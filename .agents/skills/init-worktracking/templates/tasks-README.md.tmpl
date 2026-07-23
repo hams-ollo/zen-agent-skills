@@ -1,0 +1,46 @@
+# .tasks/: active work items
+
+Atomic, agent-assignable work. One file per task. This directory is the 1,000-foot layer of the work-altitude model; strategy lives one level up in [`../ROADMAP.md`](../ROADMAP.md), and finished work is logged in [`../CHANGELOG.md`](../CHANGELOG.md). The full model is in [`../AGENTS.md`](../AGENTS.md).
+
+## For an assigned agent
+
+Read [`../AGENTS.md`](../AGENTS.md) (global rules) plus your one assigned task file plus the files it names in `touched_files`. Do not scan this directory or read other task files.
+
+## Naming
+
+`<type>-<NNNN>-<slug>.md`, where `type` is `bug`, `feat`, `chore`, or `epic`. The `id` frontmatter field equals the `<type>-<NNNN>` prefix. IDs are stable and never reused, even after a task moves to `done/`. Use the next unused number per type (zero-padded to four digits).
+
+## Authoring a new task
+
+Copy [`_TEMPLATE.md`](_TEMPLATE.md), give it the next id, and fill every section. A good task is self-contained: an agent that reads only `AGENTS.md`, this file, and the `touched_files` should be able to complete it without asking questions. Keep `touched_files` honest and complete: it is the agent's entire read/write surface and the whitelist that keeps context small.
+
+Prefer the `new-task` skill (from the Zen Starter Kit) to author tasks at the gold-standard bar automatically, then this format is filled for you.
+
+## Validating
+
+Run the shipped checker before dispatching work to agents:
+
+    python .tasks/validate.py
+
+It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task, and (with `--strict`) that every `touched_files` path exists. It exits non-zero on any error, so it drops cleanly into CI or a pre-commit hook.
+
+## Lifecycle
+
+`open -> in_progress -> done`. On done: move the file to `done/`, set `status: done`, add one dated line to `../CHANGELOG.md` referencing the task id, and (if it completed a roadmap Feature) strike that Feature through in `../ROADMAP.md`. See `AGENTS.md` section 5.
+
+## Frontmatter fields
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable task id, matches the filename prefix. |
+| `type` | `bug` \| `feat` \| `chore` \| `epic`. |
+| `status` | `open` \| `in_progress` \| `blocked` \| `done`. |
+| `priority` | `P0` (blocks a shipped output) \| `P1` \| `P2`. |
+| `parent` | The roadmap Feature/Epic this task serves (up-link, 100ft -> 30k ft). |
+| `depends_on` | Task ids that must reach `done/` before this one starts; `[]` if none. |
+| `touched_files` | Every file the task expects to create or modify. |
+| `created` | ISO date the task was authored. |
+
+## A note on parallel agents
+
+These task files are the natural unit of work for a batch of parallel, worktree-isolated agents (one task per agent). For that to be safe, `.tasks/` must be tracked by git: if it is gitignored, worktree isolation silently splits the backlog from the main checkout and agents will invent incompatible bookkeeping. Keep this directory committed.

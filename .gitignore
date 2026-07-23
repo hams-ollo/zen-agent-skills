@@ -1,0 +1,20 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Installer artifacts (per-machine, never committed)
+scripts/.install-manifest.json
+
+# Node (only if adapter tooling ever needs it)
+node_modules/
