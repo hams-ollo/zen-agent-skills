@@ -1,0 +1,17 @@
+# Normalize line endings across platforms. Text files are stored as LF in the
+# repo; Git converts on checkout per each contributor's core.autocrlf.
+* text=auto eol=lf
+
+# Be explicit about the file kinds this kit ships.
+*.py    text eol=lf
+*.md    text eol=lf
+*.tmpl  text eol=lf
+*.json  text eol=lf
+*.sh    text eol=lf
+*.mdc   text eol=lf
+
+# Anything binary that lands later stays untouched.
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.pdf   binary
