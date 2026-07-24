@@ -6,6 +6,8 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Blessed `doc-author` and `doc-revise` as **shipped** after authoring `docs/ARCHITECTURE.md` and using a consistency pass to align the README, catalog, roadmap, and status documentation. User sign-off recorded.
+- [x] (2026-07-24) Blessed `agent-handoff` and `human-handoff` as **shipped** after the in-kit fold-in brief and partner-facing `docs/PROJECT-STATUS.md` dogfood use. User sign-off recorded.
 - [x] (2026-07-24) Closed `feat-0012`: folded `doc-revise` into the kit (ported from `zen-solutions-studio`, house-style default pointed at `.agents/rules/house-style.md`, `doc-author` cross-link added). Pure prose, no portability gating. Draft pending an in-kit dogfood use before blessing.
 - [x] (2026-07-24) Closed `feat-0011`: folded `doc-author` into the kit (ported from `~/.claude/skills`, house-style default pointed at `.agents/rules/house-style.md`, `doc-revise`/`init-worktracking`/`project-bootstrap` cross-links added). Pure prose, no portability gating. Draft pending an in-kit dogfood use before blessing.
 - [x] (2026-07-24) Closed `feat-0010`: folded `human-handoff` into the kit (ported from `zen-solutions-studio`, house-style default pointed at `.agents/rules/house-style.md`, `agent-handoff` cross-link added). Pure prose, no portability gating. Draft pending an in-kit dogfood use before blessing.

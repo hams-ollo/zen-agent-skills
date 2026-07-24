@@ -18,6 +18,7 @@ The kit exists and dogfoods itself. Shipped and verified:
 - **`pr-describe`** (blessed 2026-07-24): the closing bookend; drafts a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own format, without touching GitHub.
 - **Tooling**: `scripts/install.py` (cross-platform installer), `build-adapters.py` (Cursor/VS Code adapters), `validate-skills.py` (kit-level lint).
 - **This tracking system**: `AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`.
+- **Documentation and handoffs**: `doc-author`, `doc-revise`, `agent-handoff`, and `human-handoff` (blessed 2026-07-24 after in-kit dogfooding and user sign-off).
 
 The parallel-execution back half of the spine has been folded in from the author's global skill set (`~/.claude/skills`):
 
@@ -36,8 +37,8 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 3. ~~**`code-review`.** House-style review with an explicit rubric and severities, composing the swappable [`review-quality`](.agents/rules/review-quality.md) lens (moonray's quality-lens pattern).~~ **Shipped** (`feat-0007`; blessed 2026-07-24 after dogfooding).
 4. **`ci-scaffold`** (hold until used twice). Generate CI (lint + test + build + release) matched to the detected stack.
 5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.
-6. **Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio`. **Draft (pending dogfood)** (`feat-0011`, `feat-0012`; ported and house-styled 2026-07-24; blessing awaits one real in-kit dogfood use each plus sign-off).
-7. **Fold in `agent-handoff` / `human-handoff`** (already portable by design). **Draft (pending dogfood)** (`feat-0009`, `feat-0010`; ported and house-styled 2026-07-24; blessing awaits one real in-kit dogfood use each plus sign-off).
+6. ~~**Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio`.~~ **Shipped** (`feat-0011`, `feat-0012`; dogfooded on the in-kit architecture guide and documentation consistency pass, then blessed 2026-07-24 after user sign-off).
+7. ~~**Fold in `agent-handoff` / `human-handoff`** (already portable by design).~~ **Shipped** (`feat-0009`, `feat-0010`; dogfooded with the fold-in brief and in-kit partner status update, then blessed 2026-07-24 after user sign-off).
 
 ### Epic B: semi-scalable (teams and clients)
 

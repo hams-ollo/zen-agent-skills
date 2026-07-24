@@ -24,6 +24,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project.
 - [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
 - [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog, including shipped, draft, and planned skills.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
 - [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
@@ -135,6 +136,7 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`scripts/`](scripts/) | Installer, adapter generator, and validation tooling |
 | [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit |
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
 | [`ROADMAP.md`](ROADMAP.md) | Ordered plan for future work |
 | [`CHANGELOG.md`](CHANGELOG.md) | Record of completed work |
