@@ -6,6 +6,9 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Blessed `fix-batch` and `reconcile-worktrees` as **shipped** after a live in-kit run: dispatched two parallel worktree-isolated agents via `fix-batch`, verified each against real diffs, and reconciled both into main via `reconcile-worktrees`. Status updated in `ROADMAP.md` and `docs/CATALOG.md`.
+- [x] (2026-07-24) Closed `chore-0002`: aligned `docs/CATALOG.md` Tier C Content OS names with `ROADMAP.md` Epic C (executed via the `fix-batch` live run).
+- [x] (2026-07-24) Closed `chore-0001`: fixed the README workflow-spine diagram order, removed the stale installer note, and unlinked a broken placeholder link (executed via the `fix-batch` live run).
 - [x] (2026-07-24) Closed `feat-0006`: folded `reconcile-worktrees` into the kit (ported from `~/.claude/skills`, house-styled, wired into the `.tasks/` spine). Draft pending a live in-kit run before blessing.
 - [x] (2026-07-24) Closed `feat-0005`: folded `fix-batch` into the kit (ported from `~/.claude/skills`, house-styled, portability-gated with a labeled Claude Code section, wired into the `.tasks/` spine). Draft pending a live in-kit run before blessing.
 - [x] (2026-07-24) Blessed `pr-describe` as **shipped** after a first field-iteration against this kit's own working tree; status updated in `ROADMAP.md` and `docs/CATALOG.md`.

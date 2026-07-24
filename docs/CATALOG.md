@@ -10,8 +10,8 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 |---|---|---|
 | `init-worktracking` | shipping (Phase 1) | Scaffold a spec-driven, low-context work-tracking system (`AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`) into any repo, at a chosen footprint tier, seeded by inspecting the repo. |
 | `new-task` | shipping (Phase 2) | Turn a rough idea, bug, or roadmap Feature into one or more atomic, mechanically-verifiable task files at the gold-standard bar. The upstream that feeds `fix-batch`. |
-| `fix-batch` | draft (pending live run) | Dispatch a batch of independent task files to parallel worktree-isolated agents, with a mandatory verification pass. Ported in-kit (`feat-0005`); blessing awaits a live run. |
-| `reconcile-worktrees` | draft (pending live run) | Safely consolidate isolated agent worktrees back into the main checkout without blind merges. Ported in-kit (`feat-0006`); blessing awaits a live run. |
+| `fix-batch` | shipped | Dispatch a batch of independent task files to parallel worktree-isolated agents, with a mandatory verification pass. Ported in-kit (`feat-0005`), blessed after a live run. |
+| `reconcile-worktrees` | shipped | Safely consolidate isolated agent worktrees back into the main checkout without blind merges. Ported in-kit (`feat-0006`), blessed after a live run. |
 | `project-bootstrap` | shipped | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`. |
 | `pr-describe` | shipped | Draft a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own changelog format. Draft-only: never touches GitHub. |
 | `code-review` | planned | House-style code review with an explicit rubric and severities. Composable, mirroring the quality-lens pattern (a review-quality lens a workflow inlines). |
@@ -30,7 +30,7 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## Tier C: hyper-specific (personal, stays out of the shared kit)
 
-The author's Content OS pipeline: `produce`, `cut`, `clips`, `edit`, `brief`, `idea-discovery`. These are showcase and portfolio demos ("look what is possible"), not plug-and-play for others. They live in their own repo, not here.
+The author's Content OS pipeline: `produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`. These are showcase and portfolio demos ("look what is possible"), not plug-and-play for others. They live in their own repo, not here.
 
 ## The two building blocks the whole kit reuses
 

@@ -19,9 +19,9 @@ The kit exists and dogfoods itself. Shipped and verified:
 - **Tooling**: `scripts/install.py` (cross-platform installer), `build-adapters.py` (Cursor/VS Code adapters), `validate-skills.py` (kit-level lint).
 - **This tracking system**: `AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`.
 
-The parallel-execution back half of the spine is being folded in from the author's global skill set (`~/.claude/skills`):
+The parallel-execution back half of the spine has been folded in from the author's global skill set (`~/.claude/skills`):
 
-- **`fix-batch`** and **`reconcile-worktrees`**: ported into the kit as drafts (`feat-0005`, `feat-0006`), adapted to house style, portability-gated, and wired into the `.tasks/` spine. Blessing is pending a live in-kit run (a real parallel batch on this repo).
+- **`fix-batch`** and **`reconcile-worktrees`** (blessed 2026-07-24): ported into the kit (`feat-0005`, `feat-0006`), adapted to house style, portability-gated, and wired into the `.tasks/` spine. Blessed after a live in-kit run dispatched two parallel worktree agents (`chore-0001`, `chore-0002`) and reconciled them into main.
 
 ---
 
