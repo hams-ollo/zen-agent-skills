@@ -40,15 +40,30 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 6. ~~**Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio`.~~ **Shipped** (`feat-0011`, `feat-0012`; dogfooded on the in-kit architecture guide and documentation consistency pass, then blessed 2026-07-24 after user sign-off).
 7. ~~**Fold in `agent-handoff` / `human-handoff`** (already portable by design).~~ **Shipped** (`feat-0009`, `feat-0010`; dogfooded with the fold-in brief and in-kit partner status update, then blessed 2026-07-24 after user sign-off).
 
-### Epic B: semi-scalable (teams and clients)
+### Epic B: contract-driven delivery (the agent-workflow spine)
 
-8. **`repo-explainer`.** A "start here" guided tour of an unfamiliar codebase.
-9. **`sop-drafter`.** Turn a described workflow into a documented SOP.
-10. **`security-audit`.** Repeatable dependency and secret scan with a written summary.
-11. **`test-author`.** Characterization tests for legacy code with no coverage.
-12. **`adr`.** Architecture decision records / decision log.
+1. **`spec-quality`.** A reusable quality gate for scenario-based specifications: keep contracts observable, non-redundant, grounded in repository context, traceable through stable scenario IDs, and free of implementation planning. Report explicit blockers for ambiguity, uncovered goals or surfaces, and unresolved questions.
+2. **`spec-author`.** Draft a persistent, executable `SPEC.md` from a raw idea before task decomposition: outcomes, anti-goals, architectural constraints, prior decisions, and mechanically testable verification criteria. It composes `spec-quality`; planning and specification work are read-only for implementation surfaces, and an explicit human approval state is required before `new-task` consumes a specification.
+3. **`spec-plan-readiness`.** Gate implementation on an approved specification plus an ordered, repository-grounded plan. Block tests, code, and delegation until scenarios, tasks, validation, risks, rollback notes, task-to-scenario traceability, and a first safe task are all explicit.
+4. **`test-quality`.** A reusable test-quality lens for choosing the lowest faithful test layer, naming the plausible defect each test protects, testing the real bug population, asserting meaningful observable outcomes, and handling fixtures, mocks, diagnostics, and trust boundaries deliberately.
+5. **`test-author`** (promoted from the former Epic B). Derive focused acceptance tests from approved specifications and task criteria, while retaining characterization-test support for legacy code with no coverage. Compose `test-quality` and run between implementation and reconciliation so test evidence is part of the core workflow.
+6. **`spec-conformance`.** Audit every approved scenario and public-surface element against code and test evidence, producing a positive conformance matrix of `Conformed`, `Diverged`, or `Not-built` items and an explicit unreconciled set. It reports, never repairs, implementation divergence.
+7. **`verifier-agent`.** Independently test an implementation against its approved specification and task acceptance criteria before reconciliation. It composes `spec-conformance`, produces structured pass, fail, or blocked evidence, runs the declared commands, and never edits the implementation it verifies.
+8. **`user-testing`** (conditional on user-facing work). Drive rendered UI workflows against throwaway data, inspect screenshots plus console and network state, and record user-visible defects that automated tests and contract conformance miss. Mark the closeout blocked when real workflow testing cannot run, rather than silently skipping it.
+9. **`doc-sync`** (adapted from `document`). Detect documentation drift caused by code changes or audit a documentation set, distinguishing current-state docs from human-owned contracts. Default to a code-grounded dry run; require explicit approval before updating current-state documentation and never silently rewrite contract documents. Keep it distinct from `doc-author` and `doc-revise`.
+10. **`review-depth`.** Select quick, standard, or deep review from deterministic signals: change size, directory spread, severe risk flags, blast radius, and documentation-only scope. Compose it with `code-review` so review effort matches risk and an explicit user choice always overrides detection.
+11. **`maintainability-review`** (hold until used twice). An optional, strict structural review lens for unnecessary indirection, file sprawl, spaghetti growth, boundary leaks, and missed simplification. Preserve upstream provenance and a reproducible sync process if a vendored lens is adopted.
+12. **`telemetry-guard`.** Establish a portable `.agents/hooks/` runtime protocol and stdlib Python guardrail for agent runs: structured lifecycle events, retry and implementor/verifier-cycle limits, time or optional compute budgets, repeated-work detection, and a clear stop signal on a bound violation.
+13. **`context-sync`** (hold until used against one real integration). Ground an agent in a narrowly defined live source, such as a schema or API contract, with recorded source, version or timestamp, authority level, failure behavior, and reproducible provenance for verification. Do not ship a generic MCP wrapper without field iteration.
 
-### Epic C: personal (stays OUT of the shared kit)
+### Epic C: semi-scalable (teams and clients)
+
+1. **`repo-explainer`.** A "start here" guided tour of an unfamiliar codebase.
+2. **`sop-drafter`.** Turn a described workflow into a documented SOP.
+3. **`security-audit`.** Repeatable dependency and secret scan with a written summary.
+4. **`adr`.** Architecture decision records / decision log.
+
+### Epic D: personal (stays OUT of the shared kit)
 
 The Content OS pipeline (`produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`) stays in `zen-solutions-studio` as portfolio demos, not plug-and-play kit skills.
 

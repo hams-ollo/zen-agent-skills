@@ -18,3 +18,5 @@ scripts/.install-manifest.json
 
 # Node (only if adapter tooling ever needs it)
 node_modules/
+
+repoprompt-workflows-main
