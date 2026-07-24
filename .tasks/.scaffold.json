@@ -1,0 +1,16 @@
+{
+  "generator": "init-worktracking",
+  "version": "1.0.0",
+  "tier": "team",
+  "created": "2026-07-23",
+  "files": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".tasks/README.md",
+    ".tasks/_TEMPLATE.md",
+    ".tasks/validate.py",
+    "ROADMAP.md",
+    "CHANGELOG.md"
+  ],
+  "id_high_water": {"bug": 0, "feat": 1, "chore": 0, "epic": 0}
+}

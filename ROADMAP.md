@@ -1,0 +1,55 @@
+# Roadmap
+
+**Status:** living document | **Last updated:** 2026-07-23
+
+The builder-facing execution plan: which skills get built and in what order. For the reader-facing narrative of what the kit offers, see [`docs/CATALOG.md`](docs/CATALOG.md). For atomic work in flight, see [`.tasks/`](.tasks/); for finished work, [`CHANGELOG.md`](CHANGELOG.md). Altitude model in [`AGENTS.md`](AGENTS.md) section 3.
+
+Seeded 2026-07-23 from `docs/CATALOG.md`. Features here stay at the 10,000-foot layer until it is their turn; only then are they decomposed into `.tasks/` files.
+
+---
+
+## Current state
+
+The kit exists and dogfoods itself. Shipped and verified:
+
+- **`init-worktracking`** (hardened): tiered footprint, idempotent re-runs, seed-by-inspection, shipped `validate.py`, migration dry-run, decoupled house-style module.
+- **`new-task`**: gold-standard task authoring, the upstream that feeds `fix-batch`.
+- **Tooling**: `scripts/install.py` (cross-platform installer), `build-adapters.py` (Cursor/VS Code adapters), `validate-skills.py` (kit-level lint).
+- **This tracking system**: `AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`.
+
+Two more skills already exist in the author's `zen-solutions-studio` repo and are candidates to fold in: `fix-batch` and `reconcile-worktrees` (the parallel-execution back half of the spine).
+
+---
+
+## Forward plan
+
+Ordered by effort-to-value. Each item is one skill (a Feature). Strike through when shipped.
+
+### Epic A: broadly shareable (the public kit)
+
+1. **`project-bootstrap`.** The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter, license, README stub) that then calls `init-worktracking`. First draft in progress via `.tasks/feat-0001-draft-project-bootstrap.md`; needs field iteration before it is blessed as shipped.
+2. **`pr-describe`.** Draft a PR body and changelog entry from the diff, in this kit's changelog format.
+3. **`code-review`.** House-style review with an explicit rubric and severities. Adopt moonray's composable "quality lens" pattern here (a `review-quality`-style lens), the biggest idea not yet in this kit.
+4. **`ci-scaffold`** (hold until used twice). Generate CI (lint + test + build + release) matched to the detected stack.
+5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.
+6. **Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio` once they are confirmed portable.
+7. **Fold in `agent-handoff` / `human-handoff`** (already portable by design).
+
+### Epic B: semi-scalable (teams and clients)
+
+8. **`repo-explainer`.** A "start here" guided tour of an unfamiliar codebase.
+9. **`sop-drafter`.** Turn a described workflow into a documented SOP.
+10. **`security-audit`.** Repeatable dependency and secret scan with a written summary.
+11. **`test-author`.** Characterization tests for legacy code with no coverage.
+12. **`adr`.** Architecture decision records / decision log.
+
+### Epic C: personal (stays OUT of the shared kit)
+
+The Content OS pipeline (`produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`) stays in `zen-solutions-studio` as portfolio demos, not plug-and-play kit skills.
+
+---
+
+## Out of scope by design
+
+- No database or service dependency anywhere in the kit. Everything is markdown, `SKILL.md`, and stdlib Python. Portability is the whole point.
+- No skill ships to the kit cold. A skill is drafted, used on real work, iterated, then blessed. Speculative skills stay at this roadmap altitude, not in `.agents/skills/`.
