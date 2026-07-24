@@ -1,46 +1,228 @@
 # Zen Starter Kit
 
-A portable, cross-harness library of AI agent **skills**, plus the tooling to install them into any project and any AI coding tool. Built by Zen Solutions for its own work, and shared so other founders and builders can plug the same workflows into Claude Code, Cursor, VS Code (Copilot), Codex, and OpenCode.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The design goal is simple: **write a skill once, use it in every harness.** [`AGENTS.md`](AGENTS.md) is the canonical instruction file (an open standard read natively by Cursor, Codex, Copilot, Gemini CLI, and more), and each skill's body lives in a single harness-agnostic `SKILL.md`.
+The Zen Starter Kit is a portable library of reusable AI agent skills and the tooling to distribute them across coding harnesses. It packages repeatable workflows for project setup, work tracking, parallel agent execution, documentation, code review, and pull request preparation.
 
-## What is a skill?
+The core principle is **write a skill once, use it in every harness**. Each skill has one harness-agnostic source file, `SKILL.md`. The kit then installs that source where a supported tool can discover it or generates a thin, native adapter for the target project.
 
-A skill is a packaged, reusable procedure an AI agent can invoke, for example "scaffold a work-tracking system into this repo" or "turn a rough idea into a verifiable, agent-ready task file." Each one is a directory under [`.agents/skills/`](.agents/skills/) with a `SKILL.md` describing what it does, when to use it, and how.
+## Why this repository exists
 
-## The workflow spine
+AI coding tools are useful, but their workflows are often difficult to reproduce across tools and projects. This repository provides a shared layer for procedures that should be:
 
-The skills are designed to chain into one development spine:
+- **Portable:** the procedure does not depend on one vendor's agent runtime.
+- **Self-contained:** a skill explains what it does, when to use it, and how to complete it.
+- **Verifiable:** skills prefer concrete files, commands, acceptance criteria, and checks.
+- **Composable:** the skills can be used independently or chained into a development workflow.
+
+This is a skills library, not an application or a service. It has no database, network service, or third-party Python dependency.
+
+## What's included
+
+- [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
+- [`scripts/install.py`](scripts/install.py): installs skills for Claude Code and OpenCode.
+- [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project.
+- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length.
+- [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
+- [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog, including shipped, draft, and planned skills.
+- [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
+- [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
+
+## How the workflow fits together
+
+The skills can form one development spine, while remaining useful on their own:
 
 ```mermaid
 flowchart LR
   A[project-bootstrap] --> B[init-worktracking]
-  B --> C[new-task authoring]
-  C --> D[fix-batch parallel agents]
+  B --> C[new-task]
+  C --> D[fix-batch]
   D --> E[reconcile-worktrees]
   E --> F[pr-describe]
 ```
 
-A project baseline is scaffolded, work tracking is brought up, an idea becomes a decomposed, verifiable task file, parallel agents execute, their work is reconciled back into the main tree, and the change is written up as a PR. See [`docs/CATALOG.md`](docs/CATALOG.md) for the full catalog and what is shipped versus planned.
+The front door scaffolds a project and its work tracker. A rough idea becomes an atomic task, independent tasks can be dispatched to isolated agents, their work is reconciled, and the resulting change is documented for review. See the [skill catalog](docs/CATALOG.md) for the complete inventory and status of each skill.
 
-## Install
+## Prerequisites
 
-The installer links the kit's skills into your tools' discovery directories. It is idempotent and safe to re-run, previews with `--dry-run`, and cleanly reverses with `--uninstall`.
+- Python 3.9 or newer.
+- One or more supported AI coding tools, depending on the integration you choose.
+- A project where you want to use the skills. The kit itself can also be used as a dogfooding example.
+
+Check the Python version before installing:
+
+```bash
+python --version
+```
+
+On systems where Python is exposed as `python3`, use `python3` in the commands below.
+
+## Quick start
+
+### 1. Get the kit
+
+Clone the repository and enter its directory:
+
+```bash
+git clone https://github.com/hams-ollo/zen-starter-kit.git
+cd zen-starter-kit
+```
+
+### 2. Review the installation plan
+
+The dry run makes no changes. It shows which skills would be installed and where:
 
 ```bash
 python scripts/install.py --dry-run
 ```
 
+### 3. Install global skills
+
+Install the default tool set, Claude Code and OpenCode:
+
 ```bash
 python scripts/install.py
 ```
 
-On Windows the default link mode is `copy` (POSIX symlinks are fragile there); on macOS and Linux it is `symlink`. See [`scripts/install.py`](scripts/install.py) for options.
+The installer is idempotent, so it is safe to run again after the kit changes. On Windows it uses directory copies by default. On macOS and Linux it uses directory symlinks by default.
 
-## Make it your own
+Install for only one supported tool when needed:
 
-The writing and formatting conventions the skills assume live in one swappable file, [`.agents/rules/house-style.md`](.agents/rules/house-style.md). Keep it, empty it, or replace it with your own voice. The skills reference that file rather than hardcoding any rule, so adopting the kit never forces someone else's style on your projects.
+```bash
+python scripts/install.py --tools claude
+python scripts/install.py --tools opencode
+```
+
+The installer writes its copy-mode manifest to `scripts/.install-manifest.json` so it can recognize and update files it previously created. It reports a conflict instead of overwriting an unmanaged file.
+
+### 4. Generate project-level adapters
+
+Cursor and VS Code or Copilot use project-level configuration in this kit. Generate adapters into the project where you want to use the skills:
+
+```bash
+python scripts/build-adapters.py --target cursor,vscode --out ../my-project
+```
+
+This creates:
+
+- `.cursor/rules/<skill-name>.mdc` for Cursor.
+- `.github/prompts/<skill-name>.prompt.md` for VS Code or Copilot.
+
+Generated adapters are derived files. Edit the source [`SKILL.md`](.agents/skills/) under `.agents/skills/`, then regenerate the adapters. A generation run overwrites the adapter files it owns.
+
+### 5. Use a skill
+
+Ask the installed harness to use a skill by name, or select the generated rule or prompt in the target project. Begin with a workflow skill such as `project-bootstrap`, `init-worktracking`, or `new-task`. Read the skill's `SKILL.md` when you need the complete procedure and acceptance criteria.
+
+## Integration details
+
+| Harness | Integration | Command or location |
+|---|---|---|
+| Claude Code | Global skill discovery | `python scripts/install.py --tools claude` |
+| OpenCode | Global skill discovery | `python scripts/install.py --tools opencode` |
+| Cursor | Project rule adapter | `python scripts/build-adapters.py --target cursor --out <project>` |
+| VS Code or Copilot | Project prompt adapter | `python scripts/build-adapters.py --target vscode --out <project>` |
+| Other harnesses | Read the canonical skill manually or add a local adapter | [`.agents/skills/`](.agents/skills/) |
+
+The kit does not maintain separate hand-edited versions of a skill for each harness. The canonical source remains the `SKILL.md` file.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| [`.agents/skills/`](.agents/skills/) | Canonical, reusable skills |
+| [`.agents/rules/house-style.md`](.agents/rules/house-style.md) | Swappable writing and formatting rules used by skills |
+| [`scripts/`](scripts/) | Installer, adapter generator, and validation tooling |
+| [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit |
+| [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
+| [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
+| [`ROADMAP.md`](ROADMAP.md) | Ordered plan for future work |
+| [`CHANGELOG.md`](CHANGELOG.md) | Record of completed work |
+
+## Validate changes
+
+Run the skill linter from the repository root:
+
+```bash
+python scripts/validate-skills.py
+```
+
+Preview adapter generation without writing files:
+
+```bash
+python scripts/build-adapters.py --dry-run
+```
+
+Preview installation for a specific test home without touching your normal tool directories:
+
+```bash
+python scripts/install.py --dry-run --home ./.tmp/zen-home
+```
+
+The scripts use only the Python standard library. There is currently no separate package installation step or application test suite.
+
+## Uninstall
+
+Remove the targets recorded by the installer:
+
+```bash
+python scripts/install.py --uninstall --dry-run
+python scripts/install.py --uninstall
+```
+
+If you installed with `--home`, provide the same `--home` value when uninstalling. Generated Cursor and VS Code or Copilot adapters are project files and should be removed from the target project through its normal version-control workflow.
+
+## For agents working in this repository
+
+Start with [`AGENTS.md`](AGENTS.md). It is the canonical instruction file. For an assigned task, follow its low-context reading protocol:
+
+1. Read `AGENTS.md` in full.
+2. Read the assigned task file in `.tasks/`.
+3. Read only the files named by that task's `touched_files` metadata or body.
+
+When adding or changing a skill, keep its logic in `.agents/skills/<name>/SKILL.md`, run the validator, and update the catalog or roadmap when the skill's status changes. A skill is considered shipped only after it has been used, iterated on, and verified on real work.
+
+## For contributors
+
+Before opening a change:
+
+1. Read [`AGENTS.md`](AGENTS.md) and the relevant task or roadmap entry.
+2. Keep changes focused and preserve the single-source-of-truth model.
+3. Run [`scripts/validate-skills.py`](scripts/validate-skills.py) and any relevant dry-run commands.
+4. Update documentation when commands, supported harnesses, or repository structure change.
+
+For writing conventions, use the swappable [house-style rules](.agents/rules/house-style.md). For the current scope and planned work, consult the [roadmap](ROADMAP.md).
+
+## Troubleshooting
+
+### The installer reports a conflict
+
+The installer found a file or directory at a target path that it did not create. Move it, remove it, or choose a different home directory, then rerun the command. The installer does not overwrite unmanaged targets.
+
+### Symlink creation fails on Windows
+
+Use the default Windows copy mode, or force it explicitly:
+
+```bash
+python scripts/install.py --mode copy
+```
+
+### A generated adapter is out of date
+
+Regenerate it from the kit root. Do not edit the generated file directly:
+
+```bash
+python scripts/build-adapters.py --target cursor,vscode --out ../my-project
+```
+
+### A skill is not discovered
+
+Confirm that the skill has a `SKILL.md`, run the validator, and verify that you installed the correct integration for your harness. Claude Code and OpenCode use `install.py`; Cursor and VS Code or Copilot use `build-adapters.py`.
+
+## Security and trust
+
+Review a skill before installing it into an AI coding tool. Skills are instructions that influence agent behavior and may cause file or command changes when invoked. Use the same review standard you would apply to source code, especially for skills obtained from outside this repository.
 
 ## License
 
-[MIT](LICENSE). Use it, fork it, share it.
+This project is available under the [MIT License](LICENSE).
