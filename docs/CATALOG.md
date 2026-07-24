@@ -14,7 +14,7 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 | `reconcile-worktrees` | shipped | Safely consolidate isolated agent worktrees back into the main checkout without blind merges. Ported in-kit (`feat-0006`), blessed after a live run. |
 | `project-bootstrap` | shipped | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`. |
 | `pr-describe` | shipped | Draft a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own changelog format. Draft-only: never touches GitHub. |
-| `code-review` | planned | House-style code review with an explicit rubric and severities. Composable, mirroring the quality-lens pattern (a review-quality lens a workflow inlines). |
+| `code-review` | shipped | House-style code review with an explicit rubric and severities, composing the swappable `review-quality` lens (moonray's quality-lens pattern). Report-only. |
 | `ci-scaffold` | planned (hold) | Generate CI (lint + test + build + release) matched to the detected stack. Hold until used twice. |
 | `release-cut` | planned (hold) | Version bump, changelog roll-up, tag, notes. Hold until used twice. |
 

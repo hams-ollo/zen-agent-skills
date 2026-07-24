@@ -33,7 +33,7 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 
 1. ~~**`project-bootstrap`.** The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter, license, README stub) that then calls `init-worktracking`.~~ **Shipped** (`feat-0001` draft, `feat-0002` house code-style layer; blessed 2026-07-24).
 2. ~~**`pr-describe`.** Draft a PR body and changelog entry from a branch's diff, in the target repo's own changelog format (draft-only, never touches GitHub).~~ **Shipped** (`feat-0003` draft, `feat-0004` working-tree fallback from field iteration; blessed 2026-07-24).
-3. **`code-review`.** House-style review with an explicit rubric and severities. Adopt moonray's composable "quality lens" pattern here (a `review-quality`-style lens), the biggest idea not yet in this kit.
+3. ~~**`code-review`.** House-style review with an explicit rubric and severities, composing the swappable [`review-quality`](.agents/rules/review-quality.md) lens (moonray's quality-lens pattern).~~ **Shipped** (`feat-0007`; blessed 2026-07-24 after dogfooding).
 4. **`ci-scaffold`** (hold until used twice). Generate CI (lint + test + build + release) matched to the detected stack.
 5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.
 6. **Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio` once they are confirmed portable.

@@ -6,6 +6,8 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Blessed `code-review` as **shipped** after dogfooding it on this repo's own change; status updated in `ROADMAP.md` and `docs/CATALOG.md`.
+- [x] (2026-07-24) Closed `feat-0007`: built the `code-review` skill and its swappable `review-quality` lens (8-category rubric; blocker/major/minor/nit; report-only; findings validated before reporting; reuses `pr-describe`'s range logic). Adopts moonray's composable quality-lens pattern. Dogfooded on this repo's own change (caught and fixed a house-style em-dash). Draft pending further field iteration.
 - [x] (2026-07-24) Blessed `fix-batch` and `reconcile-worktrees` as **shipped** after a live in-kit run: dispatched two parallel worktree-isolated agents via `fix-batch`, verified each against real diffs, and reconciled both into main via `reconcile-worktrees`. Status updated in `ROADMAP.md` and `docs/CATALOG.md`.
 - [x] (2026-07-24) Closed `chore-0002`: aligned `docs/CATALOG.md` Tier C Content OS names with `ROADMAP.md` Epic C (executed via the `fix-batch` live run).
 - [x] (2026-07-24) Closed `chore-0001`: fixed the README workflow-spine diagram order, removed the stale installer note, and unlinked a broken placeholder link (executed via the `fix-batch` live run).
