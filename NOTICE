@@ -1,0 +1,26 @@
+Zen Solutions Starter Kit
+Copyright (c) 2026 Zen Solutions
+
+Licensed under the MIT License; see LICENSE for details.
+
+Third-party content
+-------------------
+
+This distribution includes agent skills adapted from vendored third-party
+material. Each adapted SKILL.md also carries a one-line provenance note.
+
+- repoprompt-workflows (RepoPrompt Workflows)
+  - author: Balarama Bosch
+  - license: MIT
+  - upstream: https://github.com/moonray/repoprompt-workflows
+  - adapted into: the Zen Starter Kit spec/verify spine skills, house-styled and
+    portability-gated from their standalone SKILL.md sources. As each skill lands
+    it is listed here. Current:
+      - .agents/skills/spec-quality/SKILL.md
+      - .agents/skills/spec-plan-readiness/SKILL.md
+      - .agents/skills/test-quality/SKILL.md
+      - .agents/skills/spec-conformance/SKILL.md
+
+  - note: maintainability-review, when folded in, is doubly vendored. Upstream
+    itself carries it from cursor/plugins ("thermo-nuclear" code-quality review
+    lens, MIT, https://github.com/cursor/plugins). Record both provenances then.

@@ -22,6 +22,17 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 | `ci-scaffold` | planned (hold) | Generate CI (lint + test + build + release) matched to the detected stack. Hold until used twice. |
 | `release-cut` | planned (hold) | Version bump, changelog roll-up, tag, notes. Hold until used twice. |
 
+## The contract-driven delivery spine (Epic B, in progress)
+
+These skills make the roadmap's contract-driven delivery spine real. All four were folded in from `repoprompt-workflows` (Balarama Bosch, MIT), house-styled, and **blessed 2026-07-24** after being dogfooded on real in-kit work: drafting and gating the `spec-author` spec, and auditing `scripts/validate-skills.py`. This is where the kit begins dogfooding its own spine, with specs living under [`docs/spec/`](spec/). Provenance is recorded in [`NOTICE`](../NOTICE).
+
+| Skill | Status | What it does |
+|---|---|---|
+| `spec-quality` | shipped (Epic B) | Report-only lens keeping scenario-based specs contract-level, observable, non-redundant, grounded in repo context, and free of implementation planning. To be composed by the planned `spec-author`. |
+| `spec-plan-readiness` | shipped (Epic B) | Deterministic go/no-go gate: blocks tests, code, and delegation until an approved spec plus an ordered, repo-grounded `.tasks/` plan are implementable. |
+| `test-quality` | shipped (Epic B) | Report-only lens for choosing the lowest faithful test layer, naming the plausible defect each test protects, and asserting real observable outcomes. To be composed by the planned `test-author`. |
+| `spec-conformance` | shipped (Epic B) | Audits an implementation against its spec into a positive Conformed/Diverged/Not-built matrix. Composes into `fix-batch` verification; to be composed by the planned `verifier-agent`. |
+
 ## Tier B: semi-scalable (great for teams and clients)
 
 | Skill | Status | What it does |
