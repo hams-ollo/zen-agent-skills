@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** living document | **Last updated:** 2026-07-23
+**Status:** living document | **Last updated:** 2026-07-24
 
 The builder-facing execution plan: which skills get built and in what order. For the reader-facing narrative of what the kit offers, see [`docs/CATALOG.md`](docs/CATALOG.md). For atomic work in flight, see [`.tasks/`](.tasks/); for finished work, [`CHANGELOG.md`](CHANGELOG.md). Altitude model in [`AGENTS.md`](AGENTS.md) section 3.
 
@@ -14,6 +14,8 @@ The kit exists and dogfoods itself. Shipped and verified:
 
 - **`init-worktracking`** (hardened): tiered footprint, idempotent re-runs, seed-by-inspection, shipped `validate.py`, migration dry-run, decoupled house-style module.
 - **`new-task`**: gold-standard task authoring, the upstream that feeds `fix-batch`.
+- **`project-bootstrap`** (blessed 2026-07-24): the umbrella front door; stack-aware baseline (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`.
+- **`pr-describe`** (blessed 2026-07-24): the closing bookend; drafts a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own format, without touching GitHub.
 - **Tooling**: `scripts/install.py` (cross-platform installer), `build-adapters.py` (Cursor/VS Code adapters), `validate-skills.py` (kit-level lint).
 - **This tracking system**: `AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`.
 
@@ -27,8 +29,8 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 
 ### Epic A: broadly shareable (the public kit)
 
-1. **`project-bootstrap`.** The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter, license, README stub) that then calls `init-worktracking`. First draft in progress via `.tasks/feat-0001-draft-project-bootstrap.md`; needs field iteration before it is blessed as shipped.
-2. **`pr-describe`.** Draft a PR body and changelog entry from the diff, in this kit's changelog format.
+1. ~~**`project-bootstrap`.** The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter, license, README stub) that then calls `init-worktracking`.~~ **Shipped** (`feat-0001` draft, `feat-0002` house code-style layer; blessed 2026-07-24).
+2. ~~**`pr-describe`.** Draft a PR body and changelog entry from a branch's diff, in the target repo's own changelog format (draft-only, never touches GitHub).~~ **Shipped** (`feat-0003` draft, `feat-0004` working-tree fallback from field iteration; blessed 2026-07-24).
 3. **`code-review`.** House-style review with an explicit rubric and severities. Adopt moonray's composable "quality lens" pattern here (a `review-quality`-style lens), the biggest idea not yet in this kit.
 4. **`ci-scaffold`** (hold until used twice). Generate CI (lint + test + build + release) matched to the detected stack.
 5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.

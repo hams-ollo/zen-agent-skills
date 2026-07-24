@@ -1,0 +1,17 @@
+# House ruff config (lint + format) for project-bootstrap.
+#
+# Emitted into the target repo as a [tool.ruff] block inside pyproject.toml when a
+# manifest exists, or as a standalone ruff.toml when it does not. These are the kit's
+# house defaults; edit this file to change what every future bootstrap writes, or edit
+# the emitted config per repo. An existing ruff config in the target repo is never
+# overwritten.
+
+line-length = 100
+target-version = "py311"
+
+[format]
+quote-style = "double"
+
+[lint]
+# pycodestyle errors (E), pyflakes (F), isort (I), pyupgrade (UP), flake8-bugbear (B).
+select = ["E", "F", "I", "UP", "B"]

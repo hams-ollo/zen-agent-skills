@@ -6,6 +6,11 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Blessed `pr-describe` as **shipped** after a first field-iteration against this kit's own working tree; status updated in `ROADMAP.md` and `docs/CATALOG.md`.
+- [x] (2026-07-24) Closed `feat-0004`: iterated `pr-describe` from dogfooding, added a working-tree fallback so it describes uncommitted work on the default branch instead of dead-ending when the branch is not ahead of base.
+- [x] (2026-07-24) Closed `feat-0003`: drafted the first version of the `pr-describe` skill (PR body + changelog entry from a branch's diff; draft-only, never touches GitHub; changelog format by inspection; branch-vs-merge-base range). Lints clean via `scripts/validate-skills.py`. Marked draft in `ROADMAP.md`/`docs/CATALOG.md`, pending field iteration before it is blessed.
+- [x] (2026-07-24) Blessed `project-bootstrap` as **shipped** after review; status updated in `ROADMAP.md` and `docs/CATALOG.md`.
+- [x] (2026-07-24) Closed `feat-0002`: iterated `project-bootstrap` with a swappable house code-style layer under `templates/` (ruff, prettier, eslint, editorconfig + doc), folding in the four settled design decisions. Never-clobber preserved. Both validators green.
 - [x] (2026-07-23) Closed `feat-0001`: drafted the first version of the `project-bootstrap` skill. Lints clean via `scripts/validate-skills.py`. Marked draft in `ROADMAP.md`, pending field iteration before it is blessed as shipped.
 
 ### Seeded provenance (predates this tracker)

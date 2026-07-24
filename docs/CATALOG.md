@@ -12,8 +12,8 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 | `new-task` | shipping (Phase 2) | Turn a rough idea, bug, or roadmap Feature into one or more atomic, mechanically-verifiable task files at the gold-standard bar. The upstream that feeds `fix-batch`. |
 | `fix-batch` | shipped (external) | Dispatch a batch of independent task files to parallel worktree-isolated agents, with a mandatory verification pass. Lives in the author's existing skill set. |
 | `reconcile-worktrees` | shipped (external) | Safely consolidate isolated agent worktrees back into the main checkout without blind merges. |
-| `project-bootstrap` | draft (needs iteration) | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter, license, README stub) that then calls `init-worktracking`. First draft landed (`feat-0001`); not yet blessed as shipped. |
-| `pr-describe` | planned | Draft a PR body and a changelog entry from the diff, in the kit's changelog format. |
+| `project-bootstrap` | shipped | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`. |
+| `pr-describe` | shipped | Draft a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own changelog format. Draft-only: never touches GitHub. |
 | `code-review` | planned | House-style code review with an explicit rubric and severities. Composable, mirroring the quality-lens pattern (a review-quality lens a workflow inlines). |
 | `ci-scaffold` | planned (hold) | Generate CI (lint + test + build + release) matched to the detected stack. Hold until used twice. |
 | `release-cut` | planned (hold) | Version bump, changelog roll-up, tag, notes. Hold until used twice. |
