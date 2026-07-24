@@ -32,31 +32,40 @@ but these are not up for re-litigation:
 - **Report-only.** The skill never edits or commits. Each finding carries a concrete fix in text.
 - **Findings are validated before reporting** (the lens's govern/revalidate step). A confident
   false positive costs more than a missed nit.
-- **Default range is the branch vs its merge-base with the default branch**, with a working-tree
-  fallback, reusing [`pr-describe`](../pr-describe/SKILL.md)'s changeset logic.
+- **Two review modes**: an explicit path scope reviews named files in full; otherwise the default
+  is the branch vs its merge-base with the default branch (with a working-tree fallback), reusing
+  [`pr-describe`](../pr-describe/SKILL.md)'s changeset logic.
 
 ## Procedure
 
-### Step 1: pick the review range
+### Step 1: pick what to review
 
-Reuse `pr-describe`'s changeset logic so "review this" means the same thing across the kit:
+There are two modes. Decide which the request is.
+
+**Explicit path scope (review named files or paths).** When the user points at specific files, a
+directory, or a path glob ("review these scripts", "review `src/auth/`"), review those files as
+they stand, in full. This is a review of existing code, not a diff, so there is no range to
+compute; just read the named files. Honor an explicit base or commit range here too if one is given.
+
+**Change review (the default when no scope is named).** Reuse `pr-describe`'s changeset logic so
+"review this" means the same thing across the kit:
 
 1. Confirm a git repo with at least one commit. Find the current branch and the default branch
    robustly (`git symbolic-ref --quiet refs/remotes/origin/HEAD`, else `origin/main` /
    `origin/master`, else local `main` / `master`).
-2. Compute the base `git merge-base HEAD <default>`. Pick the changeset:
+2. Compute the base `git merge-base HEAD <default>` and pick the changeset:
    - Branch ahead of base: review the committed range `<base>..HEAD` (note and offer to include
      any uncommitted changes).
    - Range empty (on the default branch, or work uncommitted): review the working-tree changes
      (`git diff HEAD` plus untracked files). Do not dead-end.
    - Both empty: nothing to review, say so and stop.
-3. Honor an explicit base, range, or path scope if the user gave one.
 
-### Step 2: survey the change
+### Step 2: survey what is under review
 
-Read the real diff, not the summary. `git diff --stat <range>` for shape, then the actual
-`git diff <range>` for substance, plus enough surrounding context in each changed file to judge
-the lines fairly. Note the languages, the test files touched, and anything security-sensitive.
+Read the real code, not a summary. For a change review, `git diff --stat <range>` for shape then
+the actual `git diff <range>` for substance; for a path scope, read the named files in full. Either
+way, read enough surrounding context to judge the lines fairly. Note the languages, the test files
+involved, and anything security-sensitive.
 
 ### Step 3: apply the review-quality lens
 

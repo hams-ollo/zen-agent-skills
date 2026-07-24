@@ -19,6 +19,7 @@ derived artifacts); do not hand-edit them, edit the SKILL.md instead.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def discover_skills():
 def emit_cursor(name, desc, body, out: Path, dry: bool) -> Path:
     dest = out / ".cursor" / "rules" / f"{name}.mdc"
     content = (
-        f"---\ndescription: {desc}\nalwaysApply: false\n---\n\n"
+        f"---\ndescription: {json.dumps(desc)}\nalwaysApply: false\n---\n\n"
         f"{BANNER.format(name=name)}\n\n{body}\n"
     )
     _write(dest, content, dry)
@@ -73,7 +74,7 @@ def emit_cursor(name, desc, body, out: Path, dry: bool) -> Path:
 def emit_vscode(name, desc, body, out: Path, dry: bool) -> Path:
     dest = out / ".github" / "prompts" / f"{name}.prompt.md"
     content = (
-        f"---\nmode: agent\ndescription: {desc}\n---\n\n"
+        f"---\nmode: agent\ndescription: {json.dumps(desc)}\n---\n\n"
         f"{BANNER.format(name=name)}\n\n{body}\n"
     )
     _write(dest, content, dry)

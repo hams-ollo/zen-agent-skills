@@ -6,6 +6,8 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Closed `feat-0008`: iterated `code-review` from the scripts dogfood, making path-scoped whole-file review a first-class Step 1 mode alongside change review.
+- [x] (2026-07-24) Closed `bug-0001`: fixed the `code-review` findings in the kit scripts. `install.py` copy-mode symlink ownership now uses exact path equality instead of a string-prefix test (a real clobber-safety bug), dropped dead `remaining` code, hardened `is_managed`, and documented the copy-mode manifest dependency; `build-adapters.py` now emits the skill description as a JSON-serialized (valid YAML) scalar, fixing malformed adapter frontmatter for descriptions containing colons or quotes. Re-review came back clean.
 - [x] (2026-07-24) Blessed `code-review` as **shipped** after dogfooding it on this repo's own change; status updated in `ROADMAP.md` and `docs/CATALOG.md`.
 - [x] (2026-07-24) Closed `feat-0007`: built the `code-review` skill and its swappable `review-quality` lens (8-category rubric; blocker/major/minor/nit; report-only; findings validated before reporting; reuses `pr-describe`'s range logic). Adopts moonray's composable quality-lens pattern. Dogfooded on this repo's own change (caught and fixed a house-style em-dash). Draft pending further field iteration.
 - [x] (2026-07-24) Blessed `fix-batch` and `reconcile-worktrees` as **shipped** after a live in-kit run: dispatched two parallel worktree-isolated agents via `fix-batch`, verified each against real diffs, and reconciled both into main via `reconcile-worktrees`. Status updated in `ROADMAP.md` and `docs/CATALOG.md`.

@@ -5,6 +5,11 @@ Idempotent and safe to re-run. Previews with --dry-run, reverses with
 --uninstall. Never clobbers a real file it did not create: such a target is
 reported CONFLICT and skipped for you to resolve.
 
+In copy mode, re-run recognition relies on scripts/.install-manifest.json to
+know which targets this tool created. If that manifest is deleted, previously
+copied targets are treated as unmanaged and reported CONFLICT (symlink mode
+recognizes its own links directly and does not have this dependency).
+
     python scripts/install.py --dry-run          # preview
     python scripts/install.py                     # install (copy on Windows, symlink on POSIX)
     python scripts/install.py --mode symlink      # force symlinks
@@ -63,7 +68,7 @@ def save_manifest(entries, dry):
 
 def is_managed(target: Path, manifest) -> bool:
     tp = str(target)
-    return any(e["target"] == tp for e in manifest["entries"])
+    return any(e.get("target") == tp for e in manifest["entries"])
 
 
 def install(tools, mode, home: Path, dry: bool) -> int:
@@ -115,8 +120,8 @@ def _place(src: Path, target: Path, mode: str, dry: bool, manifest) -> str:
                 target.unlink()
                 _link(src, target)
             return "relinked"
-        # copy mode but a symlink is there: ours only if it points into our repo
-        if points_to and str(points_to).startswith(str(src.resolve())):
+        # copy mode but a symlink is there: ours only if it points exactly at our source
+        if points_to == src.resolve():
             if not dry:
                 target.unlink()
                 _copy(src, target)
@@ -171,7 +176,6 @@ def uninstall(home: Path, dry: bool) -> int:
         print("Nothing recorded as installed.")
         return 0
     tag = "[dry-run] " if dry else ""
-    remaining = []
     removed = 0
     for e in manifest["entries"]:
         target = Path(e["target"])
@@ -182,7 +186,7 @@ def uninstall(home: Path, dry: bool) -> int:
             print(f"{tag}removed   {e['tool']:8} {e['name']}  ({target})")
         else:
             print(f"{tag}gone      {e['tool']:8} {e['name']}  ({target})")
-    save_manifest(remaining, dry)
+    save_manifest([], dry)
     print(f"\n{tag}Uninstalled {removed} target(s).")
     return 0
 
