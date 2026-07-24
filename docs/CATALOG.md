@@ -24,10 +24,11 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## The contract-driven delivery spine (Epic B, in progress)
 
-These skills make the roadmap's contract-driven delivery spine real. All four were folded in from `repoprompt-workflows` (Balarama Bosch, MIT), house-styled, and **blessed 2026-07-24** after being dogfooded on real in-kit work: drafting and gating the `spec-author` spec, and auditing `scripts/validate-skills.py`. This is where the kit begins dogfooding its own spine, with specs living under [`docs/spec/`](spec/). Provenance is recorded in [`NOTICE`](../NOTICE).
+These skills make the roadmap's contract-driven delivery spine real. All four were folded in from `repoprompt-workflows` (Balarama Bosch, MIT), house-styled, and **blessed 2026-07-24** after being dogfooded on real in-kit work: drafting and gating the `spec-author` spec, and auditing `scripts/validate-skills.py`. This is where the kit begins dogfooding its own spine, with specs living under [`docs/spec/`](spec/). `spec-author`, the first authored (not folded-in) spine skill, was blessed 2026-07-24 after drafting the `test-author` spec. Provenance is recorded in [`NOTICE`](../NOTICE).
 
 | Skill | Status | What it does |
 |---|---|---|
+| `spec-author` | shipped (Epic B) | Drafts a persistent behavioral spec from a raw idea, composes `spec-quality` to self-check to `ready`, writes it under `docs/spec/` as `status: draft`, and stops for human approval before `new-task` decomposes it. |
 | `spec-quality` | shipped (Epic B) | Report-only lens keeping scenario-based specs contract-level, observable, non-redundant, grounded in repo context, and free of implementation planning. To be composed by the planned `spec-author`. |
 | `spec-plan-readiness` | shipped (Epic B) | Deterministic go/no-go gate: blocks tests, code, and delegation until an approved spec plus an ordered, repo-grounded `.tasks/` plan are implementable. |
 | `test-quality` | shipped (Epic B) | Report-only lens for choosing the lowest faithful test layer, naming the plausible defect each test protects, and asserting real observable outcomes. To be composed by the planned `test-author`. |
