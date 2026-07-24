@@ -46,20 +46,28 @@ def parse_frontmatter(text: str):
     return data, body_lines
 
 
-def main() -> int:
-    if not SKILLS_DIR.is_dir():
-        print(f"ERROR no skills directory at {SKILLS_DIR}")
+def _rel(path: Path) -> str:
+    """Repo-relative display path, falling back to the full path when outside the repo."""
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def main(skills_dir: Path = SKILLS_DIR) -> int:
+    if not skills_dir.is_dir():
+        print(f"ERROR no skills directory at {skills_dir}")
         return 1
 
     errors, warnings = [], []
-    skills = sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir())
+    skills = sorted(p for p in skills_dir.iterdir() if p.is_dir())
 
     if not skills:
-        print(f"No skills found under {SKILLS_DIR.relative_to(REPO_ROOT).as_posix()}.")
+        print(f"No skills found under {_rel(skills_dir)}.")
         return 0
 
     for d in skills:
-        rel = d.relative_to(REPO_ROOT).as_posix()
+        rel = _rel(d)
         skill_md = d / "SKILL.md"
         if not skill_md.is_file():
             errors.append(f"{rel}: no SKILL.md")

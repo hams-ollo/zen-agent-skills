@@ -2,7 +2,7 @@
 id: chore-0003
 title: Add test coverage for validate-skills.py and make its skills dir injectable
 type: chore
-status: open
+status: done
 priority: P2
 parent: "Kit tooling hardening (surfaced by the test-quality dogfood, feat-0015)"
 depends_on: []
@@ -59,16 +59,16 @@ check that `docs/spec/validate-skills.conformance.md` accepted as a divergence.
 
     python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] `tests/test_validate_skills.py` exists and the command above exits 0.
-- [ ] Tests cover S-001 through S-007 with exact `(errors, warnings, exit_code)` assertions, not
+- [x] `tests/test_validate_skills.py` exists and the command above exits 0.
+- [x] Tests cover S-001 through S-007 with exact `(errors, warnings, exit_code)` assertions, not
       "does not crash" checks, using temp fixture directories.
-- [ ] `main` accepts an optional `skills_dir`; `python scripts/validate-skills.py` on this repo
+- [x] `main` accepts an optional `skills_dir`; `python scripts/validate-skills.py` on this repo
       still prints `Checked N skill(s): 0 error(s), 0 warning(s).` and exits 0.
-- [ ] `python scripts/validate-skills.py` output is unchanged for the default invocation.
+- [x] `python scripts/validate-skills.py` output is unchanged for the default invocation.
 
 ## Definition of done
 
-- [ ] Acceptance command passes locally.
-- [ ] Conventions in AGENTS.md section 6 followed (stdlib only, cross-platform `pathlib`/`tempfile`).
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] Acceptance command passes locally.
+- [x] Conventions in AGENTS.md section 6 followed (stdlib only, cross-platform `pathlib`/`tempfile`).
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.
