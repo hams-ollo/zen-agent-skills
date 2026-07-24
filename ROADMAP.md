@@ -36,8 +36,8 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 3. ~~**`code-review`.** House-style review with an explicit rubric and severities, composing the swappable [`review-quality`](.agents/rules/review-quality.md) lens (moonray's quality-lens pattern).~~ **Shipped** (`feat-0007`; blessed 2026-07-24 after dogfooding).
 4. **`ci-scaffold`** (hold until used twice). Generate CI (lint + test + build + release) matched to the detected stack.
 5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.
-6. **Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio` once they are confirmed portable.
-7. **Fold in `agent-handoff` / `human-handoff`** (already portable by design).
+6. **Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio`. **Draft (pending dogfood)** (`feat-0011`, `feat-0012`; ported and house-styled 2026-07-24; blessing awaits one real in-kit dogfood use each plus sign-off).
+7. **Fold in `agent-handoff` / `human-handoff`** (already portable by design). **Draft (pending dogfood)** (`feat-0009`, `feat-0010`; ported and house-styled 2026-07-24; blessing awaits one real in-kit dogfood use each plus sign-off).
 
 ### Epic B: semi-scalable (teams and clients)
 

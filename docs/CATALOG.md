@@ -15,6 +15,10 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 | `project-bootstrap` | shipped | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`. |
 | `pr-describe` | shipped | Draft a PR body and a changelog entry from a branch's diff (or the working tree), in the target repo's own changelog format. Draft-only: never touches GitHub. |
 | `code-review` | shipped | House-style code review with an explicit rubric and severities, composing the swappable `review-quality` lens (moonray's quality-lens pattern). Report-only. |
+| `agent-handoff` | draft (pending dogfood) | Turn the current session into a self-contained, execution-ready brief a fresh session or subagent can run cold. Ported in-kit (`feat-0009`); blessing awaits a dogfood use. |
+| `human-handoff` | draft (pending dogfood) | Package project state for a person (partner, client, or teammate) as a tuned document or message, with client-facing redaction. Ported in-kit (`feat-0010`); blessing awaits a dogfood use. |
+| `doc-author` | draft (pending dogfood) | Write new, code-grounded Markdown docs (READMEs, architecture with Mermaid, guides, ADRs) matched to a reader; composes with `project-bootstrap`/`init-worktracking`. Ported in-kit (`feat-0011`); blessing awaits a dogfood use. |
+| `doc-revise` | draft (pending dogfood) | Revise existing Markdown docs surgically: reconcile with code, fix cross-doc links, keep a doc set consistent, without flattening the author's voice. Ported in-kit (`feat-0012`); blessing awaits a dogfood use. |
 | `ci-scaffold` | planned (hold) | Generate CI (lint + test + build + release) matched to the detected stack. Hold until used twice. |
 | `release-cut` | planned (hold) | Version bump, changelog roll-up, tag, notes. Hold until used twice. |
 
