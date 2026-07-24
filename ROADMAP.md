@@ -19,7 +19,9 @@ The kit exists and dogfoods itself. Shipped and verified:
 - **Tooling**: `scripts/install.py` (cross-platform installer), `build-adapters.py` (Cursor/VS Code adapters), `validate-skills.py` (kit-level lint).
 - **This tracking system**: `AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`.
 
-Two more skills already exist in the author's `zen-solutions-studio` repo and are candidates to fold in: `fix-batch` and `reconcile-worktrees` (the parallel-execution back half of the spine).
+The parallel-execution back half of the spine is being folded in from the author's global skill set (`~/.claude/skills`):
+
+- **`fix-batch`** and **`reconcile-worktrees`**: ported into the kit as drafts (`feat-0005`, `feat-0006`), adapted to house style, portability-gated, and wired into the `.tasks/` spine. Blessing is pending a live in-kit run (a real parallel batch on this repo).
 
 ---
 

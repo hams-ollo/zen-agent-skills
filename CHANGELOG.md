@@ -6,6 +6,8 @@ Completed work for the Zen Starter Kit, newest first. This is the append-only le
 
 ## Task log
 
+- [x] (2026-07-24) Closed `feat-0006`: folded `reconcile-worktrees` into the kit (ported from `~/.claude/skills`, house-styled, wired into the `.tasks/` spine). Draft pending a live in-kit run before blessing.
+- [x] (2026-07-24) Closed `feat-0005`: folded `fix-batch` into the kit (ported from `~/.claude/skills`, house-styled, portability-gated with a labeled Claude Code section, wired into the `.tasks/` spine). Draft pending a live in-kit run before blessing.
 - [x] (2026-07-24) Blessed `pr-describe` as **shipped** after a first field-iteration against this kit's own working tree; status updated in `ROADMAP.md` and `docs/CATALOG.md`.
 - [x] (2026-07-24) Closed `feat-0004`: iterated `pr-describe` from dogfooding, added a working-tree fallback so it describes uncommitted work on the default branch instead of dead-ending when the branch is not ahead of base.
 - [x] (2026-07-24) Closed `feat-0003`: drafted the first version of the `pr-describe` skill (PR body + changelog entry from a branch's diff; draft-only, never touches GitHub; changelog format by inspection; branch-vs-merge-base range). Lints clean via `scripts/validate-skills.py`. Marked draft in `ROADMAP.md`/`docs/CATALOG.md`, pending field iteration before it is blessed.
