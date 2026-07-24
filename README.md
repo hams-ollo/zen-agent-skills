@@ -24,6 +24,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project.
 - [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
+- [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
 - [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog, including shipped, draft, and planned skills.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
