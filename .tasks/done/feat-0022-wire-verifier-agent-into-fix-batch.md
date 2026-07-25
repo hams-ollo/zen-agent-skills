@@ -2,7 +2,7 @@
 id: feat-0022
 title: Wire verifier-agent into fix-batch and reconcile-worktrees
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
 depends_on: [bug-0002]
@@ -14,8 +14,8 @@ created: 2026-07-25
 
 ## Problem
 
-[`verifier-agent`](../.agents/skills/verifier-agent/SKILL.md) was built to formalize the verification
-pass that [`fix-batch`](../.agents/skills/fix-batch/SKILL.md) requires. Its own body says so:
+[`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) was built to formalize the verification
+pass that [`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) requires. Its own body says so:
 
 > "It formalizes the verification pass that `fix-batch` requires but leaves to the agent running it,
 > so depth and evidence stop varying between runs."
@@ -25,10 +25,10 @@ But the wiring was never done. `grep -c verifier-agent` returns **0** for both `
 
 - `fix-batch` Step 6 remains a five-point hand-rolled checklist, which is exactly the varying-depth
   problem `verifier-agent` exists to remove.
-- [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md) line 15 sends the reader to
+- [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md) line 15 sends the reader to
   "`fix-batch` Step 6" for verification, so the stale path is now load-bearing in two skills.
 
-This was deliberately deferred. [`feat-0019`](done/feat-0019-draft-verifier-agent.md) listed it as out
+This was deliberately deferred. [`feat-0019`](feat-0019-draft-verifier-agent.md) listed it as out
 of scope: "wiring the skill into `fix-batch`'s verification pass, which is a separate follow-up once
 this skill has been used." It has since been used twice, on `scripts/validate-skills.py` and in the
 `doc-sync` build. The follow-up is due.
@@ -39,7 +39,7 @@ this skill has been used." It has since been used twice, on `scripts/validate-sk
 per-agent verification pass, and repoint `reconcile-worktrees`'s verification reference at
 `verifier-agent` rather than at `fix-batch` Step 6.
 
-**Out of scope:** changing [`verifier-agent`](../.agents/skills/verifier-agent/SKILL.md) itself.
+**Out of scope:** changing [`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) itself.
 Changing `fix-batch`'s other steps, its `Why this exists` incident narrative, or its
 `Running this in Claude Code` section beyond what Step 6 requires. Any change to
 `reconcile-worktrees` beyond the verification reference.
@@ -71,24 +71,24 @@ Changing `fix-batch`'s other steps, its `Why this exists` incident narrative, or
 
     python scripts/validate-skills.py
 
-- [ ] `grep -c verifier-agent .agents/skills/fix-batch/SKILL.md` returns at least 1.
-- [ ] `grep -c verifier-agent .agents/skills/reconcile-worktrees/SKILL.md` returns at least 1.
-- [ ] `fix-batch` Step 6 composes `verifier-agent` by reference and does not restate its verdict rule
+- [x] `grep -c verifier-agent .agents/skills/fix-batch/SKILL.md` returns at least 1.
+- [x] `grep -c verifier-agent .agents/skills/reconcile-worktrees/SKILL.md` returns at least 1.
+- [x] `fix-batch` Step 6 composes `verifier-agent` by reference and does not restate its verdict rule
       or its output schema.
-- [ ] All four batch-specific checks listed in the implementation notes are still present in
+- [x] All four batch-specific checks listed in the implementation notes are still present in
       `fix-batch`.
-- [ ] `reconcile-worktrees` no longer directs the reader to `fix-batch` Step 6 as the verification
+- [x] `reconcile-worktrees` no longer directs the reader to `fix-batch` Step 6 as the verification
       procedure.
-- [ ] Every relative markdown link added resolves to a file that exists.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings (watch
+- [x] Every relative markdown link added resolves to a file that exists.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings (watch
       `fix-batch`'s body length, currently 182 lines).
-- [ ] `python .tasks/validate.py --strict` exits 0.
-- [ ] No em-dashes; headings sentence case.
+- [x] `python .tasks/validate.py --strict` exits 0.
+- [x] No em-dashes; headings sentence case.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] `bug-0002` confirmed in `.tasks/done/` before starting.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] `bug-0002` confirmed in `.tasks/done/` before starting.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.

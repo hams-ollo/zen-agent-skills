@@ -124,7 +124,30 @@ precise explanation of what it actually found and confirmation to proceed.
 ### Step 6: the mandatory verification pass, do this for every single agent, no exceptions
 
 This is the step that actually matters. For each completed agent, before treating any of its work
-as done:
+as done, run [`verifier-agent`](../verifier-agent/SKILL.md) against that worktree. Independence is
+the point, and it is stated once, here: run verifier-agent yourself, or dispatch a separate agent
+to run it, never the agent whose own work is being verified.
+
+verifier-agent runs the task's declared verification commands, checks the acceptance criteria
+against named evidence, and, when a spec is supplied, composes `spec-conformance` for the contract
+half, then returns `pass`, `fail`, or `blocked` with the evidence attached. What that verdict means
+for the batch:
+
+- **`pass`**: the criteria, commands, and (if applicable) spec conformance all check out. Move on
+  to the batch-specific checks below before calling the item mergeable, a pass is evidence the
+  implementation holds up, not a substitute for the checks that follow.
+- **`fail`**: the item is not done. Do not reconcile it. Carry the blocking reasons and findings
+  into your consolidated report so whoever owns the batch knows exactly what is still wrong.
+- **`blocked`**: verifier-agent could not answer the question at all, an unapproved spec or a
+  missing/unrunnable command, not a pass. Treat it as unresolved, same as you would treat not
+  having verified at all: do not reconcile, and fix whatever made verification unrunnable before
+  trying again. Neither this skill nor `verifier-agent` has yet exercised this branch on real batch
+  work, so give a `blocked` verdict extra scrutiny the first few times it actually comes up.
+
+verifier-agent verifies one implementation against its own spec and acceptance criteria; it has no
+notion of a batch. The following checks are specific to dispatching several agents at once and are
+not inside verifier-agent's scope, so they remain yours to run, for every agent, on top of its
+verdict:
 
 1. **Diff its worktree against its base commit** (`git diff` inside the worktree, or against the
    commit `git worktree list` shows as its base). Confirm the diff touches only the files the task
@@ -134,18 +157,15 @@ as done:
    previously-undiscovered bug fix the agent found opportunistically and never disclosed.
    Investigate anything unexpected against real ground truth, git history, the filesystem,
    actually running the code, before concluding either "fabricated" or "legitimate".)
-2. **Run the actual test suite yourself, inside that worktree.** Do not accept the agent's
-   reported pass/fail as sufficient. Agents get this wrong, including reporting success when their
-   own bookkeeping is incomplete.
-3. **Check any task-file or changelog bookkeeping the agent claims to have done actually matches
+2. **Check any task-file or changelog bookkeeping the agent claims to have done actually matches
    what it claims.** Open the file. Confirm the status field, every checkbox, and the changelog
    entry are actually present and actually correct, not just that a file got moved to the right
    directory.
-4. **Treat "I recovered from an error" or "I reconstructed lost work" in an agent's summary as a
+3. **Treat "I recovered from an error" or "I reconstructed lost work" in an agent's summary as a
    high-scrutiny flag, not a reassurance.** This is exactly the situation where an agent is most
    likely to have introduced something undisclosed while trying to fix its own mistake. Give that
    diff extra attention, line by line if it is not large.
-5. **Check for repo-specific landmines that would not be any single agent's fault**, especially
+4. **Check for repo-specific landmines that would not be any single agent's fault**, especially
    around binary assets, LFS tracking, or generated files. If multiple independently-created
    worktrees show the identical unexpected diff on the same path, that is a systemic or tooling
    issue, not something any agent did. Investigate before assuming corruption (compare real byte
@@ -172,8 +192,9 @@ tool names below are the local implementation.
   check in, just continue or wait for the notification.
 - **Resume a false-alarm blocker (Step 5):** use `SendMessage` addressed to the agent's id (or
   name) to continue that specific agent with its context intact, rather than starting a fresh one.
-- **Verification (Step 6):** run the `git` and test commands yourself with the `Bash` tool inside
-  each worktree path; do not delegate the verification back to the agent you are verifying.
+- **Verification (Step 6):** dispatch `verifier-agent` (a separate `Agent` call from the one that
+  did the work) or run its procedure yourself, then run the batch-specific checks with the `Bash`
+  tool inside each worktree path. See Step 6 for the independence rule.
 
 ## The throughline
 

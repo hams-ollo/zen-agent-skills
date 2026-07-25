@@ -12,9 +12,10 @@ behalf, and without trusting that "no conflicts reported" means "safe".
 This is the closing step of the kit spine: [`new-task`](../new-task/SKILL.md) authors the task
 files, [`fix-batch`](../fix-batch/SKILL.md) dispatches them to isolated worktree agents, and this
 skill consolidates the results. It assumes each worktree has already been through its own
-verification pass (see [`fix-batch`](../fix-batch/SKILL.md) Step 6). This skill is about combining
-already-trusted changes, not about trusting them in the first place. If a worktree has not been
-independently verified yet, do that first.
+verification pass via [`verifier-agent`](../verifier-agent/SKILL.md) (`fix-batch`'s Step 6 is what
+runs it against every worktree in a batch). This skill is about combining already-trusted changes,
+not about trusting them in the first place. If a worktree has not been independently verified yet,
+run [`verifier-agent`](../verifier-agent/SKILL.md) against it first.
 
 ## Why this exists
 

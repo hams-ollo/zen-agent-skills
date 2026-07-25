@@ -1,0 +1,103 @@
+---
+id: chore-0011
+title: Document the two skill shapes in AGENTS.md and give every skill a house-style pointer
+type: chore
+status: open
+priority: P2
+parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
+depends_on: [feat-0022, chore-0010]
+touched_files:
+  - AGENTS.md
+  - .agents/skills/fix-batch/SKILL.md
+  - .agents/skills/init-worktracking/SKILL.md
+  - .agents/skills/new-task/SKILL.md
+  - .agents/skills/pr-describe/SKILL.md
+  - .agents/skills/reconcile-worktrees/SKILL.md
+  - .agents/skills/spec-conformance/SKILL.md
+  - .agents/skills/spec-plan-readiness/SKILL.md
+created: 2026-07-25
+---
+
+## Problem
+
+Two related gaps, one cosmetic and one functional. The 2026-07-25 review pass found that only 4 of
+19 skills follow the full section shape (`When to use` / `When not to use` / `Inputs` / `Procedure` /
+`Output format` / `Notes` / `Conventions`), and that `## Conventions` appears in only 8 of 19.
+
+Nothing violates [`AGENTS.md`](../AGENTS.md), which mandates only frontmatter plus a body. **The
+inconsistency is not itself the defect.** Two shapes are in use and both are legitimate: workflow
+skills carry a procedure, while lenses (`spec-quality`, `test-quality`, `review-quality`) carry an
+`Intent` / `Workflow` / `Output format` shape because they are composed rather than run. The defect
+is that this is nowhere written down, so the author of skill number 20 has to guess.
+
+The functional half is narrower and more serious than the section count suggests. **Seven skills
+carry no reference to the house-style module at all:**
+
+| Skill | `## Conventions` | Any house-style pointer |
+|---|---|---|
+| `fix-batch` | no | **none** |
+| `init-worktracking` | no | **none** |
+| `new-task` | no | **none** |
+| `pr-describe` | no | **none** |
+| `reconcile-worktrees` | no | **none** |
+| `spec-conformance` | no | **none** |
+| `spec-plan-readiness` | no | **none** |
+
+`code-review`, `doc-author`, `project-bootstrap`, and `test-quality` lack the section but do point at
+house style inline, so they are fine and are **not** in scope.
+
+This matters because the house-style module is swappable by design. An adopter who replaces
+[`.agents/rules/house-style.md`](../.agents/rules/house-style.md) with their own voice is silently
+ignored by any skill that never points at it, which breaks the promise the kit makes about that file.
+
+## Scope
+
+**In scope:** add a short section to `AGENTS.md` recording that both shapes are valid and when each
+applies. Add a house-style pointer to the seven skills that have none, in each skill's own voice.
+
+**Out of scope:** retrofitting any skill to the full modern shape. That was considered and rejected:
+it is a large diff for cosmetic gain and would flatten the deliberate brevity of `doc-author` (41
+lines) and `doc-revise` (32 lines). Touching the four skills that already point at house style
+inline. Changing the content of `house-style.md` itself.
+
+## Implementation notes
+
+- **Two of the seven need different wording, and getting this wrong would be a real regression.**
+  [`init-worktracking`](../.agents/skills/init-worktracking/SKILL.md) and
+  [`new-task`](../.agents/skills/new-task/SKILL.md) operate on a *target* repository, and
+  `init-worktracking` explicitly warns against hardcoding this kit's voice into a scaffolded repo
+  ("Do not invent house rules and do not import another project's voice"). For those two, the pointer
+  must say to follow **the target repo's** conventions, and may mention this kit's module only as the
+  default when the skill is run here. Do not paste the standard paragraph into them unchanged.
+- The other five can follow the wording already used by `verifier-agent`, `doc-sync`, `spec-author`,
+  and `test-author`: a short `## Conventions` section naming the module as a swappable default that a
+  downstream adopter may replace without touching the skill.
+- Put the shape rule in `AGENTS.md` near the existing "How a skill is structured" section, which is
+  where an author would look. Keep it to a few sentences; it is a convention, not a specification.
+- `AGENTS.md` is a human-owned contract document, so `doc-sync` would never edit it on its own. This
+  task edits it deliberately, on an explicit decision recorded on 2026-07-25.
+- **Depends on `feat-0022`** (which edits `fix-batch` and `reconcile-worktrees`) and **`chore-0010`**
+  (which edits `spec-plan-readiness`). Do not dispatch this in parallel with either.
+
+## Acceptance criteria (mechanically verifiable)
+
+    python scripts/validate-skills.py
+
+- [ ] Every skill under `.agents/skills/` contains at least one reference to `house-style`.
+- [ ] `AGENTS.md` documents both skill shapes and when each applies.
+- [ ] `init-worktracking` and `new-task` point at the **target repo's** conventions rather than
+      instructing an agent to impose this kit's house style on a scaffolded repository.
+- [ ] No skill outside the seven listed in `touched_files` is modified.
+- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings (it now also
+      fails on unresolved links, so any new relative link must resolve).
+- [ ] `python .tasks/validate.py --strict` exits 0.
+- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
+- [ ] No em-dashes; headings sentence case.
+
+## Definition of done
+
+- [ ] Acceptance command(s) pass locally.
+- [ ] Conventions in the `AGENTS.md` conventions section followed.
+- [ ] `feat-0022` and `chore-0010` confirmed in `.tasks/done/` before starting.
+- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+      referencing this task id.

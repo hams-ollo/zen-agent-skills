@@ -104,15 +104,7 @@ Do not treat unmentioned scope as allowed implementation work. The task decompos
 
 ### 6. Build the scenario-to-test map
 
-For every mapped spec scenario, recommend a test layer and reason.
-
-Use the repo's test taxonomy when available, and any project `test-quality` guidance. Prefer the lowest faithful layer:
-
-- `unit/core` for pure logic, parsing, normalization, policy decisions, reducers, and state machines;
-- `component/service` for public service behavior with controlled dependencies;
-- `filesystem/database/wire-format integration` for persistence, schemas, migrations, file layout, query behavior, or wire compatibility;
-- `provider/adapter/entrypoint` for command/tool/API argument conversion, routing, serialization, protocol behavior, UI event wiring, or adapter behavior;
-- `end-to-end/smoke` only for critical user journeys or diagnostics that cannot be faithfully covered lower.
+For every mapped spec scenario, recommend a test layer plus a reason, preferring the lowest faithful layer. Use the repo's own test taxonomy when one exists; otherwise choose the layer from [`test-quality`'s layer selection](../test-quality/SKILL.md#layer-selection).
 
 If readiness was blocked before mapping, return an empty `scenario_to_test_map`.
 
@@ -167,5 +159,5 @@ Before returning `implementable`, confirm:
 8. Risk/rollback notes exist for every task that triggers the deterministic risk rule.
 9. Every task maps to spec scenarios, and every scenario maps to a task or explicit non-implementation rationale.
 10. The task decomposition does not contradict spec behavior, scope, sequencing, surfaces, dependencies, validation, or outcomes.
-11. Scenario test layers are selected from the repo's test taxonomy when available, plus any project `test-quality` guidance.
+11. Scenario test layers are selected from the repo's own test taxonomy when one exists, or from `test-quality`'s layer selection otherwise.
 12. The first safe task is dependency-satisfied and fully mappable.

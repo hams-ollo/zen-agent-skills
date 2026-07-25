@@ -84,13 +84,21 @@ Ready to dispatch. Wave 1 is parallel-safe (disjoint `touched_files`); wave 2 wa
 | [`chore-0008`](.tasks/done/chore-0008-cross-link-doc-trio.md) | 1 | `doc-author` and `doc-revise` have no reference to `doc-sync`; the documentation trio only links one way. |
 | [`chore-0009`](.tasks/done/chore-0009-agent-handoff-harness-neutral.md) | 1 | `agent-handoff`'s description hardcodes "Claude Code", putting harness lock-in in the kit's most visible field. |
 | [`feat-0023`](.tasks/done/feat-0023-extend-validate-skills-lint.md) | 1 | `validate-skills.py` catches none of the above. Extend it so this class of defect fails a command instead of waiting for a human read. |
-| [`feat-0022`](.tasks/feat-0022-wire-verifier-agent-into-fix-batch.md) | 2 | Wire `verifier-agent` into `fix-batch` Step 6 and `reconcile-worktrees`. Deferred by `feat-0019` until the skill had been used; it has been. |
-| [`chore-0010`](.tasks/chore-0010-spec-plan-readiness-compose-test-quality.md) | 2 | `spec-plan-readiness` restates `test-quality`'s layer taxonomy inline instead of composing it. Two copies free to drift. |
+| [`feat-0022`](.tasks/done/feat-0022-wire-verifier-agent-into-fix-batch.md) | 2 | Wire `verifier-agent` into `fix-batch` Step 6 and `reconcile-worktrees`. Deferred by `feat-0019` until the skill had been used; it has been. |
+| [`chore-0010`](.tasks/done/chore-0010-spec-plan-readiness-compose-test-quality.md) | 2 | `spec-plan-readiness` restates `test-quality`'s layer taxonomy inline instead of composing it. Two copies free to drift. |
 
-Not yet decomposed, because each needs a decision first (per section 3: only decompose when the work is about to be built):
+Decided on 2026-07-25 and now filed:
 
-- **Skill shape convention.** Only 4 of 19 skills follow the full `When to use` / `When not to use` / `Inputs` / `Procedure` / `Output format` / `Notes` / `Conventions` shape; `## Conventions` appears in 9 of 19. Nothing is violated, because section 4 mandates only frontmatter plus a body. Decide whether the modern shape is the standard (and whether lenses are a deliberate exception) before retrofitting anything.
-- **Spec and test coverage of the kit's own skills.** 4 of 19 skills have a spec under [`docs/spec/`](docs/spec/); none has tests. The kit built a spec-to-verify spine and has applied it to four of its own nineteen skills. This is the substance of Epic A item 8 and needs scoping as a program, not a task.
+| Task | Decision |
+|---|---|
+| [`chore-0011`](.tasks/chore-0011-document-skill-shapes-and-house-style-pointers.md) | **Skill shape.** Both shapes are legitimate: workflow skills carry a procedure, lenses carry `Intent` / `Workflow` / `Output format` because they are composed rather than run. Document that rule rather than retrofitting 19 skills. Separately, seven skills carry no house-style pointer at all, which is a live portability gap rather than a style preference, since the module is swappable and a skill that never references it silently ignores an adopter's replacement. Blocked on `feat-0022` and `chore-0010`, which touch three of the same files. |
+| [`feat-0024`](.tasks/feat-0024-exercise-verifier-blocked-branch.md) | **Epic A item 8, first slice.** Target the three unexercised branches rather than spec'ing all fifteen remaining skills. Start with `verifier-agent`'s `blocked` verdict, the branch carrying the most weight and the least evidence. Drafting a `code-review` contract the kit wants anyway produces a genuinely unapproved spec, so the branch fires on real work instead of a staged fixture. That run also settles the evaluation-record format the other two branches will reuse. |
+
+Still at roadmap altitude, deliberately not decomposed until `feat-0024` establishes the record format:
+
+- **`test-author`'s characterization mode**, never fired on real work.
+- **`spec-plan-readiness`'s blocking paths**, never fired on real work.
+- **The wider spec and test coverage question.** Even after `feat-0024`, 5 of 19 skills will have a contract and none will have behavioral tests. Whether that gap is worth closing skill by skill, or whether the targeted-branch approach is sufficient, is a judgment to make once there is evidence from the first three exercises.
 
 ---
 
