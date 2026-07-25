@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The Zen Starter Kit is a portable library of reusable AI agent skills and the tooling to distribute them across coding harnesses. It packages repeatable workflows for project setup, work tracking, parallel agent execution, documentation, code review, and pull request preparation.
+The Zen Starter Kit is a portable library of reusable AI agent skills and the tooling to distribute them across coding harnesses. It packages repeatable workflows for project setup, work tracking, specification authoring, test authoring, parallel agent execution, verification, documentation, code review, and pull request preparation.
 
 The core principle is **write a skill once, use it in every harness**. Each skill has one harness-agnostic source file, `SKILL.md`. The kit then installs that source where a supported tool can discover it or generates a thin, native adapter for the target project.
 
@@ -27,8 +27,12 @@ This is a skills library, not an application or a service. It has no database, n
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
 - [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog, including shipped, draft, and planned skills.
+- [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md): a partner-facing snapshot of where the kit stands.
+- [`docs/PLATFORM-PITCH.md`](docs/PLATFORM-PITCH.md): the wider Zen Solutions platform vision.
+- [`docs/spec/`](docs/spec/): behavioral specifications, the contracts the spine's skills are built and verified against.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
 - [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
+- [`tests/`](tests/): the kit's own test suite, derived from the specifications under `docs/spec/`.
 
 ## How the workflow fits together
 
@@ -36,14 +40,28 @@ The skills can form one development spine, while remaining useful on their own:
 
 ```mermaid
 flowchart LR
-  A[project-bootstrap] --> B[init-worktracking]
-  B --> C[new-task]
-  C --> D[fix-batch]
-  D --> E[reconcile-worktrees]
-  E --> F[pr-describe]
+  subgraph Setup
+    A[project-bootstrap] --> B[init-worktracking]
+  end
+  subgraph Contract
+    C[spec-author] --> D[spec-plan-readiness]
+  end
+  subgraph Build
+    E[new-task] --> F[fix-batch]
+  end
+  subgraph Verify
+    G[test-author] --> H[spec-conformance]
+  end
+  B --> C
+  D --> E
+  F --> G
+  H --> I[reconcile-worktrees]
+  I --> J[pr-describe]
 ```
 
-The front door scaffolds a project and its work tracker. A rough idea becomes an atomic task, independent tasks can be dispatched to isolated agents, their work is reconciled, and the resulting change is documented for review. See the [skill catalog](docs/CATALOG.md) for the complete inventory and status of each skill.
+The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. Verified work is then reconciled and documented for review.
+
+Three report-only lenses are composed by the skills above rather than run on their own: `spec-quality` (specification well-formedness), `test-quality` (test design), and `review-quality` (code review). See the [skill catalog](docs/CATALOG.md) for the complete inventory and status of each skill.
 
 ## Prerequisites
 
@@ -136,9 +154,13 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`.agents/rules/house-style.md`](.agents/rules/house-style.md) | Swappable writing and formatting rules used by skills |
 | [`scripts/`](scripts/) | Installer, adapter generator, and validation tooling |
 | [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit |
+| [`tests/`](tests/) | The kit's own test suite |
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
+| [`docs/spec/`](docs/spec/) | Behavioral specifications and conformance reports |
+| [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) | Partner-facing status snapshot |
+| [`docs/PLATFORM-PITCH.md`](docs/PLATFORM-PITCH.md) | Platform vision and positioning |
 | [`ROADMAP.md`](ROADMAP.md) | Ordered plan for future work |
 | [`CHANGELOG.md`](CHANGELOG.md) | Record of completed work |
 

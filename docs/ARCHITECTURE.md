@@ -41,6 +41,14 @@ Each directory in [`.agents/skills/`](../.agents/skills/) contains a `SKILL.md` 
 
 These adapters are derived artifacts. Change the source skill, then regenerate them. Do not maintain a second, hand-edited copy of the instructions.
 
+### Behavioral specifications and tests
+
+Since the contract-driven delivery spine shipped, the kit maintains two further classes of first-class artifact.
+
+[`docs/spec/`](spec/) holds behavioral specifications: the contracts that skills and tooling are built and audited against. A specification is written by `spec-author`, checked by the `spec-quality` lens, and carries a `status` of `draft` or `approved`, because human approval is an explicit state rather than an implied one. Scenarios use stable `S-NNN` identifiers, which is what makes the chain traceable: `spec-plan-readiness` maps those identifiers to test layers, `test-author` tags each derived test with the identifier it covers, and `spec-conformance` later audits the same identifiers. A conformance report sits beside its specification as `<spec>.conformance.md`.
+
+[`tests/`](../tests/) holds the kit's own test suite, derived from those specifications rather than written ad hoc. Tests are evidence for the verification step, not a substitute for it: a green suite asserts code contracts, while conformance asserts that behavior matches the specification.
+
 ### Governance and work tracking
 
 [`AGENTS.md`](../AGENTS.md) is the canonical instruction file for agents working in this repository. It defines the reading protocol, portability contract, and contribution bar.
@@ -51,6 +59,7 @@ The kit dogfoods its own work-tracking model:
 - [`.tasks/`](../.tasks/) contains atomic, agent-assignable work items.
 - [`CHANGELOG.md`](../CHANGELOG.md) is the append-only record of completed work.
 - [`docs/CATALOG.md`](CATALOG.md) is the reader-facing catalog of available skills and their shipping status.
+- [`docs/spec/`](spec/) holds the behavioral contracts, and [`tests/`](../tests/) the tests derived from them.
 
 ## Authoring and release flow
 

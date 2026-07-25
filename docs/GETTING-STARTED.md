@@ -280,6 +280,8 @@ Install the skills for your tool, then use one skill when the need appears:
 - 🧳 `agent-handoff` for handing work to another AI session or agent.
 - 🔍 `code-review` for a report-only review of a change.
 - 📬 `pr-describe` for a draft pull request description and changelog entry.
+- 📜 `spec-author` for writing down what a feature should do before anyone builds it.
+- 🧪 `test-author` for turning an agreed specification into real tests.
 
 This approach is useful when your existing task or project-management system already works for you.
 
@@ -289,26 +291,33 @@ The kit becomes especially useful when more than one person or agent is involved
 
 ```mermaid
 flowchart LR
-  A[Idea or request] --> B[new-task]
-  B --> C[Clear task and acceptance check]
-  C --> D[Agent or builder does the work]
-  D --> E[Verification]
-  E --> F[code-review]
-  F --> G[pr-describe]
+  A[Idea or request] --> B[spec-author]
+  B --> C[You approve the specification]
+  C --> D[new-task]
+  D --> E[Agent or builder does the work]
+  E --> F[test-author]
+  F --> G[spec-conformance]
+  G --> H[code-review]
+  H --> I[pr-describe]
 ```
 
 A typical collaboration loop is:
 
-1. 📝 `new-task` turns a rough request into a focused task.
-2. 🧑‍💻 A builder or agent completes the task.
-3. ✅ The acceptance command proves the intended result.
-4. 🔍 `code-review` checks the change and reports findings without editing.
-5. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
-6. 🔄 `reconcile-worktrees` brings verified work back into the main project.
-7. 📬 `pr-describe` drafts the change summary for review.
-8. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
+1. 📜 `spec-author` turns a rough idea into a written specification of what the result should do, then stops and waits for you to approve it. Nothing is built until you do.
+2. 📝 `new-task` breaks the approved specification into focused tasks.
+3. 🧑‍💻 A builder or agent completes the task.
+4. ✅ The acceptance command proves the intended result.
+5. 🧪 `test-author` derives tests from the specification, so each test traces back to the behavior it protects.
+6. 📐 `spec-conformance` audits whether the implementation actually matches the specification, which is a different question from whether the tests pass.
+7. 🔍 `code-review` checks the change and reports findings without editing.
+8. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
+9. 🔄 `reconcile-worktrees` brings verified work back into the main project.
+10. 📬 `pr-describe` drafts the change summary for review.
+11. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
 
-You can use the first three steps without ever running parallel agents.
+You do not need all of this at once. Steps 2 to 4 work on their own, and you can add the specification and testing steps when a piece of work is big enough to be worth agreeing on in writing first.
+
+The reason the specification comes first is worth stating plainly: an agent that is told what "done" means can be checked against it afterwards. Without that written agreement, "it works" is only an opinion, and the only person who can verify the result is whoever wrote the original prompt.
 
 ## 🗣️ Prompts you can copy
 

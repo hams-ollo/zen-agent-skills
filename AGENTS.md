@@ -29,6 +29,8 @@ A skills library, not an application. The deliverables are the skills under [`.a
 | [`.agents/hooks/`](.agents/hooks/) | Optional runtime guardrails (Python on stdin). Empty until a rule earns enforcement. |
 | [`scripts/`](scripts/) | `install.py`, `build-adapters.py`, `validate-skills.py`. |
 | [`.tasks/`](.tasks/) | Atomic, agent-assignable work items for building this kit, plus `validate.py`. |
+| [`docs/spec/`](docs/spec/) | Behavioral specifications (the contracts) and their `<spec>.conformance.md` audit reports. |
+| [`tests/`](tests/) | The kit's own tests, derived from the specifications under `docs/spec/`. |
 | [`ROADMAP.md`](ROADMAP.md) | The strategic plan: which skills get built, in what order (builder-facing). |
 | [`CHANGELOG.md`](CHANGELOG.md) | Append-only ledger of finished work. |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | The reader-facing narrative catalog (what the kit offers, for people browsing it). |

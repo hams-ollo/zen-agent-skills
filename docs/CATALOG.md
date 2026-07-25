@@ -24,16 +24,19 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## The contract-driven delivery spine (Epic B, in progress)
 
-These skills make the roadmap's contract-driven delivery spine real. All four were folded in from `repoprompt-workflows` (Balarama Bosch, MIT), house-styled, and **blessed 2026-07-24** after being dogfooded on real in-kit work: drafting and gating the `spec-author` spec, and auditing `scripts/validate-skills.py`. This is where the kit begins dogfooding its own spine, with specs living under [`docs/spec/`](spec/). `spec-author`, the first authored (not folded-in) spine skill, was blessed 2026-07-24 after drafting the `test-author` spec. Provenance is recorded in [`NOTICE`](../NOTICE).
+These skills make the roadmap's contract-driven delivery spine real. All six were **blessed 2026-07-24** after being dogfooded on real in-kit work. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Two (`spec-author`, `test-author`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
+
+`verifier-agent` is drafted and awaiting its dogfood. The spine continues at the roadmap level with `user-testing` and `doc-sync`, which are not built yet.
 
 | Skill | Status | What it does |
 |---|---|---|
 | `spec-author` | shipped (Epic B) | Drafts a persistent behavioral spec from a raw idea, composes `spec-quality` to self-check to `ready`, writes it under `docs/spec/` as `status: draft`, and stops for human approval before `new-task` decomposes it. |
-| `spec-quality` | shipped (Epic B) | Report-only lens keeping scenario-based specs contract-level, observable, non-redundant, grounded in repo context, and free of implementation planning. To be composed by the planned `spec-author`. |
+| `spec-quality` | shipped (Epic B) | Report-only lens keeping scenario-based specs contract-level, observable, non-redundant, grounded in repo context, and free of implementation planning. Composed by `spec-author` and `test-author`. |
 | `spec-plan-readiness` | shipped (Epic B) | Deterministic go/no-go gate: blocks tests, code, and delegation until an approved spec plus an ordered, repo-grounded `.tasks/` plan are implementable. |
-| `test-quality` | shipped (Epic B) | Report-only lens for choosing the lowest faithful test layer, naming the plausible defect each test protects, and asserting real observable outcomes. To be composed by the planned `test-author`. |
-| `spec-conformance` | shipped (Epic B) | Audits an implementation against its spec into a positive Conformed/Diverged/Not-built matrix. Composes into `fix-batch` verification; to be composed by the planned `verifier-agent`. |
+| `test-quality` | shipped (Epic B) | Report-only lens for choosing the lowest faithful test layer, naming the plausible defect each test protects, and asserting real observable outcomes. Composed by `test-author`. |
+| `spec-conformance` | shipped (Epic B) | Audits an implementation against its spec into a positive Conformed/Diverged/Not-built matrix. Composes into `fix-batch` verification, and is composed by `verifier-agent`. |
 | `test-author` | shipped (Epic B) | Derives runnable tests from an approved spec's scenarios (tagged by `S-NNN`), matching the repo's own test framework and composing `test-quality` for layer and oracle. Acceptance and characterization modes; writes tests, never production code. |
+| `verifier-agent` | draft (Epic B) | Independently verifies an implementation before reconciliation: runs the declared commands, composes `spec-conformance` so a contract divergence fails the run even when tests pass, maps each acceptance criterion to evidence, and returns a deterministic pass, fail, or blocked verdict. Verifies and reports; never edits what it verifies. |
 
 ## Tier B: semi-scalable (great for teams and clients)
 
@@ -42,7 +45,6 @@ These skills make the roadmap's contract-driven delivery spine real. All four we
 | `repo-explainer` | planned | A "start here" guided tour of an unfamiliar codebase. Strong for client onboarding. |
 | `sop-drafter` | planned | Turn a described workflow into a documented standard operating procedure. |
 | `security-audit` | planned | Repeatable dependency and secret scan with a written summary. |
-| `test-author` | planned | Characterization tests for legacy code with no coverage. |
 | `adr` | planned | Architecture decision records / decision log entries. |
 
 ## Tier C: hyper-specific (personal, stays out of the shared kit)

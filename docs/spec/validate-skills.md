@@ -1,6 +1,6 @@
 ---
 title: validate-skills
-status: draft
+status: approved
 ---
 
 # validate-skills

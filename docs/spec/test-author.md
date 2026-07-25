@@ -1,6 +1,6 @@
 ---
 title: test-author
-status: draft
+status: approved
 ---
 
 # test-author

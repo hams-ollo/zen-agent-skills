@@ -14,17 +14,17 @@ against [`validate-skills.md`](validate-skills.md). Produced as the first in-kit
 
 | Section | Item | Status | Evidence | Note |
 |---|---|---|---|---|
-| Scenarios | S-001 directory without SKILL.md | Conformed | `validate-skills.py:64-65` | `if not skill_md.is_file(): errors.append(... no SKILL.md)` |
-| Scenarios | S-002 no frontmatter | Conformed | `validate-skills.py:67-69` with `parse_frontmatter:26,33-34` | returns `None` when first line is not `---` or no closing `---`, then error |
-| Scenarios | S-003 name != directory | Conformed | `validate-skills.py:75-76` | `elif name != d.name: errors.append(...)` |
-| Scenarios | S-004 missing name or description | Conformed | `validate-skills.py:73-74,77-78` | separate error branches for each missing key |
-| Scenarios | S-005 thin description warns, does not fail | Conformed | `validate-skills.py:79-81` + exit `:93` | appends to `warnings`; `return 1 if errors else 0` keeps exit 0 |
-| Scenarios | S-006 oversized body warns, does not fail | Conformed | `validate-skills.py:82-84` + exit `:93` | body-line warning, no error |
-| Scenarios | S-007 all valid | Conformed | `validate-skills.py:91-93` | prints `Checked N skill(s)...` and returns 0 |
-| Scenarios | S-008 description states what and when | Diverged | spec: `validate-skills.md` S-008; code: `validate-skills.py:79-81` | spec requires flagging descriptions that do not state both what and when; code only checks `len(desc) < 40` (a length proxy the docstring at `:6` itself calls "a rough proxy"). A description over 40 chars that says neither passes. |
-| Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | `validate-skills.py:96-97` | `if __name__ == "__main__": raise SystemExit(main())` |
-| Proposed Surface | Exit non-zero on error only | Conformed | `validate-skills.py:93` | `return 1 if errors else 0` |
-| Proposed Surface | Summary output format | Conformed | `validate-skills.py:87-92` | `WARN`/`ERROR` lines then the `Checked ...` summary |
+| Scenarios | S-001 directory without SKILL.md | Conformed | `main()` / `not skill_md.is_file()` branch | `errors.append(f"{rel}: no SKILL.md")`, then `continue` |
+| Scenarios | S-002 no frontmatter | Conformed | `main()` / `fm is None` branch, with `parse_frontmatter()` / both `return None, 0` paths | `parse_frontmatter` returns `None` when the first line is not `---` or no closing `---` is found; `main` then records the error |
+| Scenarios | S-003 name != directory | Conformed | `main()` / `elif name != d.name` branch | `errors.append(... name {name!r} != directory {d.name!r})` |
+| Scenarios | S-004 missing name or description | Conformed | `main()` / `if not name` and `if not desc` branches | separate error branches for each missing key |
+| Scenarios | S-005 thin description warns, does not fail | Conformed | `main()` / `elif len(desc) < MIN_DESC_CHARS` branch, with the `return 1 if errors else 0` exit | appends to `warnings`, never `errors`, so the exit stays 0 |
+| Scenarios | S-006 oversized body warns, does not fail | Conformed | `main()` / `if body_lines > MAX_BODY_LINES` branch, with the `return 1 if errors else 0` exit | body-line warning, no error |
+| Scenarios | S-007 all valid | Conformed | `main()` / the `Checked {len(skills)} skill(s)` summary print and `return 1 if errors else 0` | prints the summary and returns 0 |
+| Scenarios | S-008 description states what and when | Diverged | spec: `validate-skills.md` S-008; code: `main()` / `elif len(desc) < MIN_DESC_CHARS` branch | spec requires flagging descriptions that do not state both what and when; code only checks `len(desc) < MIN_DESC_CHARS` (a length proxy the module docstring itself calls "a rough proxy"). A description over that length saying neither still passes. |
+| Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | module `__main__` guard | `if __name__ == "__main__": raise SystemExit(main())` |
+| Proposed Surface | Exit non-zero on error only | Conformed | `main()` / final `return 1 if errors else 0` | warnings do not affect the exit code |
+| Proposed Surface | Summary output format | Conformed | `main()` / the `WARN`/`ERROR` print loops and the `Checked ...` summary print | per-issue lines first, then the summary |
 
 ## Coverage proof
 
@@ -39,3 +39,15 @@ against [`validate-skills.md`](validate-skills.md). Produced as the first in-kit
 
 No spec item was silently dropped. One item diverges by design and is accepted with a stated reason;
 everything else conforms.
+
+## Citation maintenance
+
+Citations were re-anchored on 2026-07-24 (`chore-0005`) from line references to symbol and branch
+references. The original audit cited line numbers, and the `chore-0003` refactor later inserted the
+`skills_dir` parameter, the missing-directory guard, and the `_rel` helper above the audited code,
+shifting every citation inside `main()` by eight lines while leaving the classifications correct. The
+`verifier-agent` dogfood caught the drift ([`validate-skills.verification.md`](validate-skills.verification.md)).
+
+No status, evidence meaning, or disposition changed in that re-anchoring: the audit's findings stand
+exactly as first recorded. Symbol and branch references were chosen because they survive unrelated
+edits above them, which bare line numbers do not.

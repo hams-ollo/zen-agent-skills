@@ -1,6 +1,6 @@
 ---
 title: spec-author
-status: draft
+status: approved
 ---
 
 # spec-author
