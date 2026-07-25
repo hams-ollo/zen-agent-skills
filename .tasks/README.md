@@ -26,7 +26,7 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 
 ## Lifecycle
 
-`open -> in_progress -> done`. On done: move the file to `done/`, set `status: done`, add one dated line to `../CHANGELOG.md` referencing the task id, and (if it completed a roadmap Feature) strike that Feature through in `../ROADMAP.md`. See `AGENTS.md` section 5.
+`open -> in_progress -> done`. On done: move the file to `done/`, set `status: done`, add one dated line to `../CHANGELOG.md` referencing the task id, and (if it completed a roadmap Feature) strike that Feature through in `../ROADMAP.md`. See the task-lifecycle section of `AGENTS.md`.
 
 ## Frontmatter fields
 

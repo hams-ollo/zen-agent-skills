@@ -29,7 +29,7 @@ Do not dump the whole system on a 200-line project. Ask which tier fits, or infe
 | **standard** | lite + `ROADMAP.md` + `CHANGELOG.md` | most repos; the full altitude model |
 | **team** | standard + `.tasks/validate.py` + a CI/pre-commit invocation + optional Cursor/Copilot pointers | repos with many contributors or agents, where drift must be caught mechanically |
 
-At **lite**, also strike the `ROADMAP.md`/`CHANGELOG.md` references out of the `AGENTS.md` you write (sections 1 and 5 still describe the model, but the header links and lifecycle steps 4-5 should not point at files that do not exist).
+At **lite**, also strike the `ROADMAP.md`/`CHANGELOG.md` references out of the `AGENTS.md` you write (the work-altitude-model section and the task-lifecycle section still describe the model, but the header links and lifecycle steps 4-5 should not point at files that do not exist).
 
 ## Procedure
 
@@ -61,7 +61,7 @@ Gather what fills the placeholders from the repo itself, not from assumptions. T
   - CI from `.github/workflows/*.yml`: the lint/test/build invocations there are ground truth, mirror them.
   - Monorepo layout: workspaces (`package.json` `workspaces`, `pnpm-workspace.yaml`, uv `[tool.uv.workspace]` members, Cargo workspace). If per-package test commands are needed, list them.
   - If you genuinely cannot determine a command, write a clearly marked `<!-- TODO: fill in the test command -->` rather than guessing.
-- **Conventions** (`{{CONVENTIONS}}`): only conventions you can actually observe (a linter config, `.editorconfig`, a formatter, an existing style). Do not invent house rules and do not import another project's voice (no em-dash bans, no specific test runner) unless the repo shows it. The `AGENTS.md` template already frames section 4 as "edit freely," so seed it thin and let the user add their own.
+- **Conventions** (`{{CONVENTIONS}}`): only conventions you can actually observe (a linter config, `.editorconfig`, a formatter, an existing style). Do not invent house rules and do not import another project's voice (no em-dash bans, no specific test runner) unless the repo shows it. The `AGENTS.md` template already frames its conventions section as "edit freely," so seed it thin and let the user add their own.
 - **File map** (`{{FILE_MAP}}`): 3-8 of the most load-bearing files an agent would repeatedly need, one line of purpose each.
 - **Current state** (`{{CURRENT_STATE}}`, standard/team): a short description of what exists today, organized by theme or subsystem. This is the roadmap's 30,000 ft layer.
 
@@ -138,4 +138,4 @@ Summarize what was created and what was skipped because it existed. Then offer, 
 - This skill scaffolds structure. It does not invent work items unless asked.
 - It pairs with `new-task` (author task files upstream), `fix-batch` (spin up parallel agents over a batch of task files), and `reconcile-worktrees` (merge their results back). Mention these if the user's goal is parallel execution.
 - Everything is markdown and file-based, plus one stdlib-only Python checker. No database, no service dependency: that portability is the whole point.
-- The `AGENTS.md` section 4 conventions are deliberately labeled "edit freely" so an adopter is never saddled with rules they did not choose. Do not hardcode your own house style into a scaffolded repo.
+- The `AGENTS.md` conventions section is deliberately labeled "edit freely" so an adopter is never saddled with rules they did not choose. Do not hardcode your own house style into a scaffolded repo.

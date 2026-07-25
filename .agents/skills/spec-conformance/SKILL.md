@@ -9,7 +9,7 @@ Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 
 ## Intent
 
-Prove the implementation conforms to the spec, section by section. Green tests are not proof: they assert code contracts (an element exists, an endpoint returns 200), not that behavior matches the spec's requirements. This skill is the audit that closes that gap and produces the artifact the closeout gate requires. It is the report-only half of the kit's independent verification, meant to compose into the existing verification pass of the [`fix-batch`](../fix-batch/SKILL.md) skill rather than duplicate or replace it. See also [`verifier-agent`](../verifier-agent/SKILL.md), a planned kit skill that composes this lens with others.
+Prove the implementation conforms to the spec, section by section. Green tests are not proof: they assert code contracts (an element exists, an endpoint returns 200), not that behavior matches the spec's requirements. This skill is the audit that closes that gap and produces the artifact the closeout gate requires. It is the report-only half of the kit's independent verification, meant to compose into the existing verification pass of the [`fix-batch`](../fix-batch/SKILL.md) skill rather than duplicate or replace it. See also [`verifier-agent`](../verifier-agent/SKILL.md), a kit skill that composes this lens with others.
 
 ## When to use
 

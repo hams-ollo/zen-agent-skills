@@ -13,7 +13,7 @@ Help agents draft and review specs that are contract-level, scenario-driven, tes
 
 A good spec says **what** behavior should exist and **why** it matters. It does not become the implementation plan, architecture brief, task list, or test file design.
 
-This skill is a lens, not a drafting workflow: it is meant to be composed into one. [`spec-author`](../spec-author/SKILL.md) (a planned skill in this kit) drafts specs and calls this lens to check its own output before returning it.
+This skill is a lens, not a drafting workflow: it is meant to be composed into one. [`spec-author`](../spec-author/SKILL.md) drafts specs and calls this lens to check its own output before returning it.
 
 ## When to use
 

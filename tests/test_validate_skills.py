@@ -134,5 +134,91 @@ class TestValidatorRun(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
 
+class TestLinkChecks(unittest.TestCase):
+    """New checks: unresolved relative links and dangling sibling-skill references."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_unresolved_relative_link_errors(self):
+        # A relative link whose target does not exist on disk is an error.
+        body = "See [the missing file](nonexistent-file.md) for details.\n"
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("link target does not exist: nonexistent-file.md", out)
+
+    def test_dangling_sibling_skill_reference_errors(self):
+        # A ../<name>/SKILL.md link to a skill that does not exist in this kit is an error.
+        body = "Use [`document`](../document/SKILL.md) instead.\n"
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("references sibling skill 'document'", out)
+        self.assertIn("no such skill exists in this kit", out)
+
+    def test_valid_sibling_skill_reference_does_not_error(self):
+        # A ../<name>/SKILL.md link to a skill that does exist is not flagged.
+        body = "Use [`beta`](../beta/SKILL.md) instead.\n"
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        _write_skill(self.root, "beta", GOOD_FM.format(name="beta", desc=LONG_DESC))
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 2 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_external_and_anchor_links_are_skipped(self):
+        # http, https, mailto links and same-page anchors are not resolved on disk.
+        body = (
+            "See [docs](https://example.com/guide), [help](http://example.com), "
+            "[contact](mailto:someone@example.com), and [a section](#some-section).\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+
+class TestStatusContradictionCheck(unittest.TestCase):
+    """New check: a skill asserting both draft and shipped status warns but does not fail."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_draft_and_shipped_contradiction_warns_but_exits_zero(self):
+        body = (
+            "The skill overall is a draft pending field iteration, but these are settled.\n\n"
+            "- Shipped 2026-07-24, blessed after dogfooding on this kit's own change.\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("WARN", out)
+        self.assertIn("asserts both draft and shipped status", out)
+
+    def test_draft_alone_does_not_warn(self):
+        # Only a draft assertion, no shipped bullet: not a contradiction.
+        body = "The skill overall is a draft pending field iteration.\n"
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertNotIn("asserts both draft and shipped status", out)
+
+    def test_shipped_alone_does_not_warn(self):
+        # Only a shipped bullet, no draft assertion: not a contradiction.
+        body = "- Shipped 2026-07-24, blessed after dogfooding on this kit's own change.\n"
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertNotIn("asserts both draft and shipped status", out)
+
+
 if __name__ == "__main__":
     unittest.main()

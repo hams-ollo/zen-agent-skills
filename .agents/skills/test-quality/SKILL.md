@@ -7,7 +7,7 @@ description: Use when creating, modifying, reviewing, or deciding whether to add
 
 Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 
-This is a lens, not a workflow: it does not run tests or edit files on its own. The planned
+This is a lens, not a workflow: it does not run tests or edit files on its own. The
 [`test-author`](../test-author/SKILL.md) skill composes this lens the way `code-review` composes
 `review-quality`, so the test-quality bar lives in one editable file. Writing and formatting
 follow the house style in [`../../rules/house-style.md`](../../rules/house-style.md).

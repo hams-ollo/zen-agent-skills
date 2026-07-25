@@ -22,7 +22,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
 - [`scripts/install.py`](scripts/install.py): installs skills for Claude Code and OpenCode.
 - [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project.
-- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length.
+- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, and skills that claim both draft and shipped status.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
@@ -57,10 +57,11 @@ flowchart LR
   D --> E
   F --> G
   I --> J[reconcile-worktrees]
-  J --> K[pr-describe]
+  J --> L[doc-sync]
+  L --> K[pr-describe]
 ```
 
-The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. A final independent verification runs the declared commands and returns a pass, fail, or blocked verdict with evidence, and only then is the work reconciled and documented for review.
+The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. A final independent verification runs the declared commands and returns a pass, fail, or blocked verdict with evidence, and only then is the work reconciled. After it lands, `doc-sync` detects which documents the change invalidated, and the result is documented for review.
 
 Three report-only lenses are composed by the skills above rather than run on their own: `spec-quality` (specification well-formedness), `test-quality` (test design), and `review-quality` (code review). See the [skill catalog](docs/CATALOG.md) for the complete inventory and status of each skill.
 
@@ -173,6 +174,18 @@ Run the skill linter from the repository root:
 python scripts/validate-skills.py
 ```
 
+Run the kit's own test suite:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Check the work-tracking backlog for structural integrity:
+
+```bash
+python .tasks/validate.py --strict
+```
+
 Preview adapter generation without writing files:
 
 ```bash
@@ -185,7 +198,7 @@ Preview installation for a specific test home without touching your normal tool 
 python scripts/install.py --dry-run --home ./.tmp/zen-home
 ```
 
-The scripts use only the Python standard library. There is currently no separate package installation step or application test suite.
+The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](tests/) covers the kit's own tooling, derived from the specifications in [`docs/spec/`](docs/spec/); the kit has no runtime application to test.
 
 ## Uninstall
 

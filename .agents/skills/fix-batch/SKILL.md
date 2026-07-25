@@ -14,8 +14,9 @@ and their own summaries will not tell you.
 This is the parallel-execution step of the kit spine: [`new-task`](../new-task/SKILL.md) authors
 the atomic task files, `fix-batch` dispatches them to isolated agents, and
 [`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the verified results into the main
-working tree. Read [`AGENTS.md`](../../../AGENTS.md) section 0 (the agent reading protocol) and
-section 3 (the task lifecycle) before dispatching, so each spawned agent inherits the same rules.
+working tree. Read [`AGENTS.md`](../../../AGENTS.md)'s agent reading protocol section (section 0 in
+both this kit's own `AGENTS.md` and the `init-worktracking` scaffold's numbering) and its task
+lifecycle section before dispatching, so each spawned agent inherits the same rules.
 
 ## Why this exists
 

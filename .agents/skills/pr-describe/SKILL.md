@@ -22,8 +22,7 @@ stays the user's action, surfaced as a `gh` command they run themselves.
 
 ## Design choices
 
-Settled decisions (resolved with the author); the skill overall is a draft pending field
-iteration, but these four are not up for re-litigation:
+Settled decisions (resolved with the author); these four are not up for re-litigation:
 
 - **Produces both** a PR body and a changelog entry from a single pass over the diff.
 - **Draft text only, never touches GitHub.** It prints both artifacts and surfaces

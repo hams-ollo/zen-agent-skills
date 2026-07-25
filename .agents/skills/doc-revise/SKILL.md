@@ -11,12 +11,13 @@ description: >-
   docs is still valid", "revise the README with this new content", "move completed items to the
   changelog", "the docs are out of date after these changes", "add contextual emojis to the
   headings", or any request to edit, refresh, or reconcile existing .md files. When the document
-  does not exist yet and needs to be created from scratch, use doc-author instead.
+  does not exist yet and needs to be created from scratch, use doc-author instead. When the user
+  does not know which document is wrong, use doc-sync instead.
 ---
 
 # Doc revise
 
-Change existing documentation surgically. The reader already relies on these docs, so the goal is the smallest change that satisfies the request while keeping the document's voice, structure, and correctness intact. The two failure modes are doing too little (leaving the doc internally inconsistent or its links broken) and doing too much (rewriting whole sections that were fine, flattening the author's voice). Aim between them. When the document does not exist yet and needs creating from scratch, use [`doc-author`](../doc-author/SKILL.md) instead.
+Change existing documentation surgically. The reader already relies on these docs, so the goal is the smallest change that satisfies the request while keeping the document's voice, structure, and correctness intact. The two failure modes are doing too little (leaving the doc internally inconsistent or its links broken) and doing too much (rewriting whole sections that were fine, flattening the author's voice). Aim between them. When the document does not exist yet and needs creating from scratch, use [`doc-author`](../doc-author/SKILL.md) instead. When the user does not yet know which document drifted, use [`doc-sync`](../doc-sync/SKILL.md) to find out first; it composes this skill's editing discipline when it applies an approved correction.
 
 ## Read before you edit
 

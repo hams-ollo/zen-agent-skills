@@ -8,8 +8,8 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 | Skill | Status | What it does |
 |---|---|---|
-| `init-worktracking` | shipping (Phase 1) | Scaffold a spec-driven, low-context work-tracking system (`AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`) into any repo, at a chosen footprint tier, seeded by inspecting the repo. |
-| `new-task` | shipping (Phase 2) | Turn a rough idea, bug, or roadmap Feature into one or more atomic, mechanically-verifiable task files at the gold-standard bar. The upstream that feeds `fix-batch`. |
+| `init-worktracking` | shipped | Scaffold a spec-driven, low-context work-tracking system (`AGENTS.md`, `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`) into any repo, at a chosen footprint tier, seeded by inspecting the repo. |
+| `new-task` | shipped | Turn a rough idea, bug, or roadmap Feature into one or more atomic, mechanically-verifiable task files at the gold-standard bar. The upstream that feeds `fix-batch`. |
 | `fix-batch` | shipped | Dispatch a batch of independent task files to parallel worktree-isolated agents, with a mandatory verification pass. Ported in-kit (`feat-0005`), blessed after a live run. |
 | `reconcile-worktrees` | shipped | Safely consolidate isolated agent worktrees back into the main checkout without blind merges. Ported in-kit (`feat-0006`), blessed after a live run. |
 | `project-bootstrap` | shipped | The umbrella front door: language-aware scaffold (gitignore, editorconfig, linter/formatter from a swappable house code-style layer, license, README stub) that then calls `init-worktracking`. |
@@ -24,7 +24,7 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## The contract-driven delivery spine (Epic B, in progress)
 
-These skills make the roadmap's contract-driven delivery spine real. All six were **blessed 2026-07-24** after being dogfooded on real in-kit work. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Two (`spec-author`, `test-author`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
+These skills make the roadmap's contract-driven delivery spine real. All eight were dogfooded on real in-kit work before being blessed: seven on 2026-07-24 and `doc-sync` on 2026-07-25. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Four (`spec-author`, `test-author`, `verifier-agent`, `doc-sync`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
 
 With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. `doc-sync` closes the documentation half of that loop, and the spine continues at the roadmap level with `user-testing`, which is not built yet.
 

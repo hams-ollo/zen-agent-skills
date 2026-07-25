@@ -2,7 +2,7 @@
 id: chore-0008
 title: Cross-link doc-author and doc-revise to doc-sync
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
 depends_on: []
@@ -15,10 +15,10 @@ created: 2026-07-25
 ## Problem
 
 The documentation trio only links in one direction.
-[`doc-sync`](../.agents/skills/doc-sync/SKILL.md) positions itself against both siblings and composes
+[`doc-sync`](../../.agents/skills/doc-sync/SKILL.md) positions itself against both siblings and composes
 `doc-revise` by reference, but neither
-[`doc-author`](../.agents/skills/doc-author/SKILL.md) nor
-[`doc-revise`](../.agents/skills/doc-revise/SKILL.md) mentions `doc-sync` at all (`grep -c doc-sync`
+[`doc-author`](../../.agents/skills/doc-author/SKILL.md) nor
+[`doc-revise`](../../.agents/skills/doc-revise/SKILL.md) mentions `doc-sync` at all (`grep -c doc-sync`
 returns 0 for both).
 
 Each already redirects to the other for the case it does not handle: `doc-author` says to use
@@ -43,7 +43,7 @@ open decision on the roadmap. Changing `doc-sync`.
 
 ## Implementation notes
 
-- Follow [`doc-revise`](../.agents/skills/doc-revise/SKILL.md) itself: smallest sufficient change,
+- Follow [`doc-revise`](../../.agents/skills/doc-revise/SKILL.md) itself: smallest sufficient change,
   preserve voice. One or two sentences per file is the right size.
 - `doc-author`'s natural home is its opening paragraph, which already carries the "when the document
   already exists, use `doc-revise`" redirect.
@@ -59,18 +59,18 @@ open decision on the roadmap. Changing `doc-sync`.
 
     python scripts/validate-skills.py
 
-- [ ] `grep -c doc-sync .agents/skills/doc-author/SKILL.md` returns at least 1.
-- [ ] `grep -c doc-sync .agents/skills/doc-revise/SKILL.md` returns at least 1.
-- [ ] `doc-revise` states that `doc-sync` composes its editing discipline.
-- [ ] Every relative markdown link added resolves to a file that exists.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
-- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
-- [ ] Neither file grows by more than a few lines; no section is added or removed.
-- [ ] No em-dashes; headings sentence case.
+- [x] `grep -c doc-sync .agents/skills/doc-author/SKILL.md` returns at least 1.
+- [x] `grep -c doc-sync .agents/skills/doc-revise/SKILL.md` returns at least 1.
+- [x] `doc-revise` states that `doc-sync` composes its editing discipline.
+- [x] Every relative markdown link added resolves to a file that exists.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
+- [x] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
+- [x] Neither file grows by more than a few lines; no section is added or removed.
+- [x] No em-dashes; headings sentence case.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.

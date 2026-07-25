@@ -26,7 +26,7 @@ Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experi
 ### Step 1: confirm the system exists and learn its state
 
 1. Confirm `.tasks/` exists. If not, this repo has no work-tracking system yet: point the user to the `init-worktracking` skill and stop.
-2. Read `AGENTS.md` sections 3 (technical commands, for the acceptance command), 4 (conventions), and 1 (the altitude model). Read `.tasks/_TEMPLATE.md` for the exact frontmatter shape.
+2. Read `AGENTS.md`: the section that lists the repo's technical commands (for the acceptance command), the section that states its conventions, and the section that describes the work-altitude model. Read `.tasks/_TEMPLATE.md` for the exact frontmatter shape.
 3. Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`; otherwise scan `.tasks/` and `.tasks/done/` for the highest `NNNN` per `type` and continue from there. Ids are stable and never reused.
 4. If the input references a ROADMAP Feature, read that Feature. If it references existing tasks (as dependencies), note their ids and whether they are in `done/`.
 
@@ -47,7 +47,7 @@ Before writing `touched_files`, actually find the surface:
 
 - Grep/search for the function, symbol, config key, or behavior named in the request.
 - Identify the source file(s) that change and their corresponding test file(s). If a test file does not exist yet, include the path it should be created at.
-- Note the exact scoped test command from `AGENTS.md` section 3 (for a monorepo, the per-package command that covers these files).
+- Note the exact scoped test command from the section of `AGENTS.md` that lists the repo's technical commands (for a monorepo, the per-package command that covers these files).
 
 If you cannot find the surface, say so and ask, rather than writing a plausible-looking but wrong `touched_files`.
 
@@ -68,7 +68,7 @@ For each task, copy `.tasks/_TEMPLATE.md`, assign the next id (filename `<type>-
 - **Acceptance criteria**: the literal command that must pass, plus concrete checkboxes (new/updated test, existing tests pass, task-specific checks).
 - **Definition of done**: keep the template's lifecycle checkboxes.
 
-Follow the repo's own conventions from `AGENTS.md` section 4 (do not import another project's style).
+Follow the repo's own conventions from the conventions section of `AGENTS.md` (do not import another project's style).
 
 ### Step 6: self-check and update bookkeeping
 

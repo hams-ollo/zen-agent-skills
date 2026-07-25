@@ -37,5 +37,5 @@ Any known constraints, the intended approach, edge cases, or prior art in the co
 ## Definition of done
 
 - [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md section 4 followed.
+- [ ] Conventions in AGENTS.md's conventions section followed.
 - [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

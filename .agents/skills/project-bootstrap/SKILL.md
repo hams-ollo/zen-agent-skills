@@ -20,8 +20,7 @@ A minimal, widely-agreed baseline, matched to the detected stack. Never a heavy 
 
 ## Design choices
 
-These decisions are settled (resolved with the author); the skill overall is still a draft
-pending field iteration, but these four are not up for re-litigation:
+These decisions are settled (resolved with the author); these four are not up for re-litigation:
 
 - **First-class stacks are Python and JavaScript/TypeScript.** Everything else gets a generic baseline plus a clearly marked `<!-- TODO -->`. Add stacks as real need appears, not speculatively.
 - **Configs, not installs.** The skill writes config files; it does not run `npm install`, `uv add`, or `pre-commit install`. It offers those commands for the user to run.

@@ -11,12 +11,13 @@ description: >-
   docs", "set up the docs folder", "write a deployment guide", "create a CLAUDE.md for this
   repo", "we need a design doc for X", or any request to produce a new .md document describing
   the codebase or project. When the document already exists and the user wants it updated,
-  revised, or its links fixed, use doc-revise instead.
+  revised, or its links fixed, use doc-revise instead. When the user does not know which
+  document is wrong, use doc-sync instead.
 ---
 
 # Doc author
 
-Create documentation that is accurate, well-structured, and matched to its reader. The two ways documentation fails are being wrong (it describes code that does not exist or has drifted) and being shapeless (a wall of text with no reader in mind). This skill guards against both: ground every claim in the real repository, and pick a structure that fits the document type and audience. When the document already exists and needs updating rather than creating, use [`doc-revise`](../doc-revise/SKILL.md) instead.
+Create documentation that is accurate, well-structured, and matched to its reader. The two ways documentation fails are being wrong (it describes code that does not exist or has drifted) and being shapeless (a wall of text with no reader in mind). This skill guards against both: ground every claim in the real repository, and pick a structure that fits the document type and audience. When the document already exists and needs updating rather than creating, use [`doc-revise`](../doc-revise/SKILL.md) instead. When the user does not yet know which document is wrong, use [`doc-sync`](../doc-sync/SKILL.md) to find out first.
 
 ## Ground it in the code first
 

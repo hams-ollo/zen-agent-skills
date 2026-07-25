@@ -276,6 +276,7 @@ Install the skills for your tool, then use one skill when the need appears:
 
 - 📝 `doc-author` for a new, code-grounded guide.
 - 🔧 `doc-revise` for bringing an existing document back into alignment.
+- 🔎 `doc-sync` for finding out which documents a change made wrong, before you fix any of them.
 - 🤝 `human-handoff` for a partner, client, or teammate update.
 - 🧳 `agent-handoff` for handing work to another AI session or agent.
 - 🔍 `code-review` for a report-only review of a change.
@@ -299,7 +300,8 @@ flowchart LR
   F --> G[spec-conformance]
   G --> H[verifier-agent]
   H --> I[code-review]
-  I --> J[pr-describe]
+  I --> K[doc-sync]
+  K --> J[pr-describe]
 ```
 
 A typical collaboration loop is:
@@ -314,8 +316,9 @@ A typical collaboration loop is:
 8. 🔍 `code-review` checks the change and reports findings without editing.
 9. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
 10. 🔄 `reconcile-worktrees` brings verified work back into the main project.
-11. 📬 `pr-describe` drafts the change summary for review.
-12. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
+11. 🔎 `doc-sync` reports which documents the change made wrong. It never edits one without your approval, and it will not touch a document that governs the code, because a disagreement there means the code is wrong.
+12. 📬 `pr-describe` drafts the change summary for review.
+13. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
 
 You do not need all of this at once. Steps 2 to 4 work on their own, and you can add the specification and testing steps when a piece of work is big enough to be worth agreeing on in writing first.
 

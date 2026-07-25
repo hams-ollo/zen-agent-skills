@@ -90,19 +90,34 @@ given document was corrected, merely reported, or skipped.
 
 ### 2. Ground every claim in a repository fact
 
-Read the documents, and for each factual claim find the repository fact that confirms or contradicts
-it. Claims worth checking are the ones that go stale: what exists (files, skills, commands,
-directories), what something is called, what state something is in ("planned", "shipped", counts and
-tallies), how a workflow is ordered, and where a link points.
+Read the documents, and for each factual claim find the fact that confirms or contradicts it: usually
+a repository fact, but sometimes another passage in the same document. Claims worth checking are the
+ones that go stale: what exists (files, skills, commands, directories), what something is called,
+what state something is in, how a workflow is ordered, and where a link points.
+
+Do not check state claims against a fixed vocabulary. Derive the staleness words from the document
+set being audited: "planned", "shipped", "draft", "not built", "future", and "in progress" are all
+staleness words when a document uses them, and a list carried over from a previous run or another
+repository will miss whichever word this one actually uses. Widening the vocabulary widens what
+counts as a stale word, not what counts as evidence: a document using "draft" still needs a
+contradicting fact, in the repository or elsewhere in the document, before it becomes a finding.
+
+A document can also drift against itself. When one passage asserts something and another passage in
+the same document asserts the opposite (one section calling a skill a draft, a later one calling it
+shipped), that is a contradiction the document supplies its own evidence for; no repository lookup is
+needed to see it.
 
 Check the code, not your memory of it. The whole value of the pass is that it looks.
 
 Three habits decide whether this step actually finds anything:
 
-- **Do not let formatting define what counts as a reference.** A stale reference is just as likely to
-  be a bare word in a sentence as a backticked token, and frontmatter, descriptions, and summary
-  fields are prose that goes stale like any other. Search on the name, not on its decoration. A
-  scan that only looks at marked-up tokens in the body will miss the references that matter.
+- **Do not let formatting or line breaks define what counts as a claim.** A stale reference is just
+  as likely to be a bare word in a sentence as a backticked token, and frontmatter, descriptions, and
+  summary fields are prose that goes stale like any other. Prose wraps, so a qualifier and the
+  subject it qualifies routinely land on different lines, and a claim can span a sentence or a
+  paragraph. Search on the name, not on its decoration, and match the claim, not the line: a scan
+  that only looks at marked-up tokens, or that only compares text within a single line, will miss the
+  references that matter.
 - **Verify a count by counting the thing, not by reading the sentence.** When a document says
   "all six" or "three lenses", go count the rows, the directories, or the entries. Tallies drift
   silently because nobody recounts them, and they are the cheapest claim in the document to check.
@@ -130,7 +145,9 @@ The same disagreement means different things depending on what the document is.
 Assign each finding a confidence:
 
 - **`grounded`**: a mechanical check proved the contradiction. A named file, skill, command, or path
-  does not exist; a link resolves to nothing.
+  does not exist; a link resolves to nothing; or two passages within the same document assert
+  incompatible things, quoted side by side. The last of these needs no repository lookup, only the
+  document itself, which makes it the cheapest high-confidence finding a pass can produce.
 - **`suspected`**: a repository fact contradicts the claim, but only under interpretation. A count
   that no longer matches, a status label that looks stale, a described ordering that the code no
   longer follows. Name the fact, and state the reading under which the claim would still be true, so

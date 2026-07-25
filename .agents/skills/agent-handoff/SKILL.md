@@ -2,14 +2,14 @@
 name: agent-handoff
 description: >-
   Turns the current session's context into a self-contained, execution-ready brief that a
-  fresh Claude Code session or a spawned subagent can run without seeing this conversation.
+  fresh agent session or a spawned subagent can run without seeing this conversation.
   Produces a single pasteable block: role and mode, an ordered file reading list, a dated
   statement of what is already proven, phased scope with explicit stop-and-check-in gates,
   and an out-of-scope list. Use this whenever the user wants to move work to another agent
   or a new session and wants the instructions written down first. Trigger on phrases like:
   "draft me a prompt to trigger a new session", "prompt optimized to trigger a new session",
   "craft a prompt I can paste into a new session", "prep this plan for the agents", "hand
-  this off to a new session", "prepare this for handoff to some sonnet agents", "write a
+  this off to a new session", "prepare this for handoff to another agent", "write a
   brief the next session can follow", "spin up an agent to do X, write the instructions
   first", or when the user is about to switch models or context windows and wants the work
   captured for a clean run. When the handoff target is a person (partner, client, teammate)
@@ -18,7 +18,7 @@ description: >-
 
 # Agent handoff
 
-Write a brief that a downstream Claude Code session or subagent can execute on its own, with no access to the current conversation. The reader is a machine that will act on what you write, so the brief has to be self-contained, unambiguous about what not to touch, and precise about what is already true. When the handoff target is a person rather than an agent, use [`human-handoff`](../human-handoff/SKILL.md) instead.
+Write a brief that a downstream agent session or subagent can execute on its own, with no access to the current conversation. The reader is a machine that will act on what you write, so the brief has to be self-contained, unambiguous about what not to touch, and precise about what is already true. When the handoff target is a person rather than an agent, use [`human-handoff`](../human-handoff/SKILL.md) instead.
 
 ## Why this shape
 

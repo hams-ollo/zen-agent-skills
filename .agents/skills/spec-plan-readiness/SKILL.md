@@ -15,7 +15,7 @@ Decide whether a readable behavioral spec plus a readable ordered set of task fi
 
 This skill is a gate. It reports exact blocking gaps and, only when all readiness conditions hold, identifies scenario test layers, task traceability, and the first safe implementation task.
 
-In this kit, the "plan" being gated is not a standalone document: it is a ROADMAP Feature decomposed into ordered `.tasks/<id>.md` files, per [`AGENTS.md`](../../../AGENTS.md) section 3 (the work-altitude model). Wherever this skill says "the plan," it means that ordered task decomposition, read as a set.
+In this kit, the "plan" being gated is not a standalone document: it is a ROADMAP Feature decomposed into ordered `.tasks/<id>.md` files, per the work-altitude-model section of [`AGENTS.md`](../../../AGENTS.md). Wherever this skill says "the plan," it means that ordered task decomposition, read as a set.
 
 ## Inputs
 

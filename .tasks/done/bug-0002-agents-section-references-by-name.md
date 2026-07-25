@@ -2,7 +2,7 @@
 id: bug-0002
 title: Reference AGENTS.md sections by name, not number (cross-repo portability defect)
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
 depends_on: []
@@ -26,7 +26,7 @@ This defeats the kit's central promise that a skill works unchanged in any repo.
 
 The two numberings that exist today:
 
-| | Scaffolded by `init-worktracking` ([`templates/AGENTS.md.tmpl`](../.agents/skills/init-worktracking/templates/AGENTS.md.tmpl)) | This repository ([`AGENTS.md`](../AGENTS.md)) |
+| | Scaffolded by `init-worktracking` ([`templates/AGENTS.md.tmpl`](../../.agents/skills/init-worktracking/templates/AGENTS.md.tmpl)) | This repository ([`AGENTS.md`](../../AGENTS.md)) |
 |---|---|---|
 | 0 | Agent reading protocol | Agent reading protocol |
 | 1 | Work altitude model | What this repository is |
@@ -39,25 +39,25 @@ The two numberings that exist today:
 
 Concrete breakage:
 
-- [`new-task/SKILL.md:29`](../.agents/skills/new-task/SKILL.md) tells the agent to read "sections 3
+- [`new-task/SKILL.md:29`](../../.agents/skills/new-task/SKILL.md) tells the agent to read "sections 3
   (technical commands), 4 (conventions), and 1 (the altitude model)". Correct in a scaffolded repo,
   wrong here: section 3 here is the altitude model and section 4 is skill structure.
-- [`new-task/SKILL.md:50`](../.agents/skills/new-task/SKILL.md) sources the acceptance command from
-  "section 3", and [`:71`](../.agents/skills/new-task/SKILL.md) sources conventions from "section 4".
+- [`new-task/SKILL.md:50`](../../.agents/skills/new-task/SKILL.md) sources the acceptance command from
+  "section 3", and [`:71`](../../.agents/skills/new-task/SKILL.md) sources conventions from "section 4".
   Same split.
-- [`spec-plan-readiness/SKILL.md:18`](../.agents/skills/spec-plan-readiness/SKILL.md) cites "section 3
+- [`spec-plan-readiness/SKILL.md:18`](../../.agents/skills/spec-plan-readiness/SKILL.md) cites "section 3
   (the work-altitude model)". Correct here, wrong in a scaffolded repo, where the altitude model is
   section 1.
-- [`fix-batch/SKILL.md:17-18`](../.agents/skills/fix-batch/SKILL.md) cites "section 0 (the agent
+- [`fix-batch/SKILL.md:17-18`](../../.agents/skills/fix-batch/SKILL.md) cites "section 0 (the agent
   reading protocol) and section 3 (the task lifecycle)". Section 0 is stable; section 3 is not, and
   the task lifecycle is section 5 in a scaffolded repo.
-- [`init-worktracking/SKILL.md:64`](../.agents/skills/init-worktracking/SKILL.md) and
-  [`:141`](../.agents/skills/init-worktracking/SKILL.md) cite "section 4" for conventions. Correct for
+- [`init-worktracking/SKILL.md:64`](../../.agents/skills/init-worktracking/SKILL.md) and
+  [`:141`](../../.agents/skills/init-worktracking/SKILL.md) cite "section 4" for conventions. Correct for
   what it scaffolds, wrong for the repo it lives in.
-- [`.tasks/_TEMPLATE.md:40`](_TEMPLATE.md) carries "Conventions in AGENTS.md section 4 followed" into
+- [`.tasks/_TEMPLATE.md:40`](../_TEMPLATE.md) carries "Conventions in AGENTS.md section 4 followed" into
   **every task file authored from it**, so the defect propagates into the ledger. `feat-0019` says
   section 4 and `feat-0020` says section 6, and both are defensible readings.
-- [`.tasks/README.md:29`](README.md) cites "section 5" for the task lifecycle. Correct for a
+- [`.tasks/README.md:29`](../README.md) cites "section 5" for the task lifecycle. Correct for a
   scaffolded repo, wrong here.
 
 ## Scope
@@ -89,19 +89,19 @@ skills touched.
 
     python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] `grep -rn "AGENTS.md section [0-9]\|section [0-9] (" .agents/ .tasks/_TEMPLATE.md .tasks/README.md`
+- [x] `grep -rn "AGENTS.md section [0-9]\|section [0-9] (" .agents/ .tasks/_TEMPLATE.md .tasks/README.md`
       returns no bare number-only references (a number kept as a qualified parenthetical is allowed).
-- [ ] Each of the eight `touched_files` names its `AGENTS.md` sections by name.
-- [ ] `.tasks/_TEMPLATE.md` and `templates/_TEMPLATE.md.tmpl` agree with each other.
-- [ ] `.tasks/README.md` and `templates/tasks-README.md.tmpl` agree with each other.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
-- [ ] `python .tasks/validate.py --strict` exits 0.
-- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
-- [ ] No em-dashes; headings sentence case.
+- [x] Each of the eight `touched_files` names its `AGENTS.md` sections by name.
+- [x] `.tasks/_TEMPLATE.md` and `templates/_TEMPLATE.md.tmpl` agree with each other.
+- [x] `.tasks/README.md` and `templates/tasks-README.md.tmpl` agree with each other.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
+- [x] `python .tasks/validate.py --strict` exits 0.
+- [x] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
+- [x] No em-dashes; headings sentence case.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.

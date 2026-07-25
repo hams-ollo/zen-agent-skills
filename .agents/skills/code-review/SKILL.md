@@ -23,8 +23,7 @@ nothing substantive survives validation, it says so plainly.
 
 ## Design choices
 
-Settled decisions (resolved with the user); the skill overall is a draft pending field iteration,
-but these are not up for re-litigation:
+Settled decisions (resolved with the user); these are not up for re-litigation:
 
 - **Rubric and severities live in the lens**, [`review-quality.md`](../../rules/review-quality.md):
   eight categories, and the `blocker` / `major` / `minor` / `nit` scheme. Edit the lens to retune
@@ -107,7 +106,7 @@ validate-before-reporting rule are identical either way; only the output channel
   the bar in one file and future skills reuse the same lens.
 - Distinct from Claude Code's built-in `/code-review` command.
 - Future direction (not built yet): a multi-lens "deep-review" that runs several lenses
-  (`review-quality`, a future `test-quality`, and so on) and reconciles their findings, mirroring
+  (`review-quality`, `test-quality`, and so on) and reconciles their findings, mirroring
   moonray's Deep Review orchestration.
 - Shipped 2026-07-24, blessed after dogfooding on this kit's own change (`feat-0007`). Keep
   iterating in the field, especially against real code diffs beyond documentation changes.

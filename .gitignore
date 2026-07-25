@@ -20,3 +20,5 @@ scripts/.install-manifest.json
 node_modules/
 
 repoprompt-workflows-main
+# Agent worktrees created by fix-batch (per-run scratch, never committed)
+.claude/worktrees/
