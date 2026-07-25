@@ -39,7 +39,7 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 5. **`release-cut`** (hold until used twice). Version bump, changelog roll-up, tag, notes.
 6. ~~**Fold in `doc-author` / `doc-revise`** from `zen-solutions-studio`.~~ **Shipped** (`feat-0011`, `feat-0012`; dogfooded on the in-kit architecture guide and documentation consistency pass, then blessed 2026-07-24 after user sign-off).
 7. ~~**Fold in `agent-handoff` / `human-handoff`** (already portable by design).~~ **Shipped** (`feat-0009`, `feat-0010`; dogfooded with the fold-in brief and in-kit partner status update, then blessed 2026-07-24 after user sign-off).
-8. **Kit-wide skill evaluation** (recurring). Systematically exercise and evaluate every shipped skill rather than trusting the one dogfood that blessed it, then refine from what the pass finds. Each skill was blessed on a single real use, which proves it works once but leaves whole branches unexercised: `verifier-agent`'s `blocked` verdict, `test-author`'s characterization mode, and `spec-plan-readiness`'s blocking paths have never fired on real work. Define what "evaluated" means (which behaviors must be observed, and what evidence counts), run the pass, and record per-skill findings as tasks. Decide as part of the work whether the result is a written evaluation protocol, a reusable `skill-eval` skill, or a fixture-based regression suite under `tests/`; do not presuppose the artifact. This is the natural consumer of the spine itself: specify it with `spec-author`, verify each skill with `verifier-agent`.
+8. **Kit-wide skill evaluation** (recurring). Systematically exercise and evaluate every shipped skill rather than trusting the one dogfood that blessed it, then refine from what the pass finds. Each skill was blessed on a single real use, which proves it works once but leaves whole branches unexercised: `verifier-agent`'s `blocked` verdict, `test-author`'s characterization mode, and `spec-plan-readiness`'s blocking paths have never fired on real work. Define what "evaluated" means (which behaviors must be observed, and what evidence counts), run the pass, and record per-skill findings as tasks. Decide as part of the work whether the result is a written evaluation protocol, a reusable `skill-eval` skill, or a fixture-based regression suite under `tests/`; do not presuppose the artifact. This is the natural consumer of the spine itself: specify it with `spec-author`, verify each skill with `verifier-agent`. A first read-only pass ran on 2026-07-25 and its findings are filed under [Kit hardening](#kit-hardening-from-the-2026-07-25-review-pass); that pass covered structure, status claims, and cross-references, and deliberately did not exercise any skill's behavior, which is the harder half still open.
 
 ### Epic B: contract-driven delivery (the agent-workflow spine)
 
@@ -67,6 +67,30 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
 ### Epic D: personal (stays OUT of the shared kit)
 
 The Content OS pipeline (`produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`) stays in `zen-solutions-studio` as portfolio demos, not plug-and-play kit skills.
+
+---
+
+## Kit hardening (from the 2026-07-25 review pass)
+
+A read of all 19 shipped skills on 2026-07-25, the first deliberate pass rather than a per-skill dogfood. It found four systemic issues and two gaps that need a decision before they can be decomposed. Filed rather than fixed, so each item can be dispatched to an isolated agent.
+
+Ready to dispatch. Wave 1 is parallel-safe (disjoint `touched_files`); wave 2 waits on `bug-0002`, which touches the same files.
+
+| Task | Wave | What |
+|---|---|---|
+| [`bug-0002`](.tasks/bug-0002-agents-section-references-by-name.md) | 1 | **Portability defect.** Skills reference `AGENTS.md` by section *number*, but the numbering differs between this repo and the repos `init-worktracking` scaffolds. `new-task` is correct for scaffolded repos and wrong here; `spec-plan-readiness` is correct here and wrong there. `.tasks/_TEMPLATE.md` propagates the wrong pointer into every task file. Reference sections by name. |
+| [`chore-0007`](.tasks/chore-0007-clear-stale-skill-status-claims.md) | 1 | Seven stale status claims, including three skills (`code-review`, `pr-describe`, `project-bootstrap`) that call themselves a draft and shipped in the same file. |
+| [`feat-0021`](.tasks/feat-0021-iterate-doc-sync-detection.md) | 1 | Iterate `doc-sync` from the four drift instances this review found that its own dogfood missed. Line-scoped matching and an incomplete staleness vocabulary were the causes. |
+| [`chore-0008`](.tasks/chore-0008-cross-link-doc-trio.md) | 1 | `doc-author` and `doc-revise` have no reference to `doc-sync`; the documentation trio only links one way. |
+| [`chore-0009`](.tasks/chore-0009-agent-handoff-harness-neutral.md) | 1 | `agent-handoff`'s description hardcodes "Claude Code", putting harness lock-in in the kit's most visible field. |
+| [`feat-0023`](.tasks/feat-0023-extend-validate-skills-lint.md) | 1 | `validate-skills.py` catches none of the above. Extend it so this class of defect fails a command instead of waiting for a human read. |
+| [`feat-0022`](.tasks/feat-0022-wire-verifier-agent-into-fix-batch.md) | 2 | Wire `verifier-agent` into `fix-batch` Step 6 and `reconcile-worktrees`. Deferred by `feat-0019` until the skill had been used; it has been. |
+| [`chore-0010`](.tasks/chore-0010-spec-plan-readiness-compose-test-quality.md) | 2 | `spec-plan-readiness` restates `test-quality`'s layer taxonomy inline instead of composing it. Two copies free to drift. |
+
+Not yet decomposed, because each needs a decision first (per section 3: only decompose when the work is about to be built):
+
+- **Skill shape convention.** Only 4 of 19 skills follow the full `When to use` / `When not to use` / `Inputs` / `Procedure` / `Output format` / `Notes` / `Conventions` shape; `## Conventions` appears in 9 of 19. Nothing is violated, because section 4 mandates only frontmatter plus a body. Decide whether the modern shape is the standard (and whether lenses are a deliberate exception) before retrofitting anything.
+- **Spec and test coverage of the kit's own skills.** 4 of 19 skills have a spec under [`docs/spec/`](docs/spec/); none has tests. The kit built a spec-to-verify spine and has applied it to four of its own nineteen skills. This is the substance of Epic A item 8 and needs scoping as a program, not a task.
 
 ---
 
