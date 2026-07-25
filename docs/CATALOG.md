@@ -26,7 +26,7 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 These skills make the roadmap's contract-driven delivery spine real. All six were **blessed 2026-07-24** after being dogfooded on real in-kit work. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Two (`spec-author`, `test-author`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
 
-With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. The spine continues at the roadmap level with `user-testing` and `doc-sync`, which are not built yet.
+With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. `doc-sync` closes the documentation half of that loop, and the spine continues at the roadmap level with `user-testing`, which is not built yet.
 
 | Skill | Status | What it does |
 |---|---|---|
@@ -37,6 +37,7 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 | `spec-conformance` | shipped (Epic B) | Audits an implementation against its spec into a positive Conformed/Diverged/Not-built matrix. Composes into `fix-batch` verification, and is composed by `verifier-agent`. |
 | `test-author` | shipped (Epic B) | Derives runnable tests from an approved spec's scenarios (tagged by `S-NNN`), matching the repo's own test framework and composing `test-quality` for layer and oracle. Acceptance and characterization modes; writes tests, never production code. |
 | `verifier-agent` | shipped (Epic B) | Independently verifies an implementation before reconciliation: runs the declared commands, composes `spec-conformance` so a contract divergence fails the run even when tests pass, maps each acceptance criterion to evidence, and returns a deterministic pass, fail, or blocked verdict. Verifies and reports; never edits what it verifies. |
+| `doc-sync` | shipped (Epic B) | Detects documentation drift by checking prose claims against repository facts, classifying every document as current-state (correctable with approval), contract (report-only, human-owned) or ledger (skipped). Dry run is the default and detection never changes a file. Composes `doc-revise` for editing discipline. Authored in-kit against `docs/spec/doc-sync.md`, dogfooded on this repository's own documentation (`feat-0020`), and blessed after its apply path repointed three dangling references (`chore-0006`). |
 
 ## Tier B: semi-scalable (great for teams and clients)
 

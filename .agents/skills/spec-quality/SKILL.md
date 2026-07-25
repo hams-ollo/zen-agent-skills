@@ -48,7 +48,7 @@ Do not use this skill to:
 - create implementation plans, architecture documents, code, or tests;
 - decide feature implementation details that belong to planning or design;
 - judge readiness of a Spec plus Deep Plan pair; use a dedicated `spec-plan-readiness` process for that.
-- judge whether an implementation conforms to a spec (spec-vs-implementation); use `spec-conformance` for that, or `document` for doc-vs-code drift.
+- judge whether an implementation conforms to a spec (spec-vs-implementation); use `spec-conformance` for that, or `doc-sync` for doc-vs-code drift.
 
 ## Workflow
 
