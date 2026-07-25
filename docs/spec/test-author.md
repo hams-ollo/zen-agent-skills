@@ -5,7 +5,7 @@ status: approved
 
 # test-author
 
-Behavioral contract for the planned `test-author` skill (ROADMAP Epic B item 5). Drafted 2026-07-24
+Behavioral contract for the `test-author` skill (ROADMAP Epic B item 5). Drafted 2026-07-24
 by the `spec-author` skill as its first in-kit dogfood, and self-checked to `ready` with the
 `spec-quality` lens.
 

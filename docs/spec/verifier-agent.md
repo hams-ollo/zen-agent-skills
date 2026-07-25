@@ -5,7 +5,7 @@ status: approved
 
 # verifier-agent
 
-Behavioral contract for the planned `verifier-agent` skill (ROADMAP Epic B item 7). Drafted
+Behavioral contract for the `verifier-agent` skill (ROADMAP Epic B item 7). Drafted
 2026-07-24 by the `spec-author` skill and self-checked to `ready` with the `spec-quality` lens.
 
 ## Problem

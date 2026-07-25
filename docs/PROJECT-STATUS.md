@@ -25,7 +25,9 @@ Earlier in the same cycle, the README became a complete adoption guide, an archi
 
 ## What is open
 
-There is no immediate implementation blocker. The next roadmap item is `verifier-agent`: independent verification of an implementation against its approved specification and task acceptance criteria, composing `spec-conformance` and producing structured pass, fail, or blocked evidence before reconciliation. It is the last core skill of the delivery loop. After it, `user-testing` covers the user-facing work that automated tests and contract conformance miss, and `doc-sync` detects documentation drift.
+There is no immediate implementation blocker. `verifier-agent` shipped on 2026-07-24, completing the core delivery loop: an idea becomes a specification, and nothing lands until an independent verification returns a verdict with evidence. Its dogfood found a real defect in an artifact the kit had already audited and tested, which is the clearest evidence so far that the spine catches things a green test suite does not.
+
+Two threads follow. `user-testing` covers the user-facing work that automated tests and contract conformance both miss, and `doc-sync` detects documentation drift. Separately, a kit-wide evaluation pass is now on the roadmap: every skill was blessed on a single real use, so whole branches remain unexercised, and the next quality step is to exercise them deliberately rather than wait for a live run to surface a gap.
 
 `ci-scaffold` and `release-cut` remain intentionally on hold until they have been needed and used twice in real work. That keeps the library focused on proven workflows rather than speculative coverage.
 

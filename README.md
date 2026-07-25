@@ -51,15 +51,16 @@ flowchart LR
   end
   subgraph Verify
     G[test-author] --> H[spec-conformance]
+    H --> I[verifier-agent]
   end
   B --> C
   D --> E
   F --> G
-  H --> I[reconcile-worktrees]
-  I --> J[pr-describe]
+  I --> J[reconcile-worktrees]
+  J --> K[pr-describe]
 ```
 
-The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. Verified work is then reconciled and documented for review.
+The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. A final independent verification runs the declared commands and returns a pass, fail, or blocked verdict with evidence, and only then is the work reconciled and documented for review.
 
 Three report-only lenses are composed by the skills above rather than run on their own: `spec-quality` (specification well-formedness), `test-quality` (test design), and `review-quality` (code review). See the [skill catalog](docs/CATALOG.md) for the complete inventory and status of each skill.
 

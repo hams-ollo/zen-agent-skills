@@ -5,7 +5,7 @@ status: approved
 
 # spec-author
 
-Behavioral contract for the planned `spec-author` skill (ROADMAP Epic B item 2). Drafted 2026-07-24
+Behavioral contract for the `spec-author` skill (ROADMAP Epic B item 2). Drafted 2026-07-24
 and reviewed with the `spec-quality` lens as the first in-kit dogfood of that skill.
 
 ## Problem

@@ -297,8 +297,9 @@ flowchart LR
   D --> E[Agent or builder does the work]
   E --> F[test-author]
   F --> G[spec-conformance]
-  G --> H[code-review]
-  H --> I[pr-describe]
+  G --> H[verifier-agent]
+  H --> I[code-review]
+  I --> J[pr-describe]
 ```
 
 A typical collaboration loop is:
@@ -309,11 +310,12 @@ A typical collaboration loop is:
 4. ✅ The acceptance command proves the intended result.
 5. 🧪 `test-author` derives tests from the specification, so each test traces back to the behavior it protects.
 6. 📐 `spec-conformance` audits whether the implementation actually matches the specification, which is a different question from whether the tests pass.
-7. 🔍 `code-review` checks the change and reports findings without editing.
-8. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
-9. 🔄 `reconcile-worktrees` brings verified work back into the main project.
-10. 📬 `pr-describe` drafts the change summary for review.
-11. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
+7. ✅ `verifier-agent` independently runs the agreed commands and answers one question with evidence: pass, fail, or blocked. "Blocked" means it could not check, which is deliberately different from "it failed".
+8. 🔍 `code-review` checks the change and reports findings without editing.
+9. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
+10. 🔄 `reconcile-worktrees` brings verified work back into the main project.
+11. 📬 `pr-describe` drafts the change summary for review.
+12. 🤝 `human-handoff` or `agent-handoff` carries context to the next person or session.
 
 You do not need all of this at once. Steps 2 to 4 work on their own, and you can add the specification and testing steps when a piece of work is big enough to be worth agreeing on in writing first.
 
