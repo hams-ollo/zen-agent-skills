@@ -13,7 +13,6 @@ touched_files:
   - .agents/skills/new-task/SKILL.md
   - .agents/skills/pr-describe/SKILL.md
   - .agents/skills/reconcile-worktrees/SKILL.md
-  - .agents/skills/spec-conformance/SKILL.md
   - .agents/skills/spec-plan-readiness/SKILL.md
 created: 2026-07-25
 ---
@@ -40,8 +39,10 @@ carry no reference to the house-style module at all:**
 | `new-task` | no | **none** |
 | `pr-describe` | no | **none** |
 | `reconcile-worktrees` | no | **none** |
-| `spec-conformance` | no | **none** |
 | `spec-plan-readiness` | no | **none** |
+
+`spec-conformance` was on this list until the 2026-07-27 review pass gave it a `## Conventions`
+section, taking the set from seven to six.
 
 `code-review`, `doc-author`, `project-bootstrap`, and `test-quality` lack the section but do point at
 house style inline, so they are fine and are **not** in scope.
@@ -53,7 +54,7 @@ ignored by any skill that never points at it, which breaks the promise the kit m
 ## Scope
 
 **In scope:** add a short section to `AGENTS.md` recording that both shapes are valid and when each
-applies. Add a house-style pointer to the seven skills that have none, in each skill's own voice.
+applies. Add a house-style pointer to the six skills that have none, in each skill's own voice.
 
 **Out of scope:** retrofitting any skill to the full modern shape. That was considered and rejected:
 it is a large diff for cosmetic gain and would flatten the deliberate brevity of `doc-author` (41
@@ -62,22 +63,24 @@ inline. Changing the content of `house-style.md` itself.
 
 ## Implementation notes
 
-- **Two of the seven need different wording, and getting this wrong would be a real regression.**
+- **Two of the six need different wording, and getting this wrong would be a real regression.**
   [`init-worktracking`](../.agents/skills/init-worktracking/SKILL.md) and
   [`new-task`](../.agents/skills/new-task/SKILL.md) operate on a *target* repository, and
   `init-worktracking` explicitly warns against hardcoding this kit's voice into a scaffolded repo
   ("Do not invent house rules and do not import another project's voice"). For those two, the pointer
   must say to follow **the target repo's** conventions, and may mention this kit's module only as the
   default when the skill is run here. Do not paste the standard paragraph into them unchanged.
-- The other five can follow the wording already used by `verifier-agent`, `doc-sync`, `spec-author`,
-  and `test-author`: a short `## Conventions` section naming the module as a swappable default that a
+- The other four can follow the wording already used by `verifier-agent`, `doc-sync`, `spec-author`,
+  `test-author`, and `spec-conformance`: a short `## Conventions` section naming the module as a swappable default that a
   downstream adopter may replace without touching the skill.
 - Put the shape rule in `AGENTS.md` near the existing "How a skill is structured" section, which is
   where an author would look. Keep it to a few sentences; it is a convention, not a specification.
 - `AGENTS.md` is a human-owned contract document, so `doc-sync` would never edit it on its own. This
   task edits it deliberately, on an explicit decision recorded on 2026-07-25.
-- **Depends on `feat-0022`** (which edits `fix-batch` and `reconcile-worktrees`) and **`chore-0010`**
-  (which edits `spec-plan-readiness`). Do not dispatch this in parallel with either.
+- **Depended on `feat-0022`** (which edits `fix-batch` and `reconcile-worktrees`) and **`chore-0010`**
+  (which edits `spec-plan-readiness`). Both are now in `.tasks/done/`, so this is unblocked. Note that
+  the 2026-07-27 pass also edited `fix-batch`, `reconcile-worktrees`, and `new-task`, so re-read those
+  three before editing rather than working from this task's original picture of them.
 
 ## Acceptance criteria (mechanically verifiable)
 

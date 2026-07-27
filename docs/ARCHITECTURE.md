@@ -28,7 +28,7 @@ flowchart LR
 
 Each directory in [`.agents/skills/`](../.agents/skills/) contains a `SKILL.md` with YAML frontmatter and a harness-agnostic procedure. That file is the only hand-maintained source for the skill's behavior. Supporting templates, references, and scripts may sit alongside it when the skill needs them.
 
-[`scripts/validate-skills.py`](../scripts/validate-skills.py) checks every skill's frontmatter, directory-name match, description quality signal, and body length. It also fails on unresolved relative links and on references to sibling skills that do not exist, and warns when a skill claims both draft and shipped status, so cross-reference drift is caught by a command rather than by a human reading. It is the minimum validation gate after changing a skill.
+[`scripts/validate-skills.py`](../scripts/validate-skills.py) checks every skill's frontmatter, directory-name match, description quality signal, and body length. It also fails on unresolved relative links, on references to sibling skills that do not exist, and on links that escape the shipped skill tree (which resolve in this repository but dangle once a skill is installed), and warns when a skill claims both draft and shipped status, so cross-reference drift is caught by a command rather than by a human reading. It is the minimum validation gate after changing a skill.
 
 ### Distribution tooling
 
@@ -50,7 +50,7 @@ Since the contract-driven delivery spine shipped, the kit maintains two further 
 
 [`docs/spec/`](spec/) holds behavioral specifications: the contracts that skills and tooling are built and audited against. A specification is written by `spec-author`, checked by the `spec-quality` lens, and carries a `status` of `draft` or `approved`, because human approval is an explicit state rather than an implied one. Scenarios use stable `S-NNN` identifiers, which is what makes the chain traceable: `spec-plan-readiness` maps those identifiers to test layers, `test-author` tags each derived test with the identifier it covers, and `spec-conformance` later audits the same identifiers. A conformance report sits beside its specification as `<spec>.conformance.md`, and a verification report as `<spec>.verification.md`.
 
-[`tests/`](../tests/) holds the kit's own test suite, derived from those specifications rather than written ad hoc. Tests are evidence for the verification step, not a substitute for it: a green suite asserts code contracts, while conformance asserts that behavior matches the specification.
+[`tests/`](../tests/) holds the kit's own test suite, derived from those specifications wherever the tooling under test has one, rather than written ad hoc. Not every script has a specification yet: `build-adapters.py` does not, so its tests were written against observed behavior, which is a gap in the spine rather than a design choice. Tests are evidence for the verification step, not a substitute for it: a green suite asserts code contracts, while conformance asserts that behavior matches the specification.
 
 `verifier-agent` closes the loop by combining the two before anything lands: it runs the declared commands, composes `spec-conformance` so a contract divergence withholds a passing verdict even when every test passes, and returns `pass`, `fail`, or `blocked`. The `blocked` verdict exists so a verification that could not run is never recorded as one that passed.
 

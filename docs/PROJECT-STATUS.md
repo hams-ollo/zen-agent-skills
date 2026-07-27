@@ -1,6 +1,6 @@
 # Project status
 
-This is a partner-facing status update on the Zen Starter Kit as of 2026-07-25.
+This is a partner-facing status update on the Zen Starter Kit as of 2026-07-27.
 
 ## Where things stand
 
@@ -29,7 +29,13 @@ Earlier in the same cycle, the README became a complete adoption guide, an archi
 
 There is no immediate implementation blocker. `verifier-agent` shipped on 2026-07-24, completing the core delivery loop: an idea becomes a specification, and nothing lands until an independent verification returns a verdict with evidence. Its dogfood found a real defect in an artifact the kit had already audited and tested, which is the clearest evidence so far that the spine catches things a green test suite does not.
 
-`user-testing` remains the main open thread, covering the user-facing work that automated tests and contract conformance both miss. Separately, the first kit-wide review pass ran on 2026-07-25 and read all nineteen skills. It found a real cross-repository portability defect, seven stale status claims including three skills that called themselves both draft and shipped, and a linter blind to all of it. Those were fixed the same day by parallel agents, and the checks that catch them now run as a command. That pass deliberately reviewed structure and cross-references rather than exercising behavior, so the harder half is still open: every skill was blessed on a single real use, and whole branches remain unexercised.
+`user-testing` remains the main open thread, covering the user-facing work that automated tests and contract conformance both miss.
+
+Separately, two kit-wide review passes have now run over all nineteen skills. The first, on 2026-07-25, reviewed structure and cross-references: it found a real cross-repository portability defect, seven stale status claims including three skills that called themselves both draft and shipped, and a linter blind to all of it. Those were fixed the same day by parallel agents.
+
+The second, on 2026-07-27, reviewed what each skill's procedure actually does when run, and found more: two blockers, five majors, and eight smaller issues, all fixed the same day. The two that mattered most were both silent. The installer was shipping the skills without the rules module they compose, so fourteen of nineteen carried references that worked in this repository and dangled once installed, and the review skill in particular arrived with no rubric at all. And the worktree reconciliation step could not see files an agent had newly created, so a parallel agent's actual output landed nowhere, reported success, and was deleted with the worktree. Both are fixed and both now fail a command rather than waiting for a human to notice.
+
+The pattern behind most of the second pass is worth stating plainly, because it bounds how much confidence to take from the first: this repository is documentation and standard-library Python, with no dependency tree, no large diffs, and no binary assets. Procedures that assume an ordinary software project had therefore never met one. That is the standing limit of validating a tool on the repository that builds it, and closing it is now the top item of work. Every skill still rests on a single real use, and whole branches remain unexercised.
 
 `ci-scaffold` and `release-cut` remain intentionally on hold until they have been needed and used twice in real work. That keeps the library focused on proven workflows rather than speculative coverage.
 

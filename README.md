@@ -32,7 +32,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`docs/spec/`](docs/spec/): behavioral specifications, the contracts the spine's skills are built and verified against.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
 - [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
-- [`tests/`](tests/): the kit's own test suite, derived from the specifications under `docs/spec/`.
+- [`tests/`](tests/): the kit's own test suite, derived from the specifications under `docs/spec/` where the tooling under test has one.
 
 ## How the workflow fits together
 
@@ -199,7 +199,7 @@ Preview installation for a specific test home without touching your normal tool 
 python scripts/install.py --dry-run --home ./.tmp/zen-home
 ```
 
-The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](tests/) covers the kit's own tooling, derived from the specifications in [`docs/spec/`](docs/spec/); the kit has no runtime application to test.
+The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](tests/) covers the kit's own tooling, derived from the specifications in [`docs/spec/`](docs/spec/) where one exists and written against observed behavior where it does not; the kit has no runtime application to test.
 
 ## Uninstall
 
