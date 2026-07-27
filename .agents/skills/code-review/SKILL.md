@@ -59,12 +59,30 @@ compute; just read the named files. Honor an explicit base or commit range here 
      (`git diff HEAD` plus untracked files). Do not dead-end.
    - Both empty: nothing to review, say so and stop.
 
-### Step 2: survey what is under review
+### Step 2: survey what is under review, and bound it before reading
 
 Read the real code, not a summary. For a change review, `git diff --stat <range>` for shape then
 the actual `git diff <range>` for substance; for a path scope, read the named files in full. Either
 way, read enough surrounding context to judge the lines fairly. Note the languages, the test files
 involved, and anything security-sensitive.
+
+**Bound the read against the stat before starting it.** A large change does not fit, and running
+out of context partway through produces a review of whatever happened to come first, presented with
+the same confidence as a complete one. That is a worse outcome than an honestly partial review,
+because nothing in the output distinguishes them. So:
+
+- **Subtract what is not worth reading.** Lockfiles, generated code, vendored trees, minified
+  assets, and large fixture data routinely dominate a diff's line count and carry almost no review
+  signal. Exclude them explicitly and say you did.
+- **Order the remainder by risk, not by the order git prints it.** Anything crossing a trust
+  boundary first (auth, input parsing, secrets, subprocess, serialization, persistence), then
+  application logic, then tests, then documentation and formatting. If the budget runs out, it runs
+  out on the material where a missed finding costs least.
+- **When the change still does not fit, say so in the verdict line and name what you did not
+  read.** "Reviewed 14 of 31 files, prioritized by risk; `src/legacy/` not reviewed" is a useful
+  review. A silently truncated one is not. Offer to review the remainder as a second pass.
+
+An explicit path scope is the user pre-bounding the review for you; honor it and do not widen.
 
 ### Step 3: apply the review-quality lens
 
@@ -78,7 +96,8 @@ becomes a reported finding**, and drop anything you cannot substantiate.
 Produce the review as markdown:
 
 - **Verdict line**: a one-line summary, for example "3 findings: 1 blocker, 2 minor" or
-  "No blocking issues found".
+  "No blocking issues found". When the review was bounded per Step 2, the coverage belongs here
+  too: "No blocking issues found in the 14 of 31 files reviewed".
 - **Findings**, ordered `blocker` first, grouped by file within a severity. Each finding:
 
   > **[severity]** `path/to/file.py:42`: the issue in a sentence or two. Why it matters.
@@ -108,5 +127,3 @@ validate-before-reporting rule are identical either way; only the output channel
 - Future direction (not built yet): a multi-lens "deep-review" that runs several lenses
   (`review-quality`, `test-quality`, and so on) and reconciles their findings, mirroring
   moonray's Deep Review orchestration.
-- Shipped 2026-07-24, blessed after dogfooding on this kit's own change (`feat-0007`). Keep
-  iterating in the field, especially against real code diffs beyond documentation changes.

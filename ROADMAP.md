@@ -94,6 +94,31 @@ Decided on 2026-07-25 and now filed:
 | [`chore-0011`](.tasks/chore-0011-document-skill-shapes-and-house-style-pointers.md) | **Skill shape.** Both shapes are legitimate: workflow skills carry a procedure, lenses carry `Intent` / `Workflow` / `Output format` because they are composed rather than run. Document that rule rather than retrofitting 19 skills. Separately, seven skills carry no house-style pointer at all, which is a live portability gap rather than a style preference, since the module is swappable and a skill that never references it silently ignores an adopter's replacement. Blocked on `feat-0022` and `chore-0010`, which touch three of the same files. |
 | [`feat-0024`](.tasks/feat-0024-exercise-verifier-blocked-branch.md) | **Epic A item 8, first slice.** Target the three unexercised branches rather than spec'ing all fifteen remaining skills. Start with `verifier-agent`'s `blocked` verdict, the branch carrying the most weight and the least evidence. Drafting a `code-review` contract the kit wants anyway produces a genuinely unapproved spec, so the branch fires on real work instead of a staged fixture. That run also settles the evaluation-record format the other two branches will reuse. |
 
+## Kit mechanics hardening (from the 2026-07-27 review pass)
+
+The second kit-wide pass, and the first to go at what each skill's procedure actually *does* when
+run on a real repository rather than at its structure. It found two blockers, five majors, and
+eight smaller issues, none visible to either validator. All thirteen were fixed the same day; see
+the 2026-07-27 `CHANGELOG.md` entry for the full account. The headline two:
+
+- **The installer shipped the skills without the lenses they compose.** 14 of 19 skills referenced
+  `.agents/rules/`, which `install.py` never carried, so `code-review` arrived with no rubric at
+  all. Fixed by installing the rules module as the sibling the existing links already assumed.
+- **`reconcile-worktrees` silently dropped every new file an agent created.** Its `git diff | git
+  apply` mechanism could not see untracked files, and `fix-batch` requires agents to leave work
+  uncommitted, so the deliverable landed nowhere and the worktree holding the only copy was then
+  deleted.
+
+The pattern behind most of them: the kit is documentation and stdlib Python with no dependency
+tree, no large diffs, and no binary assets, so procedures that assume a normal software repository
+had never met one. That is the standing risk in dogfooding a tool on the repository that builds it,
+and it is what `feat-0025` exists to close.
+
+| Task | What |
+|---|---|
+| [`feat-0025`](.tasks/feat-0025-exercise-batch-loop-on-dependency-bearing-repo.md) | Exercise the hardened batch loop end to end on a repo with real build dependencies. The environment, untracked-file, and base-commit fixes are all currently cold, which the contribution bar does not allow to stand. |
+| [`chore-0012`](.tasks/chore-0012-decide-code-review-skill-name.md) | Decide whether `code-review` keeps a name that collides with Claude Code's built-in command. A judgment call, not a mechanical fix, so it is filed rather than decided. |
+
 Still at roadmap altitude, deliberately not decomposed until `feat-0024` establishes the record format:
 
 - **`test-author`'s characterization mode**, never fired on real work.

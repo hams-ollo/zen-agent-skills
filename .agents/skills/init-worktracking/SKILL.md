@@ -25,11 +25,19 @@ Do not dump the whole system on a 200-line project. Ask which tier fits, or infe
 
 | Tier | Writes | For |
 |---|---|---|
-| **lite** | `AGENTS.md`, `.tasks/` (README, `_TEMPLATE.md`, `done/`), `CLAUDE.md` pointer | small or solo repos that want task files without the ceremony |
+| **lite** | `AGENTS.md`, `.tasks/` (README, `_TEMPLATE.md`, `validate.py`, `done/`), `CLAUDE.md` pointer | small or solo repos that want task files without the ceremony |
 | **standard** | lite + `ROADMAP.md` + `CHANGELOG.md` | most repos; the full altitude model |
-| **team** | standard + `.tasks/validate.py` + a CI/pre-commit invocation + optional Cursor/Copilot pointers | repos with many contributors or agents, where drift must be caught mechanically |
+| **team** | standard + a CI/pre-commit invocation of the validator + optional Cursor/Copilot pointers | repos with many contributors or agents, where drift must be caught mechanically |
 
-At **lite**, also strike the `ROADMAP.md`/`CHANGELOG.md` references out of the `AGENTS.md` you write (the work-altitude-model section and the task-lifecycle section still describe the model, but the header links and lifecycle steps 4-5 should not point at files that do not exist).
+`validate.py` ships at every tier. It is one stdlib-only file with no dependencies, so the "do not bury a small repo" argument does not apply to it, and three sibling skills (`new-task`, `fix-batch`, `reconcile-worktrees`) instruct agents to run it unconditionally. Withholding it at lite made those instructions dead references. What **team** adds is not the file but its mechanical enforcement in CI or a pre-commit hook.
+
+### Tier stripping at lite
+
+At **lite** there is no `ROADMAP.md` and no `CHANGELOG.md`, so strike every reference to them out of what you write. This is not cosmetic: a scaffold whose own files link to things that do not exist teaches an agent that broken references are normal here. Three files carry those references and all three need the edit:
+
+- **`AGENTS.md`**: the header links and task-lifecycle steps 4 and 5. The work-altitude-model section and the lifecycle still describe the model; they just stop pointing at absent files.
+- **`.tasks/README.md`**: the strategy/ledger sentence in the opening paragraph, and the `CHANGELOG.md` and `ROADMAP.md` clauses in its lifecycle section.
+- **`.tasks/_TEMPLATE.md`**: the definition-of-done checkbox that requires a dated `CHANGELOG.md` line. Drop that clause, or the template propagates an unsatisfiable step into every task file the repo will ever create.
 
 ## Procedure
 
@@ -74,7 +82,7 @@ Fill each template for the chosen tier and write it. Use today's date (ISO `YYYY
 | `AGENTS.md.tmpl` | `AGENTS.md` | all | `{{OVERVIEW}}`, `{{COMMANDS}}`, `{{CONVENTIONS}}`, `{{FILE_MAP}}` |
 | `tasks-README.md.tmpl` | `.tasks/README.md` | all | none |
 | `_TEMPLATE.md.tmpl` | `.tasks/_TEMPLATE.md` | all | none (it is the blank template) |
-| `validate.py` | `.tasks/validate.py` | team (copy verbatim) | none |
+| `validate.py` | `.tasks/validate.py` | all (copy verbatim) | none |
 | `ROADMAP.md.tmpl` | `ROADMAP.md` | standard, team | `{{DATE}}`, `{{CURRENT_STATE}}` |
 | `CHANGELOG.md.tmpl` | `CHANGELOG.md` | standard, team | `{{PROJECT_NAME}}` |
 | `CLAUDE.md.tmpl` | `CLAUDE.md` | all | none |
@@ -84,7 +92,7 @@ Fill each template for the chosen tier and write it. Use today's date (ISO `YYYY
 Handle each case:
 
 - **New file**: write the filled template.
-- **`.tasks/` directory**: create `.tasks/`, `.tasks/done/`, `.tasks/README.md`, `.tasks/_TEMPLATE.md`, and an empty `.tasks/done/.gitkeep` so the empty dir is committable. At team tier also copy `validate.py` in verbatim.
+- **`.tasks/` directory**: create `.tasks/`, `.tasks/done/`, `.tasks/README.md`, `.tasks/_TEMPLATE.md`, `.tasks/validate.py` (copied verbatim, every tier), and an empty `.tasks/done/.gitkeep` so the empty dir is committable. At lite, apply the tier stripping above to `README.md` and `_TEMPLATE.md` as you write them.
 - **A target file already exists** (`AGENTS.md`, `ROADMAP.md`, `CHANGELOG.md`): do not overwrite. Show what the scaffold would add and offer to merge the missing sections into their file, or write the new version alongside as `AGENTS.scaffold.md` for them to reconcile. Let them choose.
 - **`CLAUDE.md` already exists**: if it already points at `AGENTS.md`, leave it. If it has real content, offer to prepend a one-line pointer to `AGENTS.md`. Only write the pointer-only `CLAUDE.md` when none exists.
 - **Pointer pick-list**: `AGENTS.md` is canonical and Cursor, Codex, and OpenCode read it natively, so most repos need only the `CLAUDE.md` pointer. Do not reflexively create `.cursorrules` (legacy). Offer `.github/copilot-instructions.md` and `.cursor/rules/agents.mdc` only if the user uses those tools; mention them as available.
@@ -127,7 +135,7 @@ If Step 1.4 found a tracker, do not silently create a parallel system. Present t
    ```
 
 2. **Git-safety**: `.tasks/` must be tracked by git, or parallel worktree-isolated agents silently diverge from the main checkout. Check `.gitignore` does not exclude `.tasks/`, `ROADMAP.md`, `CHANGELOG.md`, or `AGENTS.md`. If any is ignored, flag it and offer a negating rule. Do not commit anything yourself unless the user asks.
-3. **team tier CI/pre-commit**: offer to wire `python .tasks/validate.py` into the repo's existing CI (add a step to the lint/test workflow) or a pre-commit hook. Do not force it; show the snippet and let the user place it.
+3. **team tier CI/pre-commit**: the validator is already on disk at every tier; what team adds is enforcement. Offer to wire `python .tasks/validate.py` into the repo's existing CI (add a step to the lint/test workflow) or a pre-commit hook. Do not force it; show the snippet and let the user place it.
 
 ### Step 8: report and offer a first task
 

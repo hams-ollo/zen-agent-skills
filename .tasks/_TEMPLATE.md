@@ -6,6 +6,10 @@ status: open
 priority: P1
 parent: "ROADMAP#N feature-slug"
 depends_on: []
+# Optional, for a task decomposed from an approved spec. Omit both when there is
+# no spec. A readiness gate reads them to map this task back to its contract.
+spec: ""
+scenarios: []
 touched_files:
   - path/to/file/the/task/will/change
   - path/to/its/test

@@ -20,6 +20,12 @@ Discovery targets (per tool), each skill linked/copied as <base>/<skill-name>:
     claude    -> ~/.claude/skills
     opencode  -> ~/.agents/skills
 
+The swappable rules module (.agents/rules/) travels with the skills, placed as
+the sibling <base>/../rules. That location is not arbitrary: a skill body
+references its lens as ../../rules/<file>.md, which resolves from
+<base>/<skill-name>/SKILL.md to exactly this directory. Without it, code-review
+loses its whole rubric and twelve other skills lose their house-style module.
+
 Cursor and Copilot read repo-level pointer files, not a global skills dir, so
 they are handled by build-adapters.py per project, not here.
 
@@ -36,6 +42,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
+RULES_DIR = REPO_ROOT / ".agents" / "rules"
 MANIFEST = REPO_ROOT / "scripts" / ".install-manifest.json"
 
 TOOL_SUBPATHS = {
@@ -98,11 +105,30 @@ def install(tools, mode, home: Path, dry: bool) -> int:
                 }
             print(f"{tag}{status:9} {tool:8} {src.name}  -> {target}")
 
+        # The rules module, as the sibling <base>/../rules, so each skill's
+        # ../../rules/<file>.md reference resolves in the installed layout too.
+        if RULES_DIR.is_dir():
+            rules_target = base.parent / "rules"
+            status = _place(RULES_DIR, rules_target, mode, dry, manifest)
+            if status == "CONFLICT":
+                conflicts += 1
+            else:
+                entries[str(rules_target)] = {
+                    "tool": tool, "name": "rules",
+                    "target": str(rules_target), "mode": mode, "source": str(RULES_DIR),
+                }
+            print(f"{tag}{status:9} {tool:8} rules  -> {rules_target}")
+
     save_manifest(list(entries.values()), dry)
     if conflicts:
         print(f"\n{conflicts} CONFLICT(s): a real file exists at those targets. "
               f"Move or remove them, then re-run.")
-    print(f"\n{tag}Done: {len(skills)} skill(s) x {len(tools)} tool(s).")
+    if not RULES_DIR.is_dir():
+        print(f"\nWARNING: no rules module at {RULES_DIR}. Skills that reference "
+              f"../../rules/ (code-review's rubric, the house-style module) will "
+              f"dangle in the installed layout.")
+    print(f"\n{tag}Done: {len(skills)} skill(s) x {len(tools)} tool(s), "
+          f"plus the rules module.")
     return 1 if conflicts else 0
 
 

@@ -14,12 +14,36 @@ A good task is self-contained: an agent that reads only `AGENTS.md`, the task fi
 - **Honest `touched_files`**: the complete read/write surface, discovered by inspecting the repo, not guessed. Too narrow and the agent is blocked; too wide and it wanders and collides with parallel agents.
 - **A real `parent`**: the ROADMAP Feature/Epic it serves, so intent is traceable without reading the roadmap. If no Feature fits, propose adding one.
 - **Resolved `depends_on`**: ids of tasks that must reach `done/` first; `[]` if none. Never invent an id.
+- **`spec` and `scenarios`, when the work comes from an approved spec**: the contract path and the `S-NNN` ids this task covers. Omit both when there is no spec. See [Decomposing an approved spec](#decomposing-an-approved-spec).
 - **A mechanically-verifiable acceptance command**: an exact command (usually the repo's test command scoped to the change) that passes only when the work is done. Not "tests pass" in prose, the literal command.
 - **Tight scope with an explicit out-of-scope**: so a well-meaning agent keeps the change atomic.
 
 ## Why this skill blocks a little
 
 Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experience say the same thing: jumping straight to code on an underspecified task wastes far more time than the few minutes of elicitation. So this skill asks its questions and shows its decomposition before writing files. That friction is the feature. Do not skip it for anything non-trivial.
+
+## Decomposing an approved spec
+
+Most tasks come from a rough idea or a roadmap Feature, and the procedure below covers those
+unchanged. When the input is instead an **approved spec**, this skill is the decomposition step of
+the contract-driven spine: [`spec-author`](../spec-author/SKILL.md) drafts the spec, a human sets
+`status: approved`, and `new-task` turns it into the ordered task set that
+[`spec-plan-readiness`](../spec-plan-readiness/SKILL.md) then gates before any code is written.
+
+That gate blocks on any task not traceable to a scenario and on any scenario with no task, so
+decomposition has to produce that mapping rather than leave it to be reconstructed later. Four extra
+obligations, all inside the normal procedure:
+
+- **Refuse an unapproved spec.** If `status` is not `approved`, stop and say so. Decomposing a draft
+  commits the repo to a contract no human has agreed to, and every task you write inherits it.
+- **Cover every scenario exactly once.** Each `S-NNN` maps to at least one task, and every task
+  carries the ids it covers in `scenarios` plus the spec path in `spec`. A scenario you deliberately
+  do not implement needs a stated rationale, not silence.
+- **Split along scenario boundaries, not file boundaries** where the two disagree. A task that
+  implements half a scenario cannot be verified against the contract, which is the point of having
+  one.
+- **Do not restate the spec in the task body.** Point at it. The spec is the contract and it moves;
+  a copy in a task file is a second source of truth that will drift.
 
 ## Procedure
 
@@ -61,7 +85,7 @@ If you cannot find the surface, say so and ask, rather than writing a plausible-
 
 For each task, copy `.tasks/_TEMPLATE.md`, assign the next id (filename `<type>-<NNNN>-<slug>.md`, `id` frontmatter equal to the `<type>-<NNNN>` prefix), and fill every section:
 
-- Frontmatter: `id`, `type`, `status: open`, `priority`, `parent`, `depends_on`, `touched_files`, `created` (today, ISO).
+- Frontmatter: `id`, `type`, `status: open`, `priority`, `parent`, `depends_on`, `touched_files`, `created` (today, ISO), plus `spec` and `scenarios` when the task came from an approved spec.
 - **Problem**: what is wrong or missing and why, pointing at exact code with relative links.
 - **Scope**: in-scope change, and an explicit out-of-scope list.
 - **Implementation notes**: constraints, intended approach, edge cases, prior art to mirror. Optional if Problem + Scope are unambiguous.
@@ -79,6 +103,12 @@ Follow the repo's own conventions from the conventions section of `AGENTS.md` (d
 ### Step 7: report and offer the handoff
 
 Summarize the task file(s) written with their ids and one-line titles. Then offer, but do not automatically run, the next step: dispatch the batch to `fix-batch` (parallel worktree-isolated agents), noting that only tasks whose `depends_on` are already in `done/` are safe to dispatch immediately. Do not commit anything unless the user asks.
+
+When the tasks came from an approved spec, the next step is not `fix-batch`: it is
+[`spec-plan-readiness`](../spec-plan-readiness/SKILL.md) over the spec plus this task set. That gate
+decides whether implementation may begin at all, and it runs before dispatch, not after. Report the
+scenario coverage you produced (which scenarios map to which tasks, and any deliberately not
+implemented) so the gate has something to check rather than something to reconstruct.
 
 ## Notes
 

@@ -9,11 +9,13 @@ Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 
 ## Intent
 
-Prove the implementation conforms to the spec, section by section. Green tests are not proof: they assert code contracts (an element exists, an endpoint returns 200), not that behavior matches the spec's requirements. This skill is the audit that closes that gap and produces the artifact the closeout gate requires. It is the report-only half of the kit's independent verification, meant to compose into the existing verification pass of the [`fix-batch`](../fix-batch/SKILL.md) skill rather than duplicate or replace it. See also [`verifier-agent`](../verifier-agent/SKILL.md), a kit skill that composes this lens with others.
+Prove the implementation conforms to the spec, section by section. Green tests are not proof: they assert code contracts (an element exists, an endpoint returns 200), not that behavior matches the spec's requirements. This skill is the audit that closes that gap.
+
+It is the report-only half of the kit's independent verification. The matrix it produces is an input, not a verdict: [`verifier-agent`](../verifier-agent/SKILL.md) composes this lens for the contract half of its own `pass` / `fail` / `blocked` decision, and [`fix-batch`](../fix-batch/SKILL.md) runs that verification against every worktree before anything is reconciled. Use this lens directly when the spec-versus-code audit is all you want; go through `verifier-agent` when the question is whether the work is ready to land.
 
 ## When to use
 
-- Before closing a spec-driven issue or feature (the closeout gate requires the matrix).
+- Before closing a spec-driven issue or feature, where the matrix is the evidence that it is done.
 - When asked "does the implementation match the spec?" or "what diverges from the spec?"
 - To produce a conformance report for a spec, conventionally at `docs/spec/<spec>.conformance.md`.
 
@@ -42,5 +44,9 @@ An empty result is valid only as `{ audited: [...], unreconciled: [] }`, "no div
 ## Non-goals
 
 - Do not fix divergences; report them.
-- Do not judge spec well-formedness (`spec-quality`) or doc drift (`doc-sync`).
-- Do not write tests; do flag where a spec invariant lacks a covering test.
+- Do not judge spec well-formedness ([`spec-quality`](../spec-quality/SKILL.md)) or doc drift ([`doc-sync`](../doc-sync/SKILL.md)).
+- Do not write tests ([`test-author`](../test-author/SKILL.md)); do flag where a spec invariant lacks a covering test.
+
+## Conventions
+
+Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter may replace it without touching this skill.

@@ -39,9 +39,20 @@ Optional:
 - **Repository context**: existing names, tools, commands, surfaces, and conventions the spec
   should ground its wording in rather than inventing new terms.
 
+## Where the spec goes
+
+Find the repository's spec location before writing, do not assume one. Look for an existing spec
+directory under any of its common names (`docs/spec/`, `specs/`, `docs/rfcs/`, `design/`) and for
+how the specs already there are named. Match what you find.
+
+Only when a repository has none of these does `docs/spec/<slug>.md` apply, as this kit's default.
+Writing there regardless is how a repo ends up with two spec directories, and the second one is the
+one nobody reads. If the convention is ambiguous, ask; it is a one-line question and the answer is
+durable.
+
 ## The spec format
 
-Write Markdown with YAML frontmatter to `docs/spec/<slug>.md`. Use these sections in this order and
+Write Markdown with YAML frontmatter to the location above. Use these sections in this order and
 add none others:
 
 ```markdown
@@ -125,9 +136,10 @@ first draft.
 
 ### 4. Write the file, read-only for everything else
 
-Write the `ready` spec to `docs/spec/<slug>.md` with `status: draft`. The run creates or edits **only
-that spec file**: never an implementation source file, test, or config. If a repo keeps a spec index
-(for example `docs/spec/README.md`), updating it is allowed; writing code is not.
+Write the `ready` spec to the location established above, named `<slug>.md`, with `status: draft`.
+The run creates or edits **only that spec file**: never an implementation source file, test, or
+config. If a repo keeps a spec index (for example a `README.md` in the spec directory), updating it
+is allowed; writing code is not.
 
 ### 5. Report and hand off to human approval
 

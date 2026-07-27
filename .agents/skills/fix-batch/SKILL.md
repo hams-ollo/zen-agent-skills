@@ -14,9 +14,9 @@ and their own summaries will not tell you.
 This is the parallel-execution step of the kit spine: [`new-task`](../new-task/SKILL.md) authors
 the atomic task files, `fix-batch` dispatches them to isolated agents, and
 [`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the verified results into the main
-working tree. Read [`AGENTS.md`](../../../AGENTS.md)'s agent reading protocol section (section 0 in
-both this kit's own `AGENTS.md` and the `init-worktracking` scaffold's numbering) and its task
-lifecycle section before dispatching, so each spawned agent inherits the same rules.
+working tree. Read the target repository's `AGENTS.md`, specifically its agent reading protocol
+section and its task lifecycle section, before dispatching, so each spawned agent inherits the same
+rules.
 
 ## Why this exists
 
@@ -64,10 +64,14 @@ needs another item's finished code to make sense) and that they touch **disjoint
 depend on each other or overlap the same files, this is not the right shape for parallel
 worktrees. Handle those sequentially instead, in one place.
 
-### Step 2: file one task per item, and resolve any tracking ambiguity before spawning anyone
+### Step 2: resolve everything git will not carry into a worktree, before spawning anyone
 
-Each item needs a self-contained task file so the spawned agent can work from it cold. In this
-kit that means one [`.tasks/`](../../../.tasks/) file per item, authored to the `new-task` bar
+`git worktree add` gives an agent the **tracked** files and nothing else. Everything the work
+depends on that git does not track has to be decided once, here, and written into every prompt.
+Two populations, and the second is the one that actually stops batches.
+
+**The task files.** Each item needs a self-contained task file so the spawned agent can work from
+it cold. In this kit that means one `.tasks/` file per item, authored to the `new-task` bar
 (honest `touched_files`, a real `parent`, resolved `depends_on`, a mechanically-verifiable
 acceptance command). If the target repo uses a different convention, follow that convention
 exactly instead.
@@ -82,12 +86,50 @@ into every agent's prompt. Do not leave it to each agent's judgment, they will n
 the same answer. In this kit the `.tasks/` files are normally committed, so this trap is usually
 absent here, but confirm rather than assume.
 
+**The build environment, which is gitignored by definition.** `node_modules/`, `.venv/`,
+`target/`, `.env`, build caches, generated code, and downloaded fixtures are all absent from a
+fresh worktree because they are all correctly gitignored. So the task's acceptance command, the
+one thing that proves the item is done, cannot run there. Left unresolved this does not fail
+loudly: `verifier-agent` returns `blocked` for a runner it cannot find, and Step 6 says a
+`blocked` item does not get reconciled, so **every item in the batch stalls at once and none of
+them look broken**. On a documentation-only repo like this kit the trap is absent, which is
+exactly why it is easy to ship a batch workflow that has never met it.
+
+Before dispatching, run the acceptance command yourself in a throwaway worktree, or read it
+closely enough to answer: what does it need that git is not carrying? Then pick one answer for
+the whole batch and put it in every prompt:
+
+- **Install per worktree**: correct and hermetic, and the cost is real (N installs, N times the
+  disk). Tell the agent the exact command and that the install is expected, not a sign the task is
+  wrong.
+- **Share the store**: point the agent at a shared cache or package store where the toolchain
+  supports it. Cheaper, but no longer fully isolated, so say so.
+- **Copy in what git cannot carry**: for a small set of files, usually `.env` or a fixture,
+  place them yourself before dispatching rather than asking the agent to reach outside its
+  worktree, which rule 2 in Step 3 forbids for good reason.
+- **Do not use worktree isolation for this batch**: a legitimate answer when the environment is
+  too expensive or too stateful to replicate. Run the items sequentially in one checkout instead.
+
+Never leave this to the agent. An agent that finds its test command broken and has been told not
+to leave its worktree will either report a blocker (the good case, and it costs you a round trip)
+or improvise something creative (the bad case).
+
 ### Step 3: dispatch one isolated agent per item, with hardened prompts
 
 Dispatch one agent per item, each in its own isolated git worktree, all started together so they
 run in parallel. The concrete tool mechanics are harness-specific, see
-[Running this in Claude Code](#running-this-in-claude-code). Every prompt must include, in
-substance:
+[Running this in Claude Code](#running-this-in-claude-code).
+
+**Record the dispatch sha first** (`git rev-parse HEAD`), before any worktree is created. It is the
+base every worktree's changes should be read against, and it is the one piece of state that cannot
+be recovered afterwards: `git worktree list` reports current `HEAD`, not the creation point.
+
+Keep the batch to a size you can actually verify. Every item costs a full verification pass in
+Step 6, and that is your time, not the agents'. If a batch is large enough that verification will
+be skimmed, it is too large, and skimmed verification is the exact failure this skill exists to
+prevent. Dispatch in waves instead.
+
+Every prompt must include, in substance:
 
 1. **The scope**: exactly what to change, in which file(s), and what "done" (acceptance criteria)
    looks like, self-contained, since the agent starts cold with no memory of this conversation.
@@ -98,11 +140,20 @@ substance:
    report that as a blocker instead of doing it." Worktree isolation is a starting-state
    guarantee, not a runtime sandbox. Nothing stops a shell call from going wherever it wants
    unless you say so directly.
-3. **The untracked-file resolution from Step 2**, if applicable, spelled out concretely rather
-   than left as a judgment call.
+3. **Both Step 2 resolutions**, spelled out concretely rather than left as judgment calls: how to
+   handle the task file if it is untracked, and how to get the build environment the acceptance
+   command needs.
 4. **An instruction not to commit**: leave all changes uncommitted in the worktree for review,
-   unless the user has explicitly said otherwise.
-5. **A request for an honest blocker report** over a confident-sounding improvisation: "If
+   unless the user has explicitly said otherwise. Add: do not stage them either. Staged changes
+   are invisible to a bare `git diff`, which is what reconciliation reads, so staging is a quiet
+   way to lose work at the far end.
+5. **How to produce the test the acceptance command runs**, when the task's criteria name a test
+   that does not exist yet. Point the agent at [`test-author`](../test-author/SKILL.md): derive the
+   test from the scenario it protects, tag it with that `S-NNN` id, and pick the layer and oracle
+   through the [`test-quality`](../test-quality/SKILL.md) lens. Without this the agent writes
+   whatever test makes its own change pass, which is the failure mode the whole verification stage
+   exists to catch, arriving one step earlier than the stage that would catch it.
+6. **A request for an honest blocker report** over a confident-sounding improvisation: "If
    something about this task's premise turns out to be wrong, or you hit a blocker you are not
    sure how to resolve within your own worktree, stop and report it clearly rather than guessing."
 
@@ -149,8 +200,12 @@ notion of a batch. The following checks are specific to dispatching several agen
 not inside verifier-agent's scope, so they remain yours to run, for every agent, on top of its
 verdict:
 
-1. **Diff its worktree against its base commit** (`git diff` inside the worktree, or against the
-   commit `git worktree list` shows as its base). Confirm the diff touches only the files the task
+1. **Diff its worktree against its base commit.** Use `git -C <worktree> diff --binary HEAD` for
+   tracked edits (bare `git diff` misses anything staged) plus
+   `git -C <worktree> ls-files --others --exclude-standard` for new files, which no diff shows at
+   all. For the base, use the sha you recorded at dispatch: the commit in `git worktree list` is
+   the worktree's current `HEAD`, not the commit it was created from, and those stop being the
+   same the moment an agent commits. Confirm the changes touch only the files the task
    scoped it to. Anything extra is a finding, not a bonus, investigate it, do not assume it is
    helpful just because tests pass. (In the incident, an "extra" test initially looked like
    fabrication and was nearly deleted for that reason, it turned out to be a real,

@@ -23,10 +23,15 @@ REPO_ROOT = TASKS_DIR.parent
 
 REQUIRED = ["id", "type", "status", "priority", "parent", "depends_on",
             "touched_files", "created"]
+# Optional, and only meaningful together: the approved spec this task implements
+# and the scenario ids it covers. They are what makes a task traceable to a
+# contract, which is what a spec-plan-readiness gate checks for.
+OPTIONAL_SPEC_FIELDS = ["spec", "scenarios"]
 TYPES = {"bug", "feat", "chore", "epic"}
 STATUSES = {"open", "in_progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2"}
 ID_RE = re.compile(r"^(bug|feat|chore|epic)-\d{4}$")
+SCENARIO_RE = re.compile(r"^S-\d{3}$")
 
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 
@@ -158,6 +163,21 @@ def main() -> int:
         for path in touched:
             if not (REPO_ROOT / path).exists():
                 warn(rel, f"touched_files path does not exist: {path}")
+
+        # Spec traceability, when the task claims any. Absent is fine: not every
+        # task comes from a spec. Present but malformed is not, because a
+        # readiness gate reads these to map tasks to scenarios.
+        spec = fm.get("spec", "")
+        scenarios = fm.get("scenarios", []) or []
+        if isinstance(scenarios, str):
+            scenarios = [scenarios]
+        for sid in scenarios:
+            if not SCENARIO_RE.match(sid):
+                err(rel, f"scenario id {sid!r} does not match S-NNN")
+        if scenarios and not spec:
+            warn(rel, "scenarios are listed but no spec: field names the contract they come from")
+        if spec and not (REPO_ROOT / spec).exists():
+            warn(rel, f"spec path does not exist: {spec}")
 
     for tid, where in ids_seen.items():
         if len(where) > 1:

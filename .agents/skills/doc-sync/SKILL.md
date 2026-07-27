@@ -61,6 +61,27 @@ Optional:
 
 ## Procedure
 
+### 0. Bound the scope before reading anything
+
+The default scope is every tracked Markdown document, and on a real repository that is routinely
+more than fits. An audit that runs out of budget partway through does not fail: it reports on the
+documents it reached and says nothing about the rest, which reads exactly like a complete pass.
+Since the entire value of this skill is that a clean verdict means something, an unbounded run can
+produce the one output worse than not running at all.
+
+So decide the scope first, and make it visible:
+
+- **Count the scope before reading it.** If it does not fit, narrow it deliberately rather than
+  discovering the limit mid-run.
+- **Narrow by what a change could have invalidated** when a change scope was supplied, which is
+  the cheapest and highest-yield cut available.
+- **Otherwise narrow by blast radius**: the documents most read and most trusted first (the
+  README, the getting-started and architecture documents, anything a newcomer or a release reads),
+  then the rest.
+- **Exclude vendored third-party trees from the count**, since they are never edited anyway.
+- **Record what you did not reach** in `not_audited`, with the reason. A document that was in scope
+  and never read is not a clean document, and the report must not let those two look alike.
+
 ### 1. Classify every document before reading it for drift
 
 Decide what each document in scope *is*. Classify by property, not by filename, so the rule travels
@@ -163,8 +184,9 @@ is empty. Return the report inline unless a report destination was supplied.
 
 Report the audited set positively: every document read, with its classification. "No drift found" is
 only meaningful next to the list of what was actually checked, otherwise a clean verdict is
-indistinguishable from a run that did not look. When the scope was narrowed by a change range, say
-so, so a partial audit is never read as a whole one.
+indistinguishable from a run that did not look. Whenever the scope was narrowed, by a change range,
+by the Step 0 bounding, or by a budget that ran out mid-run, say so and list what went unread in
+`not_audited`, so a partial audit is never read as a whole one.
 
 ### 5. Apply only what was approved, and leave a record
 
@@ -201,6 +223,9 @@ audited:
 skipped:
   - document: ...
     reason: ...
+not_audited:
+  - document: ...
+    reason: ...
 findings:
   - id: D-001
     document: ...
@@ -221,6 +246,11 @@ Rules:
 
 - `verdict: clean` only when `findings` is empty, and only alongside a non-empty `audited` set that
   shows what was checked. `verdict: drift_found` otherwise.
+- `not_audited` holds documents that were in scope and never read, whether the scope was bounded up
+  front or the budget ran out mid-run. A non-empty `not_audited` never blocks a `clean` verdict, but
+  it must appear next to it, so a partial pass is never mistaken for a whole one. `skipped` and
+  `not_audited` are different claims: `skipped` means the document was classified and deliberately
+  excluded (a ledger), `not_audited` means nothing is known about it.
 - `mode: dry-run` is the default. An apply invocation with no approved findings makes no edits and
   reports as a dry run.
 - `applied` is empty in a dry run, and never contains a contract, ledger, or vendored document.

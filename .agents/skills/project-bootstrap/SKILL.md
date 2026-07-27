@@ -96,4 +96,3 @@ Offer, as the natural next step, to author the repo's first task with `new-task`
 - This skill only writes config and calls `init-worktracking`. It installs nothing and runs no package manager, so it is safe in any environment.
 - Linter/formatter opinions live in the [house code-style layer](#house-code-style-layer), edit-once and swappable, never clobbering a repo's existing config.
 - It is the front door of the kit: `project-bootstrap` -> `init-worktracking` -> `new-task` -> `fix-batch` -> `reconcile-worktrees`.
-- Shipped 2026-07-24: the four design choices above are settled (`feat-0001` draft, `feat-0002` house code-style layer). Keep iterating in the field as it meets new stacks.

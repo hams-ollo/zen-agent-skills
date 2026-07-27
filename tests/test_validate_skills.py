@@ -170,6 +170,32 @@ class TestLinkChecks(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Checked 2 skill(s): 0 error(s), 0 warning(s).", out)
 
+    def test_link_escaping_the_shipped_tree_errors(self):
+        # A link above the .agents/ tree resolves in the repo but dangles once installed.
+        # The bug population is exactly this: the target exists on disk, so an
+        # existence-only check passes it.
+        agents = self.root / "agents"
+        skills = agents / "skills"
+        (self.root / "AGENTS.md").write_text("real file\n", encoding="utf-8")
+        body = "Read [`AGENTS.md`](../../../AGENTS.md) before dispatching.\n"
+        _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(skills)
+        self.assertEqual(code, 1)
+        self.assertIn("link escapes the shipped skill tree: ../../../AGENTS.md", out)
+
+    def test_rules_module_link_does_not_error(self):
+        # ../../rules/<file>.md is the one legitimate escape: install.py ships the
+        # rules module as the sibling of the skills directory.
+        agents = self.root / "agents"
+        skills = agents / "skills"
+        (agents / "rules").mkdir(parents=True)
+        (agents / "rules" / "house-style.md").write_text("# style\n", encoding="utf-8")
+        body = "Follow [`house-style.md`](../../rules/house-style.md).\n"
+        _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(skills)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
     def test_external_and_anchor_links_are_skipped(self):
         # http, https, mailto links and same-page anchors are not resolved on disk.
         body = (

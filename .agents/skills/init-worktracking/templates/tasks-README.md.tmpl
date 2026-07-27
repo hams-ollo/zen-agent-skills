@@ -38,8 +38,15 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 | `priority` | `P0` (blocks a shipped output) \| `P1` \| `P2`. |
 | `parent` | The roadmap Feature/Epic this task serves (up-link, 100ft -> 30k ft). |
 | `depends_on` | Task ids that must reach `done/` before this one starts; `[]` if none. |
+| `spec` | Optional. Path to the approved spec this task implements. |
+| `scenarios` | Optional. The `S-NNN` scenario ids from that spec this task covers. |
 | `touched_files` | Every file the task expects to create or modify. |
 | `created` | ISO date the task was authored. |
+
+`spec` and `scenarios` are what make a task traceable back to a contract. Omit both for a task that
+does not come from a spec, which is most of them. Fill both when one exists, because a readiness
+gate run before implementation reads them to confirm every scenario has a task and every task has a
+reason to exist.
 
 ## A note on parallel agents
 

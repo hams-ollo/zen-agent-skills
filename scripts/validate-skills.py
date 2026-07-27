@@ -9,6 +9,12 @@ on disk, that `../<name>/SKILL.md` references point at a skill that actually
 exists, and warns when a skill asserts both draft and shipped status. Standard
 library only. Exits non-zero on error.
 
+Link checks are made against the *shipped* layout, not just the authoring one. A
+skill is distributed as a directory alongside the rules module (see
+scripts/install.py), so a link that escapes the `.agents/` tree resolves here and
+dangles everywhere the skill is actually used. Those are errors even though the
+file they name exists in this repository.
+
     python scripts/validate-skills.py
 """
 from __future__ import annotations
@@ -76,8 +82,14 @@ def _link_targets(text: str):
             yield target
 
 
-def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: list) -> None:
-    """Flag unresolved relative links and dangling sibling-skill references."""
+def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: list,
+                portable_root: Path | None = None) -> None:
+    """Flag unresolved relative links, dangling siblings, and non-portable links.
+
+    `portable_root` is the highest directory a skill link may reach: the `.agents/`
+    tree that install.py ships (the skills plus the rules module beside them). A link
+    above it resolves in this repository and dangles once the skill is installed.
+    """
     for target in _link_targets(text):
         if target.lower().startswith(EXTERNAL_LINK_PREFIXES):
             continue
@@ -93,7 +105,15 @@ def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: l
                     f"{path_part}, but no such skill exists in this kit"
                 )
             continue
-        if not (skill_md.parent / path_part).exists():
+        resolved = (skill_md.parent / path_part).resolve()
+        if portable_root is not None and not resolved.is_relative_to(portable_root):
+            errors.append(
+                f"{rel}/SKILL.md: link escapes the shipped skill tree: {path_part}. "
+                f"It resolves in this repo but dangles once the skill is installed; "
+                f"name the file in prose instead of linking to it."
+            )
+            continue
+        if not resolved.exists():
             errors.append(f"{rel}/SKILL.md: link target does not exist: {path_part}")
 
 
@@ -118,6 +138,8 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         return 0
 
     skill_names = {d.name for d in skills}
+    # Everything install.py ships: the skills plus the sibling rules module.
+    portable_root = skills_dir.parent.resolve()
 
     for d in skills:
         rel = _rel(d)
@@ -144,7 +166,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         if body_lines > MAX_BODY_LINES:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")
-        check_links(skill_md, text, skill_names, rel, errors)
+        check_links(skill_md, text, skill_names, rel, errors, portable_root)
         check_status_contradiction(text, rel, warnings)
 
     for w in warnings:

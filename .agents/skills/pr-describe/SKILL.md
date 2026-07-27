@@ -120,5 +120,3 @@ never calls `gh` or the GitHub API itself.
   repo, not from this kit. Do not hardcode this kit's own conventions into another repo.
 - It is the closing bookend of the kit spine: `project-bootstrap` -> `init-worktracking`
   -> `new-task` -> (build) -> `pr-describe`.
-- Shipped 2026-07-24, blessed after a first field-iteration against this kit's own working
-  tree, which added the working-tree fallback in Step 1 (`feat-0003` draft, `feat-0004` iteration).
