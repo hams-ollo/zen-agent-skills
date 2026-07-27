@@ -2,7 +2,7 @@
 id: chore-0011
 title: Document the two skill shapes in AGENTS.md and give every skill a house-style pointer
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
 depends_on: [feat-0022, chore-0010]
@@ -86,21 +86,50 @@ inline. Changing the content of `house-style.md` itself.
 
     python scripts/validate-skills.py
 
-- [ ] Every skill under `.agents/skills/` contains at least one reference to `house-style`.
-- [ ] `AGENTS.md` documents both skill shapes and when each applies.
-- [ ] `init-worktracking` and `new-task` point at the **target repo's** conventions rather than
+- [x] Every skill under `.agents/skills/` contains at least one reference to `house-style`.
+- [x] `AGENTS.md` documents both skill shapes and when each applies.
+- [x] `init-worktracking` and `new-task` point at the **target repo's** conventions rather than
       instructing an agent to impose this kit's house style on a scaffolded repository.
-- [ ] No skill outside the seven listed in `touched_files` is modified.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings (it now also
+- [x] No skill outside the seven listed in `touched_files` is modified.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings (it now also
       fails on unresolved links, so any new relative link must resolve).
-- [ ] `python .tasks/validate.py --strict` exits 0.
-- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
-- [ ] No em-dashes; headings sentence case.
+- [x] `python .tasks/validate.py --strict` exits 0.
+- [x] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
+- [x] No em-dashes; headings sentence case.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] `feat-0022` and `chore-0010` confirmed in `.tasks/done/` before starting.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] `feat-0022` and `chore-0010` confirmed in `.tasks/done/` before starting.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.
+
+## Outcome (2026-07-27)
+
+All 19 skills now reference the house-style module, and `AGENTS.md` documents both body shapes.
+
+**This task's own premise was wrong, and the work corrected it.** The implementation notes above say
+"two of the six need different wording", naming `init-worktracking` and `new-task`. Checking each of
+the six against its actual text found **four**:
+
+| Skill | Why it is target-repo-facing |
+|---|---|
+| `init-worktracking` | scaffolds into a target repo; already warns against importing another project's voice |
+| `new-task` | writes task files an agent in that repo executes; already says "do not import another project's style" |
+| `pr-describe` | its Notes already say "Do not hardcode this kit's own conventions into another repo" |
+| `fix-batch` | dispatches prompts that point agents at the target repo's `AGENTS.md` |
+
+`pr-describe` is the sharpest case: pasting the standard paragraph into it would have directly
+contradicted a rule already stated in its own body, which is precisely the regression the task warned
+about while under-counting the skills it applied to. Only `reconcile-worktrees` and
+`spec-plan-readiness` were clean cases for the standard wording.
+
+This is the `new-task` rule added on 2026-07-27 ("verify any claim you make *about* the code before
+writing it into the task") failing against its own author, on a task filed two days before that rule
+existed. The premise was written from a plausible reading rather than a check.
+
+Each of the four now states **which conventions govern what**: the artifact written into the target
+repository follows that repository's conventions, and the skill's own report follows the house-style
+module. `AGENTS.md` records that split as the general rule, so skill number 20 does not have to
+rediscover it.

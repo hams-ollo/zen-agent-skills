@@ -120,3 +120,15 @@ never calls `gh` or the GitHub API itself.
   repo, not from this kit. Do not hardcode this kit's own conventions into another repo.
 - It is the closing bookend of the kit spine: `project-bootstrap` -> `init-worktracking`
   -> `new-task` -> (build) -> `pr-describe`.
+
+## Conventions
+
+**The PR body and the changelog entry follow the target repository's conventions**, discovered by
+inspection: its existing `CHANGELOG.md` style, its `.github/PULL_REQUEST_TEMPLATE.md` if present, and
+its own voice. That rule is the point of this skill and it outranks anything here. Never impose this
+kit's formatting on another repo's changelog.
+
+**Your own output**, the summary you report alongside the two drafts, follows the repo's house-style
+module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case
+headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a
+downstream adopter may replace it without touching this skill.

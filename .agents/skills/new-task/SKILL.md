@@ -117,3 +117,14 @@ implemented) so the gate has something to check rather than something to reconst
 - One task, one agent, one command that proves it. If you cannot write the proving command, the task is not ready; keep eliciting.
 - Prefer several small honest tasks over one big vague one. `fix-batch` parallelizes small independent tasks; it cannot rescue a task whose scope is a wish.
 - This skill authors work; it does not do it. Stop after the files are written and validated.
+
+## Conventions
+
+**Task files follow the target repository's conventions, not this kit's.** Take them from the
+conventions section of that repo's `AGENTS.md`, and do not import another project's style into a task
+file an agent there will execute.
+
+**Your own output**, the decomposition you present and the summary you report, follows the repo's
+house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
+sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
+swappable default; a downstream adopter may replace it without touching this skill.

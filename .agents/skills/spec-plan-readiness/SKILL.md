@@ -161,3 +161,11 @@ Before returning `implementable`, confirm:
 10. The task decomposition does not contradict spec behavior, scope, sequencing, surfaces, dependencies, validation, or outcomes.
 11. Scenario test layers are selected from the repo's own test taxonomy when one exists, or from `test-quality`'s layer selection otherwise.
 12. The first safe task is dependency-satisfied and fully mappable.
+
+## Conventions
+
+Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
+sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
+swappable default; a downstream adopter may replace it without touching this skill. This governs the
+readiness report's wording. It does not govern the spec or the task files being gated, which belong
+to their own repository and are read-only here.

@@ -287,3 +287,14 @@ Their self-reports are optimistic by construction, not because they are being di
 because they do not have the outside view needed to catch their own scope creep or their own
 recovery-attempt side effects. The fix is not "do not delegate", it is "delegate, then verify
 against reality before you believe it".
+
+## Conventions
+
+**The prompts you dispatch point agents at the target repository's conventions**, taken from that
+repo's `AGENTS.md`, since the code they write belongs to that repo and not to this kit.
+
+**Your own output**, the hardened prompts themselves and the consolidated verification report,
+follows the repo's house-style module (in this kit,
+[`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable
+relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter
+may replace it without touching this skill.

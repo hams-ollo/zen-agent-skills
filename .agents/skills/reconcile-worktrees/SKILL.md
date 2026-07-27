@@ -188,3 +188,11 @@ The worktree paths are harness-specific. When the worktrees were created by `fix
 Claude Code, they are the ones `git worktree list` reports for the background agents (commonly
 under a `.claude/worktrees/` or similarly named directory). The git procedure above is identical
 regardless of which harness created them, so no part of this skill depends on a particular tool.
+
+## Conventions
+
+Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
+sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
+swappable default; a downstream adopter may replace it without touching this skill. This governs the
+consolidated diff summary and the reports this skill writes, which are its only output: it never
+edits the content it reconciles.

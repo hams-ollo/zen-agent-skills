@@ -91,7 +91,7 @@ Decided on 2026-07-25 and now filed:
 
 | Task | Decision |
 |---|---|
-| [`chore-0011`](.tasks/chore-0011-document-skill-shapes-and-house-style-pointers.md) | **Skill shape.** Both shapes are legitimate: workflow skills carry a procedure, lenses carry `Intent` / `Workflow` / `Output format` because they are composed rather than run. Document that rule rather than retrofitting 19 skills. Separately, six skills carry no house-style pointer at all, which is a live portability gap rather than a style preference, since the module is swappable and a skill that never references it silently ignores an adopter's replacement. Unblocked: `feat-0022` and `chore-0010` are both done, and the 2026-07-27 pass closed the `spec-conformance` case, taking the set from seven to six. |
+| ~~[`chore-0011`](.tasks/done/chore-0011-document-skill-shapes-and-house-style-pointers.md)~~ | **Done.** All 19 skills now reference the house-style module and `AGENTS.md` documents both body shapes. The task's own premise was wrong: four skills needed target-repo-aware wording, not two, and `pr-describe` would have been given a paragraph contradicting a rule in its own body. |
 | ~~[`feat-0024`](.tasks/done/feat-0024-exercise-verifier-blocked-branch.md)~~ | **Done.** The `blocked` branch fired on a real unapproved contract and matched S-005 on every clause. Produced `docs/spec/code-review.md` (11 scenarios) and the reusable evaluation-record format at `docs/spec/code-review.verification.md`. Two findings filed as `chore-0014`. |
 
 ## Kit mechanics hardening (from the 2026-07-27 review pass)

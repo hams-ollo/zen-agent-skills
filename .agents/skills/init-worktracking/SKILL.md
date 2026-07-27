@@ -147,3 +147,18 @@ Summarize what was created and what was skipped because it existed. Then offer, 
 - It pairs with `new-task` (author task files upstream), `fix-batch` (spin up parallel agents over a batch of task files), and `reconcile-worktrees` (merge their results back). Mention these if the user's goal is parallel execution.
 - Everything is markdown and file-based, plus one stdlib-only Python checker. No database, no service dependency: that portability is the whole point.
 - The `AGENTS.md` conventions section is deliberately labeled "edit freely" so an adopter is never saddled with rules they did not choose. Do not hardcode your own house style into a scaffolded repo.
+
+## Conventions
+
+Two different sets of conventions apply here, and confusing them is the failure this skill most needs
+to avoid.
+
+**What you scaffold into the target repository follows that repository's conventions, never this
+kit's.** Seed the `AGENTS.md` conventions section only from what you can actually observe in the repo
+(a linter config, an `.editorconfig`, an existing style), and leave it thin. An adopter must never
+find rules they did not choose, which is why the template labels that section "edit freely".
+
+**Your own output**, the summary you report and any prose you write about the scaffold, follows the
+repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
+sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
+swappable default; a downstream adopter may replace it without touching this skill.

@@ -59,6 +59,34 @@ Each skill is a directory under `.agents/skills/<name>/` containing:
 
 Run `python scripts/validate-skills.py` to lint every skill against these rules.
 
+### Two body shapes, both valid
+
+The body takes one of two shapes, decided by how the skill is consumed. Neither is preferred and
+neither should be retrofitted onto the other.
+
+- **Workflow skills** carry a procedure: ordered steps an agent executes, usually with sections for
+  when to use it, when not to, inputs, the procedure itself, and notes. Most skills are workflows.
+- **Lenses** carry `Intent`, `Workflow`, and `Output format` instead, because they are composed into
+  another skill rather than run on their own. `spec-quality`, `test-quality`, and the
+  [`review-quality`](.agents/rules/review-quality.md) rules module are lenses. Giving a lens a
+  step-by-step procedure invites an agent to run it standalone, which is the one thing it is not for.
+
+### Every skill points at the house-style module
+
+Whatever its shape, a skill must reference the house-style module somewhere, because that module is
+swappable: an adopter who replaces it is silently ignored by any skill that never points at it.
+
+Which conventions govern depends on what the skill writes:
+
+- A skill that produces **its own output** (a report, a review, a spec) follows this repository's
+  house-style module.
+- A skill that writes **into a target repository** (`init-worktracking`, `new-task`, `pr-describe`,
+  and the agent prompts `fix-batch` dispatches) follows **that repository's** conventions instead,
+  and names this kit's module only as the fallback when the skill is run here. Importing this kit's
+  voice into a repo that did not choose it is a defect, not a nicety.
+
+A skill that does both says so, and says which applies where.
+
 ## 5. Portability contract (the whole point)
 
 - **`AGENTS.md` is canonical** in any repo this kit scaffolds. Cursor, Codex, and OpenCode read it natively; a thin `CLAUDE.md` pointer covers Claude Code.
