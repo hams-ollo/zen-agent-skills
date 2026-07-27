@@ -2,7 +2,7 @@
 id: feat-0024
 title: Exercise verifier-agent's blocked verdict on real work and set the evaluation-record format
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A #8: kit-wide skill evaluation"
 depends_on: []
@@ -77,25 +77,53 @@ Writing tests.
 
     python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] `docs/spec/code-review.md` exists with `status: draft`, and the sections Problem, Goals,
+- [x] `docs/spec/code-review.md` exists with `status: draft`, and the sections Problem, Goals,
       Non-Goals, Constraints, Scenarios, Proposed Surface, Open Questions in that order.
-- [ ] Every scenario carries a stable `S-NNN` id, and the `spec-quality` self-check returns `ready`.
-- [ ] Both `code-review` modes and the report-only rule appear in at least one scenario each.
-- [ ] `docs/spec/code-review.verification.md` records `verdict: blocked` with a blocking reason
+- [x] Every scenario carries a stable `S-NNN` id, and the `spec-quality` self-check returns `ready`.
+- [x] Both `code-review` modes and the report-only rule appear in at least one scenario each.
+- [x] `docs/spec/code-review.verification.md` records `verdict: blocked` with a blocking reason
       naming the unapproved contract, and reports no pass or fail for the implementation.
-- [ ] The verification record states which branch was exercised and what triggered it.
-- [ ] `.agents/skills/code-review/SKILL.md` is byte-for-byte unchanged.
-- [ ] No spec anywhere gains `status: approved` as part of this task.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
-- [ ] `python .tasks/validate.py --strict` exits 0.
-- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0, unaffected.
-- [ ] Every relative markdown link added resolves; no em-dashes; headings sentence case.
+- [x] The verification record states which branch was exercised and what triggered it.
+- [x] `.agents/skills/code-review/SKILL.md` is byte-for-byte unchanged.
+- [x] No spec anywhere gains `status: approved` as part of this task.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills and no new warnings.
+- [x] `python .tasks/validate.py --strict` exits 0.
+- [x] `python -m unittest discover -s tests -p "test_*.py"` exits 0, unaffected.
+- [x] Every relative markdown link added resolves; no em-dashes; headings sentence case.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] Report to the user: the scenario count, the blocked verdict and its reason, and an honest
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] Report to the user: the scenario count, the blocked verdict and its reason, and an honest
       assessment of whether the `blocked` branch behaved as its spec (`S-005`) describes.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.
+
+## Outcome (2026-07-27)
+
+The `blocked` branch fired on a real trigger and behaved exactly as `verifier-agent`'s S-005
+describes: `verdict: blocked`, a blocking reason naming the unapproved contract, no command executed,
+and no pass or fail reported for the implementation. `code-review/SKILL.md` is byte-for-byte
+unchanged, confirmed by object hash against `HEAD`.
+
+Eleven scenarios in the new `code-review` contract. `spec-quality` caught one coverage gap before the
+draft was finished: S-011 (a structured findings channel) traced to no goal, so a sixth goal now
+covers harness portability. That is the third consecutive spec where the lens caught a scenario with
+no goal, after `validate-skills` S-015 and `build-adapters` S-013, and in all three the orphan was an
+invocation or channel concern rather than a core behavior. Worth watching for on the next spec.
+
+Two findings, both recorded rather than resolved:
+
+- **Both blocked preconditions were true at once.** `code-review` also has no declared verification
+  command, so S-006's trigger held alongside S-005's. The skill's Step 1 reads as short-circuit while
+  its `blocking_reasons` list reads as accumulation, and the contract never says which is intended.
+  Filed as `chore-0014`.
+- **"Exercising a branch" of a prose skill is weaker than exercising a branch of a program**, and the
+  evaluation format now says so explicitly. This record is evidence that the procedure, followed
+  faithfully against a real trigger, produces the specified outcome. It is not evidence that anything
+  enforces it, because nothing does.
+
+The evaluation-record format is settled and documented in the record itself: frontmatter naming the
+branch exercised, why the trigger is real, the skill's own output format verbatim, a clause-by-clause
+check against the scenario, and observations. One page. The two remaining branches reuse it.

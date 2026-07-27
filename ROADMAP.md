@@ -92,7 +92,7 @@ Decided on 2026-07-25 and now filed:
 | Task | Decision |
 |---|---|
 | [`chore-0011`](.tasks/chore-0011-document-skill-shapes-and-house-style-pointers.md) | **Skill shape.** Both shapes are legitimate: workflow skills carry a procedure, lenses carry `Intent` / `Workflow` / `Output format` because they are composed rather than run. Document that rule rather than retrofitting 19 skills. Separately, six skills carry no house-style pointer at all, which is a live portability gap rather than a style preference, since the module is swappable and a skill that never references it silently ignores an adopter's replacement. Unblocked: `feat-0022` and `chore-0010` are both done, and the 2026-07-27 pass closed the `spec-conformance` case, taking the set from seven to six. |
-| [`feat-0024`](.tasks/feat-0024-exercise-verifier-blocked-branch.md) | **Epic A item 8, first slice.** Target the three unexercised branches rather than spec'ing all fifteen remaining skills. Start with `verifier-agent`'s `blocked` verdict, the branch carrying the most weight and the least evidence. Drafting a `code-review` contract the kit wants anyway produces a genuinely unapproved spec, so the branch fires on real work instead of a staged fixture. That run also settles the evaluation-record format the other two branches will reuse. |
+| ~~[`feat-0024`](.tasks/done/feat-0024-exercise-verifier-blocked-branch.md)~~ | **Done.** The `blocked` branch fired on a real unapproved contract and matched S-005 on every clause. Produced `docs/spec/code-review.md` (11 scenarios) and the reusable evaluation-record format at `docs/spec/code-review.verification.md`. Two findings filed as `chore-0014`. |
 
 ## Kit mechanics hardening (from the 2026-07-27 review pass)
 
@@ -121,7 +121,9 @@ and it is what `feat-0025` exists to close.
 | ~~[`chore-0013`](.tasks/done/chore-0013-amend-validate-skills-contract.md)~~ | **Done.** Amended the `validate-skills` contract to cover the four checks the implementation had outgrown it by, and the regenerated matrix caught a live divergence in `S-014` while doing it: the check had shipped on 2026-07-25, was believed correct for two days, and only surfaced once a scenario stated the condition semantically instead of restating the implementation. Fixed the same day. |
 | ~~[`feat-0026`](.tasks/done/feat-0026-write-build-adapters-spec.md)~~ | **Done.** Wrote and approved `docs/spec/build-adapters.md` (13 scenarios), closed the five that had no test (30 to 35 tests), and restored the softened documentation claims. The audit surfaced one unstated contract decision: an existing rules file is preserved but an edited skill template is overwritten, an asymmetry invisible to both the spec and the tests. Recommendation recorded; the call is human. |
 
-Still at roadmap altitude, deliberately not decomposed until `feat-0024` establishes the record format:
+The evaluation-record format is now established by `feat-0024` and documented in
+[`docs/spec/code-review.verification.md`](docs/spec/code-review.verification.md). The two remaining
+branches reuse it and are ready to decompose:
 
 - **`test-author`'s characterization mode**, never fired on real work.
 - **`spec-plan-readiness`'s blocking paths**, never fired on real work.
