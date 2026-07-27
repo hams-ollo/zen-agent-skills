@@ -30,6 +30,18 @@ What is wrong or missing, and why it matters. Point at the exact code, function,
 
 Any known constraints, the intended approach, edge cases, or prior art in the codebase to mirror. Optional if the Problem + Scope are unambiguous.
 
+## Risks and rollback
+
+Optional, and **required** when any of these hold, because a readiness gate checks for it:
+
+- the task touches more than one module;
+- it changes a persisted data format or protocol; or
+- it cannot be safely reversed by reverting one commit.
+
+When required, state what could go wrong and how to undo it. When none of the three hold, delete this
+section rather than leaving it empty: a heading every task carries and most leave blank teaches
+authors to skip it.
+
 ## Acceptance criteria (mechanically verifiable)
 
     <exact command that must pass, e.g. the project's test command scoped to this area>

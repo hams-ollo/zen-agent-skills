@@ -130,8 +130,14 @@ one, and each recorded in the format `feat-0024` established:
 
 Each run found something the branch itself was not being tested for: an unresolved precondition
 ambiguity (`chore-0014`), two testability defects in `install.py`, and a second seam between the
-spine's front and back halves (`chore-0016`). Exercising a branch on real work has so far been more
-productive than the branch coverage was the point of.
+spine's front and back halves (`chore-0016`, now closed). Exercising a branch on real work has so far
+been more productive than the branch coverage was the point of.
+
+Both seams between the spine's halves are now closed. `spec-plan-readiness` was folded in from
+upstream against a different planning artifact, and its Step 3 requirements had never been reconciled
+against the task format this kit authors: `feat-0025` added task-to-scenario traceability and
+`chore-0016` added risk and rollback notes. A full re-read of that list during `chore-0016` found no
+third gap, so the two were the whole of it.
 - **The wider spec and test coverage question.** Even after `feat-0024`, 5 of 19 skills will have a contract and none will have behavioral tests. Whether that gap is worth closing skill by skill, or whether the targeted-branch approach is sufficient, is a judgment to make once there is evidence from the first three exercises.
 
 ---

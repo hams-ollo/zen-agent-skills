@@ -57,6 +57,23 @@ specifies and which is not in question.
 - `tests/test_build_adapters.py` already covers the rules half (`test_an_existing_rules_file_is_not_clobbered`).
   Whichever way this goes, the skill-asset half needs its own test, because it currently has none.
 
+## Risks and rollback
+
+Required: this touches more than one module (the contract under `docs/spec/`, and
+`scripts/build-adapters.py` if the symmetric option is chosen).
+
+- **If the asymmetry is kept**, the change is documentation only and reverts with one commit.
+- **If the loops are made symmetric**, the risk is the opposite of the current defect: a skill template
+  that legitimately changed in the kit would stop reaching a project that already has an older copy,
+  turning a silent overwrite into a silent staleness. Mitigate by saying so in the emitted summary,
+  the way the rules-module skip already is. Reverts with one commit.
+- **Either way the conformance matrix is regenerated**, so a bad amendment shows up as a diff in
+  `build-adapters.conformance.md` rather than as a silent change of meaning.
+
+Added 2026-07-27 by `chore-0016`, applying the `required_resolution` the readiness gate recorded for
+this task's `source: plan` gap. The `source: spec` and `source: both` gaps remain, so this task is
+still blocked.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"

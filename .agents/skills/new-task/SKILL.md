@@ -16,6 +16,7 @@ A good task is self-contained: an agent that reads only `AGENTS.md`, the task fi
 - **Resolved `depends_on`**: ids of tasks that must reach `done/` first; `[]` if none. Never invent an id.
 - **`spec` and `scenarios`, when the work comes from an approved spec**: the contract path and the `S-NNN` ids this task covers. Omit both when there is no spec. See [Decomposing an approved spec](#decomposing-an-approved-spec).
 - **A mechanically-verifiable acceptance command**: an exact command (usually the repo's test command scoped to the change) that passes only when the work is done. Not "tests pass" in prose, the literal command.
+- **Risk and rollback notes, when the deterministic rule fires.** Required when the task touches more than one module, changes a persisted data format or protocol, or cannot be safely reversed by reverting one commit. Omit the section entirely when none of the three hold. This is not a judgment call about how risky the work feels: it is the same rule [`spec-plan-readiness`](../spec-plan-readiness/SKILL.md) applies, quoted so the two cannot drift apart, and a task that triggers it without the notes will be blocked at the gate no matter how well the rest is written.
 - **Tight scope with an explicit out-of-scope**: so a well-meaning agent keeps the change atomic.
 
 ## Why this skill blocks a little
@@ -91,6 +92,7 @@ For each task, copy `.tasks/_TEMPLATE.md`, assign the next id (filename `<type>-
 - **Problem**: what is wrong or missing and why, pointing at exact code with relative links.
 - **Scope**: in-scope change, and an explicit out-of-scope list.
 - **Implementation notes**: constraints, intended approach, edge cases, prior art to mirror. Optional if Problem + Scope are unambiguous.
+- **Risks and rollback**: only when the deterministic rule above fires. Check it against the `touched_files` you just wrote, since "touches more than one module" is answerable from that list rather than from intuition. Delete the section when it does not apply.
 - **Acceptance criteria**: the literal command that must pass, plus concrete checkboxes (new/updated test, existing tests pass, task-specific checks).
 - **Definition of done**: keep the template's lifecycle checkboxes.
 
