@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** living document | **Last updated:** 2026-07-25
+**Status:** living document | **Last updated:** 2026-07-27
 
 The builder-facing execution plan: which skills get built and in what order. For the reader-facing narrative of what the kit offers, see [`docs/CATALOG.md`](docs/CATALOG.md). For atomic work in flight, see [`.tasks/`](.tasks/); for finished work, [`CHANGELOG.md`](CHANGELOG.md). Altitude model in the work-altitude-model section of [`AGENTS.md`](AGENTS.md).
 
@@ -118,7 +118,7 @@ and it is what `feat-0025` exists to close.
 |---|---|
 | [`feat-0025`](.tasks/feat-0025-exercise-batch-loop-on-dependency-bearing-repo.md) | Exercise the hardened batch loop end to end on a repo with real build dependencies. The environment, untracked-file, and base-commit fixes are all currently cold, which the contribution bar does not allow to stand. |
 | [`chore-0012`](.tasks/chore-0012-decide-code-review-skill-name.md) | Decide whether `code-review` keeps a name that collides with Claude Code's built-in command. A judgment call, not a mechanical fix, so it is filed rather than decided. |
-| [`chore-0013`](.tasks/chore-0013-amend-validate-skills-contract.md) | Amend the approved `validate-skills` contract to cover the four checks the implementation outgrew it by. It has now happened twice and been answered with a note both times, and the conformance matrix meanwhile certifies full coverage of a contract describing less than half the tool. The amendment is drafted in the task; only the human approval is outstanding. |
+| ~~[`chore-0013`](.tasks/done/chore-0013-amend-validate-skills-contract.md)~~ | **Done.** Amended the `validate-skills` contract to cover the four checks the implementation had outgrown it by, and the regenerated matrix caught a live divergence in `S-014` while doing it: the check had shipped on 2026-07-25, was believed correct for two days, and only surfaced once a scenario stated the condition semantically instead of restating the implementation. Fixed the same day. |
 | [`feat-0026`](.tasks/feat-0026-write-build-adapters-spec.md) | Write the missing `build-adapters.py` contract. It is the one kit script with tests and no spec, which is why the 2026-07-27 `doc-sync` run had to soften three "derived from the specifications" claims rather than fix them. |
 
 Still at roadmap altitude, deliberately not decomposed until `feat-0024` establishes the record format:

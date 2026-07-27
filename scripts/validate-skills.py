@@ -35,8 +35,24 @@ EXTERNAL_LINK_PREFIXES = ("http://", "https://", "mailto:")
 
 # A skill declaring itself a draft in prose while also declaring itself shipped
 # (typically a "- Shipped <date>" provenance bullet) is self-contradictory.
-DRAFT_STATUS_RE = re.compile(r"\bis (?:a|still a) draft\b", re.IGNORECASE)
-SHIPPED_STATUS_RE = re.compile(r"^-\s*shipped\b", re.IGNORECASE | re.MULTILINE)
+#
+# Neither half needs to be precise on its own, because the finding requires BOTH.
+# That conjunction is what keeps the check specific, and it is why these patterns
+# can afford to be generous: a skill merely discussing drafts, or merely recording
+# that it shipped, produces nothing. Narrow patterns were the actual defect here
+# (S-014, 2026-07-27): matching only "is a draft" and a "- Shipped" list item let
+# through "remains a draft" beside "- Blessed <date>", among others.
+DRAFT_STATUS_RE = re.compile(
+    r"\b(?:is|remains|stays)\s+(?:still\s+)?(?:a\s+)?draft\b"
+    r"|^\s*status:\s*draft\b"
+    r"|\bdraft\s+pending\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+SHIPPED_STATUS_RE = re.compile(
+    r"^\s*[-*]\s*\**(?:shipped|blessed)\b"
+    r"|\b(?:shipped|blessed)\s+(?:on\s+)?\d{4}-\d{2}-\d{2}\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def parse_frontmatter(text: str):

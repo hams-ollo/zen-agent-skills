@@ -2,7 +2,7 @@
 id: chore-0013
 title: Amend the approved validate-skills contract to cover the four checks the tool outgrew it by
 type: chore
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic B: contract-driven delivery"
 depends_on: []
@@ -11,6 +11,8 @@ scenarios: []
 touched_files:
   - docs/spec/validate-skills.md
   - docs/spec/validate-skills.conformance.md
+  - scripts/validate-skills.py
+  - tests/test_validate_skills.py
 created: 2026-07-27
 ---
 
@@ -151,15 +153,15 @@ matrix imply coverage that does not exist.
 
     python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] `docs/spec/validate-skills.md` covers all four previously uncontracted checks.
-- [ ] `spec-quality` returns `ready` on the amended spec.
-- [ ] A human, not an agent, set `status: approved`.
-- [ ] `docs/spec/validate-skills.conformance.md` is regenerated and its `audited` set names every
-      scenario S-001 through S-015.
-- [ ] S-008 remains the accepted divergence; no new divergence is silently accepted.
+- [x] `docs/spec/validate-skills.md` covers all four previously uncontracted checks.
+- [x] `spec-quality` returns `ready` on the amended spec.
+- [x] A human, not an agent, set `status: approved`.
+- [x] `docs/spec/validate-skills.conformance.md` is regenerated and its `audited` set names every
+      scenario S-001 through S-016.
+- [x] S-008 remains the accepted divergence; no new divergence is silently accepted.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

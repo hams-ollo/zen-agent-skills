@@ -33,7 +33,7 @@ validator did. Scenarios S-009 through S-016 are audited here for the first time
 | Scenarios | S-011 link escapes the distributed tree | Conformed | `check_links()` / `not resolved.is_relative_to(portable_root)` branch, with `main()` / `portable_root = skills_dir.parent.resolve()` | the escape branch precedes the existence check, so a link whose target exists in this repository still errors, which is the behavior the scenario requires |
 | Scenarios | S-012 link to the rules module is legal | Conformed | `main()` / `portable_root = skills_dir.parent.resolve()`, with `check_links()` / the `is_relative_to` guard | `../../rules/<file>` resolves inside `.agents/`, so it passes the portability guard and is then subject only to the ordinary existence check |
 | Scenarios | S-013 external and same-page links not resolved | Conformed | `check_links()` / `EXTERNAL_LINK_PREFIXES` guard and the `if not path_part` anchor guard | both `continue` before any filesystem access |
-| Scenarios | S-014 contradictory status claim warns | **Diverged** | spec: `validate-skills.md` S-014; code: `check_status_contradiction()` with `DRAFT_STATUS_RE` and `SHIPPED_STATUS_RE` | spec requires flagging a skill that "asserts it is a draft and also records that it shipped"; code matches two fixed phrasings, `\bis (?:a\|still a) draft\b` and a line beginning `- Shipped`. Probed against five plausible phrasings, it flags one and misses four: "remains a draft", a prose "Status: draft", a shipped statement not written as a list item, and "Blessed" instead of "Shipped". |
+| Scenarios | S-014 contradictory status claim warns | Conformed | `check_status_contradiction()` with the widened `DRAFT_STATUS_RE` and `SHIPPED_STATUS_RE` | diverged when first audited on 2026-07-27 and was fixed the same day. The patterns now cover assertion forms (`is`/`remains`/`stays` a draft, a `status: draft` line, `draft pending`) and provenance forms (a `shipped`/`blessed` list item, or either word before an ISO date). Re-probed against the five phrasings that produced the original finding: all five flag. Four negative cases produce no finding, including prose that merely discusses drafts and a skill whose `status: draft` refers to a spec it authors rather than to itself. |
 | Scenarios | S-015 skills directory does not exist | Conformed | `main()` / `if not skills_dir.is_dir()` guard | prints the missing-directory error and returns 1; confirmed by execution (exit 1, `ERROR no skills directory at ...`) |
 | Scenarios | S-016 skills directory exists but is empty | Conformed | `main()` / `if not skills:` guard after `skills_dir.iterdir()` | prints `No skills found under ...` and returns 0; confirmed by execution (exit 0) |
 | Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | module `__main__` guard | `if __name__ == "__main__": raise SystemExit(main())` |
@@ -50,18 +50,16 @@ validator did. Scenarios S-009 through S-016 are audited here for the first time
     length proxy is a deliberate, documented approximation. If the kit later wants to enforce it, the
     honest fix is to soften the spec wording to "length proxy" or add a real check, not to claim the
     current code satisfies the stated intent. Unchanged from the 2026-07-24 audit.
-  - **S-014 (Diverged)**: disposition **fix**, pending the author's decision. This divergence was
-    found by this audit, in a scenario approved the same day. The contract states a semantic
-    condition ("asserts it is a draft and also records that it shipped") and the code implements two
-    literal phrase matches, so the check passes a skill that says "remains a draft" beside "Blessed
-    2026-07-24". It is left as **fix** rather than accepted because accepting it would excuse the
-    drafting rather than the implementation, and because unlike S-008 the gap is closable: widening
-    the patterns is cheap, and the check is a warning, so a false positive costs a line of output
-    rather than a broken build. The alternative resolution is to narrow the scenario to the phrasings
-    the kit actually uses and record that as the contract.
 
-No spec item was silently dropped. Two items diverge: one accepted with a stated reason, one live and
-awaiting disposition.
+S-014 was the second unreconciled item when this matrix was first regenerated on 2026-07-27, carrying
+disposition **fix**. The author chose to widen rather than to narrow the scenario, the patterns were
+widened the same day, and the row above is the re-audit. It is recorded here rather than erased
+because the divergence is the useful part of the history: the check had shipped on 2026-07-25, was
+believed correct for two days, and was only caught when a scenario was written that stated the
+condition semantically instead of restating the implementation.
+
+No spec item was silently dropped. One item diverges, accepted with a stated reason; everything else
+conforms.
 
 ## Test coverage of spec invariants
 
@@ -70,9 +68,12 @@ lacks one). Against [`tests/test_validate_skills.py`](../../tests/test_validate_
 
 | Scenario | Covering test | Note |
 |---|---|---|
-| S-009 through S-013 | present | one test each, plus negative cases for S-010 and S-012 |
-| S-014 | partial | only the canonical phrasing is tested, which is why the divergence above survived to this audit |
-| S-015, S-016 | **none** | both verified here by direct execution, neither is protected by a test |
+| S-009 through S-013 | present | one test each, plus negative cases for S-010 and S-012, each tagged with its scenario id |
+| S-014 | present | table-driven over all five contradiction phrasings and four negative cases. Confirmed to fail on four of the five against the pre-fix patterns, which is the bug population; the canonical phrasing always passed and proves nothing on its own, which is exactly how the original single-case test hid the divergence |
+| S-015, S-016 | present | added 2026-07-27 once the contract was approved. Asserts the pair together: the absent directory must fail and must not report `Checked 0 skill`, the empty one must succeed |
+
+Every scenario except S-008 now has a covering test. S-008 remains deliberately untested, because a
+passing test there would assert behavior the accepted divergence says does not exist.
 
 ## Citation maintenance
 

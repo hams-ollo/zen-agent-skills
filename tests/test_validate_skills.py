@@ -1,8 +1,9 @@
 """Acceptance tests for scripts/validate-skills.py.
 
 Derived from the behavioral contract in docs/spec/validate-skills.md via the test-author
-skill (in-kit dogfood, 2026-07-24). Each test is tagged with the scenario id it covers.
-Standard library only, per AGENTS.md section 6.
+skill (in-kit dogfood, 2026-07-24; extended 2026-07-27 to the amended contract's S-009
+through S-016). Each test is tagged with the scenario id it covers. Standard library only,
+per the conventions section of AGENTS.md.
 
 test-quality notes: the parsing scenarios are covered at the lowest faithful layer (unit tests
 on parse_frontmatter, a pure function); the whole-run scenarios are covered at the component
@@ -135,7 +136,7 @@ class TestValidatorRun(unittest.TestCase):
 
 
 class TestLinkChecks(unittest.TestCase):
-    """New checks: unresolved relative links and dangling sibling-skill references."""
+    """Scenarios S-009 through S-013: link resolution, portability, and what is skipped."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -145,7 +146,7 @@ class TestLinkChecks(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_unresolved_relative_link_errors(self):
-        # A relative link whose target does not exist on disk is an error.
+        # Scenario S-009: a relative link whose target does not exist on disk is an error.
         body = "See [the missing file](nonexistent-file.md) for details.\n"
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
         code, out = _run(self.root)
@@ -153,7 +154,7 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("link target does not exist: nonexistent-file.md", out)
 
     def test_dangling_sibling_skill_reference_errors(self):
-        # A ../<name>/SKILL.md link to a skill that does not exist in this kit is an error.
+        # Scenario S-010: a ../<name>/SKILL.md link to a skill that does not exist is an error.
         body = "Use [`document`](../document/SKILL.md) instead.\n"
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
         code, out = _run(self.root)
@@ -162,7 +163,7 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("no such skill exists in this kit", out)
 
     def test_valid_sibling_skill_reference_does_not_error(self):
-        # A ../<name>/SKILL.md link to a skill that does exist is not flagged.
+        # Scenario S-010 (negative): a link to a skill that does exist is not flagged.
         body = "Use [`beta`](../beta/SKILL.md) instead.\n"
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
         _write_skill(self.root, "beta", GOOD_FM.format(name="beta", desc=LONG_DESC))
@@ -171,7 +172,7 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("Checked 2 skill(s): 0 error(s), 0 warning(s).", out)
 
     def test_link_escaping_the_shipped_tree_errors(self):
-        # A link above the .agents/ tree resolves in the repo but dangles once installed.
+        # Scenario S-011: a link above the .agents/ tree resolves in the repo but dangles once installed.
         # The bug population is exactly this: the target exists on disk, so an
         # existence-only check passes it.
         agents = self.root / "agents"
@@ -184,7 +185,7 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("link escapes the shipped skill tree: ../../../AGENTS.md", out)
 
     def test_rules_module_link_does_not_error(self):
-        # ../../rules/<file>.md is the one legitimate escape: install.py ships the
+        # Scenario S-012: ../../rules/<file>.md is legal, because install.py ships the
         # rules module as the sibling of the skills directory.
         agents = self.root / "agents"
         skills = agents / "skills"
@@ -197,7 +198,7 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
     def test_external_and_anchor_links_are_skipped(self):
-        # http, https, mailto links and same-page anchors are not resolved on disk.
+        # Scenario S-013: http, https, mailto and same-page anchors are not resolved on disk.
         body = (
             "See [docs](https://example.com/guide), [help](http://example.com), "
             "[contact](mailto:someone@example.com), and [a section](#some-section).\n"
@@ -209,7 +210,37 @@ class TestLinkChecks(unittest.TestCase):
 
 
 class TestStatusContradictionCheck(unittest.TestCase):
-    """New check: a skill asserting both draft and shipped status warns but does not fail."""
+    """Scenario S-014: a skill asserting both draft and shipped warns but does not fail.
+
+    The oracle is table-driven over the bug population rather than the one phrasing
+    that happened to be implemented. The 2026-07-27 conformance audit found this check
+    matched "is a draft" plus a "- Shipped" list item and missed four other plausible
+    phrasings, so a test that only exercised the canonical case proved nothing about
+    the contract it claimed to protect.
+    """
+
+    CONTRADICTIONS = {
+        "canonical": "This skill is a draft.\n\n- Shipped 2026-07-24, blessed.\n",
+        "remains a draft": "This skill remains a draft.\n\n- Shipped 2026-07-24, blessed.\n",
+        "prose status line": "Status: draft pending iteration.\n\n- Shipped 2026-07-24.\n",
+        "shipped not a list item": "This skill is a draft.\n\nShipped 2026-07-24, blessed.\n",
+        "blessed rather than shipped": "This skill is a draft.\n\n- Blessed 2026-07-24 after dogfooding.\n",
+    }
+
+    # Each of these carries at most one half of the contradiction, so none is a finding.
+    # The conjunction is what makes the check specific, which is why each half can afford
+    # to match generously.
+    NON_CONTRADICTIONS = {
+        "draft alone": "This skill is a draft pending field iteration.\n",
+        "shipped alone": "- Shipped 2026-07-24, blessed after dogfooding.\n",
+        "prose discussing drafts": (
+            "A document using 'draft' still needs a contradicting fact.\n\n"
+            "- Shipped 2026-07-24.\n"
+        ),
+        "draft refers to something else": (
+            "This skill only ever writes `status: draft` for the spec it authors.\n"
+        ),
+    }
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -218,32 +249,53 @@ class TestStatusContradictionCheck(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_draft_and_shipped_contradiction_warns_but_exits_zero(self):
-        body = (
-            "The skill overall is a draft pending field iteration, but these are settled.\n\n"
-            "- Shipped 2026-07-24, blessed after dogfooding on this kit's own change.\n"
-        )
+    def _run_body(self, body):
+        for child in self.root.iterdir():
+            if child.is_dir():
+                for f in child.iterdir():
+                    f.unlink()
+                child.rmdir()
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
-        code, out = _run(self.root)
-        self.assertEqual(code, 0)
-        self.assertIn("WARN", out)
-        self.assertIn("asserts both draft and shipped status", out)
+        return _run(self.root)
 
-    def test_draft_alone_does_not_warn(self):
-        # Only a draft assertion, no shipped bullet: not a contradiction.
-        body = "The skill overall is a draft pending field iteration.\n"
-        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
-        code, out = _run(self.root)
-        self.assertEqual(code, 0)
-        self.assertNotIn("asserts both draft and shipped status", out)
+    def test_every_contradiction_phrasing_warns_and_exits_zero(self):
+        # Scenario S-014: the warning fires, and it stays a warning.
+        for label, body in self.CONTRADICTIONS.items():
+            with self.subTest(phrasing=label):
+                code, out = self._run_body(body)
+                self.assertEqual(code, 0, f"{label} must warn, not fail")
+                self.assertIn("asserts both draft and shipped status", out, label)
 
-    def test_shipped_alone_does_not_warn(self):
-        # Only a shipped bullet, no draft assertion: not a contradiction.
-        body = "- Shipped 2026-07-24, blessed after dogfooding on this kit's own change.\n"
-        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
-        code, out = _run(self.root)
+    def test_a_single_assertion_is_not_a_contradiction(self):
+        # Scenario S-014: "Either assertion alone is not a contradiction."
+        for label, body in self.NON_CONTRADICTIONS.items():
+            with self.subTest(phrasing=label):
+                _, out = self._run_body(body)
+                self.assertNotIn("asserts both draft and shipped status", out, label)
+
+
+class TestSkillsDirectoryPreconditions(unittest.TestCase):
+    """Scenarios S-015 and S-016: an unreadable directory is not a zero-skill success.
+
+    The defect these protect against is the quiet one: reporting success because
+    nothing was checked. S-015 must fail, S-016 must not, and the pair is only
+    meaningful together.
+    """
+
+    def test_absent_directory_fails(self):
+        # Scenario S-015: a missing directory errors rather than reporting zero skills.
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = _run(Path(tmp) / "does-not-exist")
+        self.assertEqual(code, 1)
+        self.assertIn("no skills directory", out)
+        self.assertNotIn("Checked 0 skill", out)
+
+    def test_empty_directory_succeeds(self):
+        # Scenario S-016: an empty directory is a legitimate zero-skill result.
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = _run(Path(tmp))
         self.assertEqual(code, 0)
-        self.assertNotIn("asserts both draft and shipped status", out)
+        self.assertIn("No skills found", out)
 
 
 if __name__ == "__main__":
