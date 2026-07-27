@@ -2,7 +2,7 @@
 id: feat-0026
 title: Write the behavioral contract for build-adapters.py, the last untested-by-contract script
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A #8: kit-wide skill evaluation"
 depends_on: []
@@ -10,6 +10,7 @@ spec: ""
 scenarios: []
 touched_files:
   - docs/spec/build-adapters.md
+  - docs/spec/build-adapters.conformance.md
   - tests/test_build_adapters.py
   - README.md
   - docs/ARCHITECTURE.md
@@ -75,15 +76,34 @@ here. Writing a spec for `install.py` (worth doing, but it is its own task and i
 
     python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] `docs/spec/build-adapters.md` exists, `status: draft`, and `spec-quality` returns `ready`.
-- [ ] Every scenario carries a stable `S-NNN` id; every goal and emitted surface has a scenario.
-- [ ] Every test in `tests/test_build_adapters.py` is tagged with the scenario id it covers, or is
+- [x] `docs/spec/build-adapters.md` exists and `spec-quality` returns `ready`. Written `status: draft`
+      as required, then approved by the author, so it now reads `approved`.
+- [x] Every scenario carries a stable `S-NNN` id; every goal and emitted surface has a scenario.
+- [x] Every test in `tests/test_build_adapters.py` is tagged with the scenario id it covers, or is
       explicitly recorded as covering none.
-- [ ] `README.md` and `docs/ARCHITECTURE.md` no longer need the "where one exists" hedge, and the
+- [x] `README.md` and `docs/ARCHITECTURE.md` no longer need the "where one exists" hedge, and the
       `D-007` softening is reverted.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-27)
+
+Thirteen scenarios, every one verified against real execution before being written rather than
+described from the code. The `spec-quality` self-check caught two coverage gaps first: S-013 traced
+to no goal, and the surface's "exit zero otherwise" plus the summary output had no scenario at all.
+Both fixed before the draft was committed.
+
+Tests went 30 to 35. Five scenarios had no coverage (S-001, S-002, S-011, S-012, S-013) and all five
+were closed once the contract was approved, so every scenario now has a covering test. The S-011 test
+targets the repository itself and therefore uses a preview run, so it asserts the no-op without being
+able to write into the repo even if the no-op regressed.
+
+**The audit found one thing the scenarios do not cover**, recorded in the matrix rather than
+silently passed: the two shared-asset loops guard differently. A rules file that already exists is
+skipped (S-010), while a skill's supporting file is overwritten, so an adopter who edits an emitted
+template loses it on the next run. Confirmed by execution. It is defensible and probably intended,
+but it is an unstated contract decision sitting one line from a stated one. Left for a human call.

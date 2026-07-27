@@ -1,6 +1,6 @@
 ---
 title: build-adapters
-status: draft
+status: approved
 ---
 
 # build-adapters
@@ -8,7 +8,7 @@ status: draft
 Behavioral contract for [`scripts/build-adapters.py`](../../scripts/build-adapters.py), written
 2026-07-27 (`feat-0026`). This is a **retrospective** spec: the implementation exists and is verified,
 and this document states the contract it already holds so that the contract stops living only as code
-and test assertions. A human sets `status: approved`.
+and test assertions. Approved by the author on 2026-07-27.
 
 ## Problem
 
