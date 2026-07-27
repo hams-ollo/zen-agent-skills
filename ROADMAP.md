@@ -121,12 +121,17 @@ and it is what `feat-0025` exists to close.
 | ~~[`chore-0013`](.tasks/done/chore-0013-amend-validate-skills-contract.md)~~ | **Done.** Amended the `validate-skills` contract to cover the four checks the implementation had outgrown it by, and the regenerated matrix caught a live divergence in `S-014` while doing it: the check had shipped on 2026-07-25, was believed correct for two days, and only surfaced once a scenario stated the condition semantically instead of restating the implementation. Fixed the same day. |
 | ~~[`feat-0026`](.tasks/done/feat-0026-write-build-adapters-spec.md)~~ | **Done.** Wrote and approved `docs/spec/build-adapters.md` (13 scenarios), closed the five that had no test (30 to 35 tests), and restored the softened documentation claims. The audit surfaced one unstated contract decision: an existing rules file is preserved but an edited skill template is overwritten, an asymmetry invisible to both the spec and the tests. Recommendation recorded; the call is human. |
 
-The evaluation-record format is now established by `feat-0024` and documented in
-[`docs/spec/house-review.verification.md`](docs/spec/house-review.verification.md). The two remaining
-branches reuse it and are ready to decompose:
+**All three branches are now exercised on real work**, each on a genuine trigger rather than a staged
+one, and each recorded in the format `feat-0024` established:
 
-- **`test-author`'s characterization mode**, never fired on real work.
-- **`spec-plan-readiness`'s blocking paths**, never fired on real work.
+- ~~**`verifier-agent`'s `blocked` verdict**~~ (`feat-0024`), at [`house-review.verification.md`](docs/spec/house-review.verification.md).
+- ~~**`test-author`'s characterization mode**~~ (`feat-0027`), at [`install.characterization.md`](docs/spec/install.characterization.md).
+- ~~**`spec-plan-readiness`'s blocking paths**~~ (`feat-0028`), at [`build-adapters.readiness.md`](docs/spec/build-adapters.readiness.md).
+
+Each run found something the branch itself was not being tested for: an unresolved precondition
+ambiguity (`chore-0014`), two testability defects in `install.py`, and a second seam between the
+spine's front and back halves (`chore-0016`). Exercising a branch on real work has so far been more
+productive than the branch coverage was the point of.
 - **The wider spec and test coverage question.** Even after `feat-0024`, 5 of 19 skills will have a contract and none will have behavioral tests. Whether that gap is worth closing skill by skill, or whether the targeted-branch approach is sufficient, is a judgment to make once there is evidence from the first three exercises.
 
 ---
