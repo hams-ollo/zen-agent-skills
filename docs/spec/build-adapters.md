@@ -1,6 +1,6 @@
 ---
 title: build-adapters
-status: approved
+status: draft
 ---
 
 # build-adapters
@@ -9,6 +9,10 @@ Behavioral contract for [`scripts/build-adapters.py`](../../scripts/build-adapte
 2026-07-27 (`feat-0026`). This is a **retrospective** spec: the implementation exists and is verified,
 and this document states the contract it already holds so that the contract stops living only as code
 and test assertions. Approved by the author on 2026-07-27.
+
+Amended 2026-07-27 (`chore-0015`) to classify the two kinds of emitted shared material and state how
+each is treated on a re-run, closing the gap the `feat-0026` audit recorded as "behavior found outside
+the contract". Reopened to `draft` for that amendment; a human sets `status: approved`.
 
 ## Problem
 
@@ -31,8 +35,8 @@ every test still pass, because no test asserts the reason.
 
 1. Emit one native adapter per skill for each supported harness, from the single `SKILL.md` source.
 2. Keep every link in an inlined body resolvable from the adapter's own location.
-3. Emit the shared material those rewritten links point at, without overwriting a copy the target
-   project already has.
+3. Emit the shared material those rewritten links point at, refreshing what the kit owns while
+   never overwriting what the adopter owns.
 4. Keep adapters safe to regenerate: derived artifacts, and a no-op when the output is the kit itself.
 5. Support previewing a run without writing anything.
 6. Fail clearly on an unusable invocation rather than writing a partial result.
@@ -54,6 +58,11 @@ every test still pass, because no test asserts the reason.
   so a link is correct in the emitted file only if it was rewritten for the adapter's location.
 - The rules module is swappable by design, so a copy already present in the target project is the
   project's own choice and outranks the kit's.
+- The two kinds of emitted shared material have different owners, which is what decides their
+  treatment on a re-run. A skill's supporting files are **derived**: they exist in the target project
+  only so an adapter's link resolves, and the adopter's own working configuration lives elsewhere in
+  their repository, so replacing them loses nothing. The rules module is **adopted**: it is the file
+  the kit invites a project to rewrite in its own voice.
 
 ## Scenarios
 
@@ -128,6 +137,19 @@ every test still pass, because no test asserts the reason.
 - **Then** that file's content is unchanged, because a project's own copy of a swappable module
   outranks the kit's.
 
+### Scenario S-014: a re-run refreshes derived assets and preserves adopted ones
+
+- **Given** an output root from a previous run, in which both an emitted skill supporting file and an
+  emitted rules-module file have been edited
+- **When** the tool runs again against that output root
+- **Then** the skill supporting file is replaced with the kit's current version and the rules-module
+  file retains its edited content, because the first is derived from the kit and the second belongs to
+  the adopter.
+
+  The rules half restates S-010 deliberately. The contrast is the requirement: stating either half
+  alone leaves a reader unable to tell a rule from an accident, which is exactly how the skill-asset
+  behavior went unstated in the first place.
+
 ### Scenario S-011: generating into the kit itself changes nothing
 
 - **Given** an output root that is the kit repository, where a shared file's source and destination
@@ -158,7 +180,7 @@ every test still pass, because no test asserts the reason.
 | `--out` | Output project root; defaults to the working directory |
 | `--dry-run` | Preview: report what would be written, write nothing |
 | Emitted per skill | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md` |
-| Emitted shared | `.agents/rules/<file>`, `.agents/skills/<name>/<path>` |
+| Emitted shared | `.agents/rules/<file>` (adopted, preserved on a re-run), `.agents/skills/<name>/<path>` (derived, refreshed on a re-run) |
 | Exit code | non-zero for an unrecognized target, zero otherwise |
 | Output | one line per emitted adapter, then a summary of adapter and shared-asset counts |
 

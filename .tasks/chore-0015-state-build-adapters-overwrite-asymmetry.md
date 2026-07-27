@@ -7,7 +7,7 @@ priority: P2
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: []
 spec: docs/spec/build-adapters.md
-scenarios: []
+scenarios: [S-014]
 touched_files:
   - docs/spec/build-adapters.md
   - docs/spec/build-adapters.conformance.md
