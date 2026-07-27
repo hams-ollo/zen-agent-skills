@@ -66,14 +66,20 @@ The output format rules held too. `blocking_reasons` is non-empty exactly becaus
 
 ## Two observations from the run
 
-**S-006's precondition was independently true, and the contract does not say what to do about that.**
+**S-006's precondition was independently true, and the contract did not say what to do about that.**
 Alongside the unapproved spec, `code-review` has no declared verification command: no task in flight
 carries acceptance criteria for it and no test file exists. That is S-006's trigger, satisfied at the
-same moment as S-005's. Read literally, verifier-agent's Step 1 tells the run to "stop and return
+same moment as S-005's. Read literally, verifier-agent's Step 1 told the run to "stop and return
 `blocked`" at the first precondition, so this record reports one blocking reason, which is what the
-procedure produces. But `blocking_reasons` is a list, which suggests accumulation, and the contract
-never says which behavior is intended when both preconditions hold. Recorded as a finding against
-`verifier-agent`'s own contract, not resolved here.
+procedure produced on the day. But `blocking_reasons` is a list, which suggests accumulation, and the
+contract never said which behavior was intended when both preconditions hold.
+
+**Resolved by `chore-0014` on 2026-07-27: the behavior is to accumulate.** Both preconditions are now
+checked before returning, and every reason that holds is reported in a fixed order, specified as
+[`verifier-agent.md`](verifier-agent.md) S-011. Re-run against the same state, this record would carry
+two blocking reasons rather than one: the unapproved contract first, the missing command second. The
+single-reason record above is preserved as what the procedure produced at the time, because a ledger
+entry that describes a past run is not corrected to match a later contract.
 
 **"Exercising a branch" of a skill means something weaker than exercising a branch of a program, and
 the evaluation format should not pretend otherwise.** These skills are prose procedures, so a branch

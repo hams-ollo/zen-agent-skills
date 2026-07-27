@@ -2,7 +2,7 @@
 id: chore-0014
 title: Decide whether verifier-agent's two blocked preconditions short-circuit or accumulate
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #7: verifier-agent"
 depends_on: []
@@ -75,14 +75,38 @@ record as its exercised branch.
 
     python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] The skill body and `docs/spec/verifier-agent.md` agree on the both-true behavior.
-- [ ] A scenario covers the case where both preconditions hold.
-- [ ] `spec-quality` returns `ready` on the amended spec, and a human set `status: approved`.
-- [ ] `docs/spec/verifier-agent.conformance.md` is regenerated against the amended contract.
-- [ ] `docs/spec/code-review.verification.md`'s observation is updated to point at the resolution.
+- [x] The skill body and `docs/spec/verifier-agent.md` agree on the both-true behavior.
+- [x] A scenario covers the case where both preconditions hold.
+- [x] `spec-quality` returns `ready` on the amended spec, and a human set `status: approved`.
+- [x] `docs/spec/verifier-agent.conformance.md` is regenerated against the amended contract.
+- [x] `docs/spec/code-review.verification.md`'s observation is updated to point at the resolution.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-27)
+
+**Decision: accumulate.** Both preconditions are checked before returning, and every reason that holds
+is reported in a fixed order (unapproved contract first, missing command second). Neither check runs
+the implementation, so evaluating both is free, while short-circuiting sends the reader away to fix
+one blocker and straight back for the second. The plural `blocking_reasons` field was already the
+right shape; the prose was what was wrong.
+
+`S-011` covers the both-true case and traces to goals 1 and 5, so no new goal was needed. That broke a
+three-spec run of `spec-quality` catching orphaned scenarios, and the difference is instructive: the
+previous three orphans (`validate-skills` S-015, `build-adapters` S-013, `code-review` S-011) were all
+invocation or channel concerns, while this one is core behavior.
+
+`docs/spec/verifier-agent.conformance.md` now exists. Every scenario and surface element conforms, and
+the matrix says why that is a weaker result than it looks: the contract and the skill were drafted the
+same day from the same intent, so a clean matrix mostly confirms the two documents still agree. It
+also states the limit that applies to auditing any prose skill, that conformance establishes the skill
+**instructs** the specified behavior and not that anything **enforces** it. The `feat-0024` run
+remains the stronger evidence.
+
+The observation in `code-review.verification.md` now points at this resolution. Its single-reason
+record was left as written, because a ledger entry describing a past run is not corrected to match a
+later contract.

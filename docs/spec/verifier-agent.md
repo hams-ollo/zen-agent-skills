@@ -1,6 +1,6 @@
 ---
 title: verifier-agent
-status: draft
+status: approved
 ---
 
 # verifier-agent
@@ -11,8 +11,8 @@ Behavioral contract for the `verifier-agent` skill (ROADMAP Epic B item 7). Draf
 Reopened to `draft` on 2026-07-27 and amended (`chore-0014`). The `feat-0024` run hit a state this
 contract did not cover: both blocking preconditions true at once. S-005 and S-006 each said "returns
 `blocked`" without saying what happens when both hold, while the plural `blocking_reasons` field
-implied accumulation and the skill body read as short-circuit. S-011 settles it. A human sets
-`status: approved`.
+implied accumulation and the skill body read as short-circuit. S-011 settles it, and the decision was to
+accumulate rather than short-circuit. Re-approved by the author on 2026-07-27.
 
 ## Problem
 
