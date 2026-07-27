@@ -1,6 +1,6 @@
 ---
 title: validate-skills
-status: draft
+status: approved
 ---
 
 # validate-skills
@@ -12,8 +12,8 @@ lens. It captures the tool's intended contract from its module docstring and obs
 Reopened to `draft` on 2026-07-27 and amended (`chore-0013`). The implementation had twice grown
 past this contract without it: `feat-0023` added link resolution, sibling-reference, and
 status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass added the portability
-check now specified as S-011. Scenarios S-009 through S-016 close that gap. A human sets
-`status: approved`.
+check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
+author on 2026-07-27.
 
 ## Problem
 
