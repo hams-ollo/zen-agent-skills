@@ -20,9 +20,9 @@ This is a skills library, not an application or a service. It has no database, n
 ## What's included
 
 - [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
-- [`scripts/install.py`](scripts/install.py): installs skills for Claude Code and OpenCode.
-- [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project.
-- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, and skills that claim both draft and shipped status.
+- [`scripts/install.py`](scripts/install.py): installs skills, and the rules module they compose, for Claude Code and OpenCode.
+- [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project, rewriting each skill's relative links so they resolve from the adapter's location.
+- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
@@ -129,6 +129,7 @@ This creates:
 
 - `.cursor/rules/<skill-name>.mdc` for Cursor.
 - `.github/prompts/<skill-name>.prompt.md` for VS Code or Copilot.
+- `.agents/rules/` and `.agents/skills/<skill-name>/`, holding the material those adapters link to: the swappable rules module (the review rubric, the house style) and each skill's own templates. The adapters' relative links are rewritten to point here, so a lens reference resolves in the target project instead of dangling. An `.agents/rules/` file that already exists is never overwritten, because that module is swappable and the project's own copy outranks the kit's.
 
 Generated adapters are derived files. Edit the source [`SKILL.md`](.agents/skills/) under `.agents/skills/`, then regenerate the adapters. A generation run overwrites the adapter files it owns.
 

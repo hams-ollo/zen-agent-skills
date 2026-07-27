@@ -230,7 +230,7 @@ The `init-worktracking` skill offers three footprints:
 
 - 🪶 **Lite:** basic agent instructions and task files. Good for a solo project or a small experiment.
 - 🗺️ **Standard:** lite plus a roadmap and changelog. Good for most projects.
-- 👥 **Team:** standard plus validation tooling and optional mechanical checks. Good for teams, multiple agents, or projects where drift is expensive.
+- 👥 **Team:** standard plus mechanical enforcement, wiring the validator into CI or a pre-commit hook. Good for teams, multiple agents, or projects where drift is expensive. The validator itself ships at every tier.
 
 Ask the assistant to recommend a tier based on the project, then confirm the choice yourself.
 
