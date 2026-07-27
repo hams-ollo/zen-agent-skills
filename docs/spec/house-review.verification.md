@@ -1,16 +1,20 @@
 ---
-title: code-review verification
-spec: docs/spec/code-review.md
+title: house-review verification
+spec: docs/spec/house-review.md
 task: .tasks/feat-0024-exercise-verifier-blocked-branch.md
 verified: 2026-07-27
 verdict: blocked
 branch_exercised: verifier-agent S-005 (spec not approved)
 ---
 
-# code-review verification record
+# house-review verification record
+
+> **Naming note.** This run was performed while the skill was named `code-review`. It was renamed to
+> `house-review` later the same day (`chore-0012`) to resolve a collision with a harness built-in.
+> Paths and names below are updated so every reference resolves; the run itself is unchanged.
 
 A [`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) run against the
-[`code-review`](../../.agents/skills/code-review/SKILL.md) implementation, performed 2026-07-27 to
+[`house-review`](../../.agents/skills/house-review/SKILL.md) implementation, performed 2026-07-27 to
 exercise the `blocked` verdict on real work (`feat-0024`).
 
 This is also the first **evaluation record**, the reusable format for the two remaining unexercised
@@ -20,8 +24,8 @@ verdict.
 
 ## Why this trigger is real and not staged
 
-The branch fires because [`docs/spec/code-review.md`](code-review.md) carries `status: draft`. That
-spec is one the kit genuinely wants: `code-review` is shipped, load-bearing, composes a swappable
+The branch fires because [`docs/spec/house-review.md`](house-review.md) carries `status: draft`. That
+spec is one the kit genuinely wants: `house-review` is shipped, load-bearing, composes a swappable
 lens, and had no contract. It was drafted properly with `spec-author`, self-checked to `ready`
 against the `spec-quality` lens, and written `status: draft` because only a human sets `approved`.
 
@@ -35,7 +39,7 @@ run, not that it fires when it should.
 verdict: blocked
 blocking_reasons:
   - reason: the supplied contract is not approved
-    detail: docs/spec/code-review.md carries `status: draft`. A draft spec is one no human has
+    detail: docs/spec/house-review.md carries `status: draft`. A draft spec is one no human has
       agreed to, so verifying against it would launder an unapproved contract into evidence.
 commands:
   - not executed. A blocked run reports no pass or fail for the work itself, so no verification
@@ -49,7 +53,7 @@ findings:
     where: n/a
 ```
 
-`.agents/skills/code-review/SKILL.md` is byte-for-byte unchanged, confirmed by comparing its object
+`.agents/skills/house-review/SKILL.md` is byte-for-byte unchanged, confirmed by comparing its object
 hash against `HEAD`. Verification is read-only and a blocked run changes even less than a completed
 one.
 
@@ -59,7 +63,7 @@ Yes, on every clause. [`verifier-agent.md`](verifier-agent.md) S-005 requires th
 produce `verdict: blocked`, that the run state the contract is unapproved, and that it "does not
 execute the verification or report a pass or a fail." All three held: the verdict is `blocked`, the
 blocking reason names the unapproved contract, no command was run, and no pass or fail was reported
-for `code-review`.
+for `house-review`.
 
 The output format rules held too. `blocking_reasons` is non-empty exactly because the verdict is not
 `pass`, and `conformance` reads as not assessed rather than being inferred from anything.
@@ -67,7 +71,7 @@ The output format rules held too. `blocking_reasons` is non-empty exactly becaus
 ## Two observations from the run
 
 **S-006's precondition was independently true, and the contract did not say what to do about that.**
-Alongside the unapproved spec, `code-review` has no declared verification command: no task in flight
+Alongside the unapproved spec, `house-review` has no declared verification command: no task in flight
 carries acceptance criteria for it and no test file exists. That is S-006's trigger, satisfied at the
 same moment as S-005's. Read literally, verifier-agent's Step 1 told the run to "stop and return
 `blocked`" at the first precondition, so this record reports one blocking reason, which is what the

@@ -23,7 +23,7 @@ Discovery targets (per tool), each skill linked/copied as <base>/<skill-name>:
 The swappable rules module (.agents/rules/) travels with the skills, placed as
 the sibling <base>/../rules. That location is not arbitrary: a skill body
 references its lens as ../../rules/<file>.md, which resolves from
-<base>/<skill-name>/SKILL.md to exactly this directory. Without it, code-review
+<base>/<skill-name>/SKILL.md to exactly this directory. Without it, house-review
 loses its whole rubric and twelve other skills lose their house-style module.
 
 Cursor and Copilot read repo-level pointer files, not a global skills dir, so
@@ -125,7 +125,7 @@ def install(tools, mode, home: Path, dry: bool) -> int:
               f"Move or remove them, then re-run.")
     if not RULES_DIR.is_dir():
         print(f"\nWARNING: no rules module at {RULES_DIR}. Skills that reference "
-              f"../../rules/ (code-review's rubric, the house-style module) will "
+              f"../../rules/ (house-review's rubric, the house-style module) will "
               f"dangle in the installed layout.")
     print(f"\n{tag}Done: {len(skills)} skill(s) x {len(tools)} tool(s), "
           f"plus the rules module.")

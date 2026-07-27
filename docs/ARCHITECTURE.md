@@ -32,7 +32,7 @@ Each directory in [`.agents/skills/`](../.agents/skills/) contains a `SKILL.md` 
 
 ### Distribution tooling
 
-[`scripts/install.py`](../scripts/install.py) places the canonical skill directories into the global discovery locations used by Claude Code and OpenCode. It is idempotent, defaults to copies on Windows and symlinks on POSIX systems, and avoids overwriting unmanaged targets. It also places [`.agents/rules/`](../.agents/rules/) as the sibling of the installed skills directory, which is where every skill's `../../rules/<file>.md` reference resolves to. Without it a composed lens dangles, and `code-review` in particular arrives with no rubric, since its severities and categories live entirely in the lens.
+[`scripts/install.py`](../scripts/install.py) places the canonical skill directories into the global discovery locations used by Claude Code and OpenCode. It is idempotent, defaults to copies on Windows and symlinks on POSIX systems, and avoids overwriting unmanaged targets. It also places [`.agents/rules/`](../.agents/rules/) as the sibling of the installed skills directory, which is where every skill's `../../rules/<file>.md` reference resolves to. Without it a composed lens dangles, and `house-review` in particular arrives with no rubric, since its severities and categories live entirely in the lens.
 
 [`scripts/build-adapters.py`](../scripts/build-adapters.py) handles tools that use project-level configuration. It reads each canonical `SKILL.md` and generates:
 

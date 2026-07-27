@@ -1,19 +1,23 @@
 ---
-title: code-review
+title: house-review
 status: draft
 ---
 
-# code-review
+# house-review
 
-Behavioral contract for the [`code-review`](../../.agents/skills/code-review/SKILL.md) skill, written
+Behavioral contract for the [`house-review`](../../.agents/skills/house-review/SKILL.md) skill, written
 2026-07-27 (`feat-0024`). This is a **characterization** spec: it records the contract the shipped
 skill already holds, drafted from its actual behavior rather than from what it arguably should do.
 Where the skill is genuinely ambiguous, that ambiguity is recorded in Open Questions rather than
 resolved by inventing behavior.
 
+Amended 2026-07-27 (`chore-0012`): the skill was renamed from `code-review` to `house-review` to
+resolve a collision with harness built-in review commands, and both Open Questions were resolved into
+the contract. Reopened to `draft` for that amendment; a human sets `status: approved`.
+
 ## Problem
 
-`code-review` is shipped, load-bearing, and composes a swappable lens, and it has no contract. Three
+`house-review` is shipped, load-bearing, and composes a swappable lens, and it has no contract. Three
 things about it are load-bearing and currently unstated anywhere a reader can check them.
 
 It is **report-only**, which is the property an adopter most needs to be able to rely on: a review
@@ -60,6 +64,13 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 - **When** the skill runs
 - **Then** it reviews those files as they currently stand, in full, computes no commit range, and does
   not widen the scope beyond what was named.
+
+### Scenario S-012: a range supplied alongside a path scope narrows a change review
+
+- **Given** a request naming both a path scope and an explicit base or commit range
+- **When** the skill runs
+- **Then** it reviews that range restricted to the named paths, as a change review rather than a
+  full-file review, because a request naming a range is asking about a change.
 
 ### Scenario S-002: with no scope named, the branch's own range is reviewed
 
@@ -138,7 +149,7 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 | Element | Detail |
 |---|---|
 | Invocation | A request to review, optionally naming a path scope, a base, or a commit range |
-| Modes | Explicit path scope (full-file review), or change review (default, no scope named) |
+| Modes | Explicit path scope (full-file review), change review (default, no scope named), or a path scope plus a range (change review narrowed to those paths) |
 | Range resolution | Merge-base with the default branch, then working tree, then nothing to review |
 | Severities | `blocker`, `major`, `minor`, `nit`, defined by the `review-quality` lens |
 | Output | A verdict line, then findings ordered by severity, each with `file:line`, issue, why, and fix |
@@ -146,11 +157,6 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 
 ## Open Questions
 
-1. **What does an explicit base or commit range mean inside an explicit path scope?** The skill says
-   to honor one if given, but a path scope is defined as a full-file review while a range implies a
-   diff. Recommendation: treat a range supplied alongside a path scope as narrowing a change review to
-   those paths, rather than as a full-file review, since a user who names a range is asking about a
-   change. This needs a decision before the two modes can be tested independently.
-2. **Does the skill's name resolve unambiguously in a harness that ships its own review command?**
-   Tracked separately as `chore-0012`. Recommendation: resolve that task first, since the answer
-   changes the invocation row of the Proposed Surface.
+None. Both questions this spec opened were resolved by `chore-0012` on 2026-07-27: a range supplied
+alongside a path scope narrows a change review to those paths (now `S-012`), and the name collision
+was resolved by renaming the skill rather than by asserting a distinction.

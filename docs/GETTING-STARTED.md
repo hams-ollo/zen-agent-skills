@@ -279,7 +279,7 @@ Install the skills for your tool, then use one skill when the need appears:
 - 🔎 `doc-sync` for finding out which documents a change made wrong, before you fix any of them.
 - 🤝 `human-handoff` for a partner, client, or teammate update.
 - 🧳 `agent-handoff` for handing work to another AI session or agent.
-- 🔍 `code-review` for a report-only review of a change.
+- 🔍 `house-review` for a report-only review of a change.
 - 📬 `pr-describe` for a draft pull request description and changelog entry.
 - 📜 `spec-author` for writing down what a feature should do before anyone builds it.
 - 🧪 `test-author` for turning an agreed specification into real tests.
@@ -299,7 +299,7 @@ flowchart LR
   E --> F[test-author]
   F --> G[spec-conformance]
   G --> H[verifier-agent]
-  H --> I[code-review]
+  H --> I[house-review]
   I --> K[doc-sync]
   K --> J[pr-describe]
 ```
@@ -313,7 +313,7 @@ A typical collaboration loop is:
 5. 🧪 `test-author` derives tests from the specification, so each test traces back to the behavior it protects.
 6. 📐 `spec-conformance` audits whether the implementation actually matches the specification, which is a different question from whether the tests pass.
 7. ✅ `verifier-agent` independently runs the agreed commands and answers one question with evidence: pass, fail, or blocked. "Blocked" means it could not check, which is deliberately different from "it failed".
-8. 🔍 `code-review` checks the change and reports findings without editing.
+8. 🔍 `house-review` checks the change and reports findings without editing.
 9. 🌳 `fix-batch` can dispatch independent tasks to isolated worktrees when a team is ready for parallel work.
 10. 🔄 `reconcile-worktrees` brings verified work back into the main project.
 11. 🔎 `doc-sync` reports which documents the change made wrong. It never edits one without your approval, and it will not touch a document that governs the code, because a disagreement there means the code is wrong.
@@ -348,7 +348,7 @@ The reason the specification comes first is worth stating plainly: an agent that
 
 ### For a review
 
-> Use `code-review` in report-only mode. Look for correctness, security, missing checks, and user-facing regressions. Report findings by severity with a concrete suggested fix, and do not edit files.
+> Use `house-review` in report-only mode. Look for correctness, security, missing checks, and user-facing regressions. Report findings by severity with a concrete suggested fix, and do not edit files.
 
 ## 🛡️ Safety and trust
 

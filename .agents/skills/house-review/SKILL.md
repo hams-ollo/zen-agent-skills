@@ -1,16 +1,18 @@
 ---
-name: code-review
-description: Review a code change against an explicit house rubric and severities, and produce a structured, severity-ranked markdown review, without editing or committing anything. Determines the review range (the current branch against its merge-base with the default branch, with a working-tree fallback), applies the review-quality lens (correctness, security, error handling, tests, readability, performance, API design, docs), validates each finding against the real code before reporting it, and writes findings ordered blocker to nit with file:line, why it matters, and a concrete fix. Use when the user says "review this", "review my changes", "code review", "review this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before merging. Report-only: it never changes code. Distinct from Claude Code's built-in /code-review command.
+name: house-review
+description: Review a code change against an explicit house rubric and severities, and produce a structured, severity-ranked markdown review, without editing or committing anything. Determines the review range (the current branch against its merge-base with the default branch, with a working-tree fallback), applies the review-quality lens (correctness, security, error handling, tests, readability, performance, API design, docs), validates each finding against the real code before reporting it, and writes findings ordered blocker to nit with file:line, why it matters, and a concrete fix. Use when the user says "review this", "review my changes", "code review", "review this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before merging. Report-only: it never changes code.
 ---
 
-# code-review
+# house-review
 
 A house-style code review with an explicit rubric and severities. It reads a change, applies the
 [`review-quality`](../../rules/review-quality.md) lens, and writes a structured review. It is
 **report-only**: it never edits or commits. Reconciling the findings is the author's call, handled
 by the human, `/simplify`, or [`fix-batch`](../fix-batch/SKILL.md).
 
-This is the kit's own review skill, distinct from Claude Code's built-in `/code-review` command.
+It is named for the house rubric it applies rather than for the act of reviewing, which also keeps it
+clear of the review commands several harnesses ship built in: a skill cannot resolve a namespace
+collision by asserting it is different, so the name avoids one instead.
 It composes a swappable lens (the moonray pattern: a reusable review "shot" a workflow composes,
 with findings validated before they are reported), so the review bar lives in one editable file
 and future quality skills can reuse it.
@@ -44,7 +46,12 @@ There are two modes. Decide which the request is.
 **Explicit path scope (review named files or paths).** When the user points at specific files, a
 directory, or a path glob ("review these scripts", "review `src/auth/`"), review those files as
 they stand, in full. This is a review of existing code, not a diff, so there is no range to
-compute; just read the named files. Honor an explicit base or commit range here too if one is given.
+compute; just read the named files.
+
+**A path scope with an explicit base or range is a narrowed change review, not a full-file one.**
+If the user names both ("review `src/auth/` on this branch"), compute the range as below and restrict
+it to the named paths. A request that names a range is asking about a change, so reviewing those
+files in full would answer a question they did not ask.
 
 **Change review (the default when no scope is named).** Reuse `pr-describe`'s changeset logic so
 "review this" means the same thing across the kit:
@@ -123,7 +130,6 @@ validate-before-reporting rule are identical either way; only the output channel
 - Portable by composition: the rubric and severities live in the swappable
   [`review-quality`](../../rules/review-quality.md) lens, not hardcoded here, so an adopter retunes
   the bar in one file and future skills reuse the same lens.
-- Distinct from Claude Code's built-in `/code-review` command.
 - Future direction (not built yet): a multi-lens "deep-review" that runs several lenses
   (`review-quality`, `test-quality`, and so on) and reconciles their findings, mirroring
   moonray's Deep Review orchestration.

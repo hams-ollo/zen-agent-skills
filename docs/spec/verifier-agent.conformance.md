@@ -20,7 +20,7 @@ anything **enforces** it. A skill can conform perfectly here and still be ignore
 it.
 
 That limit is worth stating plainly rather than leaving implied, because it is the same limit recorded
-in [`code-review.verification.md`](code-review.verification.md) about exercising a branch of a prose
+in [`house-review.verification.md`](house-review.verification.md) about exercising a branch of a prose
 skill. Conformance for a prose skill answers "does the instruction match the contract", and nothing
 more. What closes the remaining gap is exercising the branch on real work, which is what the Epic A
 item 8 evaluation records are for.
@@ -67,6 +67,6 @@ overstate it.
 **What is genuinely absent is enforcement.** Nothing mechanically checks that a `blocked` verdict is
 returned when a spec is unapproved; the skill says to, and an agent may or may not. Of the three
 Epic A item 8 branches, one is now exercised on real work
-([`code-review.verification.md`](code-review.verification.md)) and two remain. Until those run, the
+([`house-review.verification.md`](house-review.verification.md)) and two remain. Until those run, the
 strongest claim available for this skill is that its instructions match its contract and one of its
 three hardest paths has been observed behaving correctly once.

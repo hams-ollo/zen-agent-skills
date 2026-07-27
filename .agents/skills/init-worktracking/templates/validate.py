@@ -160,9 +160,14 @@ def main() -> int:
         touched = fm.get("touched_files", []) or []
         if not touched:
             warn(rel, "touched_files is empty")
-        for path in touched:
-            if not (REPO_ROOT / path).exists():
-                warn(rel, f"touched_files path does not exist: {path}")
+        # A completed task's touched_files are a historical record of what it changed,
+        # not a claim about the tree today. Checking them means any later rename, move,
+        # or deletion breaks the backlog permanently, and the only way to "fix" it is to
+        # rewrite the ledger. So the existence check applies to open work only.
+        if not in_done:
+            for path in touched:
+                if not (REPO_ROOT / path).exists():
+                    warn(rel, f"touched_files path does not exist: {path}")
 
         # Spec traceability, when the task claims any. Absent is fine: not every
         # task comes from a spec. Present but malformed is not, because a

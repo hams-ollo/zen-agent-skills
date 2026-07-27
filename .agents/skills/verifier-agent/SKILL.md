@@ -1,6 +1,6 @@
 ---
 name: verifier-agent
-description: Use before reconciling or landing an implementation to independently verify it against its approved spec and its task's acceptance criteria. Runs the declared verification commands and records each exact outcome, composes the spec-conformance lens so a contract divergence fails the run even when every command passes, maps each acceptance criterion to met or unmet with named evidence, and returns a deterministic pass, fail, or blocked verdict. Returns blocked rather than guessing when the spec is unapproved or no command is declared, so a verification that could not run is never recorded as a pass. Distinct from spec-conformance (the report-only lens it composes), test-author (which writes tests), code-review (which judges quality), and fix-batch (which dispatches the work). It verifies and reports; it never edits what it verifies.
+description: Use before reconciling or landing an implementation to independently verify it against its approved spec and its task's acceptance criteria. Runs the declared verification commands and records each exact outcome, composes the spec-conformance lens so a contract divergence fails the run even when every command passes, maps each acceptance criterion to met or unmet with named evidence, and returns a deterministic pass, fail, or blocked verdict. Returns blocked rather than guessing when the spec is unapproved or no command is declared, so a verification that could not run is never recorded as a pass. Distinct from spec-conformance (the report-only lens it composes), test-author (which writes tests), house-review (which judges quality), and fix-batch (which dispatches the work). It verifies and reports; it never edits what it verifies.
 ---
 
 # verifier-agent
@@ -36,7 +36,7 @@ skill exists to remove.
 - You only need the spec-vs-code audit by inspection, with no commands run and no verdict: use
   [`spec-conformance`](../spec-conformance/SKILL.md) directly.
 - You need tests to exist before anything can be verified: use [`test-author`](../test-author/SKILL.md) first.
-- You want an opinion on code quality, design, or style: use [`code-review`](../code-review/SKILL.md).
+- You want an opinion on code quality, design, or style: use [`house-review`](../house-review/SKILL.md).
 - You are deciding whether a spec plus its plan are ready to implement: that is
   [`spec-plan-readiness`](../spec-plan-readiness/SKILL.md), which gates the front of the spine, not the back.
 
@@ -186,7 +186,7 @@ Rules:
   [`spec-conformance`](../spec-conformance/SKILL.md) audits those same ids, so criteria, tests, and
   conformance rows can be read against each other.
 - A passing verdict is a statement about evidence, not about quality. It does not mean the code is
-  well designed; that is [`code-review`](../code-review/SKILL.md).
+  well designed; that is [`house-review`](../house-review/SKILL.md).
 
 ## Conventions
 

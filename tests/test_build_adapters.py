@@ -51,7 +51,7 @@ class TestRewriteLinks(unittest.TestCase):
     def test_sibling_skill_points_at_the_adapter_beside_it(self):
         # Scenario S-003.
         body = "See [`fix-batch`](../fix-batch/SKILL.md) for the batch."
-        self.assertIn("](fix-batch.mdc)", ba.rewrite_links(body, "code-review", ".mdc"))
+        self.assertIn("](fix-batch.mdc)", ba.rewrite_links(body, "house-review", ".mdc"))
 
     def test_sibling_skill_keeps_its_anchor(self):
         # Scenario S-004.
@@ -62,13 +62,13 @@ class TestRewriteLinks(unittest.TestCase):
     def test_link_title_is_preserved(self):
         # Scenario S-005.
         body = 'See [`fix-batch`](../fix-batch/SKILL.md "the batch skill").'
-        out = ba.rewrite_links(body, "code-review", ".mdc")
+        out = ba.rewrite_links(body, "house-review", ".mdc")
         self.assertIn('](fix-batch.mdc "the batch skill")', out)
 
     def test_rules_module_points_at_the_shared_location(self):
         # Scenario S-006.
         body = "Apply the [`review-quality`](../../rules/review-quality.md) lens."
-        out = ba.rewrite_links(body, "code-review", ".mdc")
+        out = ba.rewrite_links(body, "house-review", ".mdc")
         self.assertIn("](../../.agents/rules/review-quality.md)", out)
 
     def test_skill_local_asset_points_into_the_shared_skill_directory(self):
@@ -114,7 +114,7 @@ class TestEmittedTreeResolves(unittest.TestCase):
         self.assertEqual(broken, [], f"{len(broken)} dangling link(s): {broken[:5]}")
 
     def test_the_review_rubric_is_emitted_with_its_content(self):
-        # Scenario S-009: code-review is the skill that loses the most to a dangling
+        # Scenario S-009: house-review is the skill that loses the most to a dangling
         # lens, since its severities and rubric categories live entirely in that file.
         lens = self.out / ".agents" / "rules" / "review-quality.md"
         self.assertTrue(lens.is_file())
@@ -122,14 +122,14 @@ class TestEmittedTreeResolves(unittest.TestCase):
 
     def test_each_adapter_carries_its_harness_frontmatter_and_the_banner(self):
         # Scenario S-002.
-        cursor = (self.out / ".cursor" / "rules" / "code-review.mdc").read_text(encoding="utf-8")
-        vscode = (self.out / ".github" / "prompts" / "code-review.prompt.md").read_text(encoding="utf-8")
+        cursor = (self.out / ".cursor" / "rules" / "house-review.mdc").read_text(encoding="utf-8")
+        vscode = (self.out / ".github" / "prompts" / "house-review.prompt.md").read_text(encoding="utf-8")
         self.assertIn("alwaysApply: false", cursor)
         self.assertIn("description:", cursor)
         self.assertIn("mode: agent", vscode)
         self.assertIn("description:", vscode)
         for text in (cursor, vscode):
-            self.assertIn(".agents/skills/code-review/SKILL.md", text)
+            self.assertIn(".agents/skills/house-review/SKILL.md", text)
             self.assertIn("Do not edit here", text)
 
     def test_an_existing_rules_file_is_not_clobbered(self):

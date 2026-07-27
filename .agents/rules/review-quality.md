@@ -1,8 +1,8 @@
 # Zen review quality lens (edit freely)
 
-This file is a **swappable module**, the code-review counterpart to
+This file is a **swappable module**, the house-review counterpart to
 [`house-style.md`](house-style.md). It holds the rubric, severities, and protocol that the
-[`code-review`](../skills/code-review/SKILL.md) skill applies. It is separated from the skill so
+[`house-review`](../skills/house-review/SKILL.md) skill applies. It is separated from the skill so
 an adopter can retune the review bar (or replace it with a team's own standard) without touching
 skill logic. Future quality-focused skills (for example `test-author`, `security-audit`) can
 compose this same lens, or a sibling lens next to it.

@@ -54,7 +54,7 @@ one that ran and passed.
 - Authoring tests. That is `test-author`.
 - Judging spec well-formedness (`spec-quality`) or gating a spec plus plan for readiness
   (`spec-plan-readiness`).
-- Judging code quality, style, or design (`code-review`).
+- Judging code quality, style, or design (`house-review`).
 - Dispatching agents or managing worktrees (`fix-batch`), or landing changes
   (`reconcile-worktrees`).
 - Deciding whether a recorded divergence is acceptable. It reports the disposition the conformance

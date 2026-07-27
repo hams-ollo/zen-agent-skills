@@ -1,6 +1,6 @@
 ---
 name: test-quality
-description: Use when creating, modifying, reviewing, or deciding whether to add tests, fixtures, mocks, integration tests, end-to-end tests, smoke tests, or test plans in any codebase or language, including regression tests for bug fixes. Chooses the test layer and oracle: guides agents to pick the right test layer, avoid low-value tests, and verify meaningful behavioral oracles. Distinct from code-review and review-quality, which judge code changes rather than test design.
+description: Use when creating, modifying, reviewing, or deciding whether to add tests, fixtures, mocks, integration tests, end-to-end tests, smoke tests, or test plans in any codebase or language, including regression tests for bug fixes. Chooses the test layer and oracle: guides agents to pick the right test layer, avoid low-value tests, and verify meaningful behavioral oracles. Distinct from house-review and review-quality, which judge code changes rather than test design.
 ---
 
 # Test quality
@@ -8,7 +8,7 @@ description: Use when creating, modifying, reviewing, or deciding whether to add
 Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 
 This is a lens, not a workflow: it does not run tests or edit files on its own. The
-[`test-author`](../test-author/SKILL.md) skill composes this lens the way `code-review` composes
+[`test-author`](../test-author/SKILL.md) skill composes this lens the way `house-review` composes
 `review-quality`, so the test-quality bar lives in one editable file. Writing and formatting
 follow the house style in [`../../rules/house-style.md`](../../rules/house-style.md).
 
