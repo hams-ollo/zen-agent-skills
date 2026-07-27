@@ -1,12 +1,18 @@
 ---
 title: verifier-agent
-status: approved
+status: draft
 ---
 
 # verifier-agent
 
 Behavioral contract for the `verifier-agent` skill (ROADMAP Epic B item 7). Drafted
 2026-07-24 by the `spec-author` skill and self-checked to `ready` with the `spec-quality` lens.
+
+Reopened to `draft` on 2026-07-27 and amended (`chore-0014`). The `feat-0024` run hit a state this
+contract did not cover: both blocking preconditions true at once. S-005 and S-006 each said "returns
+`blocked`" without saying what happens when both hold, while the plural `blocking_reasons` field
+implied accumulation and the skill body read as short-circuit. S-011 settles it. A human sets
+`status: approved`.
 
 ## Problem
 
@@ -108,16 +114,24 @@ one that ran and passed.
 
 - **Given** a spec whose status is draft rather than approved
 - **When** verifier-agent runs
-- **Then** it returns `verdict: blocked`, states that the contract is unapproved, and does not
-  execute the verification or report a pass or a fail.
+- **Then** it returns `verdict: blocked` with a blocking reason stating that the contract is
+  unapproved, and does not execute the verification or report a pass or a fail.
 
 ### Scenario S-006: no command is declared, or a declared command cannot run
 
 - **Given** a task with no declared verification command, or a declared command whose runner is
   absent from the environment
 - **When** verifier-agent runs
-- **Then** it returns `verdict: blocked`, names the missing command or runner, and does not
-  substitute a command of its own choosing.
+- **Then** it returns `verdict: blocked` with a blocking reason naming the missing command or
+  runner, and does not substitute a command of its own choosing.
+
+### Scenario S-011: both blocking preconditions hold at once
+
+- **Given** a run whose spec is unapproved and which also has no runnable declared command
+- **When** verifier-agent runs
+- **Then** it returns `verdict: blocked` carrying **both** blocking reasons, the unapproved contract
+  first and the missing command second, rather than only the first one found. The ordering is fixed,
+  so the same state always produces the same record.
 
 ### Scenario S-007: an acceptance criterion has no evidence
 
@@ -155,7 +169,7 @@ one that ran and passed.
 | Inputs (required) | Task acceptance criteria, and at least one declared verification command |
 | Inputs (optional) | Approved spec path, report destination |
 | `verdict` | Exactly one of `pass`, `fail`, or `blocked` |
-| `blocking_reasons` | Why the verdict is not `pass`, empty when it is; the only field consulted for the reason |
+| `blocking_reasons` | Why the verdict is not `pass`, empty when it is; the only field consulted for the reason. Carries every reason that holds, in a fixed order, not just the first found |
 | `commands` | Per command: the command as declared, its exit status, and the evidence excerpt from its output |
 | `conformance` | The audited and unreconciled sets carried from `spec-conformance`, each unreconciled item with its recorded disposition, or an explicit note that conformance was not assessed |
 | `criteria` | Per acceptance criterion: `met` or `unmet`, and the evidence naming a command result, code location, or test, or stating that no evidence was found |

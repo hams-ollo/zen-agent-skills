@@ -58,20 +58,26 @@ Optional:
 
 ### 1. Establish that verification can run at all
 
-Before verifying anything, check the two preconditions that produce `blocked`. This step exists so an
+Before verifying anything, check **both** preconditions that produce `blocked`. This step exists so an
 unrunnable verification is never dressed up as a result.
 
-- **Is the contract approved?** If a spec is supplied and its `status` is not `approved`, stop and
-  return `blocked`. A draft spec is not a contract: it is one a human has not yet agreed to, and
-  verifying against it would launder an unapproved contract into evidence. If no spec is supplied at
-  all, that is not a blocker; continue, and record that conformance was not assessed.
+- **Is the contract approved?** If a spec is supplied and its `status` is not `approved`, the run is
+  blocked. A draft spec is not a contract: it is one a human has not yet agreed to, and verifying
+  against it would launder an unapproved contract into evidence. If no spec is supplied at all, that
+  is not a blocker; continue, and record that conformance was not assessed.
 - **Is there a command to run?** If no verification command is declared, or a declared command's
-  runner is absent from the environment, stop and return `blocked` naming what is missing. Do not
+  runner is absent from the environment, the run is blocked, naming what is missing. Do not
   substitute a command you think is equivalent, relax one that fails to launch, or fall back to
   reading the code and calling that verification.
 
-`blocked` is a real outcome that says the question could not be answered. It is never a soft `fail`,
-and it is never a reason to guess.
+**Check both before returning, and report every reason that holds.** Stopping at the first one is the
+tempting reading and the wrong one: neither check runs the implementation, so evaluating both is free,
+and a report naming one of two blockers sends the reader away to fix it and come straight back. List
+the reasons in the order above, so the same state always produces the same record.
+
+If either precondition holds, return `blocked` without running any command. `blocked` is a real
+outcome that says the question could not be answered. It is never a soft `fail`, and it is never a
+reason to guess.
 
 ### 2. Run the declared commands and record what happened
 
