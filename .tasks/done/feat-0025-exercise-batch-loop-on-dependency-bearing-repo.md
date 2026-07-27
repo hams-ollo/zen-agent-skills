@@ -2,7 +2,7 @@
 id: feat-0025
 title: Exercise the hardened batch loop on a repo that has real build dependencies
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A #8: kit-wide skill evaluation"
 depends_on: []
@@ -74,16 +74,41 @@ drop the step.
 
     python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] One real batch run completed against a dependency-bearing repo, with the chosen environment
+- [x] One real batch run completed against a dependency-bearing repo, with the chosen environment
       strategy and its cost recorded.
-- [ ] A new file created by an agent is confirmed landed in the main checkout by Step 5.
-- [ ] `verifier-agent` returned a real `pass` or `fail` (not `blocked`) for at least one item.
-- [ ] Step 8's path-by-path reconciliation ran, including at least one deliberate exclusion.
-- [ ] Each of the three skills either iterated from the run's findings or is recorded as confirmed
+- [x] A new file created by an agent is confirmed landed in the main checkout by Step 5.
+- [x] `verifier-agent` returned a real `pass` or `fail` (not `blocked`) for at least one item.
+- [~] Step 8's path-by-path reconciliation ran. **No deliberate exclusion occurred**, because no
+      spurious path appeared: no phantom binary diff, no stray file, nothing to exclude. The
+      criterion presumed a condition this batch did not produce. Recorded unmet rather than
+      satisfied by manufacturing an exclusion, which would have tested nothing.
+- [x] Each of the three skills either iterated from the run's findings or is recorded as confirmed
       unchanged, with the evidence.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-27)
+
+Run against `gaudiya-vaishnava-knowledge-wiki`: three parallel worktree agents adding first test
+coverage to three untested modules. Suite went 9 to 47, all three landed, every diff verified
+independently before anything was applied.
+
+**Environment strategy chosen:** install per worktree. `uv sync --extra dev` measured at **2 seconds
+and 52MB** per worktree, so ~6s and 156MB for the batch. Effectively free with `uv`'s shared cache,
+and the reason the four-option list now says to measure rather than assume.
+
+**The reconciliation fix was load-bearing, not theoretical.** Every item's deliverable was a new
+file, so all three `git diff` patches were 0 bytes. Under the pre-2026-07-27 mechanism
+(`git diff | git apply`) the entire batch would have landed nothing, reported success, and been
+deleted at cleanup.
+
+**Six findings, all folded back into the skills:** the harness section assumed a same-repo batch;
+"tracked" needed to be "committed", since a worktree checks out a commit and `git add` is not
+enough; the pre-flight command check caught a genuinely broken acceptance command before dispatch;
+strategy cost is toolchain-dependent and wants measuring; closeout bookkeeping needed to be
+explicitly excluded from agent prompts; and two of three task files carried premise errors about the
+code that the agents caught and reported rather than complied with, which is now a `new-task` rule.

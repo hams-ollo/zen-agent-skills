@@ -76,10 +76,12 @@ it cold. In this kit that means one `.tasks/` file per item, authored to the `ne
 acceptance command). If the target repo uses a different convention, follow that convention
 exactly instead.
 
-Then check whether those task files are **tracked by git** (`git status` after creating them, or
-inspect `.gitignore`). If they are untracked, a `git worktree add` checkout will not include
-them, which is exactly the ambiguity that caused three incompatible agent behaviors in the
-incident above. Decide now, once, how every spawned agent should handle this (for example: "the
+Then check whether those task files are **committed**, not merely tracked. A worktree checks out a
+**commit**, so a task file that is staged with `git add` but not committed is as absent from the
+worktree as one that is gitignored. `git status` showing it as a staged addition looks like success
+and is not. Commit the task files, then take the dispatch sha from *after* that commit. If they are
+untracked by policy, a `git worktree add` checkout will not include them either, which is exactly
+the ambiguity that caused three incompatible agent behaviors in the incident above. Decide now, once, how every spawned agent should handle this (for example: "the
 task file is untracked, so it will not exist in your worktree, recreate it verbatim from the
 content below and do not touch the main checkout's copy of it at all"), and bake that decision
 into every agent's prompt. Do not leave it to each agent's judgment, they will not converge on
@@ -95,13 +97,21 @@ loudly: `verifier-agent` returns `blocked` for a runner it cannot find, and Step
 them look broken**. On a documentation-only repo like this kit the trap is absent, which is
 exactly why it is easy to ship a batch workflow that has never met it.
 
-Before dispatching, run the acceptance command yourself in a throwaway worktree, or read it
-closely enough to answer: what does it need that git is not carrying? Then pick one answer for
-the whole batch and put it in every prompt:
+Before dispatching, **actually run the acceptance command in a throwaway worktree.** Not read it,
+run it. This costs one worktree and catches two different failures at once: what the command needs
+that git is not carrying, and whether the command as written works at all. On a real batch this
+step caught a command that was wrong in a way no amount of reading would have shown, `uv run pytest`
+versus `uv run python -m pytest`, where the console script does not put the repo root on `sys.path`
+and every import fails. Dispatched unchecked, that is three agents hitting the same wall and
+reporting three confusing blockers.
 
-- **Install per worktree**: correct and hermetic, and the cost is real (N installs, N times the
-  disk). Tell the agent the exact command and that the install is expected, not a sign the task is
-  wrong.
+Then pick one answer for the whole batch and put it in every prompt:
+
+- **Install per worktree**: correct and hermetic. Measure the cost before assuming it is too high,
+  because it varies by orders of magnitude across toolchains. A measured `uv sync` on a real Python
+  project took 2 seconds and 52MB per worktree, which makes this choice free; the same decision
+  against a cold `npm ci` is a different conversation. Tell the agent the exact command and that
+  the install is expected, not a sign the task is wrong.
 - **Share the store**: point the agent at a shared cache or package store where the toolchain
   supports it. Cheaper, but no longer fully isolated, so say so.
 - **Copy in what git cannot carry**: for a small set of files, usually `.env` or a fixture,
@@ -156,6 +166,18 @@ Every prompt must include, in substance:
 6. **A request for an honest blocker report** over a confident-sounding improvisation: "If
    something about this task's premise turns out to be wrong, or you hit a blocker you are not
    sure how to resolve within your own worktree, stop and report it clearly rather than guessing."
+   This is not a formality. On a real batch, two of three agents reported that the task file's
+   premise was factually wrong about the code (a function that did not contain the logic the task
+   attributed to it, and a regex that did not handle a case the task asserted it handled). Both
+   reported it and tested what was actually there instead of forcing a test onto a premise that did
+   not hold. An agent that quietly "makes it work" hides a defect in your task authoring.
+
+**Keep closeout bookkeeping out of every prompt.** Do not ask agents to move their own task file to
+`done/`, update the changelog, or tick the roadmap. Those touch the same one or two files for every
+item in the batch, so N agents editing them in N worktrees is a guaranteed conflict at
+reconciliation, and it is the single easiest collision to avoid: you do it once, centrally, in Step
+7 or during reconciliation. Bookkeeping is also exactly where unsupervised agents were caught
+misreporting in the incident above, so doing it yourself removes the need to audit N copies of it.
 
 ### Step 4: while waiting, do not poll
 
@@ -240,9 +262,15 @@ This section is Claude Code specific. Other harnesses provide the same capabilit
 isolated, resumable agents) through their own mechanisms; the doctrine above is what matters, the
 tool names below are the local implementation.
 
-- **Dispatch (Step 3):** use the `Agent` tool with `isolation: "worktree"` and
+- **Dispatch (Step 3), same-repo batch:** use the `Agent` tool with `isolation: "worktree"` and
   `run_in_background: true`, one call per item, all in the same message so they run in parallel.
   Each `Agent` call gets its own worktree; the `prompt` carries the hardened prompt from Step 3.
+- **Dispatch, batch against a *different* repository:** `isolation: "worktree"` worktrees the
+  **current** project, so it does nothing useful when the work lives in another repo. Create the
+  worktrees yourself first (`git -C <target-repo> worktree add -b agent/<id> <path> <dispatch-sha>`),
+  then dispatch ordinary background agents whose prompts name the absolute worktree path. The
+  sandbox rule in Step 3 carries the full weight here, since there is no harness-level isolation at
+  all, which is a difference worth stating in the prompt rather than assuming the agent infers it.
 - **Do not poll (Step 4):** background agents re-invoke you on completion. There is no need to
   check in, just continue or wait for the notification.
 - **Resume a false-alarm blocker (Step 5):** use `SendMessage` addressed to the agent's id (or

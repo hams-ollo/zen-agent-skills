@@ -68,7 +68,11 @@ The distinctions matter and each has burned someone:
 - **`git diff` never shows untracked files at all.** A new module or a new test file the agent
   created is untracked, because `fix-batch` tells agents to leave work uncommitted. This is the most
   expensive omission available here: it is usually the actual deliverable, and it produces no error,
-  just an empty patch and a worktree you are about to delete.
+  just an empty patch and a worktree you are about to delete. Measured on a real three-agent batch
+  whose items were each "add a test file": all three `git diff` patches were **0 bytes**, so the
+  whole batch would have landed nothing and reported success. Whenever the work is *new files*, which
+  is a large fraction of real tasks, the tracked-diff half of this step returns nothing at all and
+  the untracked half is the entire result.
 - **`--binary` is required for any binary file**, or the patch is unappliable later.
 
 Record the full `git status --short` file list per worktree now, not just its count. Step 8 checks

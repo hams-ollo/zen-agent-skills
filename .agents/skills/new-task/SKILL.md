@@ -75,6 +75,8 @@ Before writing `touched_files`, actually find the surface:
 
 If you cannot find the surface, say so and ask, rather than writing a plausible-looking but wrong `touched_files`.
 
+**Verify any claim you make *about* the code before writing it into the task.** A task body that says "the regex already handles the anchor form" or "the Devanagari filtering lives in `clean()`" is an assertion the implementing agent will build on, and both of those examples are real premise errors caught by agents mid-batch after being written from a quick read rather than a check. Run the function, grep for the symbol, or read the branch. A wrong premise in a task file is worse than a vague one, because vagueness prompts a question and a confident error prompts compliance.
+
 ### Step 4: decompose and identify the parent
 
 - Decide whether this is one atomic task or several. Split when the change spans independent surfaces, has internal ordering (use `depends_on`), or is too large to verify with one command. Keep each resulting task atomic.
