@@ -2,7 +2,7 @@
 id: feat-0031
 title: Teach pr-describe to emit a GitHub closing reference into the PR description
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP#9 tracker-links"
 depends_on: ["feat-0030"]
