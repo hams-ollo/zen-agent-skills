@@ -85,6 +85,38 @@ section the change does not justify. A typical shape, trimmed to fit the change:
 Match the tone and any PR-template headings the repo already uses (check
 `.github/PULL_REQUEST_TEMPLATE.md` if present and fill it rather than overriding it).
 
+#### Close the linked issue, when a task names one
+
+A task file may carry an `external` field naming the upstream issue it serves (`#123` for
+this repository, `owner/repo#123` for another). When the PR completes such a task, put a
+closing reference in the body so merging closes the issue instead of leaving someone to
+remember. Emit the value verbatim after the keyword; it is already stored in the syntax
+GitHub expects.
+
+Four rules, each of which fails **silently** when broken, producing a PR that looks correct,
+merges cleanly, and leaves the tracker wrong:
+
+- **In the description, never the title.** GitHub ignores a closing keyword in a PR title
+  and in comments. Only the body counts.
+- **Repeat the keyword per issue.** `Closes #1, #2, #3` closes only `#1`. Write
+  `Closes #1`, `Closes #2`, `Closes #3`, one per line.
+- **Only the default branch closes anything.** You already computed the merge-base against
+  the default branch in Step 1, so you know the base. When the PR targets anything else,
+  emit the bare reference **without** a keyword and say plainly that GitHub will not close
+  the issue on merge because the target is not the default branch. Emitting an inert keyword
+  is worse than emitting none: it reads as done and does nothing.
+- **A completed task still counts.** A branch usually moves its task file into `.tasks/done/`
+  in the same change, so look there as well as in `.tasks/`. The PR is what completes the
+  work, so its merge is exactly when the issue should close.
+
+Emit nothing when no task names an issue, and nothing when you cannot tell which task the
+branch completes. A missing reference costs a manual close; a wrong one closes someone
+else's issue.
+
+The contract behind this is `docs/spec/tracker-links.md` in the Zen Agent Skills repository.
+Other trackers use the same shape with a different token, so the rule is the placement, not
+the vocabulary.
+
 ### Step 3: draft the changelog entry (by inspection)
 
 1. Look for `CHANGELOG.md` (or `HISTORY.md`/`CHANGES.md`). If present, infer its style from
