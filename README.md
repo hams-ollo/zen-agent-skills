@@ -6,6 +6,18 @@ The Zen Starter Kit is a portable library of reusable AI agent skills and the to
 
 The core principle is **write a skill once, use it in every harness**. Each skill has one harness-agnostic source file, `SKILL.md`. The kit then installs that source where a supported tool can discover it or generates a thin, native adapter for the target project.
 
+## Where to start
+
+Pick the row that matches you. Each path is short, and none of them require reading the others.
+
+| You are | Start here |
+|---|---|
+| New to agent workflows, or not a developer by trade | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language walkthrough with prompts you can copy |
+| A developer who just wants it installed | [Quick start](#quick-start) below, about five minutes |
+| Deciding whether this is worth adopting | [`docs/CATALOG.md`](docs/CATALOG.md) for what each skill does, then [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how it stays portable |
+| An AI agent asked to work **on this repository** | [`AGENTS.md`](AGENTS.md) in full, then your assigned task file. It defines the reading protocol and the contribution bar |
+| An AI agent asked to **use one of these skills** | That skill's own `SKILL.md` under [`.agents/skills/`](.agents/skills/). Each is self-contained: what it does, when not to use it, the procedure, and how to tell it worked |
+
 ## Why this repository exists
 
 AI coding tools are useful, but their workflows are often difficult to reproduce across tools and projects. This repository provides a shared layer for procedures that should be:
@@ -26,7 +38,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
-- [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog, including shipped, draft, and planned skills.
+- [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog of shipped and planned skills.
 - [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md): a partner-facing snapshot of where the kit stands.
 - [`docs/spec/`](docs/spec/): behavioral specifications, the contracts the spine's skills are built and verified against.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
@@ -153,11 +165,12 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | Path | Purpose |
 |---|---|
 | [`.agents/skills/`](.agents/skills/) | Canonical, reusable skills |
-| [`.agents/rules/house-style.md`](.agents/rules/house-style.md) | Swappable writing and formatting rules used by skills |
+| [`.agents/rules/`](.agents/rules/) | The two swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities. Installed alongside the skills, because a skill that references a lens is not self-contained without it |
 | [`scripts/`](scripts/) | Installer, adapter generator, and validation tooling |
 | [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit |
 | [`tests/`](tests/) | The kit's own test suite |
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
+| [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Plain-language guide for non-specialists |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications, plus the conformance, verification, readiness, and characterization reports that sit beside them |

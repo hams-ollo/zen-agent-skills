@@ -96,9 +96,12 @@ Run these commands from the repository root after changing a skill or distributi
 
 ```bash
 python scripts/validate-skills.py
+python -m unittest discover -s tests -p "test_*.py"
 python scripts/build-adapters.py --dry-run
 python scripts/install.py --dry-run --home ./.tmp/zen-home
 python .tasks/validate.py --strict
 ```
+
+The test suite is not optional here. [`tests/`](../tests/) covers the distribution tooling itself, so a change to `install.py` or `build-adapters.py` is exactly the case the suite exists to catch.
 
 The [README](../README.md) provides the adopter-facing quick start and integration commands.
