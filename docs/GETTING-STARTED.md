@@ -64,7 +64,7 @@ You can start small. You do not need to adopt every skill on day one.
 
 You will need:
 
-- 🐍 **Python 3.9 or newer.** The kit's small setup tools use Python.
+- 🐍 **Python 3.10 or newer.** The kit's small setup tools use Python.
 - 🌿 **Git.** Git is the version history for your project. It lets you see what changed and return to an earlier point when needed.
 - 🤖 **An AI coding tool.** Use the tool you already have or want to try.
 - 📂 **A project folder or repository.** This can be empty for a new project or already full of work.

@@ -77,7 +77,7 @@ Three report-only lenses are composed by the skills above rather than run on the
 
 ## Prerequisites
 
-- Python 3.9 or newer.
+- Python 3.10 or newer. Every supported version is exercised by CI on Linux, macOS, and Windows; the kit does not claim a version it does not test.
 - One or more supported AI coding tools, depending on the integration you choose.
 - A project where you want to use the skills. The kit itself can also be used as a dogfooding example.
 

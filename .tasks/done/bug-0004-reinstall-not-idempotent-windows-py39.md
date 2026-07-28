@@ -2,7 +2,7 @@
 id: bug-0004
 title: Make re-install idempotent on Windows with Python 3.9, or narrow the supported range
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP#tooling install.py"
 depends_on: []
@@ -60,6 +60,28 @@ on the failing combination before changing anything.
 
 CI is now the reproduction environment: `windows-latest` with `python-version: "3.9"` in
 [`.github/workflows/checks.yml`](../.github/workflows/checks.yml) reproduces it every run.
+
+## Resolution (2026-07-28)
+
+**Option B was taken: the supported floor is now Python 3.10.**
+
+The deciding fact was not the defect but the calendar. Python 3.9 reached end of life in October
+2025, so the kit was claiming support for a runtime that upstream no longer supports, and CI proved
+the claim false on one of the three platforms it targets. A floor that holds everywhere is worth more
+than a lower one that does not.
+
+Option A was not attempted. The cause is well localized (all 40 targets conflicted rather than some,
+which points at the shared `home` prefix rather than per-target handling, and `main()` resolves
+`--home` once against a path that does not exist on the first run and does on the second), but it
+does not reproduce on the maintainer's machine, so the fix would have been written blind against CI
+and would have changed how every manifest entry is keyed. That is a lot of risk to keep an
+end-of-life version.
+
+The cost is real and worth stating: macOS and Linux passed on 3.9, so this drops users whose system
+`python3` is 3.9 even though nothing was broken for them. They can install 3.10 or newer, and since
+3.9 is unsupported upstream they should.
+
+If someone later needs 3.9, Option A below is still the route, and the diagnosis stands.
 
 ## Scope
 
