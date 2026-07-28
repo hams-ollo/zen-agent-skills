@@ -32,6 +32,10 @@ STATUSES = {"open", "in_progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2"}
 ID_RE = re.compile(r"^(bug|feat|chore|epic)-\d{4}$")
 SCENARIO_RE = re.compile(r"^S-\d{3}$")
+# An upstream issue reference, stored in GitHub's own syntax so emitting it is
+# concatenation rather than translation: `#123` here, `owner/repo#123` elsewhere.
+# A bare number is rejected on purpose; see docs/spec/tracker-links.md.
+EXTERNAL_RE = re.compile(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#\d+$")
 
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 
@@ -91,8 +95,12 @@ def task_files():
     return files
 
 
-def main() -> int:
-    strict = "--strict" in sys.argv[1:]
+def main(argv=None) -> int:
+    # `argv` is injectable so the CLI layer is reachable from a test, matching
+    # validate-skills.py, build-adapters.py, and install.py (chore-0017). Calling
+    # main() with no argument behaves exactly as before.
+    args = sys.argv[1:] if argv is None else list(argv)
+    strict = "--strict" in args
     files = task_files()
 
     errors, warnings = [], []
@@ -183,6 +191,16 @@ def main() -> int:
             warn(rel, "scenarios are listed but no spec: field names the contract they come from")
         if spec and not (REPO_ROOT / spec).exists():
             warn(rel, f"spec path does not exist: {spec}")
+
+        # The upstream issue this task serves, when it has one. Absent is fine
+        # (S-008). Present but malformed is an error rather than a warning
+        # (S-007), because the value is emitted verbatim into a pull request
+        # description: a form GitHub does not recognise is ignored silently, and
+        # the issue simply never closes.
+        external = fm.get("external", "")
+        if external and not EXTERNAL_RE.match(external):
+            err(rel, f"external {external!r} is not a GitHub issue reference "
+                     f"(#123 or owner/repo#123)")
 
     for tid, where in ids_seen.items():
         if len(where) > 1:

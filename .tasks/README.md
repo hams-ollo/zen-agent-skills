@@ -40,8 +40,14 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 | `depends_on` | Task ids that must reach `done/` before this one starts; `[]` if none. |
 | `spec` | Optional. Path to the approved spec this task implements. |
 | `scenarios` | Optional. The `S-NNN` scenario ids from that spec this task covers. |
+| `external` | Optional. The upstream GitHub issue this task serves: `#123` here, `owner/repo#123` elsewhere. |
 | `touched_files` | Every file the task expects to create or modify. |
 | `created` | ISO date the task was authored. |
+
+`external` links the task to the issue tracker. Store the reference in GitHub's own syntax, because
+`pr-describe` emits it verbatim after a closing keyword so merging the pull request closes the issue.
+A bare number is rejected on purpose: keeping the stored value identical to what GitHub expects means
+emission is concatenation rather than translation. See [`docs/spec/tracker-links.md`](../docs/spec/tracker-links.md).
 
 `spec` and `scenarios` are what make a task traceable back to a contract. Omit both for a task that
 does not come from a spec, which is most of them. Fill both when one exists, because a readiness

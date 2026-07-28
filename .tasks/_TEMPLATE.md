@@ -10,6 +10,11 @@ depends_on: []
 # no spec. A readiness gate reads them to map this task back to its contract.
 spec: ""
 scenarios: []
+# Optional. The upstream issue this task serves, in GitHub's own syntax: "#123"
+# for this repository, "owner/repo#123" for another. `pr-describe` emits a
+# closing reference for it, so merging the pull request closes the issue. A bare
+# number is rejected; see docs/spec/tracker-links.md.
+external: ""
 touched_files:
   - path/to/file/the/task/will/change
   - path/to/its/test

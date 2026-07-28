@@ -1,12 +1,16 @@
 ---
 title: tracker-links
-status: draft
+status: approved
 ---
 
 # tracker-links
 
 Behavioral contract for linking a task file to an upstream GitHub issue, and for carrying that link
 into the pull request description so merging the pull request closes the issue.
+
+Drafted 2026-07-28 by `spec-author`, whose `spec-quality` self-check returned `needs_revision` on
+the first draft and was revised to `ready`. Approved by the author on 2026-07-28, together with the
+decision recorded in S-009.
 
 ## Problem
 
@@ -115,6 +119,14 @@ that holds both halves at once.
 - **When** the backlog is validated
 - **Then** validation passes, because the link is optional.
 
+### Scenario S-009: a task completed in the same change still gets a reference
+
+- **Given** a task whose `external` value is `#123`, whose file the branch moves from `.tasks/` to
+  `.tasks/done/`
+- **When** the pull request body is drafted
+- **Then** the body contains `Closes #123`, the same as for a task still open, because the pull
+  request is what completes the work.
+
 ## Proposed Surface
 
 | Element | Detail |
@@ -128,8 +140,5 @@ that holds both halves at once.
 
 ## Open Questions
 
-1. **Does a task moved to `.tasks/done/` in the same pull request still get a reference?** A branch
-   routinely completes a task and moves its file in the same change, so at draft time the task may
-   sit in either directory. Recommendation: yes, emit for both. The pull request is precisely what
-   completes the work, so the issue should close on its merge, and treating a moved file as absent
-   would silently drop the reference in the most common case.
+None. The one question this spec carried, whether a task moved to `.tasks/done/` in the same change
+still gets a reference, was decided yes on 2026-07-28 and is now S-009.
