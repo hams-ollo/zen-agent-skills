@@ -217,7 +217,8 @@ def uninstall(home: Path, dry: bool) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test."""
     ap = argparse.ArgumentParser(description="Install Zen Starter Kit skills.")
     ap.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     ap.add_argument("--uninstall", action="store_true", help="remove what was installed")
@@ -228,7 +229,7 @@ def main() -> int:
                     help="comma-separated subset of: " + ",".join(TOOL_SUBPATHS))
     ap.add_argument("--home", default=None,
                     help="override the base home dir (for testing/unusual setups)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     home = Path(args.home).expanduser().resolve() if args.home else Path.home()
 

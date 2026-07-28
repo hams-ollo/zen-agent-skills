@@ -2,6 +2,7 @@
 title: install conformance
 spec: docs/spec/install.md
 audited: 2026-07-27
+re_audited: 2026-07-27 (chore-0017)
 ---
 
 # install conformance matrix
@@ -50,14 +51,22 @@ to an acceptance suite by this task:
 | S-001 through S-008 | present | one each, plus a supporting test for how the skill set is identified |
 | S-011 | present | added here; asserts the message names both ways out, not merely that it raises |
 | S-005 | present | added here; the surprising-but-correct case, which is why it is worth pinning |
-| **S-009, S-010** | **none** | both live in `main()`, which calls `parse_args()` with no argv, so the CLI layer cannot be driven from a test |
+| S-009 | present | added by `chore-0017`. Pairs a supported tool with an unsupported one, so it also proves the valid entry does not rescue the invocation, and asserts nothing was placed |
+| S-010 | present, one branch | added by `chore-0017`. See the note below |
 
-The S-009 and S-010 gap is not a defect in the contract and not a divergence. It is a coverage gap
-caused by the code's shape, and stating it here converts the loose testability observation
-`install.characterization.md` recorded into a concrete, contract-backed one: two approved scenarios
-cannot be tested until `install.py` gets the injectable entry point that `validate-skills.py`
-(`chore-0003`) and `build-adapters.py` (`feat-0026`) were both given when they were brought under
-test. Filed as `chore-0017`.
+Every scenario now has a covering test. `chore-0017` gave `main()` the optional `argv` parameter that
+`validate-skills.py` (`chore-0003`) and `build-adapters.py` (`feat-0026`) already had, which is what
+made the CLI layer reachable at all. Both new tests were confirmed to fail against the pre-fix
+`main()`.
+
+**S-010 is covered on one branch only, and the reason is worth recording.** The rule reads `os.name`,
+and faking that to exercise the other platform breaks `pathlib`, which selects `PosixPath` or
+`WindowsPath` from the same attribute and raises on instantiation. The test therefore derives its
+expectation from the running platform and asserts the wiring, so it fails if the default changes or
+the flag stops feeding it, but the opposite platform's branch is exercised only by running the suite
+there. A test that hardcoded `"copy"` would have passed everywhere and meant nothing off Windows,
+which is the outcome this avoids. Closing the remaining half would mean extracting the default into
+its own expression, a behaviour-preserving refactor deliberately left out of `chore-0017`'s scope.
 
 ## Observations
 

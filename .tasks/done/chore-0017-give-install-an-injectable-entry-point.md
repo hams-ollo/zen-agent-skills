@@ -2,7 +2,7 @@
 id: chore-0017
 title: Give install.py an injectable entry point so its CLI scenarios can be tested
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: []
@@ -58,13 +58,33 @@ Not required: one module, no persisted format, reverts with one commit.
 
     python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] `main(argv=None)` accepts a list, and calling `main()` with no argument is unchanged.
-- [ ] `S-009` and `S-010` each have a covering test tagged with their id.
-- [ ] `docs/spec/install.conformance.md`'s test-coverage table records them as covered.
-- [ ] No `install.py` behavior changed; the existing suite passes untouched.
+- [x] `main(argv=None)` accepts a list, and calling `main()` with no argument is unchanged.
+- [x] `S-009` and `S-010` each have a covering test tagged with their id.
+- [x] `docs/spec/install.conformance.md`'s test-coverage table records them as covered.
+- [x] No `install.py` behavior changed; the existing suite passes untouched.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-27)
+
+`main()` now takes an optional `argv`, matching `validate-skills.py` and `build-adapters.py`, and
+calling it with no argument is unchanged: the CLI behaves identically for every real caller. Both new
+tests were confirmed to fail against the pre-fix `main()`, so they test the change rather than
+restating it. Suite 46 to 48, and every scenario in the contract now has a covering test.
+
+**S-010 is covered on one branch only, which the task's own note anticipated and the run then
+sharpened.** The note warned against a test that hardcodes `"copy"` and silently passes everywhere
+else, and recommended deriving the expectation from `os.name`. The first attempt went further and
+patched `os.name` to exercise both branches, which fails outright: `pathlib` selects `PosixPath` or
+`WindowsPath` from that same attribute and raises `NotImplementedError` on instantiation. Faking the
+platform is not available here.
+
+So the test derives its expectation from the running platform and asserts the wiring end to end,
+failing if the default changes or the flag stops feeding it, while the opposite branch is exercised
+only by running the suite there. That is an honest partial result rather than a hollow assertion.
+Closing the other half means extracting the default into its own expression, a behaviour-preserving
+refactor that was deliberately out of this task's scope and is not obviously worth its own.

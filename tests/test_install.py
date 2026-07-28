@@ -163,6 +163,42 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertIn("--mode copy", message)
         self.assertIn("Developer Mode", message)
 
+    def test_an_unrecognised_tool_is_rejected_before_anything_is_placed(self):
+        # Scenario S-009. The list pairs a supported tool with an unsupported one, so
+        # this also proves the valid entry does not rescue the invocation.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--tools", "claude,bogus", "--home", str(self.home)])
+        self.assertEqual(code, 2)
+        self.assertIn("bogus", buf.getvalue())
+        self.assertFalse(self.home.exists(), "nothing may be placed when a tool is unrecognised")
+
+    def test_the_default_mode_suits_the_platform(self):
+        # Scenario S-010, on the platform actually running the test. It captures the mode
+        # main() passes through rather than re-deriving the rule, so it fails if the
+        # default is changed or the flag stops being wired to it.
+        #
+        # Only the running platform's branch is exercised, and deliberately so: the rule
+        # reads `os.name`, and faking that breaks `pathlib`, which selects PosixPath or
+        # WindowsPath from the same attribute and raises on instantiation. An assertion
+        # that hardcoded "copy" would pass everywhere while meaning nothing off Windows,
+        # so this derives the expectation from the platform and checks the wiring.
+        expected = "copy" if os.name == "nt" else "symlink"
+        seen = []
+
+        def recording_install(tools, mode, home, dry):
+            seen.append(mode)
+            return 0
+
+        real_install = inst.install
+        inst.install = recording_install
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                inst.main(["--home", str(self.home)])
+        finally:
+            inst.install = real_install
+        self.assertEqual(seen, [expected])
+
 
 if __name__ == "__main__":
     unittest.main()
