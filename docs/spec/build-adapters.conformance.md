@@ -2,6 +2,7 @@
 title: build-adapters conformance
 spec: docs/spec/build-adapters.md
 audited: 2026-07-27
+re_audited: 2026-07-27 (chore-0015)
 ---
 
 # build-adapters conformance matrix
@@ -10,11 +11,15 @@ Spec-vs-implementation audit of [`scripts/build-adapters.py`](../../scripts/buil
 against [`build-adapters.md`](build-adapters.md). Evidence is by code location; this audit is
 independent of test pass/fail.
 
+Re-audited after `chore-0015` amended the contract to classify the two kinds of emitted shared
+material. The "behavior found outside the contract" section this matrix carried is **retired**: the
+behavior it described is now S-014.
+
 First audit of this contract, produced immediately after its approval (`feat-0026`). Because the spec
 is retrospective, written against an implementation that already existed and was verified, a clean
 matrix here is weaker evidence than a clean matrix on a contract written first: the spec was authored
-by reading the same code it audits. The audit's value is therefore concentrated in what it found
-outside the scenarios, recorded below.
+by reading the same code it audits. Its value was therefore concentrated in what it found outside the
+scenarios, which was the shared-asset re-run behavior: unstated at the time, and now S-014.
 
 ## Matrix
 
@@ -30,6 +35,7 @@ outside the scenarios, recorded below.
 | Scenarios | S-008 external and same-page links unchanged | Conformed | `rewrite_links()` / the `target.startswith("#")` and `EXTERNAL_PREFIXES` guard returning `m.group(0)` | returns the original match object's text, so the link is byte-for-byte preserved |
 | Scenarios | S-009 the material the links point at is emitted | Conformed | `emit_shared_assets()` / both copy loops, called per skill from `main()` | rules module and each skill's non-`SKILL.md` files |
 | Scenarios | S-010 an existing rules file is never overwritten | Conformed | `emit_shared_assets()` / `or dest.exists(): continue` in the rules loop | confirmed by execution: an edited rules file survives a re-run unchanged |
+| Scenarios | S-014 a re-run refreshes derived assets and preserves adopted ones | Conformed | `emit_shared_assets()` / the rules loop's `or dest.exists(): continue`, contrasted with the skill-asset loop which has no such guard | added by `chore-0015`. Confirmed by execution: after editing both and re-running, the rules file kept its content and the skill template was replaced by the kit's version |
 | Scenarios | S-011 generating into the kit is a no-op | Conformed | `emit_shared_assets()` / `dest.resolve() == src.resolve(): continue` in both loops | confirmed by execution: a run against the repo root reports `plus 0 shared asset file(s)` |
 | Scenarios | S-012 a preview run writes nothing | Conformed | `_write()` / `if dry: return`, and the `if not dry` guards in `emit_shared_assets()` | confirmed by execution: zero files written into a temp root |
 | Scenarios | S-013 an unrecognized target is rejected | Conformed | `main()` / the `bad` check returning 2 | the check precedes any emission, so nothing partial is written; confirmed by execution (exit 2, zero files) |
@@ -41,29 +47,9 @@ outside the scenarios, recorded below.
 
 ## Coverage proof
 
-- **audited**: S-001 through S-013, and all five Proposed Surface elements. Every spec item was
+- **audited**: S-001 through S-014, and all five Proposed Surface elements. Every spec item was
   checked.
 - **unreconciled**: none. No item diverged and none is unbuilt.
-
-## Behavior found outside the contract
-
-Not a matrix row, because there is no spec item to diverge from. Recorded because implementation
-behavior drifting past its contract is the exact pattern that went unnoticed twice in
-[`validate-skills.md`](validate-skills.md), and catching the third instance during the audit rather
-than two days later is the point of running one.
-
-**The two shared-asset loops guard differently, and only one of them is specified.** The rules loop
-skips a destination that already exists (`or dest.exists()`), which is S-010. The skill-asset loop
-has no such guard, so a supporting file the target project has edited is silently overwritten on the
-next run. Confirmed by execution: after editing both and re-running, the rules file kept its content
-and the skill template was replaced.
-
-This is defensible and probably intended, since a skill's templates are derived from the kit and
-should track it, while the rules module is swappable by design and belongs to the adopter. But it is
-an unstated contract decision sitting one line away from a stated one, and the asymmetry is invisible
-to a reader of either the spec or the tests. Recommendation: state it, either as a scenario asserting
-that skill assets are refreshed while rules files are preserved, or as a Constraint explaining why
-the two are treated differently. Deciding that is a human call and is not made here.
 
 ## Test coverage of spec invariants
 
@@ -79,6 +65,13 @@ lacks one. Against [`tests/test_build_adapters.py`](../../tests/test_build_adapt
 | S-010 | present | the contract rule with no other enforcement, so this test is the only thing holding it |
 | S-011 | present | asserted through a preview run, so the test cannot write into the repository even if the no-op regressed |
 | S-012, S-013 | present | each asserts both the exit code and that no file was written |
+| S-014 | present | added by `chore-0015`. Asserts both halves in one test, because the contrast is the requirement. Confirmed to fail against the rejected symmetric alternative, so it distinguishes the chosen contract rather than merely restating current behavior |
 
-Every scenario has a covering test. The unspecified asymmetry above has none, which follows from it
-having no scenario.
+Every scenario has a covering test, including the shared-asset re-run behavior that had neither a
+scenario nor a test when this matrix was first written.
+
+One note on what the S-014 test is worth. It was confirmed to **fail** when the skill-asset loop is
+guarded the way the rules loop is, which is the alternative `chore-0015` considered and rejected. That
+makes it an oracle over the decision rather than a restatement of whatever the code happens to do: a
+future editor who makes the two loops symmetric will see this test fail and be sent to the contract,
+which is the entire point of writing the asymmetry down.

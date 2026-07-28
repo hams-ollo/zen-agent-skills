@@ -1,6 +1,6 @@
 ---
 title: build-adapters
-status: draft
+status: approved
 ---
 
 # build-adapters
@@ -12,7 +12,7 @@ and test assertions. Approved by the author on 2026-07-27.
 
 Amended 2026-07-27 (`chore-0015`) to classify the two kinds of emitted shared material and state how
 each is treated on a re-run, closing the gap the `feat-0026` audit recorded as "behavior found outside
-the contract". Reopened to `draft` for that amendment; a human sets `status: approved`.
+the contract". Re-approved by the author on 2026-07-27.
 
 ## Problem
 

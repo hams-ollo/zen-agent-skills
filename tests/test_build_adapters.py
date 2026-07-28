@@ -140,6 +140,27 @@ class TestEmittedTreeResolves(unittest.TestCase):
         _run(["--out", str(self.out)])
         self.assertEqual(lens.read_text(encoding="utf-8"), "# my own house style\n")
 
+    def test_a_rerun_refreshes_derived_assets_and_preserves_adopted_ones(self):
+        # Scenario S-014. Both halves in one test, because the contrast is the
+        # requirement: asserting either alone cannot distinguish a deliberate rule
+        # from an accident, which is how the skill-asset half went unstated until
+        # the feat-0026 audit found it outside the contract.
+        edited = "EDITED BY THE ADOPTER\n"
+        adopted = self.out / ".agents" / "rules" / "house-style.md"
+        derived = (self.out / ".agents" / "skills" / "project-bootstrap"
+                   / "templates" / "ruff.toml")
+        self.assertTrue(derived.is_file(), "expected the emitted skill template")
+        kit_version = derived.read_text(encoding="utf-8")
+
+        adopted.write_text(edited, encoding="utf-8")
+        derived.write_text(edited, encoding="utf-8")
+        _run(["--out", str(self.out)])
+
+        self.assertEqual(adopted.read_text(encoding="utf-8"), edited,
+                         "an adopted file must survive a re-run")
+        self.assertEqual(derived.read_text(encoding="utf-8"), kit_version,
+                         "a derived file must be refreshed from the kit")
+
 
 class TestInvocationContract(unittest.TestCase):
     """Scenarios S-001, S-011, S-012, S-013: what each way of invoking it does."""
