@@ -179,6 +179,7 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`tests/`](tests/) | The kit's own test suite |
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and the bar a new skill has to clear |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and how to report a conduct concern privately |
 | [`SECURITY.md`](SECURITY.md) | Threat model and how to report a security issue privately |
 | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Plain-language guide for non-specialists |
 | [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) | Connecting task files to a GitHub issue tracker |

@@ -81,9 +81,13 @@ jobs:
           python - <<'PY'
           import pathlib, re, sys
 
-          docs = ["README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md",
-                  "ROADMAP.md", "CHANGELOG.md"]
-          docs += [str(p) for p in pathlib.Path("docs").rglob("*.md")]
+          # Globbed rather than listed. The list was six hardcoded names, so every
+          # new root-level document silently fell outside the check until someone
+          # remembered to add it, which is the failure mode this step exists to
+          # catch. chore-0018 and chore-0019 each landed a document the list missed.
+          docs = [str(p) for p in sorted(pathlib.Path(".").glob("*.md"))]
+          docs += [str(p) for p in sorted(pathlib.Path(".github").rglob("*.md"))]
+          docs += [str(p) for p in sorted(pathlib.Path("docs").rglob("*.md"))]
 
           broken = []
           for doc in docs:
