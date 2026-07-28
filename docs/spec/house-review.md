@@ -1,6 +1,6 @@
 ---
 title: house-review
-status: draft
+status: approved
 ---
 
 # house-review
@@ -159,4 +159,4 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 
 None. Both questions this spec opened were resolved by `chore-0012` on 2026-07-27: a range supplied
 alongside a path scope narrows a change review to those paths (now `S-012`), and the name collision
-was resolved by renaming the skill rather than by asserting a distinction.
+was resolved by renaming the skill rather than by asserting a distinction. Re-approved by the author on 2026-07-27.

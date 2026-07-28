@@ -31,11 +31,34 @@ There is no immediate implementation blocker. `verifier-agent` shipped on 2026-0
 
 `user-testing` remains the main open thread, covering the user-facing work that automated tests and contract conformance both miss.
 
-Separately, two kit-wide review passes have now run over all nineteen skills. The first, on 2026-07-25, reviewed structure and cross-references: it found a real cross-repository portability defect, seven stale status claims including three skills that called themselves both draft and shipped, and a linter blind to all of it. Those were fixed the same day by parallel agents.
+Separately, two kit-wide review passes have now run over all nineteen skills, and the second one
+turned into the largest single day of work the kit has had.
 
-The second, on 2026-07-27, reviewed what each skill's procedure actually does when run, and found more: two blockers, five majors, and eight smaller issues, all fixed the same day. The two that mattered most were both silent. The installer was shipping the skills without the rules module they compose, so fourteen of nineteen carried references that worked in this repository and dangled once installed, and the review skill in particular arrived with no rubric at all. And the worktree reconciliation step could not see files an agent had newly created, so a parallel agent's actual output landed nowhere, reported success, and was deleted with the worktree. Both are fixed and both now fail a command rather than waiting for a human to notice.
+The first pass, on 2026-07-25, reviewed structure and cross-references. It found a real
+cross-repository portability defect, seven stale status claims including three skills that called
+themselves both draft and shipped, and a linter blind to all of it. Those were fixed the same day by
+parallel agents.
 
-The pattern behind most of the second pass is worth stating plainly, because it bounds how much confidence to take from the first: this repository is documentation and standard-library Python, with no dependency tree, no large diffs, and no binary assets. Procedures that assume an ordinary software project had therefore never met one. That is the standing limit of validating a tool on the repository that builds it, and closing it is now the top item of work. Every skill still rests on a single real use, and whole branches remain unexercised.
+The second, on 2026-07-27, reviewed what each skill's procedure actually does when run, and found
+two defects that would have cost an adopter real work. The installer was shipping the skills without
+the rules module they compose, so the review skill arrived with no rubric at all. And the step that
+brings parallel agents' work back into the main branch could not see files an agent had newly
+created, so a batch whose output was new files would have landed nothing while reporting success.
+Both are fixed, both now fail a command rather than waiting for someone to notice, and the second was
+confirmed against a real three-agent run where all three patches were empty.
+
+That day then closed everything the review surfaced. Every kit script now has an approved behavioral
+contract and a conformance audit, where three days earlier only one did. The three hardest paths
+through the delivery spine, which had never once run on real work, were each exercised against a
+genuine trigger and recorded. The review skill was renamed to `house-review`, since its old name
+collided with a command the harness itself ships. The test suite went from eighteen tests to
+forty-eight. The backlog is empty.
+
+The pattern worth carrying is unglamorous and consistent: the reading passes found structure
+problems, and the running passes found the defects. Nothing that would actually have broken for a
+user was found by review alone. Each was found by running the thing against reality, and in several
+cases against conditions this repository cannot itself produce, which is why one of the day's runs
+was deliberately staged against an unrelated project with real build dependencies.
 
 `ci-scaffold` and `release-cut` remain intentionally on hold until they have been needed and used twice in real work. That keeps the library focused on proven workflows rather than speculative coverage.
 

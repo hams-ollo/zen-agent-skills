@@ -1,7 +1,7 @@
 ---
 title: install characterization
 spec: none (this is the trigger)
-task: .tasks/feat-0027-exercise-test-author-characterization.md
+task: .tasks/done/feat-0027-exercise-test-author-characterization.md
 verified: 2026-07-27
 verdict: characterized
 branch_exercised: test-author characterization mode

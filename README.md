@@ -161,7 +161,7 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
-| [`docs/spec/`](docs/spec/) | Behavioral specifications and conformance reports |
+| [`docs/spec/`](docs/spec/) | Behavioral specifications, plus the conformance, verification, readiness, and characterization reports that sit beside them |
 | [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) | Partner-facing status snapshot |
 | [`docs/PLATFORM-PITCH.md`](docs/PLATFORM-PITCH.md) | Platform vision and positioning |
 | [`ROADMAP.md`](ROADMAP.md) | Ordered plan for future work |

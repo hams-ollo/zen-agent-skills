@@ -1,7 +1,7 @@
 ---
 title: house-review verification
 spec: docs/spec/house-review.md
-task: .tasks/feat-0024-exercise-verifier-blocked-branch.md
+task: .tasks/done/feat-0024-exercise-verifier-blocked-branch.md
 verified: 2026-07-27
 verdict: blocked
 branch_exercised: verifier-agent S-005 (spec not approved)
