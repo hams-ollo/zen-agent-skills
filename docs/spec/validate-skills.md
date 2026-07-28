@@ -15,6 +15,15 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-07-28 (`feat-0032`) on the author's explicit instruction, and re-approved.** S-017 and
+S-018 were added, along with Goal 6 and the field-limit constraint they serve. This contract had a soft
+floor on the description and no ceiling, while both harnesses `install.py` targets cap the field at
+1024 characters, so five shipped skills exceeded a hard distribution limit and the validator reported
+nothing (`bug-0005`). S-018 exists because fixing S-017 alone would have been wrong: the parser counted
+a YAML block-scalar indicator as description content, so the number the validator reported was three
+characters higher than the number the harness measures, and a ceiling built on it would reject
+descriptions the harness accepts.
+
 ## Problem
 
 The kit ships skills as `SKILL.md` files. A malformed skill (missing frontmatter, a `name` that
@@ -30,6 +39,8 @@ validator is the kit-level lint that enforces that bar.
    distributed away from this repository.
 5. Fail rather than report a vacuous success when the target skills directory cannot be read, so an
    absent check is never indistinguishable from a passing one.
+6. Fail when a field exceeds a limit the distribution targets enforce, because a skill a harness
+   rejects or truncates has not shipped, and it fails by simply never being selected.
 
 ## Non-Goals
 
@@ -42,6 +53,11 @@ validator is the kit-level lint that enforces that bar.
 
 - Standard library only.
 - A `SKILL.md` is YAML frontmatter (delimited by `---`) followed by a Markdown body.
+- Both harnesses the kit installs to cap `description` at 1024 characters. That bound is external and
+  not the kit's to choose, which is why exceeding it is an error rather than a matter of taste.
+- Frontmatter is read by a small standard-library parser, not a YAML library. A field's value is
+  therefore whatever that parser yields, so where YAML syntax and the parser could disagree about what
+  the value is, the contract states which one the checks mean.
 - A skill is distributed as a directory alongside its sibling skills and the swappable rules module,
   without the surrounding repository. A link is therefore legal only if it stays inside that
   distributed tree: the skill's own files, a sibling skill, or the rules module. A link above it
@@ -153,6 +169,23 @@ validator is the kit-level lint that enforces that bar.
 - **When** the validator runs
 - **Then** it reports that no skills were found and exits zero, because an empty directory is a
   legitimate zero-skill result rather than an unreadable one.
+
+### Scenario S-017: description over the harness limit fails
+
+- **Given** a `SKILL.md` whose `description` is longer than the 1024-character limit the distribution
+  targets enforce
+- **When** the validator runs
+- **Then** it records an error naming the measured length and that limit, and exits non-zero. A
+  description at or below the limit produces no finding from this check.
+
+### Scenario S-018: a description is measured by its value, not its YAML syntax
+
+- **Given** a `SKILL.md` whose `description` is written as a YAML block scalar, so the field line
+  carries an indicator (`>`, `>-`, `>+`, `|`, `|-`, or `|+`) and the text follows on continuation lines
+- **When** the validator measures that description
+- **Then** the length is of the scalar's value, excluding the indicator, so the reported number is the
+  one a harness reading the same file would measure. A plain single-line description is measured
+  unchanged.
 
 ## Proposed Surface
 

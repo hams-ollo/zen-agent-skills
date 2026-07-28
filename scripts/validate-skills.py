@@ -3,7 +3,8 @@
 
 Checks that each skill has a well-formed SKILL.md: frontmatter with `name` and
 `description`, `name` matching its directory, a description that says both what
-and when (a rough proxy: non-trivial length), and a body that is not so long it
+and when (a rough proxy: non-trivial length) and that fits the 1024-character
+limit both target harnesses enforce, and a body that is not so long it
 defeats progressive disclosure. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
 exists, and warns when a skill asserts both draft and shipped status. Standard
@@ -28,6 +29,17 @@ SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 
 MAX_BODY_LINES = 500          # progressive-disclosure guideline
 MIN_DESC_CHARS = 40           # a real "what + when" description is not tiny
+# Hard upper bound enforced by both harnesses install.py targets, so it is an
+# error rather than a guideline: a description over it is rejected or truncated
+# by the harness, and the skill then simply never gets selected. Five skills
+# shipped over this limit before the check existed (bug-0005).
+MAX_DESC_CHARS = 1024
+
+# A YAML block scalar puts an indicator on the field line and the text on the
+# continuation lines below. parse_frontmatter folds those lines together, so
+# without this the indicator is counted as description content and every length
+# check reads three characters more than a harness would (S-018).
+BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 SIBLING_SKILL_RE = re.compile(r"^\.\./([^/]+)/SKILL\.md$")
@@ -72,10 +84,14 @@ def parse_frontmatter(text: str):
         m = re.match(r"^(\w[\w-]*):\s*(.*)$", raw)
         if m:
             key = m.group(1)
-            data[key] = m.group(2).strip().strip('"').strip("'")
+            value = m.group(2).strip().strip('"').strip("'")
+            # Drop a block-scalar indicator so the value is the text, not the
+            # YAML that introduces it (S-018). Only at the head of a field line:
+            # a `>` inside prose is content.
+            data[key] = BLOCK_SCALAR_RE.sub("", value, count=1)
         elif key and raw.strip():
             # folded continuation of the previous scalar
-            data[key] += " " + raw.strip()
+            data[key] = (data[key] + " " + raw.strip()).strip()
     body_lines = len(lines) - (end + 1)
     return data, body_lines
 
@@ -179,6 +195,10 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         elif len(desc) < MIN_DESC_CHARS:
             warnings.append(f"{rel}/SKILL.md: description looks thin "
                             f"({len(desc)} chars); say what it does and when to use it")
+        elif len(desc) > MAX_DESC_CHARS:
+            errors.append(f"{rel}/SKILL.md: description is {len(desc)} chars, over the "
+                          f"{MAX_DESC_CHARS}-char limit both target harnesses enforce; "
+                          f"cut prose that restates the body and keep the trigger phrases")
         if body_lines > MAX_BODY_LINES:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")

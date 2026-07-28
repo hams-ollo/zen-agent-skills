@@ -4,8 +4,7 @@ description: >-
   Updates and revises existing Markdown documentation in place, without flattening its voice or
   rewriting more than asked. Reconciles a doc with the current code or project state, fixes
   cross-document links and references after files or folders have moved, keeps a set of docs
-  internally consistent, moves completed items between docs (for example TODO to CHANGELOG), and
-  applies targeted edits like adding section emojis or a new subsection. Use this whenever the
+  internally consistent. Use this whenever the
   user wants to change documentation that already exists. Trigger on phrases like: "update the
   docs to reflect this", "I moved these files, fix the links", "make sure the linking across the
   docs is still valid", "revise the README with this new content", "move completed items to the

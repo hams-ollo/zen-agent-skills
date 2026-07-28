@@ -10,6 +10,12 @@ Behavioral contract for [`scripts/install.py`](../../scripts/install.py), writte
 [`install.characterization.md`](install.characterization.md), so this describes a contract that
 already holds rather than proposing one. Approved by the author on 2026-07-27.
 
+**Amended 2026-07-28 (`feat-0033`) on the author's explicit instruction, and re-approved.** S-013 and
+S-014 add a profile axis, so a run can place a subset of the skills and report what that subset costs in
+description characters. The amendment also records the constraint that decides how small a profile can
+be, which is not a matter of preference: the skills reference each other, so a profile is only sound if
+it is closed over those references.
+
 **Amended 2026-07-28 (`bug-0003`) and re-approved by the author on 2026-07-28.** S-007 was scoped to
 the home it was given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
 was satisfied by an implementation that removed every recorded target from every home ever installed
@@ -45,6 +51,9 @@ overwritten exists only as a branch.
 6. Fail clearly on an unusable invocation rather than placing part of it.
 7. Work out of the box on Windows, macOS, and Linux, since a portability promise that starts with a
    failed install is not one.
+8. Let a run place a coherent subset of the skills rather than all of them, and say what the subset
+   costs, because every installed description is loaded so an agent can route to it and that budget is
+   shared with skills this tool cannot see.
 
 ## Non-Goals
 
@@ -65,6 +74,15 @@ overwritten exists only as a branch.
   indistinguishable from a user's own. That record is the manifest, and its presence is therefore part
   of the observable contract rather than an internal detail. Symlink mode can recognise its own links
   directly and does not depend on it.
+- Skills reference each other as `../<name>/SKILL.md`, and some of those references are load-bearing:
+  a skill may compose a sibling's discipline by reference and deliberately not restate it. A subset that
+  omits a referenced sibling therefore ships the same dangling-reference defect the kit's own validator
+  raises as an error. Any subset this tool places must be closed over those references.
+- The reference graph, and not editorial judgment, bounds the available subsets. Measured 2026-07-28 it
+  has one strongly connected component of fourteen skills, every member of which reaches seventeen. The
+  only separable skills are `agent-handoff` and `human-handoff` (a closed pair) and
+  `init-worktracking`, `pr-describe`, and `project-bootstrap` (which reference no sibling). There is no
+  useful middle size, and a profile set that pretends otherwise would be lying about what it installs.
 
 ## Scenarios
 
@@ -150,20 +168,45 @@ overwritten exists only as a branch.
 - **Then** the run stops with a message naming the alternatives available to the user, rather than an
   unhandled error.
 
+### Scenario S-013: a profile places a closed subset, and says when it grew the request
+
+- **Given** a requested profile naming a set of skills
+- **When** the tool runs
+- **Then** it places that set expanded to its closure over sibling references, so no placed skill
+  references a skill the same run did not place, and it reports the expansion when the closure added
+  anything to what was asked for. An unrecognised profile is named, nothing is placed, and the run exits
+  non-zero, as for an unrecognised tool.
+
+### Scenario S-014: the run reports what the profile costs in description characters
+
+- **Given** any run that places skills
+- **When** it reports its outcome
+- **Then** the summary states the total description characters for the profile being placed, and the
+  same total for each available profile so the figure is comparable rather than absolute. It is reported
+  as a character count and not as a proportion of any harness's budget, which depends on the context
+  window and on skills this tool cannot see.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
-| Invocation | `python scripts/install.py [--tools <list>] [--mode <symlink\|copy>] [--home <dir>] [--dry-run] [--uninstall]` |
+| Invocation | `python scripts/install.py [--tools <list>] [--profile <name>] [--mode <symlink\|copy>] [--home <dir>] [--dry-run] [--uninstall]` |
 | `--tools` | Comma-separated subset of the supported tools; defaults to all of them |
+| `--profile` | Which skills to place: `core` (the separable front door), `spine` (the delivery loop), or `all`. Defaults to `spine`, which is smaller than `all`. Each is expanded to its closure over sibling references before anything is placed |
 | `--mode` | `symlink` or `copy`; defaults to copy on Windows and symlink elsewhere |
 | `--home` | Base directory to install beneath; defaults to the user's home |
 | `--dry-run` | Preview: report what would be placed, write nothing |
 | `--uninstall` | Remove the recorded targets beneath `--home` and drop those entries from the record, leaving entries for other homes |
 | Placed per tool | Each skill's directory under that tool's discovery path, plus the rules module as their sibling |
 | Record | A manifest of the targets this tool created, enabling re-run recognition in copy mode |
-| Exit code | non-zero on an unrecognised tool or any unmanaged-target conflict, zero otherwise |
-| Output | one line per target with its outcome, then a summary; conflicts additionally summarised |
+| Exit code | non-zero on an unrecognised tool or profile, or any unmanaged-target conflict, zero otherwise |
+| Output | one line per target with its outcome, then a summary carrying the placed count and the description-character total per profile; conflicts and any closure expansion additionally summarised |
+
+A note on what the default change does **not** do, because the quiet version of it would be a defect.
+Defaulting to `spine` means `agent-handoff` and `human-handoff` stop being refreshed by a default run.
+It does not remove them: this tool only places and updates, reversal is `--uninstall`, and both the
+directories and their manifest entries survive. An adopter who installed them before this change keeps
+them, unchanged, until they pass `--profile all`.
 
 ## Open Questions
 

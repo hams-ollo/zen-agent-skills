@@ -30,7 +30,9 @@ approved contract and a matrix.
 | Scenarios | S-009 an unrecognised tool is rejected before anything is placed | Conformed | `main()` / the `bad` check returning 2 before `install()` is called | the check precedes any placement, so a valid tool in the same list does not save it |
 | Scenarios | S-010 the default mode suits the platform | Conformed | `main()` / `default="copy" if os.name == "nt" else "symlink"` | |
 | Scenarios | S-011 a refused link reports what to do instead | Conformed | `_link()` / the `except (OSError, NotImplementedError)` raising `SystemExit` with guidance | names Developer Mode and `--mode copy`; confirmed by execution |
-| Proposed Surface | Invocation and its five flags | Conformed | `main()` / the `argparse` definitions | `--tools`, `--mode`, `--home`, `--dry-run`, `--uninstall` |
+| Scenarios | S-013 a profile places a closed subset and reports expansion | Conformed | `resolve_profile()` / the closure loop over `sibling_refs()`, `install()` / the expansion notice, and `main()` / the `args.profile not in PROFILE_SEEDS` check returning 2 | the closure is computed from each body's `../<name>/SKILL.md` references rather than listed, so a skill that gains a reference cannot leave a profile shipping a dangling one. Confirmed by execution: `core` resolves to 3 with no expansion, `spine` to 17 having added 4 (`doc-author`, `doc-revise`, `spec-quality`, `test-quality`), `all` to 19, and every profile has zero references to a skill it does not place. An unrecognised profile exits 2 before placement, matching S-009's shape |
+| Scenarios | S-014 the run reports its description budget | Conformed | `profile_budgets()`, `description_of()`, and `install()` / the `Description budget:` print | reports the installed profile's total and every profile's, as counts. Confirmed by execution: `core=2298`, `spine=12489`, `all=14262`. `description_of()` strips a block-scalar indicator, without which the four skills using one would each inflate the figure by three |
+| Proposed Surface | Invocation and its six flags | Conformed | `main()` / the `argparse` definitions | `--tools`, `--profile`, `--mode`, `--home`, `--dry-run`, `--uninstall` |
 | Proposed Surface | Placed per tool | Conformed | `install()` / the per-skill `_place` and the rules placement | |
 | Proposed Surface | Record | Conformed | `load_manifest()`, `save_manifest()`, `is_managed()` | |
 | Proposed Surface | Exit code | Conformed | `main()` / `return 2`, and `install()` / `return 1 if conflicts else 0` | |
@@ -38,7 +40,7 @@ approved contract and a matrix.
 
 ## Coverage proof
 
-- **audited**: S-001 through S-012, and all five Proposed Surface elements. Every spec item was
+- **audited**: S-001 through S-014, and all Proposed Surface elements. Every spec item was
   checked.
 - **unreconciled**: none. No item diverged and none is unbuilt.
 
@@ -55,11 +57,20 @@ to an acceptance suite by this task:
 | S-005 | present | added here; the surprising-but-correct case, which is why it is worth pinning |
 | S-009 | present | added by `chore-0017`. Pairs a supported tool with an unsupported one, so it also proves the valid entry does not rescue the invocation, and asserts nothing was placed |
 | S-010 | present, one branch | added by `chore-0017`. See the note below |
+| S-013 | present | added by `feat-0033`. Five tests: closure holds for every profile (the load-bearing one, since a subset shipping a skill without its composed sibling fails silently), the default places fewer than all, the three profiles are strictly nested, an expanded seed is reported, and a closed seed is not reported as expanded. Plus a rejection test asserting exit 2 and that nothing was placed |
+| S-014 | present | added by `feat-0033`. Three tests: the summary carries the installed profile's total and every profile's, a smaller profile costs strictly fewer characters, and a block-scalar description is measured without its indicator |
 
 Every scenario now has a covering test. `chore-0017` gave `main()` the optional `argv` parameter that
 `validate-skills.py` (`chore-0003`) and `build-adapters.py` (`feat-0026`) already had, which is what
 made the CLI layer reachable at all. Both new tests were confirmed to fail against the pre-fix
 `main()`.
+
+**One pre-existing test was changed by `feat-0033`, and it is worth saying which and why.**
+`test_install_places_every_skill_and_the_rules_module` asserted that a default run places all nineteen
+skills. Once the default profile became `spine`, that assertion failed, correctly: the default no
+longer places all of them. The test now requests `--profile all` explicitly, so it still asserts what
+S-001 means (every skill in the requested set) rather than being weakened to match the new default.
+The suite's other pre-existing scenarios were left asserting over the whole set for the same reason.
 
 **S-010 is covered on one branch only, and the reason is worth recording.** The rule reads `os.name`,
 and faking that to exercise the other platform breaks `pathlib`, which selects `PosixPath` or

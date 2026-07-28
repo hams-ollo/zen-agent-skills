@@ -83,6 +83,29 @@ class TestRewriteLinks(unittest.TestCase):
         self.assertEqual(ba.rewrite_links(body, "pr-describe", ".mdc"), body)
 
 
+class TestFrontmatterParsing(unittest.TestCase):
+    """Scenario S-002 at the parser layer: what counts as the description's value.
+
+    The negative case is the load-bearing one. Stripping too eagerly would shorten a
+    description silently rather than fail, and a silently shortened description is the
+    same class of defect as the indicator it removes.
+    """
+
+    def test_block_scalar_indicators_are_stripped(self):
+        for indicator in ("|", "|-", "|+", ">", ">-", ">+"):
+            with self.subTest(indicator=indicator):
+                fm, _ = ba.split_frontmatter(
+                    f"---\nname: x\ndescription: {indicator}\n  real text here\n---\nbody\n"
+                )
+                self.assertEqual(fm["description"], "real text here")
+
+    def test_a_plain_scalar_is_left_alone(self):
+        fm, _ = ba.split_frontmatter(
+            "---\nname: x\ndescription: plain text > with a bracket\n---\nbody\n"
+        )
+        self.assertEqual(fm["description"], "plain text > with a bracket")
+
+
 class TestEmittedTreeResolves(unittest.TestCase):
     """Scenarios S-001, S-002, S-009, S-010: what a real run puts on disk."""
 
@@ -119,6 +142,21 @@ class TestEmittedTreeResolves(unittest.TestCase):
         lens = self.out / ".agents" / "rules" / "review-quality.md"
         self.assertTrue(lens.is_file())
         self.assertIn("blocker", lens.read_text(encoding="utf-8"))
+
+    def test_a_block_scalar_description_emits_its_text_not_its_yaml(self):
+        # Scenario S-002 (bug-0006). Four skills write `description: >-`, and the parser
+        # captured the indicator, so every adapter for them opened with
+        # `description: ">- Turns ..."`: valid YAML carrying three characters of syntax
+        # where the description should start. The test below it asserts only that
+        # `description:` is present, which is precisely why this shipped unnoticed, so
+        # this oracle is on the value.
+        for rel in (Path(".cursor") / "rules" / "agent-handoff.mdc",
+                    Path(".github") / "prompts" / "agent-handoff.prompt.md"):
+            with self.subTest(adapter=rel.as_posix()):
+                text = (self.out / rel).read_text(encoding="utf-8")
+                line = next(l for l in text.splitlines() if l.startswith("description:"))
+                self.assertNotIn(">-", line)
+                self.assertTrue(line.startswith('description: "Turns the current session'), line)
 
     def test_each_adapter_carries_its_harness_frontmatter_and_the_banner(self):
         # Scenario S-002.

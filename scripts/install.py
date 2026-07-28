@@ -14,7 +14,14 @@ recognizes its own links directly and does not have this dependency).
     python scripts/install.py                     # install (copy on Windows, symlink on POSIX)
     python scripts/install.py --mode symlink      # force symlinks
     python scripts/install.py --tools claude      # only Claude Code
+    python scripts/install.py --profile all       # every skill, not just the default set
     python scripts/install.py --uninstall         # remove what this installed
+
+A --profile selects which skills to place, and defaults to less than all of them
+because every installed description is loaded so an agent can route to it. A profile
+is expanded over sibling references before anything is placed, so it can never ship a
+skill whose composed sibling is missing. --uninstall is unaffected by the profile: it
+reverses every recorded target beneath --home, whichever run placed it.
 
 Discovery targets (per tool), each skill linked/copied as <base>/<skill-name>:
     claude    -> ~/.claude/skills
@@ -36,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -50,12 +58,99 @@ TOOL_SUBPATHS = {
     "opencode": Path(".agents") / "skills",
 }
 
+# Which skills a profile asks for. Each is a seed, not the final set: it is expanded
+# over sibling references before anything is placed (S-013), because a skill that
+# composes a sibling by reference is broken without it.
+#
+# These boundaries are dictated by the reference graph, not chosen. It has one
+# strongly connected component of fourteen skills, so any profile touching it is at
+# least seventeen; the only separable skills are the handoff pair and the three that
+# reference no sibling. `core` is therefore small but cannot include new-task, which
+# lives inside the component. See docs/spec/install.md.
+PROFILE_SEEDS = {
+    "core": ["project-bootstrap", "init-worktracking", "pr-describe"],
+    "spine": ["spec-author", "spec-plan-readiness", "new-task", "fix-batch", "test-author",
+              "spec-conformance", "verifier-agent", "reconcile-worktrees", "doc-sync",
+              "pr-describe", "project-bootstrap", "init-worktracking", "house-review"],
+    "all": None,  # everything discovered
+}
+DEFAULT_PROFILE = "spine"
+
+SIBLING_REF_RE = re.compile(r"\]\(\.\./([^/)]+)/SKILL\.md")
+# Narrow readers for one frontmatter field, deliberately not a YAML parser. The block
+# scalar case matters here for the same reason it does in validate-skills.py: without
+# it the reported description budget is inflated by three characters per skill that
+# uses one. This is the third copy of this shape in scripts/; unifying them is a
+# standing recommendation, not a drive-by change.
+DESC_FIELD_RE = re.compile(r"^description:\s*(.*)$")
+BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
+
 
 def discover_skills():
     if not SKILLS_DIR.is_dir():
         return []
     return sorted(d for d in SKILLS_DIR.iterdir()
                   if d.is_dir() and (d / "SKILL.md").is_file())
+
+
+def description_of(skill_dir: Path) -> str:
+    """The skill's `description` value, or "" when absent.
+
+    Only the frontmatter is scanned, and only for this one field. A block-scalar
+    indicator is dropped so the length is the text's, matching what a harness measures.
+    """
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    parts, collecting = [], False
+    for raw in lines[1:]:
+        if raw.strip() == "---":
+            break
+        m = DESC_FIELD_RE.match(raw)
+        if m:
+            parts.append(BLOCK_SCALAR_RE.sub("", m.group(1).strip().strip('"').strip("'"), count=1))
+            collecting = True
+        elif collecting:
+            if re.match(r"^\w[\w-]*:", raw):
+                break
+            if raw.strip():
+                parts.append(raw.strip())
+    return " ".join(p for p in parts if p).strip()
+
+
+def sibling_refs(skill_dir: Path) -> set:
+    """Skill names this skill links to as ../<name>/SKILL.md."""
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    return set(SIBLING_REF_RE.findall(text)) - {skill_dir.name}
+
+
+def resolve_profile(profile: str, skills):
+    """Return (selected_dirs, added_names) for a profile.
+
+    The seed is expanded over sibling references until closed (S-013). Computed rather
+    than listed, so a skill that gains a reference later cannot silently leave a
+    profile shipping a dangling one.
+    """
+    by_name = {d.name: d for d in skills}
+    seed = PROFILE_SEEDS[profile]
+    if seed is None:
+        return list(skills), []
+    wanted = {n for n in seed if n in by_name}
+    stack = list(wanted)
+    while stack:
+        for ref in sibling_refs(by_name[stack.pop()]):
+            if ref in by_name and ref not in wanted:
+                wanted.add(ref)
+                stack.append(ref)
+    added = sorted(wanted - {n for n in seed if n in by_name})
+    return [d for d in skills if d.name in wanted], added
+
+
+def profile_budgets(skills):
+    """Description-character total per profile, so the figure is comparable."""
+    return {name: sum(len(description_of(d)) for d in resolve_profile(name, skills)[0])
+            for name in PROFILE_SEEDS}
 
 
 def load_manifest():
@@ -78,11 +173,17 @@ def is_managed(target: Path, manifest) -> bool:
     return any(e.get("target") == tp for e in manifest["entries"])
 
 
-def install(tools, mode, home: Path, dry: bool) -> int:
-    skills = discover_skills()
-    if not skills:
+def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE) -> int:
+    all_skills = discover_skills()
+    if not all_skills:
         print(f"No skills found under {SKILLS_DIR}.")
         return 0
+
+    skills, added = resolve_profile(profile, all_skills)
+    if added:
+        print(f"Profile {profile!r} was expanded to stay closed over sibling references: "
+              f"{len(added)} skill(s) added ({', '.join(added)}). A skill that composes a "
+              f"sibling is broken without it.\n")
 
     manifest = load_manifest()
     entries = {e["target"]: e for e in manifest["entries"]}
@@ -127,8 +228,13 @@ def install(tools, mode, home: Path, dry: bool) -> int:
         print(f"\nWARNING: no rules module at {RULES_DIR}. Skills that reference "
               f"../../rules/ (house-review's rubric, the house-style module) will "
               f"dangle in the installed layout.")
-    print(f"\n{tag}Done: {len(skills)} skill(s) x {len(tools)} tool(s), "
-          f"plus the rules module.")
+    budgets = profile_budgets(all_skills)
+    print(f"\n{tag}Done: profile {profile!r}, {len(skills)} of {len(all_skills)} skill(s) "
+          f"x {len(tools)} tool(s), plus the rules module.")
+    # A count, not a percentage: the harness budget scales with the context window and
+    # is shared with skills this tool cannot see, so a proportion here would be invented.
+    print(f"{tag}Description budget: {budgets[profile]} characters for this profile "
+          f"(" + ", ".join(f"{n}={budgets[n]}" for n in PROFILE_SEEDS) + ").")
     return 1 if conflicts else 0
 
 
@@ -253,6 +359,9 @@ def main(argv=None) -> int:
                     help="link mode (default: copy on Windows, symlink elsewhere)")
     ap.add_argument("--tools", default="claude,opencode",
                     help="comma-separated subset of: " + ",".join(TOOL_SUBPATHS))
+    ap.add_argument("--profile", default=DEFAULT_PROFILE,
+                    help="which skills to place: " + ", ".join(PROFILE_SEEDS)
+                         + f" (default: {DEFAULT_PROFILE})")
     ap.add_argument("--home", default=None,
                     help="override the base home dir (for testing/unusual setups)")
     args = ap.parse_args(argv)
@@ -267,7 +376,10 @@ def main(argv=None) -> int:
     if bad:
         print(f"Unknown tool(s): {bad}. Choose from {list(TOOL_SUBPATHS)}.")
         return 2
-    return install(tools, args.mode, home, args.dry_run)
+    if args.profile not in PROFILE_SEEDS:
+        print(f"Unknown profile: {args.profile!r}. Choose from {list(PROFILE_SEEDS)}.")
+        return 2
+    return install(tools, args.mode, home, args.dry_run, args.profile)
 
 
 if __name__ == "__main__":

@@ -135,6 +135,75 @@ class TestValidatorRun(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
 
+class TestDescriptionCeiling(unittest.TestCase):
+    """Scenarios S-017 and S-018: the 1024-character harness limit, measured correctly.
+
+    The bug population is a description that reads fine and is silently rejected by the
+    harness, so the oracle is the exit code plus the measured length in the message, not
+    just the presence of a finding. S-018 is tested separately because a ceiling built on
+    the wrong measurement would fail descriptions the harness accepts: the pre-fix parser
+    counted the `>-` indicator, so a block scalar measured three characters long.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_description_over_the_limit_errors(self):
+        # Scenario S-017: over 1024 characters is an error and a non-zero exit.
+        long_desc = "word " * 250  # 1250 chars
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=long_desc.strip()))
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR", out)
+        self.assertIn("over the 1024-char limit", out)
+        self.assertIn("1249 chars", out)
+
+    def test_description_at_the_limit_does_not_error(self):
+        # Scenario S-017 (boundary): exactly at the limit is allowed, so the check is
+        # `>` and not `>=`. An off-by-one here would reject a legal description.
+        exact = "x" * vs.MAX_DESC_CHARS
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=exact))
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_block_scalar_description_is_measured_without_its_indicator(self):
+        # Scenario S-018: the measured value excludes the `>-` indicator. Written as a
+        # block scalar whose text is exactly at the limit: it must pass. Before the fix
+        # the parser yielded ">- " + text, measured 3 over, and this errored.
+        text = "y" * vs.MAX_DESC_CHARS
+        frontmatter = f"---\nname: alpha\ndescription: >-\n  {text}\n---\n"
+        _write_skill(self.root, "alpha", frontmatter)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, "a block scalar at the limit must not be measured 3 over")
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_block_scalar_indicators_are_stripped_but_plain_scalars_are_not(self):
+        # Scenario S-018 at the parser layer, across every indicator form. The negative
+        # case is the one that matters: stripping too eagerly would silently shorten a
+        # description rather than fail, which is the failure mode with no symptom.
+        for indicator in ("|", "|-", "|+", ">", ">-", ">+"):
+            with self.subTest(indicator=indicator):
+                fm, _ = vs.parse_frontmatter(
+                    f"---\nname: x\ndescription: {indicator}\n  real text here\n---\nbody\n"
+                )
+                self.assertEqual(fm["description"], "real text here")
+        plain, _ = vs.parse_frontmatter("---\nname: x\ndescription: real text here\n---\nbody\n")
+        self.assertEqual(plain["description"], "real text here")
+
+    def test_prose_beginning_with_an_angle_bracket_is_preserved(self):
+        # Scenario S-018 (negative): the strip is anchored to the field line's head and
+        # bounded to one substitution, so content is never eaten.
+        fm, _ = vs.parse_frontmatter(
+            "---\nname: x\ndescription: >-\n  >> quoted prose > with angle brackets\n---\nb\n"
+        )
+        self.assertEqual(fm["description"], ">> quoted prose > with angle brackets")
+
+
 class TestLinkChecks(unittest.TestCase):
     """Scenarios S-009 through S-013: link resolution, portability, and what is skipped."""
 

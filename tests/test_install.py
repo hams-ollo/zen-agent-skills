@@ -54,10 +54,13 @@ class InstallAcceptanceTests(unittest.TestCase):
         inst.MANIFEST = self._real_manifest
         self._tmp.cleanup()
 
-    def _install(self, tools=("claude",), mode="copy", dry=False):
+    def _install(self, tools=("claude",), mode="copy", dry=False, profile="all"):
+        # Defaults to `all` so every pre-existing scenario keeps asserting over the whole
+        # skill set, which is what it was written against. The profile axis (S-013) is
+        # covered separately, including its own default.
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = inst.install(list(tools), mode, self.home, dry)
+            code = inst.install(list(tools), mode, self.home, dry, profile)
         return code, buf.getvalue()
 
     def _uninstall(self, dry=False):
@@ -230,7 +233,7 @@ class InstallAcceptanceTests(unittest.TestCase):
         expected = "copy" if os.name == "nt" else "symlink"
         seen = []
 
-        def recording_install(tools, mode, home, dry):
+        def recording_install(tools, mode, home, dry, profile=inst.DEFAULT_PROFILE):
             seen.append(mode)
             return 0
 
@@ -242,6 +245,120 @@ class InstallAcceptanceTests(unittest.TestCase):
         finally:
             inst.install = real_install
         self.assertEqual(seen, [expected])
+
+
+class ProfileTests(unittest.TestCase):
+    """Scenarios S-013 and S-014: the profile axis, its closure, and its budget report.
+
+    The defect worth protecting against is not a wrong count. It is a profile that
+    installs a skill whose composed sibling is absent, which is silent: the skill loads,
+    reads correctly, and the reference it depends on resolves to nothing. That is the
+    failure `install.py` already shipped once with the rules module, so the load-bearing
+    assertion here is the closure one, not the arithmetic.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+
+    def tearDown(self):
+        inst.MANIFEST = self._real_manifest
+        self._tmp.cleanup()
+
+    def test_every_profile_is_closed_over_sibling_references(self):
+        # Scenario S-013: no placed skill may reference a skill the same run did not place.
+        all_skills = inst.discover_skills()
+        for name in inst.PROFILE_SEEDS:
+            with self.subTest(profile=name):
+                selected, _ = inst.resolve_profile(name, all_skills)
+                placed = {d.name for d in selected}
+                for d in selected:
+                    missing = inst.sibling_refs(d) & set(n.name for n in all_skills) - placed
+                    self.assertEqual(missing, set(),
+                                     f"{name} would ship {d.name} without {sorted(missing)}")
+
+    def test_the_default_profile_places_fewer_than_all_skills(self):
+        # Scenario S-013: the point of the axis is that the default costs less than
+        # everything. A default equal to `all` would satisfy the flag and not the goal.
+        all_skills = inst.discover_skills()
+        selected, _ = inst.resolve_profile(inst.DEFAULT_PROFILE, all_skills)
+        self.assertLess(len(selected), len(all_skills))
+
+    def test_profiles_are_nested_from_smallest_to_largest(self):
+        # Scenario S-013: core is a subset of spine, and spine of all. A profile set that
+        # crossed over would make "smaller profile" meaningless.
+        all_skills = inst.discover_skills()
+        core = {d.name for d in inst.resolve_profile("core", all_skills)[0]}
+        spine = {d.name for d in inst.resolve_profile("spine", all_skills)[0]}
+        every = {d.name for d in inst.resolve_profile("all", all_skills)[0]}
+        self.assertTrue(core < spine < every)
+
+    def test_an_expanded_seed_is_reported(self):
+        # Scenario S-013: a request that silently grew is the thing the report exists to
+        # prevent. `spine`'s seed is not closed, so this run must say so.
+        _, added = inst.resolve_profile("spine", inst.discover_skills())
+        self.assertTrue(added, "the spine seed is expected to require expansion")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.install(["claude"], "copy", self.home, True, "spine")
+        self.assertIn("expanded to stay closed over sibling references", buf.getvalue())
+
+    def test_an_unclosed_request_is_not_reported_as_expanded(self):
+        # Scenario S-013 (negative): `core` is already closed, so no notice belongs.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.install(["claude"], "copy", self.home, True, "core")
+        self.assertNotIn("expanded to stay closed", buf.getvalue())
+
+    def test_the_summary_reports_the_budget_for_every_profile(self):
+        # Scenario S-014: the installed profile's total, and each profile's, so the
+        # number is comparable rather than absolute.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.install(["claude"], "copy", self.home, True, "core")
+        out = buf.getvalue()
+        budgets = inst.profile_budgets(inst.discover_skills())
+        self.assertIn("Description budget:", out)
+        self.assertIn(f"{budgets['core']} characters for this profile", out)
+        for name, total in budgets.items():
+            self.assertIn(f"{name}={total}", out)
+
+    def test_a_smaller_profile_costs_fewer_description_characters(self):
+        # Scenario S-014: the figure has to track the selection, or it is decoration.
+        budgets = inst.profile_budgets(inst.discover_skills())
+        self.assertLess(budgets["core"], budgets["spine"])
+        self.assertLess(budgets["spine"], budgets["all"])
+
+    def test_a_description_is_measured_without_its_block_scalar_indicator(self):
+        # Scenario S-014: four skills write `description: >-`. Counting the indicator
+        # would inflate the reported budget by three characters per such skill.
+        handoff = next(d for d in inst.discover_skills() if d.name == "agent-handoff")
+        desc = inst.description_of(handoff)
+        self.assertFalse(desc.startswith(">"))
+        self.assertTrue(desc.startswith("Turns the current session"))
+
+    def test_an_unrecognised_profile_places_nothing_and_exits_non_zero(self):
+        # Scenario S-013: rejected the way an unrecognised tool is (S-009).
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--home", str(self.home), "--profile", "enormous"])
+        self.assertEqual(code, 2)
+        self.assertIn("Unknown profile", buf.getvalue())
+        self.assertFalse((self.home / ".claude" / "skills").exists())
+
+    def test_uninstall_reverses_targets_a_different_profile_placed(self):
+        # Scenario S-007 with S-013: reversal is scoped by home, not by profile. An
+        # adopter who installs `all` then reverses must not be left with orphans
+        # because the default profile is narrower than what they placed.
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst.install(["claude"], "copy", self.home, False, "all")
+            code = inst.uninstall(self.home, False)
+        self.assertEqual(code, 0)
+        remaining = list((self.home / ".claude" / "skills").iterdir())
+        self.assertEqual(remaining, [])
 
 
 if __name__ == "__main__":

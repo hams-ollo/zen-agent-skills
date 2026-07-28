@@ -16,6 +16,12 @@ S-001 through S-008 and reported full coverage with one accepted divergence, whi
 it checked and misleading about the tool: the contract then described less than half of what the
 validator did. Scenarios S-009 through S-016 are audited here for the first time.
 
+Extended 2026-07-28 (`feat-0032`) with S-017 and S-018, audited here for the first time. This is a
+partial re-audit rather than a regeneration: the two new rows were audited against the code as it now
+stands, and every carried-forward citation was re-checked to still resolve after the
+`parse_frontmatter()` change, which touched a function five other rows cite. No carried-forward status
+or disposition changed.
+
 ## Matrix
 
 | Section | Item | Status | Evidence | Note |
@@ -36,13 +42,15 @@ validator did. Scenarios S-009 through S-016 are audited here for the first time
 | Scenarios | S-014 contradictory status claim warns | Conformed | `check_status_contradiction()` with the widened `DRAFT_STATUS_RE` and `SHIPPED_STATUS_RE` | diverged when first audited on 2026-07-27 and was fixed the same day. The patterns now cover assertion forms (`is`/`remains`/`stays` a draft, a `status: draft` line, `draft pending`) and provenance forms (a `shipped`/`blessed` list item, or either word before an ISO date). Re-probed against the five phrasings that produced the original finding: all five flag. Four negative cases produce no finding, including prose that merely discusses drafts and a skill whose `status: draft` refers to a spec it authors rather than to itself. |
 | Scenarios | S-015 skills directory does not exist | Conformed | `main()` / `if not skills_dir.is_dir()` guard | prints the missing-directory error and returns 1; confirmed by execution (exit 1, `ERROR no skills directory at ...`) |
 | Scenarios | S-016 skills directory exists but is empty | Conformed | `main()` / `if not skills:` guard after `skills_dir.iterdir()` | prints `No skills found under ...` and returns 0; confirmed by execution (exit 0) |
+| Scenarios | S-017 description over the harness limit fails | Conformed | `main()` / `elif len(desc) > MAX_DESC_CHARS` branch, with `MAX_DESC_CHARS = 1024` | appends to `errors`, so the run exits non-zero; the message carries both the measured length and the limit. Confirmed by execution against a copy of the real skills tree with one description padded over the bound: exit 1, `description is 1173 chars, over the 1024-char limit`. The boundary is `>`, so a description of exactly 1024 produces no finding |
+| Scenarios | S-018 description measured by value, not YAML syntax | Conformed | `parse_frontmatter()` / `BLOCK_SCALAR_RE.sub("", value, count=1)` on the field-line branch | the indicator is stripped at the head of the field line only and once, so `>`, `>-`, `>+`, `\|`, `\|-`, and `\|+` are removed while a plain scalar and any angle bracket inside the prose are untouched. The four block-scalar descriptions in the kit each measure 3 fewer characters than before the fix, which is the defect this closes |
 | Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | module `__main__` guard | `if __name__ == "__main__": raise SystemExit(main())` |
 | Proposed Surface | Exit non-zero on error only | Conformed | `main()` / final `return 1 if errors else 0` | warnings do not affect the exit code |
 | Proposed Surface | Output format | Conformed | `main()` / the `WARN`/`ERROR` print loops and the `Checked ...` summary print, plus the two early-return prints | per-issue lines then the summary; the missing-directory and no-skills-found lines replace the summary as the amended surface states |
 
 ## Coverage proof
 
-- **audited**: S-001 through S-016, and all three Proposed Surface elements (invocation, exit code,
+- **audited**: S-001 through S-018, and all three Proposed Surface elements (invocation, exit code,
   output format). Every spec item was checked.
 - **unreconciled**:
   - **S-008 (Diverged)**: disposition **accepted-with-reason**. The "what and when" bar is aspirational
@@ -71,9 +79,14 @@ lacks one). Against [`tests/test_validate_skills.py`](../../tests/test_validate_
 | S-009 through S-013 | present | one test each, plus negative cases for S-010 and S-012, each tagged with its scenario id |
 | S-014 | present | table-driven over all five contradiction phrasings and four negative cases. Confirmed to fail on four of the five against the pre-fix patterns, which is the bug population; the canonical phrasing always passed and proves nothing on its own, which is exactly how the original single-case test hid the divergence |
 | S-015, S-016 | present | added 2026-07-27 once the contract was approved. Asserts the pair together: the absent directory must fail and must not report `Checked 0 skill`, the empty one must succeed |
+| S-017 | present | two tests: over the limit errors with the measured length in the message, and exactly at the limit does not, so an off-by-one that rejected a legal description would fail |
+| S-018 | present | three tests: a block scalar whose text is exactly at the limit must pass (it measured 3 over before the fix), every indicator form strips at the parser layer, and two negative cases hold, a plain scalar and prose containing angle brackets. The negative cases are the load-bearing ones, because over-eager stripping shortens a description silently instead of failing |
 
 Every scenario except S-008 now has a covering test. S-008 remains deliberately untested, because a
 passing test there would assert behavior the accepted divergence says does not exist.
+
+All five S-017 and S-018 tests were confirmed to fail against the pre-fix script before it was changed,
+so they test the change rather than restate it.
 
 ## Citation maintenance
 

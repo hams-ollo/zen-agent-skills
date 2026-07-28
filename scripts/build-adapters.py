@@ -51,6 +51,9 @@ LINK_RE = re.compile(r"\]\(([^)\s]+)((?:\s+\"[^\"]*\")?)\)")
 SIBLING_RE = re.compile(r"^\.\./([^/]+)/SKILL\.md(#.*)?$")
 RULES_RE = re.compile(r"^\.\./\.\./rules/(.+)$")
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
+# Kept identical to validate-skills.py's copy. Two parsers that agree are bad; two
+# that have drifted apart are worse, and this defect had to be found twice already.
+BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 
 
 def rewrite_links(body: str, skill_name: str, ext: str) -> str:
@@ -118,7 +121,15 @@ def emit_shared_assets(skill_dir: Path, out: Path, dry: bool) -> list[Path]:
 
 
 def split_frontmatter(text: str):
-    """Return (frontmatter_dict, body_text)."""
+    """Return (frontmatter_dict, body_text).
+
+    A block-scalar indicator is dropped so an emitted `description` is the scalar's
+    text and not its YAML serialisation. Four skills write `description: >-`, and
+    without this every adapter for them opened with `description: ">- Turns ..."`,
+    which is well-formed and wrong: valid YAML holding three characters of syntax
+    (bug-0006). The same fix is in validate-skills.py's copy of this parser, which
+    is where the duplication is the real problem.
+    """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}, text
@@ -135,9 +146,10 @@ def split_frontmatter(text: str):
         m = re.match(r"^(\w[\w-]*):\s*(.*)$", raw)
         if m:
             key = m.group(1)
-            data[key] = m.group(2).strip().strip('"').strip("'")
+            value = m.group(2).strip().strip('"').strip("'")
+            data[key] = BLOCK_SCALAR_RE.sub("", value, count=1)
         elif key and raw.strip():
-            data[key] += " " + raw.strip()
+            data[key] = (data[key] + " " + raw.strip()).strip()
     body = "\n".join(lines[end + 1:]).strip()
     return data, body
 

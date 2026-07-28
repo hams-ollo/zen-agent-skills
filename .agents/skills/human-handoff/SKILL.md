@@ -2,17 +2,16 @@
 name: human-handoff
 description: >-
   Packages the current state of a project into a handoff for a person: a business partner,
-  a client, or a team member. Produces either a handoff document or a short message, written
-  in plain language, tuned to the reader, with internals and costs redacted when the reader
-  is a client. Covers where things stand, what changed, what is open or needs a decision, and
-  what happens next and who owns it. Use this whenever the user wants to bring a person up to
-  speed, ask a collaborator to decide something, prep for a meeting, or draft an update.
-  Trigger on phrases like: "write an update for my partner", "draft a message to <name> about
-  where we are", "summary for the client", "onboard the new dev", "prep for the meeting with
-  the other engineering team", "what should I tell <name> about the open questions", "put
-  together a handoff doc for whoever picks this up", or any request to explain project status
-  to a person rather than an agent. If the handoff target is a fresh Claude Code session or a
-  spawned subagent that will execute work, use agent-handoff instead.
+  a client, or a team member. Produces a document or a short message, in plain language,
+  tuned to the reader, with internals and costs redacted when the reader is a client. Use
+  this whenever the user wants to bring a person up to speed, ask a collaborator to decide
+  something, prep for a meeting, or draft an update. Trigger on phrases like: "write an
+  update for my partner", "draft a message to <name> about where we are", "summary for the
+  client", "onboard the new dev", "prep for the meeting with the other engineering team",
+  "what should I tell <name> about the open questions", "put together a handoff doc for
+  whoever picks this up", or any request to explain project status to a person rather than
+  an agent. If the handoff target is a fresh agent session or a spawned subagent that will
+  execute work, use agent-handoff instead.
 ---
 
 # Human handoff

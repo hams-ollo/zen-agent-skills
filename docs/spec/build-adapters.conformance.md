@@ -15,6 +15,13 @@ Re-audited after `chore-0015` amended the contract to classify the two kinds of 
 material. The "behavior found outside the contract" section this matrix carried is **retired**: the
 behavior it described is now S-014.
 
+S-002 re-audited 2026-07-28 (`bug-0006`) and found diverged, the first divergence this contract has
+recorded. It is worth reading the row for how it hid: `bug-0001` had already fixed a defect in the same
+field, JSON-serialising the description so a colon or quote could not break the adapter's own
+frontmatter. That made the output well-formed, which is what both the tests and a reader check, so the
+remaining defect became valid YAML holding the wrong value. The pre-existing S-002 test asserted that
+`description:` was present, never what followed it.
+
 First audit of this contract, produced immediately after its approval (`feat-0026`). Because the spec
 is retrospective, written against an implementation that already existed and was verified, a clean
 matrix here is weaker evidence than a clean matrix on a contract written first: the spec was authored
@@ -26,7 +33,7 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 | Section | Item | Status | Evidence | Note |
 |---|---|---|---|---|
 | Scenarios | S-001 one adapter per skill per requested target | Conformed | `main()` / the `for d in skills` loop over `targets`, with the summary print and `return 0` | only requested targets are dispatched, via `EMITTERS[t]` |
-| Scenarios | S-002 harness frontmatter and do-not-edit banner | Conformed | `emit_cursor()` and `emit_vscode()` content strings, with `BANNER` | cursor gets `description` plus `alwaysApply: false`, vscode gets `mode: agent` plus `description`; both prepend the banner naming the source `SKILL.md` |
+| Scenarios | S-002 harness frontmatter and do-not-edit banner | Conformed | `emit_cursor()` and `emit_vscode()` content strings, with `BANNER`, and `split_frontmatter()` / `BLOCK_SCALAR_RE.sub("", value, count=1)` | cursor gets `description` plus `alwaysApply: false`, vscode gets `mode: agent` plus `description`; both prepend the banner naming the source `SKILL.md`. **Diverged when re-audited 2026-07-28 and fixed the same day (`bug-0006`)**: `split_frontmatter()` captured a YAML block-scalar indicator as part of the value, so the four skills writing `description: >-` emitted `description: ">- Turns ..."`, eight of the 38 files a full run produces. The scenario says the adapter opens with the skill's `description`, and that string is the scalar's serialisation rather than its value, so the contract already covered it and no amendment was needed |
 | Scenarios | S-003 sibling link points at the adapter beside it | Conformed | `rewrite_links()` / `SIBLING_RE` branch | emits `<sibling><ext>`, a same-directory reference |
 | Scenarios | S-004 anchor survives the rewrite | Conformed | `rewrite_links()` / `SIBLING_RE` branch, `sibling.group(2)` | the captured anchor is reattached |
 | Scenarios | S-005 link title survives the rewrite | Conformed | `rewrite_links()` / `LINK_RE` group 2, reattached by the inner `out()` | the title is carried through every rewrite path, not just the sibling one |

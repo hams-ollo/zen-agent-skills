@@ -1,11 +1,10 @@
 ---
 name: doc-author
 description: >-
-  Writes new, high-quality Markdown documentation for the repository it is used in, grounded
-  in the actual code and following documentation best practices. Handles READMEs (technical or
-  for non-technical readers), architecture docs with Mermaid diagrams, setup and deployment
-  guides, contributing guides, design docs, and architecture decision records, and can bootstrap
-  a fresh repo's baseline doc set. Use this whenever the user wants to create documentation that
+  Writes new Markdown documentation for the repository it is used in, grounded in the actual
+  code. Handles READMEs (technical or for non-technical readers), architecture docs with
+  Mermaid diagrams, setup and deployment guides, contributing guides, design docs, and
+  architecture decision records. Use this whenever the user wants to create documentation that
   does not exist yet. Trigger on phrases like: "create a README", "write an architecture doc
   with mermaid diagrams", "document this project for non-technical users", "scaffold the repo
   docs", "set up the docs folder", "write a deployment guide", "create a CLAUDE.md for this

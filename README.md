@@ -34,7 +34,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
 - [`scripts/install.py`](scripts/install.py): installs skills, and the rules module they compose, for Claude Code and OpenCode.
 - [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project, rewriting each skill's relative links so they resolve from the adapter's location.
-- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status.
+- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status. A description over 1024 characters is an error, because that is the hard limit both target harnesses enforce on the field.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
@@ -135,6 +135,25 @@ python scripts/install.py --tools opencode
 ```
 
 The installer writes its copy-mode manifest to `scripts/.install-manifest.json` so it can recognize and update files it previously created. It reports a conflict instead of overwriting an unmanaged file.
+
+### 3a. Choose how many skills to install
+
+Every installed skill's `description` is loaded so your agent can route to it, and that budget is shared with every other skill you have installed. So `--profile` selects how many skills to place, and the run reports what each profile costs in description characters:
+
+```bash
+python scripts/install.py --profile core
+python scripts/install.py --profile all
+```
+
+| Profile | Skills | What it is |
+|---|---|---|
+| `core` | 3 | Scaffold a project, track work in it, describe the change at the end |
+| `spine` | 17 | The contract-driven delivery loop. **The default** |
+| `all` | 19 | Everything, adding the two handoff skills |
+
+A profile is expanded over sibling references before anything is placed, so it can never install a skill whose composed sibling is missing, and the run says when it expanded what you asked for. That is also why the sizes jump the way they do rather than offering a middle: most of the skills reference each other, so any profile reaching into that group brings the group with it.
+
+Defaulting to `spine` means `agent-handoff` and `human-handoff` are not placed. Nothing is removed if you already installed them: this command only places and updates, and reversal is `--uninstall`. Pass `--profile all` to keep them refreshed.
 
 ### 4. Generate project-level adapters
 

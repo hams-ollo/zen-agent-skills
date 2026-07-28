@@ -137,6 +137,15 @@ python scripts/install.py --tools claude
 python scripts/install.py --tools opencode
 ```
 
+That default installs 17 of the 19 skills, the ones that make up the delivery workflow. There is a reason it is not all of them: your assistant reads a one-line summary of every installed skill in order to pick the right one, and that reading budget is shared with any other skills you have installed, so more is not automatically better. If you want the smallest useful set, or all of it:
+
+```bash
+python scripts/install.py --profile core
+python scripts/install.py --profile all
+```
+
+`core` is three skills: set up a project, track the work, describe the change at the end. Each command prints what it costs, so you can compare before deciding. You can change your mind later by running it again with a different profile.
+
 For Cursor or VS Code with Copilot, generate project-level adapters from the kit directory:
 
 ```bash
