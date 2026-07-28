@@ -1,5 +1,7 @@
 # Skill catalog
 
+Every skill Zen Agent Skills ships, plus what is planned and deliberately not built yet.
+
 The kit is organized by how broadly a skill is worth sharing. The axis is deliberate: broadly-useful skills go in the public kit; hyper-specific personal skills stay out and serve as portfolio demos instead.
 
 A skill is only listed as **shipped** once it lives under [`.agents/skills/`](../.agents/skills/) and has been used and iterated on for real. Everything else is **planned**, and stays planned until it has earned its place. This is the same "seed by inspection, not speculation" principle the skills themselves follow.

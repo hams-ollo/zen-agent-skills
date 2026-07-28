@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering a contribution. Please read the first section before writing anything, because this project rejects work for a reason most repositories do not have.
+Thanks for considering a contribution to Zen Agent Skills. Please read the first section before writing anything, because this project rejects work for a reason most repositories do not have.
 
 ## The bar: no skill ships cold
 
