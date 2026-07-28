@@ -1,6 +1,6 @@
 ---
 name: project-bootstrap
-description: Bootstrap a new or bare repository with a sane, stack-matched baseline, then hand off to init-worktracking for work tracking. Detects the language and package manager, then lays down .gitignore, .editorconfig, a linter/formatter config, a LICENSE, and a README stub, without clobbering anything that already exists. Use when the user says "set up a new repo", "scaffold this project", "fire up my harness", "give me a starting point", "bootstrap this", or points at an empty or nearly-empty directory they want turned into a real project. This is the front door of the Zen Starter Kit: it calls init-worktracking so the repo comes up already tracked.
+description: Bootstrap a new or bare repository with a sane, stack-matched baseline, then hand off to init-worktracking for work tracking. Detects the language and package manager, then lays down .gitignore, .editorconfig, a linter/formatter config, a LICENSE, and a README stub, without clobbering anything that already exists. Use when the user says "set up a new repo", "scaffold this project", "fire up my harness", "give me a starting point", "bootstrap this", or points at an empty or nearly-empty directory they want turned into a real project. This is the front door of Zen Agent Skills: it calls init-worktracking so the repo comes up already tracked.
 ---
 
 # project-bootstrap

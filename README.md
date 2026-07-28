@@ -1,8 +1,8 @@
-# Zen Starter Kit
+# Zen Agent Skills
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The Zen Starter Kit is a portable library of reusable AI agent skills and the tooling to distribute them across coding harnesses. It packages repeatable workflows for project setup, work tracking, specification authoring, test authoring, parallel agent execution, verification, documentation, code review, and pull request preparation.
+Zen Agent Skills is a portable library of reusable AI agent skills and the tooling to distribute them across coding harnesses. It packages repeatable workflows for project setup, work tracking, specification authoring, test authoring, parallel agent execution, verification, documentation, code review, and pull request preparation.
 
 The core principle is **write a skill once, use it in every harness**. Each skill has one harness-agnostic source file, `SKILL.md`. The kit then installs that source where a supported tool can discover it or generates a thin, native adapter for the target project.
 
@@ -96,8 +96,8 @@ On systems where Python is exposed as `python3`, use `python3` in the commands b
 Clone the repository and enter its directory:
 
 ```bash
-git clone https://github.com/hams-ollo/zen-starter-kit.git
-cd zen-starter-kit
+git clone https://github.com/hams-ollo/zen-agent-skills.git
+cd zen-agent-skills
 ```
 
 ### 2. Review the installation plan

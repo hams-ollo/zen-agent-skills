@@ -1,4 +1,4 @@
-Zen Solutions Starter Kit
+Zen Agent Skills
 Copyright (c) 2026 Zen Solutions
 
 Licensed under the MIT License; see LICENSE for details.
@@ -13,7 +13,7 @@ material. Each adapted SKILL.md also carries a one-line provenance note.
   - author: Balarama Bosch
   - license: MIT
   - upstream: https://github.com/moonray/repoprompt-workflows
-  - adapted into: the Zen Starter Kit spec/verify spine skills, house-styled and
+  - adapted into: the Zen Agent Skills spec/verify spine skills, house-styled and
     portability-gated from their standalone SKILL.md sources. As each skill lands
     it is listed here. Current:
       - .agents/skills/spec-quality/SKILL.md

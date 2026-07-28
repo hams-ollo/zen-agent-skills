@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the Zen Starter Kit skills into your AI tools' discovery directories.
+"""Install the Zen Agent Skills library into your AI tools' discovery directories.
 
 Idempotent and safe to re-run. Previews with --dry-run, reverses with
 --uninstall. Never clobbers a real file it did not create: such a target is
@@ -245,7 +245,7 @@ def uninstall(home: Path, dry: bool) -> int:
 
 def main(argv=None) -> int:
     """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test."""
-    ap = argparse.ArgumentParser(description="Install Zen Starter Kit skills.")
+    ap = argparse.ArgumentParser(description="Install the Zen Agent Skills library.")
     ap.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     ap.add_argument("--uninstall", action="store_true", help="remove what was installed")
     ap.add_argument("--mode", choices=["symlink", "copy"],

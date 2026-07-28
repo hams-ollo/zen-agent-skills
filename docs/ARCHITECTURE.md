@@ -1,6 +1,6 @@
 # Architecture
 
-This guide explains how the Zen Starter Kit is organized and maintained for contributors and technical adopters.
+This guide explains how Zen Agent Skills is organized and maintained for contributors and technical adopters.
 
 ## Purpose
 

@@ -1,4 +1,4 @@
-# Zen Starter Kit: a founder's getting-started guide
+# Zen Agent Skills: a founder's getting-started guide
 
 This guide is for founders, builders, creators, and curious newcomers who want a calmer way to use AI coding tools on a new or existing project.
 
@@ -6,7 +6,7 @@ You do not need to be a professional developer to begin. You need a project idea
 
 ## 🌱 Start here
 
-The Zen Starter Kit is a collection of reusable playbooks for working with an AI coding assistant.
+Zen Agent Skills is a collection of reusable playbooks for working with an AI coding assistant.
 
 Think of it like a well-organized studio shelf:
 
@@ -36,15 +36,15 @@ There are three layers to understand:
 
 1. **Your project:** the folder or repository containing the product you want to build.
 2. **Your AI assistant:** the tool you use to talk through ideas and make changes in that project.
-3. **The starter kit:** a set of instructions that helps the assistant work in a consistent, checkable way.
+3. **Zen Agent Skills:** a set of instructions that helps the assistant work in a consistent, checkable way.
 
-The starter kit does not replace your AI assistant. It gives the assistant better repeatable habits.
+Zen Agent Skills does not replace your AI assistant. It gives the assistant better repeatable habits.
 
 ```mermaid
 flowchart LR
   A[Your idea] --> B[Your project]
   B --> C[AI assistant]
-  D[Zen Starter Kit playbooks] --> C
+  D[Zen Agent Skills playbooks] --> C
   C --> E[Small verified steps]
   E --> B
 ```
@@ -101,13 +101,13 @@ git init
 
 You can replace `my-project` with the name of your project.
 
-### 2. Get the starter kit
+### 2. Get Zen Agent Skills
 
 Keep the kit in its own folder. It can then be reused across multiple projects.
 
 ```bash
-git clone https://github.com/hams-ollo/zen-starter-kit.git
-cd zen-starter-kit
+git clone https://github.com/hams-ollo/zen-agent-skills.git
+cd zen-agent-skills
 ```
 
 The kit is not copied into every project. Its skills are installed into your AI tool or translated into project-level files, depending on the tool you use.
@@ -205,7 +205,7 @@ Before asking an assistant to reorganize anything:
 
 A useful opening prompt is:
 
-> I am bringing the Zen Starter Kit into an existing project. First inspect the repository and explain its current structure, tools, task tracking, and important conventions. Do not write files yet. If another tracker already exists, show me a migration plan instead of creating a parallel system.
+> I am bringing Zen Agent Skills into an existing project. First inspect the repository and explain its current structure, tools, task tracking, and important conventions. Do not write files yet. If another tracker already exists, show me a migration plan instead of creating a parallel system.
 
 ### 2. Install the kit without moving the project
 

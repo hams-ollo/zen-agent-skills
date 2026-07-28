@@ -1,8 +1,8 @@
-# AGENTS.md: rules for the Zen Starter Kit repository
+# AGENTS.md: rules for the Zen Agent Skills repository
 
 Canonical rules for every AI agent working in this repository (Claude Code, Cursor, Codex, OpenCode, and any tool that reads `AGENTS.md`). This is the single source of truth. `CLAUDE.md` and any `.cursor/rules/*.mdc` or `.github/copilot-instructions.md` here are thin pointers back to this file.
 
-This repo is the **Zen Solutions Starter Kit**: a portable, cross-harness library of agent skills, plus the tooling to install them into any project and any AI coding tool. It dogfoods its own system: this repository is tracked with the same `init-worktracking` skill it ships. Strategy lives in [`ROADMAP.md`](ROADMAP.md); atomic work lives in [`.tasks/`](.tasks/); completed work is logged in [`CHANGELOG.md`](CHANGELOG.md).
+This repo is **Zen Agent Skills**: a portable, cross-harness library of agent skills, plus the tooling to install them into any project and any AI coding tool. It dogfoods its own system: this repository is tracked with the same `init-worktracking` skill it ships. Strategy lives in [`ROADMAP.md`](ROADMAP.md); atomic work lives in [`.tasks/`](.tasks/); completed work is logged in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

@@ -14,7 +14,7 @@ Read [`../AGENTS.md`](../AGENTS.md) (global rules) plus your one assigned task f
 
 Copy [`_TEMPLATE.md`](_TEMPLATE.md), give it the next id, and fill every section. A good task is self-contained: an agent that reads only `AGENTS.md`, this file, and the `touched_files` should be able to complete it without asking questions. Keep `touched_files` honest and complete: it is the agent's entire read/write surface and the whitelist that keeps context small.
 
-Prefer the `new-task` skill (from the Zen Starter Kit) to author tasks at the gold-standard bar automatically, then this format is filled for you.
+Prefer the `new-task` skill (from Zen Agent Skills) to author tasks at the gold-standard bar automatically, then this format is filled for you.
 
 ## Validating
 

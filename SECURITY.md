@@ -2,7 +2,7 @@
 
 ## What this project is, and why its threat model is unusual
 
-The Zen Starter Kit distributes **instructions that an AI coding agent executes**. A skill is not a library your code calls in a sandbox. It is prose that an agent reads and acts on, in your repository, usually with permission to read files, write files, and run commands.
+Zen Agent Skills distributes **instructions that an AI coding agent executes**. A skill is not a library your code calls in a sandbox. It is prose that an agent reads and acts on, in your repository, usually with permission to read files, write files, and run commands.
 
 That changes what a vulnerability looks like here. There is no memory safety surface and almost no attack surface in the usual sense: the tooling is standard-library Python with no network calls, no deserialization of untrusted input, and no dependencies to be compromised. The real risk is that **a skill body causes an agent to do something the person running it did not intend**.
 

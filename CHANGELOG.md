@@ -1,6 +1,6 @@
 # Changelog
 
-Completed work for the Zen Starter Kit, newest first. This is the append-only ledger for the spec-driven task workflow: when a task in [`.tasks/`](.tasks/) is finished, its file moves to `.tasks/done/` and one dated line is added here referencing the task id.
+Completed work for Zen Agent Skills, newest first. This is the append-only ledger for the spec-driven task workflow: when a task in [`.tasks/`](.tasks/) is finished, its file moves to `.tasks/done/` and one dated line is added here referencing the task id.
 
 ---
 
