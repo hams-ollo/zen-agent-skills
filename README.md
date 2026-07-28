@@ -39,7 +39,6 @@ This is a skills library, not an application or a service. It has no database, n
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
 - [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog of shipped and planned skills.
-- [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md): a partner-facing snapshot of where the kit stands.
 - [`docs/spec/`](docs/spec/): behavioral specifications, the contracts the spine's skills are built and verified against.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
 - [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
@@ -174,7 +173,6 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications, plus the conformance, verification, readiness, and characterization reports that sit beside them |
-| [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) | Partner-facing status snapshot |
 | [`ROADMAP.md`](ROADMAP.md) | Ordered plan for future work |
 | [`CHANGELOG.md`](CHANGELOG.md) | Record of completed work |
 
