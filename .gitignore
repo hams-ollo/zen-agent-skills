@@ -16,6 +16,9 @@ venv/
 # Installer artifacts (per-machine, never committed)
 scripts/.install-manifest.json
 
+# Throwaway install home used by the documented preview commands and by CI
+.tmp/
+
 # Node (only if adapter tooling ever needs it)
 node_modules/
 

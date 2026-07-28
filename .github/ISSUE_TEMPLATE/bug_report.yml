@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in the tooling, docs, or install path is broken.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a skill that ran but behaved wrongly, use the "a skill behaved unexpectedly" template
+        instead. This one is for the scripts, the docs, and the install and adapter paths.
+  - type: textarea
+    id: command
+    attributes:
+      label: What you ran
+      description: The exact command, so it can be reproduced without guessing.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: Include the output, trimmed to the relevant part.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 / macOS 14 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python --version`.
+      placeholder: "3.11.9"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I ran `python scripts/validate-skills.py` and included the output if it failed.
+          required: false
+        - label: This is not a security issue (those go through SECURITY.md, not a public issue).
+          required: true

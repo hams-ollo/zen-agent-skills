@@ -1,0 +1,71 @@
+name: A skill behaved unexpectedly
+description: A skill did something other than what its description promised, or silently did nothing.
+title: "[skill] "
+labels: ["skill-behavior"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful report this project can receive. Skills are prose that an agent
+        interprets, so the gap between what a description promises and what the agent actually does
+        is the main way they fail, and it is invisible from inside the repository.
+
+        If the skill did something destructive or crossed a boundary it promised not to cross,
+        please stop here and follow [SECURITY.md](../blob/main/SECURITY.md) instead, so it is not
+        disclosed publicly before it is fixed.
+  - type: input
+    id: skill
+    attributes:
+      label: Which skill
+      placeholder: house-review
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Which harness
+      options:
+        - Claude Code
+        - Cursor
+        - VS Code or Copilot
+        - OpenCode
+        - Other (say which below)
+    validations:
+      required: true
+  - type: textarea
+    id: prompt
+    attributes:
+      label: What you asked
+      description: The prompt or command you gave, as close to verbatim as you can manage.
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What the agent did
+      description: >
+        What actually happened, including files it touched or commands it ran. A transcript excerpt
+        is worth more than a summary. If it reported success but you cannot find the result, say so
+        explicitly, that is its own category of problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: >
+        If the skill's own description or procedure led you to expect something different, quote the
+        line. That turns this into a fix rather than a discussion.
+    validations:
+      required: true
+  - type: textarea
+    id: repo
+    attributes:
+      label: What kind of repository
+      description: >
+        Language, package manager, rough size, and anything unusual (monorepo, LFS, submodules, no
+        tests). This matters more than it sounds: the kit is developed in a repository that is
+        Markdown and stdlib Python with no dependency tree, so procedures meeting a normal codebase
+        for the first time is a known source of failures.
+    validations:
+      required: false

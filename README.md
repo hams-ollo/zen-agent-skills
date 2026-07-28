@@ -169,6 +169,8 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit |
 | [`tests/`](tests/) | The kit's own test suite |
 | [`AGENTS.md`](AGENTS.md) | Canonical instructions for agents working in this repository |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and the bar a new skill has to clear |
+| [`SECURITY.md`](SECURITY.md) | Threat model and how to report a security issue privately |
 | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Plain-language guide for non-specialists |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
@@ -233,14 +235,9 @@ When adding or changing a skill, keep its logic in `.agents/skills/<name>/SKILL.
 
 ## For contributors
 
-Before opening a change:
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide, including the checks to run before opening a change.
 
-1. Read [`AGENTS.md`](AGENTS.md) and the relevant task or roadmap entry.
-2. Keep changes focused and preserve the single-source-of-truth model.
-3. Run [`scripts/validate-skills.py`](scripts/validate-skills.py) and any relevant dry-run commands.
-4. Update documentation when commands, supported harnesses, or repository structure change.
-
-For writing conventions, use the swappable [house-style rules](.agents/rules/house-style.md). For the current scope and planned work, consult the [roadmap](ROADMAP.md).
+Read one thing first, because it is the most common reason a contribution is declined: **no skill ships cold.** A skill is accepted only after it has been used on real work and refined from what that use exposed, so a well-written skill for a workflow nobody has performed will be parked in the [roadmap](ROADMAP.md) rather than merged.
 
 ## Troubleshooting
 
@@ -256,6 +253,10 @@ Use the default Windows copy mode, or force it explicitly:
 python scripts/install.py --mode copy
 ```
 
+### Uninstall removed more than I expected
+
+Known defect, tracked as [`bug-0003`](.tasks/bug-0003-uninstall-ignores-home.md). `--uninstall` ignores `--home` and removes every target the manifest records, which includes any earlier installation made from the same checkout to a different home. Until it is fixed, use `--dry-run` to preview an uninstall, and prefer `--dry-run` over a real install when evaluating against a throwaway home.
+
 ### A generated adapter is out of date
 
 Regenerate it from the kit root. Do not edit the generated file directly:
@@ -270,7 +271,11 @@ Confirm that the skill has a `SKILL.md`, run the validator, and verify that you 
 
 ## Security and trust
 
-Review a skill before installing it into an AI coding tool. Skills are instructions that influence agent behavior and may cause file or command changes when invoked. Use the same review standard you would apply to source code, especially for skills obtained from outside this repository.
+A skill is not a library your code calls in a sandbox. It is prose an agent reads and acts on, in your repository, usually with permission to write files and run commands. Review one before installing it, with the same standard you would apply to a script you were about to run, and especially for skills obtained from outside this repository.
+
+Each `SKILL.md` is a single readable file with no indirection, which is deliberate: it is what makes that review possible.
+
+To report a security issue, follow [`SECURITY.md`](SECURITY.md). Please do not open a public issue for it.
 
 ## License
 

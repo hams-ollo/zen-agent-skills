@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security issue
+    url: https://github.com/hams-ollo/zen-starter-kit/security/advisories/new
+    about: Anything where a skill could cause harm, cross a boundary it promised to respect, or be steered by injected content. Reported privately, never as a public issue.
+  - name: Propose a new skill
+    url: https://github.com/hams-ollo/zen-starter-kit/blob/main/CONTRIBUTING.md
+    about: Read the contribution bar first. A skill is only accepted after it has been used on real work, so start by describing the recurring problem rather than the solution.
