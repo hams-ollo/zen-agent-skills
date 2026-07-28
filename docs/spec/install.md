@@ -10,8 +10,8 @@ Behavioral contract for [`scripts/install.py`](../../scripts/install.py), writte
 [`install.characterization.md`](install.characterization.md), so this describes a contract that
 already holds rather than proposing one. Approved by the author on 2026-07-27.
 
-**Amended 2026-07-28 (`bug-0003`), pending author re-approval.** S-007 was scoped to the home it was
-given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
+**Amended 2026-07-28 (`bug-0003`) and re-approved by the author on 2026-07-28.** S-007 was scoped to
+the home it was given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
 was satisfied by an implementation that removed every recorded target from every home ever installed
 to from this checkout, which destroyed a working installation while reporting success. The contract
 never said what `--uninstall` should do when the record spans more than one home, so the code was not
