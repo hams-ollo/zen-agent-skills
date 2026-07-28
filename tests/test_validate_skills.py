@@ -204,6 +204,80 @@ class TestDescriptionCeiling(unittest.TestCase):
         self.assertEqual(fm["description"], ">> quoted prose > with angle brackets")
 
 
+class TestFrontmatterParseability(unittest.TestCase):
+    """Scenario S-019: frontmatter no real YAML parser can read fails.
+
+    The bug population is a plain unquoted value containing ": ", which YAML reads as a
+    nested mapping. Eight skills shipped that way and every gate passed, because this
+    script's own parser is a regex. The negative cases carry the weight: the same text
+    quoted or in a block scalar is valid, and flagging those would push authors toward
+    contorting descriptions to satisfy a checker rather than a parser.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_plain_scalar_with_a_colon_errors(self):
+        # Scenario S-019: the exact construct that shipped in eight skills.
+        desc = ("Scaffold a work-tracking system into the current repository: AGENTS.md, a "
+                ".tasks/ directory, and a validate.py checker. Use it when setting one up.")
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=desc))
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("nested mapping", out)
+        self.assertIn("`description`", out)
+
+    def test_plain_scalar_ending_in_a_colon_errors(self):
+        # Scenario S-019: the other half of the same construct, a value YAML reads as a
+        # key awaiting its own value.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC + " Trigger on:"))
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("nested mapping", out)
+
+    def test_a_block_scalar_containing_a_colon_is_fine(self):
+        # Scenario S-019 (negative): this is the fix bug-0007 applied to all eight, so a
+        # false positive here would reject the corrected tree.
+        frontmatter = ("---\nname: alpha\ndescription: >-\n"
+                       "  Scaffold a system into this repository: AGENTS.md and a .tasks/ directory,\n"
+                       "  which is what you want when setting one up for the first time.\n---\n")
+        _write_skill(self.root, "alpha", frontmatter)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_quoted_scalar_containing_a_colon_is_fine(self):
+        # Scenario S-019 (negative): quoting is the other valid form.
+        _write_skill(self.root, "alpha",
+                     f'---\nname: alpha\ndescription: "{LONG_DESC} Namely: this one."\n---\n')
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_url_in_a_plain_scalar_is_not_flagged(self):
+        # Scenario S-019 (negative): "https://x" has a colon with no following space, so
+        # it is valid plain YAML. Flagging it would be the obvious over-broad mistake.
+        _write_skill(self.root, "alpha",
+                     GOOD_FM.format(name="alpha", desc=LONG_DESC + " See https://example.com/guide"))
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_every_shipped_skill_has_parseable_frontmatter(self):
+        # Scenario S-019 against the real tree, which is the assertion that would have
+        # caught bug-0007. The unit cases above prove the check works; this proves the
+        # kit satisfies it.
+        errors = []
+        for d in sorted(p for p in (REPO_ROOT / ".agents" / "skills").iterdir() if p.is_dir()):
+            text = (d / "SKILL.md").read_text(encoding="utf-8")
+            vs.check_frontmatter_is_parseable(text, d.name, errors)
+        self.assertEqual(errors, [])
+
+
 class TestLinkChecks(unittest.TestCase):
     """Scenarios S-009 through S-013: link resolution, portability, and what is skipped."""
 

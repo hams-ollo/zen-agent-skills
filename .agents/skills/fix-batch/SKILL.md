@@ -1,6 +1,16 @@
 ---
 name: fix-batch
-description: Delegate a batch of independent, already-scoped task files (bugs, chores, small features) to parallel isolated agents, each sandboxed in its own git worktree, with a mandatory independent verification pass before anything is treated as mergeable. Use this whenever asked to "fix these bugs", "work through the backlog", "spin up agents to fix X, Y, Z", or "parallelize these fixes", especially when there are 2 or more distinct, independently-fixable items and the user wants them actioned rather than just discussed. It is the parallel-execution step of the kit spine: new-task authors the task files, fix-batch dispatches them, reconcile-worktrees lands them. Do not use it for a single fix (just do it directly) or for changes that are inherently sequential or interdependent (one agent's output feeds the next's input), since worktree isolation assumes the items do not need to see each other's work in progress.
+description: >-
+  Delegate a batch of independent, already-scoped task files (bugs, chores, small features) to
+  parallel isolated agents, each sandboxed in its own git worktree, with a mandatory independent
+  verification pass before anything is treated as mergeable. Use this whenever asked to "fix these
+  bugs", "work through the backlog", "spin up agents to fix X, Y, Z", or "parallelize these
+  fixes", especially when there are 2 or more distinct, independently-fixable items and the user
+  wants them actioned rather than just discussed. It is the parallel-execution step of the kit
+  spine: new-task authors the task files, fix-batch dispatches them, reconcile-worktrees lands
+  them. Do not use it for a single fix (just do it directly) or for changes that are inherently
+  sequential or interdependent (one agent's output feeds the next's input), since worktree
+  isolation assumes the items do not need to see each other's work in progress.
 ---
 
 # fix-batch

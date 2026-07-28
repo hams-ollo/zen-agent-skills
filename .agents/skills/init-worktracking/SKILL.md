@@ -1,6 +1,16 @@
 ---
 name: init-worktracking
-description: Scaffold a portable, agent-optimized spec-driven work-tracking system into the current repository: AGENTS.md (global rules + agent reading protocol), a .tasks/ directory of atomic task files, and (by tier) ROADMAP.md, CHANGELOG.md, a validate.py checker, and thin CLAUDE.md/Cursor/Copilot pointers. Choose a footprint tier (lite/standard/team) so small repos are not buried. Seeds AGENTS.md by inspecting the repo (package manager, test runner, CI, layout) instead of leaving blanks. Safe to re-run, and detects a pre-existing tracker before writing. Use when the user wants to set up work-item tracking, a backlog, a todo/changelog system, or task files that parallel subagents can pick up, or says things like "add work tracking here", "set up the task system", or "scaffold the backlog". Feeds the new-task and fix-batch skills: one task file per worktree-isolated agent.
+description: >-
+  Scaffold a portable, agent-optimized spec-driven work-tracking system into the current
+  repository: AGENTS.md (global rules + agent reading protocol), a .tasks/ directory of atomic
+  task files, and (by tier) ROADMAP.md, CHANGELOG.md, a validate.py checker, and thin
+  CLAUDE.md/Cursor/Copilot pointers. Choose a footprint tier (lite/standard/team) so small repos
+  are not buried. Seeds AGENTS.md by inspecting the repo (package manager, test runner, CI,
+  layout) instead of leaving blanks. Safe to re-run, and detects a pre-existing tracker before
+  writing. Use when the user wants to set up work-item tracking, a backlog, a todo/changelog
+  system, or task files that parallel subagents can pick up, or says things like "add work
+  tracking here", "set up the task system", or "scaffold the backlog". Feeds the new-task and
+  fix-batch skills: one task file per worktree-isolated agent.
 ---
 
 # init-worktracking

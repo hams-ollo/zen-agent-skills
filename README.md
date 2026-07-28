@@ -34,7 +34,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
 - [`scripts/install.py`](scripts/install.py): installs skills, and the rules module they compose, for Claude Code and OpenCode.
 - [`scripts/build-adapters.py`](scripts/build-adapters.py): generates Cursor rules and VS Code or Copilot prompts for a target project, rewriting each skill's relative links so they resolve from the adapter's location.
-- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status. A description over 1024 characters is an error, because that is the hard limit both target harnesses enforce on the field.
+- [`scripts/validate-skills.py`](scripts/validate-skills.py): checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status. Two field-level errors: a description over 1024 characters, the hard limit both target harnesses enforce, and frontmatter written in a form no real YAML parser can read.
 - [`AGENTS.md`](AGENTS.md): the canonical repository instructions and agent reading protocol.
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
@@ -154,6 +154,18 @@ python scripts/install.py --profile all
 A profile is expanded over sibling references before anything is placed, so it can never install a skill whose composed sibling is missing, and the run says when it expanded what you asked for. That is also why the sizes jump the way they do rather than offering a middle: most of the skills reference each other, so any profile reaching into that group brings the group with it.
 
 Defaulting to `spine` means `agent-handoff` and `human-handoff` are not placed. Nothing is removed if you already installed them: this command only places and updates, and reversal is `--uninstall`. Pass `--profile all` to keep them refreshed.
+
+### 3b. Or install with `npx skills`
+
+The kit is discoverable by [`npx skills`](https://github.com/vercel-labs/skills), the cross-agent installer indexed at skills.sh, with no manifest and no configuration: `.agents/skills/` is one of the layouts it walks.
+
+```bash
+npx skills add hams-ollo/zen-agent-skills
+```
+
+**It installs the skill bodies and nothing else, which matters here.** Every skill in this kit composes a lens from [`.agents/rules/`](.agents/rules/) through a relative reference, and that installer copies only each skill's `SKILL.md`, so those references resolve to nothing. Most skills lose the house-style module; `house-review` loses its entire rubric and severity scheme, because they live in the lens rather than in the skill. Verified against this repository on 2026-07-28.
+
+So use it if you want the skill bodies in a hurry, across a harness the Python installer does not target. Use `python scripts/install.py` if you want the kit as designed: it is the only path that places the rules module where the skills' own references resolve, and it needs no Node and no network.
 
 ### 4. Generate project-level adapters
 

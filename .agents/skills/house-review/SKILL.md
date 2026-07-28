@@ -1,6 +1,15 @@
 ---
 name: house-review
-description: Review a code change against an explicit house rubric and severities, and produce a structured, severity-ranked markdown review, without editing or committing anything. Determines the review range (the current branch against its merge-base with the default branch, with a working-tree fallback), applies the review-quality lens (correctness, security, error handling, tests, readability, performance, API design, docs), validates each finding against the real code before reporting it, and writes findings ordered blocker to nit with file:line, why it matters, and a concrete fix. Use when the user says "review this", "review my changes", "code review", "review this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before merging. Report-only: it never changes code.
+description: >-
+  Review a code change against an explicit house rubric and severities, and produce a structured,
+  severity-ranked markdown review, without editing or committing anything. Determines the review
+  range (the current branch against its merge-base with the default branch, with a working-tree
+  fallback), applies the review-quality lens (correctness, security, error handling, tests,
+  readability, performance, API design, docs), validates each finding against the real code before
+  reporting it, and writes findings ordered blocker to nit with file:line, why it matters, and a
+  concrete fix. Use when the user says "review this", "review my changes", "code review", "review
+  this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before
+  merging. Report-only: it never changes code.
 ---
 
 # house-review

@@ -1,6 +1,10 @@
 ---
 name: spec-quality
-description: Use when drafting, reviewing, repairing, or validating scenario-based specs, product specs, implementation specs, Proposed Surface sections, Given/When/Then scenarios, Open Questions, or spec-quality checklists. A quality lens for spec well-formedness: keeps specs contract-level, observable, non-redundant, grounded in repo context, and free of implementation planning.
+description: >-
+  Use when drafting, reviewing, repairing, or validating scenario-based specs, product specs,
+  implementation specs, Proposed Surface sections, Given/When/Then scenarios, Open Questions, or
+  spec-quality checklists. A quality lens for spec well-formedness: keeps specs contract-level,
+  observable, non-redundant, grounded in repo context, and free of implementation planning.
 ---
 
 # Spec quality

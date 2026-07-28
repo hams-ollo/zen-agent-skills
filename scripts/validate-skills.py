@@ -5,7 +5,8 @@ Checks that each skill has a well-formed SKILL.md: frontmatter with `name` and
 `description`, `name` matching its directory, a description that says both what
 and when (a rough proxy: non-trivial length) and that fits the 1024-character
 limit both target harnesses enforce, and a body that is not so long it
-defeats progressive disclosure. It also checks that inline relative links resolve
+defeats progressive disclosure, and frontmatter written in a form no real YAML
+parser can read. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
 exists, and warns when a skill asserts both draft and shipped status. Standard
 library only. Exits non-zero on error.
@@ -149,6 +150,40 @@ def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: l
             errors.append(f"{rel}/SKILL.md: link target does not exist: {path_part}")
 
 
+def check_frontmatter_is_parseable(text: str, rel: str, errors: list) -> None:
+    """Flag a plain frontmatter scalar that a real YAML parser would reject.
+
+    Deliberately narrow, and not a YAML validator: the standard-library-only rule
+    rules out importing one. This catches the single construct that has actually
+    shipped here (S-019). A plain unquoted value containing ": " reads as a nested
+    mapping, and one ending in ":" reads as a key expecting a value, so YAML
+    rejects the whole file. This script's own parser is a regex and accepts both,
+    which is how eight skills stayed unreadable by every real consumer while every
+    gate passed (bug-0007). Quote the value or use a block scalar.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return
+    for raw in lines[1:]:
+        if raw.strip() == "---":
+            break
+        m = re.match(r"^(\w[\w-]*):[ \t]+(\S.*)$", raw)
+        if not m:
+            continue
+        key, value = m.group(1), m.group(2).rstrip()
+        if BLOCK_SCALAR_RE.match(value):
+            continue  # a block scalar may contain anything
+        if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+            continue  # quoted, so the colon is just text
+        if ": " in value or value.endswith(":"):
+            errors.append(
+                f"{rel}/SKILL.md: `{key}` is a plain scalar containing a colon, which YAML "
+                f"reads as a nested mapping, so no real parser can read this file. Quote the "
+                f"value or write it as a block scalar (`{key}: >-`). This checks one known "
+                f"construct, not YAML validity in general."
+            )
+
+
 def check_status_contradiction(text: str, rel: str, warnings: list) -> None:
     """Warn when a skill asserts both draft and shipped status."""
     if DRAFT_STATUS_RE.search(text) and SHIPPED_STATUS_RE.search(text):
@@ -203,6 +238,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")
         check_links(skill_md, text, skill_names, rel, errors, portable_root)
+        check_frontmatter_is_parseable(text, rel, errors)
         check_status_contradiction(text, rel, warnings)
 
     for w in warnings:

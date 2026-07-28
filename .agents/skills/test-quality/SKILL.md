@@ -1,6 +1,11 @@
 ---
 name: test-quality
-description: Use when creating, modifying, reviewing, or deciding whether to add tests, fixtures, mocks, integration tests, end-to-end tests, smoke tests, or test plans in any codebase or language, including regression tests for bug fixes. Chooses the test layer and oracle: guides agents to pick the right test layer, avoid low-value tests, and verify meaningful behavioral oracles. Distinct from house-review and review-quality, which judge code changes rather than test design.
+description: >-
+  Use when creating, modifying, reviewing, or deciding whether to add tests, fixtures, mocks,
+  integration tests, end-to-end tests, smoke tests, or test plans in any codebase or language,
+  including regression tests for bug fixes. Chooses the test layer and oracle: guides agents to
+  pick the right test layer, avoid low-value tests, and verify meaningful behavioral oracles.
+  Distinct from house-review and review-quality, which judge code changes rather than test design.
 ---
 
 # Test quality

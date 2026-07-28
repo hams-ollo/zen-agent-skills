@@ -2,7 +2,7 @@
 id: chore-0020
 title: Document npx skills as a second install path, with its limitation stated
 type: chore
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0007]
@@ -24,8 +24,8 @@ offers only the Python installer.
 
 ## Scope
 
-**In scope:** document `npx skills` as a second install path in [`README.md`](../README.md) and
-[`docs/GETTING-STARTED.md`](../docs/GETTING-STARTED.md), with its limitation stated plainly, keeping
+**In scope:** document `npx skills` as a second install path in [`README.md`](../../README.md) and
+[`docs/GETTING-STARTED.md`](../../docs/GETTING-STARTED.md), with its limitation stated plainly, keeping
 `install.py` as the complete, offline, standard-library-only path. Do not delete or demote the existing
 quick start.
 
@@ -86,17 +86,43 @@ Other notes:
 
     python scripts/build-adapters.py --dry-run
 
-- [ ] `README.md` documents the `npx skills` path after the existing quick start, which is unchanged.
-- [ ] `docs/GETTING-STARTED.md` documents it in plain language.
-- [ ] Both state the lens limitation in the same passage as the command, not as a footnote.
-- [ ] Both state that `install.py` remains the complete path, and why in one clause.
-- [ ] No claim is made about a registry listing or a supported version.
-- [ ] Every relative link added resolves; CI's link check still reports zero broken links.
-- [ ] All four repository checks still pass.
+- [x] `README.md` documents the `npx skills` path after the existing quick start, which is unchanged.
+- [x] `docs/GETTING-STARTED.md` documents it in plain language.
+- [x] Both state the lens limitation in the same passage as the command, not as a footnote.
+- [x] Both state that `install.py` remains the complete path, and why in one clause.
+- [x] No claim is made about a registry listing or a supported version.
+- [x] Every relative link added resolves; CI's link check still reports zero broken links.
+- [x] All four repository checks still pass.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-28)
+
+Option 1, on the author's decision: documented with the limitation stated in the same passage as the
+command, not in a footnote. `README.md` gets a `3b` section after the existing quick start, which is
+untouched. `docs/GETTING-STARTED.md` gets a `4a` section in plain language for a non-specialist reader,
+naming the consequence rather than the mechanism ("those skills arrive with the pointer but not the thing
+it points at. Nothing errors; the skill just quietly has less to work with").
+
+Both say `install.py` remains the complete path and why in one clause: it places the rules module where
+the skills' own references resolve, and needs no Node and no network. No version is pinned and no
+registry listing is claimed, since neither is the kit's to promise.
+
+**The honest state of this path, recorded so nobody has to rediscover it:** after `bug-0007`, all
+nineteen skills install, and all nineteen arrive with a dangling lens reference. For most that costs the
+house-style module. For `house-review` it costs the entire rubric and severity scheme, which is the
+2026-07-27 blocker reproduced on a channel the kit does not control. The README says exactly that,
+naming `house-review`, because a reader choosing between two installers deserves the specific
+consequence rather than a general caution.
+
+**The lens problem was not solved here and remains the shared blocker with `feat-0034`.** It is one
+problem with two consumers, and the four options (duplicate the lens per skill, place it as a
+plugin-root sibling, inline it, or accept the degradation) each cost something real. The recommendation
+recorded in `feat-0034` is to extend `build-adapters.py` with a plugin target rather than hand-write a
+manifest, since that generator already solves link rewriting for two other harnesses. Deciding it once,
+for both consumers, is the point.

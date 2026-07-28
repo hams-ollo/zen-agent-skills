@@ -15,6 +15,13 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-07-28 (`bug-0007`) on the author's explicit instruction, and re-approved.** S-019 was
+added, along with Goal 7 and the non-goal bounding it. Eight of the nineteen shipped skills had
+frontmatter that no real YAML parser could read: a plain unquoted `description` containing a colon
+followed by a space, which YAML parses as a nested mapping. Every gate passed, because both kit scripts
+read frontmatter with a regex that accepts it, so the kit had never parsed its own frontmatter the way a
+consumer does. It was found by running a third-party installer, which skipped all eight.
+
 **Amended 2026-07-28 (`feat-0032`) on the author's explicit instruction, and re-approved.** S-017 and
 S-018 were added, along with Goal 6 and the field-limit constraint they serve. This contract had a soft
 floor on the description and no ceiling, while both harnesses `install.py` targets cap the field at
@@ -41,9 +48,15 @@ validator is the kit-level lint that enforces that bar.
    absent check is never indistinguishable from a passing one.
 6. Fail when a field exceeds a limit the distribution targets enforce, because a skill a harness
    rejects or truncates has not shipped, and it fails by simply never being selected.
+7. Fail when frontmatter is written in a form a real YAML parser rejects, since this validator's own
+   reader is more permissive than any consumer's and a skill it accepts may still be unreadable
+   everywhere it is installed.
 
 ## Non-Goals
 
+- **Full YAML validation.** The standard-library-only constraint rules out a YAML library, so the
+  parseability check in S-019 targets the specific construct that has actually shipped rather than
+  claiming general validity. It is a check for one known defect, and its message says so.
 - Judging skill prose quality beyond the structural and length proxies.
 - Modifying or fixing any skill.
 - Verifying that a link's target contains what the linking text claims about it.
@@ -186,6 +199,15 @@ validator is the kit-level lint that enforces that bar.
 - **Then** the length is of the scalar's value, excluding the indicator, so the reported number is the
   one a harness reading the same file would measure. A plain single-line description is measured
   unchanged.
+
+### Scenario S-019: frontmatter a real YAML parser would reject fails
+
+- **Given** a `SKILL.md` whose frontmatter holds a plain unquoted scalar containing a colon followed by
+  a space, or ending in a colon, which YAML reads as a nested mapping rather than as text
+- **When** the validator runs
+- **Then** it records an error naming the field and exits non-zero, so the file cannot ship in a form no
+  consumer can read. The same text quoted, or written as a block scalar, produces no finding, because
+  both are valid YAML.
 
 ## Proposed Surface
 

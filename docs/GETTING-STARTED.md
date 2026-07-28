@@ -146,6 +146,18 @@ python scripts/install.py --profile all
 
 `core` is three skills: set up a project, track the work, describe the change at the end. Each command prints what it costs, so you can compare before deciding. You can change your mind later by running it again with a different profile.
 
+### 4a. If you already use `npx skills`
+
+There is a popular installer called `npx skills` that works across many more assistants, and this kit works with it:
+
+```bash
+npx skills add hams-ollo/zen-agent-skills
+```
+
+One thing to know before you choose it. Several skills in this kit are written to read a separate shared file for their standards, for example the checklist `house-review` uses to review code. That installer copies only the skill itself and not the shared file, so those skills arrive with the pointer but not the thing it points at. Nothing errors; the skill just quietly has less to work with.
+
+The command in step 4 above does copy the shared files, so prefer it unless you are using an assistant it does not cover. It also needs no internet connection after you have the repository.
+
 For Cursor or VS Code with Copilot, generate project-level adapters from the kit directory:
 
 ```bash

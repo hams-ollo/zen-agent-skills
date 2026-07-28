@@ -1,6 +1,14 @@
 ---
 name: reconcile-worktrees
-description: Safely consolidate one or more isolated git worktrees (for example left behind by parallel background agents, or from the fix-batch skill) into the main working tree, without committing or merging blindly. Use whenever asked to "reconcile the worktrees", "merge these agent branches", "bring the worktree changes back into main", "clean up the worktrees", or when multiple agent worktree directories exist and their changes need to land in the primary checkout. It is the closing step of the kit spine: new-task authors, fix-batch dispatches to isolated agents, reconcile-worktrees lands the verified results. Also use it proactively after a fix-batch run once every spawned agent has been individually verified, as the natural next step.
+description: >-
+  Safely consolidate one or more isolated git worktrees (for example left behind by parallel
+  background agents, or from the fix-batch skill) into the main working tree, without committing
+  or merging blindly. Use whenever asked to "reconcile the worktrees", "merge these agent
+  branches", "bring the worktree changes back into main", "clean up the worktrees", or when
+  multiple agent worktree directories exist and their changes need to land in the primary
+  checkout. It is the closing step of the kit spine: new-task authors, fix-batch dispatches to
+  isolated agents, reconcile-worktrees lands the verified results. Also use it proactively after a
+  fix-batch run once every spawned agent has been individually verified, as the natural next step.
 ---
 
 # reconcile-worktrees

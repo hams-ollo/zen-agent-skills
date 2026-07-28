@@ -2,7 +2,7 @@
 id: bug-0007
 title: Eight skill descriptions are not valid YAML and are rejected by any real parser
 type: bug
-status: open
+status: done
 priority: P0
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -56,7 +56,7 @@ sharpest illustration, since it is also the skill that most depends on material 
 ## Scope
 
 **In scope:** make all eight descriptions valid YAML, preserving their text exactly; add a check to
-[`validate-skills.py`](../scripts/validate-skills.py) that fails on frontmatter no YAML parser would
+[`validate-skills.py`](../../scripts/validate-skills.py) that fails on frontmatter no YAML parser would
 accept, so this cannot recur; add covering tests.
 
 **Out of scope:** rewording any description, which is `bug-0005`'s territory and already done. The
@@ -87,7 +87,7 @@ forbids.
   Prefer the first. Name it for what it is: a check for the one malformed-frontmatter construct that
   has actually shipped, not a YAML validator.
 - **This needs a spec amendment, so it needs the author's explicit instruction before implementing.**
-  A new check is a new scenario in [`docs/spec/validate-skills.md`](../docs/spec/validate-skills.md)
+  A new check is a new scenario in [`docs/spec/validate-skills.md`](../../docs/spec/validate-skills.md)
   (`S-019` is next), and that contract is human-owned. The eight description fixes do not need one.
 - Re-run `npx skills add <this repo> --list` after fixing and confirm it discovers nineteen skills and
   skips none. That is the acceptance evidence no unit test can give, because the oracle is a third
@@ -107,17 +107,53 @@ character, rather than eyeballing the diff. Reverting is one commit.
 
     python scripts/validate-skills.py
 
-- [ ] All nineteen descriptions parse under a real YAML parser, proven by `npx skills add <repo> --list` discovering nineteen and skipping none.
-- [ ] Each of the eight descriptions is character-for-character identical to its value before the change.
-- [ ] `validate-skills.py` fails on a plain-scalar description containing `": "`, with a message that says what it checks and does not claim to validate YAML.
-- [ ] The new test fails against the pre-fix validator.
-- [ ] `python scripts/validate-skills.py` exits 0 with 19 skills, 0 errors, 0 warnings.
-- [ ] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
-- [ ] `python scripts/build-adapters.py --dry-run` exits 0 with 38 adapter files.
+- [x] All nineteen descriptions parse under a real YAML parser, proven by `npx skills add <repo> --list` discovering nineteen and skipping none.
+- [x] Each of the eight descriptions is character-for-character identical to its value before the change.
+- [x] `validate-skills.py` fails on a plain-scalar description containing `": "`, with a message that says what it checks and does not claim to validate YAML.
+- [x] The new test fails against the pre-fix validator.
+- [x] `python scripts/validate-skills.py` exits 0 with 19 skills, 0 errors, 0 warnings.
+- [x] `python -m unittest discover -s tests -p "test_*.py"` exits 0.
+- [x] `python scripts/build-adapters.py --dry-run` exits 0 with 38 adapter files.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in the `AGENTS.md` conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in the `AGENTS.md` conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-28)
+
+All eight descriptions are now folded block scalars, and `npx skills add D:\zen-starter-kit --list`
+reports **19 skills found, none skipped**, against 11 found and 8 skipped before. That third-party
+parser is the oracle, since the defect was precisely that the kit's own reader disagreed with every
+other one.
+
+**The round-trip was verified mechanically rather than by reading the diff**, because the risk was silent
+truncation: an under-indented continuation line in a folded scalar stops folding and quietly shortens the
+value, and no existing check would notice. A script extracted each description, rewrapped it at 96
+columns, reparsed the result, and asserted character-for-character equality before writing anything. All
+eight matched exactly (916, 800, 874, 860, 647, 738, 370, 467 characters). Two independent confirmations
+followed: `validate-skills.py` still reports 19 skills with 0 errors and 0 warnings, and `install.py`'s
+description budget is still exactly 14,262 characters, which it could not be if any description had
+changed length by even one character.
+
+`check_frontmatter_is_parseable()` now errors on the construct, and `docs/spec/validate-skills.md` carries
+S-019 with Goal 7 and an explicit non-goal bounding it, amended on the author's instruction and
+re-approved. Six tests, of which the three negative cases matter most: a block scalar, a quoted value,
+and a URL whose colon has no following space must all pass, or the check would push authors into
+contorting descriptions to satisfy a checker rather than a parser. Proven by execution against a copy of
+the real `.agents/` tree with `house-review`'s description restored to its shipped form: exit 1 with the
+nested-mapping error.
+
+**The check is deliberately not a YAML validator and says so in its own message.** The standard-library
+rule forbids importing one, so it targets the single construct that has shipped. Claiming more than that
+would be the more dangerous outcome: a check named "validates YAML" that misses a different malformation
+is worse than a narrow check that is honest about its scope.
+
+**The finding worth carrying forward is about method, not YAML.** Nineteen skills, four gates, an
+approved contract, and a conformance matrix all agreed the frontmatter was fine. It was not, and nothing
+inside the repository could have found it, because the spec and the implementation were consistent with
+each other and both were inconsistent with the standard. It took running a real consumer over the real
+tree. Where a tool reimplements a standard instead of calling it, conformance to the spec is not evidence
+of conformance to the standard, and this kit reimplements YAML parsing in three places.
