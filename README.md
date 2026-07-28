@@ -39,6 +39,7 @@ This is a skills library, not an application or a service. It has no database, n
 - [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md): a plain-language guide for founders and builders starting new or existing projects.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the technical model, components, and maintenance flow.
 - [`docs/CATALOG.md`](docs/CATALOG.md): the reader-facing catalog of shipped and planned skills.
+- [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md): how to link tasks to GitHub issues so merging a pull request closes them.
 - [`docs/spec/`](docs/spec/): behavioral specifications, the contracts the spine's skills are built and verified against.
 - [`ROADMAP.md`](ROADMAP.md): the builder-facing execution plan.
 - [`.tasks/`](.tasks/): atomic work items used to build and maintain this kit.
@@ -77,7 +78,7 @@ The front door scaffolds a project and its work tracker. A rough idea becomes a 
 
 The spine is local by default: a task file lives in your repository, not in a tracker, which is what keeps an agent's context small and lets the whole system work offline. When a team needs the work visible on a board, a task can name the GitHub issue it serves with an `external` field (`#123`, or `owner/repo#123` for another repository). `pr-describe` then puts a closing reference in the pull request description, so merging closes the issue without anyone remembering to.
 
-The point is not the plumbing, which is one line of text. It is that GitHub's rules for that line fail silently in four different ways: a keyword is ignored in a pull request title and in comments, it is ignored entirely unless the pull request targets the default branch, and one keyword followed by a list closes only the first issue. Each of those produces a pull request that looks right, merges cleanly, and leaves the tracker wrong. `pr-describe` knows all four. See [`docs/spec/tracker-links.md`](docs/spec/tracker-links.md) for the contract.
+The point is not the plumbing, which is one line of text. It is that GitHub's rules for that line fail silently in four different ways: a keyword is ignored in a pull request title and in comments, it is ignored entirely unless the pull request targets the default branch, and one keyword followed by a list closes only the first issue. Each of those produces a pull request that looks right, merges cleanly, and leaves the tracker wrong. `pr-describe` knows all four. See [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) for how to set it up and what to check when an issue does not close, or [`docs/spec/tracker-links.md`](docs/spec/tracker-links.md) for the contract.
 
 Other trackers use the same shape with a different token. Azure Boards support is on the [roadmap](ROADMAP.md), deliberately unbuilt until there is a board to exercise it against.
 
@@ -180,6 +181,7 @@ The kit does not maintain separate hand-edited versions of a skill for each harn
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and the bar a new skill has to clear |
 | [`SECURITY.md`](SECURITY.md) | Threat model and how to report a security issue privately |
 | [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) | Plain-language guide for non-specialists |
+| [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) | Connecting task files to a GitHub issue tracker |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Technical architecture and skill maintenance flow |
 | [`docs/CATALOG.md`](docs/CATALOG.md) | Narrative catalog for readers |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications, plus the conformance, verification, readiness, and characterization reports that sit beside them |

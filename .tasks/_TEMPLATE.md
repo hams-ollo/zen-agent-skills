@@ -59,4 +59,5 @@ authors to skip it.
 
 - [ ] Acceptance command(s) pass locally.
 - [ ] Conventions in AGENTS.md's conventions section followed.
+- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
 - [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -48,7 +48,9 @@ A skills library, not an application. The deliverables are the skills under [`.a
 
 A task file is the 1,000-foot decomposition of one roadmap Feature; its `parent:` links back up. **Only decompose a Feature into task files when it is actually about to be built.** Speculative task files for far-off skills rot and are dishonest about `touched_files`; keep those at the `ROADMAP.md` altitude until their turn.
 
-Task lifecycle `open -> in_progress -> done`. On completion: confirm the acceptance command passes; confirm every `depends_on` is in `.tasks/done/`; move the file to `.tasks/done/` with `status: done`; add one dated line to `CHANGELOG.md`; strike the roadmap Feature through if it is complete.
+Task lifecycle `open -> in_progress -> done`. On completion: confirm the acceptance command passes; confirm every `depends_on` is in `.tasks/done/`; **run `doc-sync` over the reader-facing documents and apply or dismiss each finding**; move the file to `.tasks/done/` with `status: done`; add one dated line to `CHANGELOG.md`; strike the roadmap Feature through if it is complete.
+
+The `doc-sync` step is in that list because its absence has cost real work. `feat-0031` shipped a user-facing feature that was dogfooded, given a conformance matrix and a verification record, and left every reader-facing document with zero mention of it. Updating `CHANGELOG.md` and the task file is bookkeeping, not documentation: a feature only a maintainer can find out about has not shipped for anyone else.
 
 ## 4. How a skill is structured
 
