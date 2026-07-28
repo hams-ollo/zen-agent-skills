@@ -196,14 +196,38 @@ def _rm(target: Path):
         target.unlink()
 
 
+def _beneath(target: str, home: Path) -> bool:
+    """True when a recorded target lies under `home`.
+
+    One manifest serves every home installed to from this checkout, because
+    `install` merges into the existing record rather than replacing it. Reversal
+    is therefore scoped here, per S-007 and S-012: without this, uninstalling a
+    throwaway home also removes the user's real installation.
+    """
+    try:
+        return Path(target).is_relative_to(home)
+    except (OSError, ValueError):
+        return False
+
+
 def uninstall(home: Path, dry: bool) -> int:
     manifest = load_manifest()
     if not manifest["entries"]:
         print("Nothing recorded as installed.")
         return 0
+
+    mine = [e for e in manifest["entries"] if _beneath(e["target"], home)]
+    others = [e for e in manifest["entries"] if not _beneath(e["target"], home)]
+
     tag = "[dry-run] " if dry else ""
+    if not mine:
+        print(f"Nothing recorded as installed beneath {home}.")
+        if others:
+            print(f"{len(others)} target(s) recorded under other homes are untouched.")
+        return 0
+
     removed = 0
-    for e in manifest["entries"]:
+    for e in mine:
         target = Path(e["target"])
         if target.is_symlink() or target.exists():
             if not dry:
@@ -212,8 +236,10 @@ def uninstall(home: Path, dry: bool) -> int:
             print(f"{tag}removed   {e['tool']:8} {e['name']}  ({target})")
         else:
             print(f"{tag}gone      {e['tool']:8} {e['name']}  ({target})")
-    save_manifest([], dry)
+    save_manifest(others, dry)
     print(f"\n{tag}Uninstalled {removed} target(s).")
+    if others:
+        print(f"{tag}Kept {len(others)} target(s) recorded under other homes.")
     return 0
 
 

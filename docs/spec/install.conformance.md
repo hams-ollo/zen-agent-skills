@@ -2,7 +2,7 @@
 title: install conformance
 spec: docs/spec/install.md
 audited: 2026-07-27
-re_audited: 2026-07-27 (chore-0017)
+re_audited: 2026-07-28 (bug-0003)
 ---
 
 # install conformance matrix
@@ -24,7 +24,8 @@ approved contract and a matrix.
 | Scenarios | S-004 an unmanaged target is refused | Conformed | `_place()` / both `return "CONFLICT"` paths, with `install()` counting them and returning 1 while the loop continues | the loop continues past a conflict, so free targets are still placed |
 | Scenarios | S-005 a lost record makes previous copies unmanaged | Conformed | `load_manifest()` returning empty entries, feeding `is_managed()` | confirmed by execution: deleting the manifest and re-running yields exit 1 with a conflict per previously-copied target |
 | Scenarios | S-006 a preview run writes nothing | Conformed | `_place()` / the `if not dry` guards, and `save_manifest()` / `if dry: return` | neither targets nor the record are created |
-| Scenarios | S-007 reversing removes what was placed | Conformed | `uninstall()` / the loop over `manifest["entries"]` calling `_rm`, then `save_manifest([], dry)` | driven by the record, so nothing unrecorded is touched |
+| Scenarios | S-007 reversing removes what was placed beneath the given home | Conformed | `uninstall()` / `mine = [... if _beneath(e["target"], home)]`, the loop calling `_rm`, then `save_manifest(others, dry)` | amended and re-audited by `bug-0003`. The pre-fix code ignored `home` entirely and emptied the whole record |
+| Scenarios | S-012 reversing one home leaves another intact | Conformed | `_beneath()` / `Path(target).is_relative_to(home)`, and `uninstall()` retaining `others` in the record | confirmed by execution against two throwaway homes and by a test proven to fail against the pre-fix code |
 | Scenarios | S-008 reversing with nothing recorded is not an error | Conformed | `uninstall()` / the `if not manifest["entries"]` early return 0 | prints the nothing-recorded line |
 | Scenarios | S-009 an unrecognised tool is rejected before anything is placed | Conformed | `main()` / the `bad` check returning 2 before `install()` is called | the check precedes any placement, so a valid tool in the same list does not save it |
 | Scenarios | S-010 the default mode suits the platform | Conformed | `main()` / `default="copy" if os.name == "nt" else "symlink"` | |
@@ -37,7 +38,7 @@ approved contract and a matrix.
 
 ## Coverage proof
 
-- **audited**: S-001 through S-011, and all five Proposed Surface elements. Every spec item was
+- **audited**: S-001 through S-012, and all five Proposed Surface elements. Every spec item was
   checked.
 - **unreconciled**: none. No item diverged and none is unbuilt.
 
@@ -49,6 +50,7 @@ to an acceptance suite by this task:
 | Scenario | Covering test | Note |
 |---|---|---|
 | S-001 through S-008 | present | one each, plus a supporting test for how the skill set is identified |
+| S-012 | present | added by `bug-0003`. Two tests: one installs to two homes and asserts reversing one leaves the other on disk and in the record, one asserts reversing an uninstalled home removes nothing. Both were run against the pre-fix `uninstall()` and failed |
 | S-011 | present | added here; asserts the message names both ways out, not merely that it raises |
 | S-005 | present | added here; the surprising-but-correct case, which is why it is worth pinning |
 | S-009 | present | added by `chore-0017`. Pairs a supported tool with an unsupported one, so it also proves the valid entry does not rescue the invocation, and asserts nothing was placed |

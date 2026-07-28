@@ -10,6 +10,13 @@ Behavioral contract for [`scripts/install.py`](../../scripts/install.py), writte
 [`install.characterization.md`](install.characterization.md), so this describes a contract that
 already holds rather than proposing one. Approved by the author on 2026-07-27.
 
+**Amended 2026-07-28 (`bug-0003`), pending author re-approval.** S-007 was scoped to the home it was
+given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
+was satisfied by an implementation that removed every recorded target from every home ever installed
+to from this checkout, which destroyed a working installation while reporting success. The contract
+never said what `--uninstall` should do when the record spans more than one home, so the code was not
+diverging from it. This amendment states it.
+
 ## Problem
 
 The kit's skills are useless until a harness can find them. Claude Code and OpenCode both discover
@@ -103,18 +110,25 @@ overwritten exists only as a branch.
 - **Then** no target and no record exists that the run would have created, and the reported outcome
   describes what would have been placed.
 
-### Scenario S-007: reversing a run removes what it placed
+### Scenario S-007: reversing a run removes what it placed beneath the given home
 
 - **Given** a completed run whose targets are recorded
-- **When** the tool is asked to reverse it
-- **Then** each recorded target is removed, the record is emptied, and nothing the tool did not place
-  is touched.
+- **When** the tool is asked to reverse it against the same home
+- **Then** each recorded target beneath that home is removed, those entries leave the record, and
+  nothing the tool did not place is touched.
 
 ### Scenario S-008: reversing with nothing recorded is not an error
 
 - **Given** no record of any previous run
 - **When** the tool is asked to reverse one
 - **Then** it reports that nothing is recorded and exits zero.
+
+### Scenario S-012: reversing one home leaves another home's installation intact
+
+- **Given** completed runs against two different homes, both recorded
+- **When** the tool is asked to reverse one of them
+- **Then** only that home's targets are removed, the other home's targets remain on disk and remain
+  recorded, and a later reversal of the other home still finds them.
 
 ### Scenario S-009: an unrecognised tool is rejected before anything is placed
 
@@ -145,7 +159,7 @@ overwritten exists only as a branch.
 | `--mode` | `symlink` or `copy`; defaults to copy on Windows and symlink elsewhere |
 | `--home` | Base directory to install beneath; defaults to the user's home |
 | `--dry-run` | Preview: report what would be placed, write nothing |
-| `--uninstall` | Remove the recorded targets and empty the record |
+| `--uninstall` | Remove the recorded targets beneath `--home` and drop those entries from the record, leaving entries for other homes |
 | Placed per tool | Each skill's directory under that tool's discovery path, plus the rules module as their sibling |
 | Record | A manifest of the targets this tool created, enabling re-run recognition in copy mode |
 | Exit code | non-zero on an unrecognised tool or any unmanaged-target conflict, zero otherwise |

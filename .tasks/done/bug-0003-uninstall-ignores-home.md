@@ -2,12 +2,12 @@
 id: bug-0003
 title: Scope uninstall to the home it was given, instead of every recorded target
 type: bug
-status: open
+status: done
 priority: P0
 parent: "ROADMAP#tooling install.py"
 depends_on: []
 spec: "docs/spec/install.md"
-scenarios: ["S-011"]
+scenarios: ["S-007", "S-012"]
 touched_files:
   - scripts/install.py
   - tests/test_install.py

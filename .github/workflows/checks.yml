@@ -58,10 +58,9 @@ jobs:
       # dry run does not cover. Re-running proves idempotence, and the uninstall
       # proves the manifest can find what it created.
       #
-      # Safe here only because a CI runner starts with no manifest and no prior
-      # installation. Do NOT copy this sequence to a development machine: until
-      # bug-0003 is fixed, `--uninstall` ignores `--home` and removes every target
-      # the manifest records, which includes any real installation you already had.
+      # Safe on a development machine too, since bug-0003: `--uninstall` is scoped
+      # to `--home`, so reversing a throwaway home leaves a real installation alone
+      # (S-012). Before that fix this sequence destroyed it.
       - name: Install, re-install, and uninstall against a throwaway home
         shell: bash
         run: |

@@ -129,6 +129,50 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertFalse((self.home / ".claude" / "rules").exists())
         self.assertEqual(json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"], [])
 
+    def test_uninstall_of_one_home_leaves_another_homes_install_intact(self):
+        # Scenario S-012: one manifest serves every home installed to from this checkout,
+        # because install() merges into the existing record. Before bug-0003 this test
+        # failed: uninstall ignored its `home` argument, removed every recorded target,
+        # and emptied the whole record, so reversing a throwaway home destroyed the real
+        # installation while reporting success.
+        other_home = self.root / "other-home"
+
+        self._install()                                    # into self.home
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.install(["claude"], "copy", other_home, False)
+
+        recorded = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+        self.assertTrue(any(str(other_home) in e["target"] for e in recorded),
+                        "both homes should be in one record, or this test proves nothing")
+
+        code, out = self._uninstall()                      # reverse self.home only
+        self.assertEqual(code, 0)
+
+        # The reversed home is gone.
+        self.assertEqual(list((self.home / ".claude" / "skills").iterdir()), [])
+        # The untouched home still has its skills on disk.
+        survivors = list((other_home / ".claude" / "skills").iterdir())
+        self.assertTrue(survivors, "the other home's targets must survive")
+        self.assertTrue((other_home / ".claude" / "rules").exists())
+        # And is still recorded, so it can be reversed later.
+        left = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+        self.assertTrue(left, "the other home's entries must remain in the record")
+        self.assertTrue(all(str(other_home) in e["target"] for e in left))
+        self.assertIn("Kept", out)
+
+    def test_uninstall_reports_when_nothing_is_recorded_for_this_home(self):
+        # Scenario S-012 (second half): asking to reverse a home that holds nothing is not
+        # an error and must not fall through to removing another home's targets.
+        self._install()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.uninstall(self.root / "never-installed", False)
+        self.assertEqual(code, 0)
+        self.assertIn("Nothing recorded as installed beneath", buf.getvalue())
+        self.assertTrue(list((self.home / ".claude" / "skills").iterdir()),
+                        "the installed home must be untouched")
+
     def test_uninstall_with_no_manifest_reports_nothing_recorded(self):
         # Scenario S-008: reversing with nothing recorded is not an error.
         code, out = self._uninstall()

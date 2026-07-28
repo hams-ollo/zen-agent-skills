@@ -253,10 +253,6 @@ Use the default Windows copy mode, or force it explicitly:
 python scripts/install.py --mode copy
 ```
 
-### Uninstall removed more than I expected
-
-Known defect, tracked as [`bug-0003`](.tasks/bug-0003-uninstall-ignores-home.md). `--uninstall` ignores `--home` and removes every target the manifest records, which includes any earlier installation made from the same checkout to a different home. Until it is fixed, use `--dry-run` to preview an uninstall, and prefer `--dry-run` over a real install when evaluating against a throwaway home.
-
 ### A generated adapter is out of date
 
 Regenerate it from the kit root. Do not edit the generated file directly:
