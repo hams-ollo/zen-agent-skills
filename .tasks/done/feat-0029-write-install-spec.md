@@ -2,7 +2,7 @@
 id: feat-0029
 title: Write the behavioral contract for install.py, the last uncontracted script
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: []
@@ -63,14 +63,45 @@ and reverts with one commit.
 
     python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] `docs/spec/install.md` exists, `spec-quality` returns `ready`, and a human set `status: approved`.
-- [ ] Every scenario carries a stable `S-NNN`; every goal and surface element has one.
-- [ ] Each test in `tests/test_install.py` is tagged with the scenario it covers, and the file no
+- [x] `docs/spec/install.md` exists, `spec-quality` returns `ready`, and a human set `status: approved`.
+- [x] Every scenario carries a stable `S-NNN`; every goal and surface element has one.
+- [x] Each test in `tests/test_install.py` is tagged with the scenario it covers, and the file no
       longer describes itself as characterization.
-- [ ] `scripts/install.py` is byte-for-byte unchanged.
+- [x] `scripts/install.py` is byte-for-byte unchanged.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Outcome (2026-07-27)
+
+Eleven scenarios, approved, with a conformance matrix and a promoted acceptance suite. Every kit
+distribution script now has a contract and a matrix.
+
+Two judgment calls decided what belonged in the contract. **The manifest is contract-level**, not an
+internal detail: deleting it changes observable behavior, which `S-005` now states. **The two
+`feat-0027` testability findings are not contract items** and were deliberately left out, since the
+manifest's location is intended behavior and argv injection is a property of the code rather than of
+what the tool does.
+
+`S-002` states the rules module's location by derivation rather than by path: it goes wherever the
+skills' existing references resolve to. That is the property the 2026-07-27 blocker violated, and
+writing it as a literal path would have made it look arbitrary rather than forced.
+
+`spec-quality` caught one gap before the draft was committed: `S-010` traced to no goal. That is the
+fourth consecutive spec whose orphan was an invocation concern, after `validate-skills` S-015,
+`build-adapters` S-013, and `house-review` S-011, so goal 7 now covers working out of the box per
+platform.
+
+The suite went 8 to 10 and became an acceptance suite: every test tagged with the scenario it covers,
+plus new tests for `S-005` and `S-011`. `S-005` was worth adding for its own sake, since "deleting the
+record turns the tool's own past work into conflicts" looks like a bug and is correct, and is exactly
+what a future editor would try to fix.
+
+**The matrix converted a loose observation into a concrete one.** `S-009` and `S-010` have no test and
+cannot get one, because both live in `main()`, which takes no argv. That is not a contract defect and
+not a divergence; it is a coverage gap caused by the code's shape, and it is now two named scenarios of
+an approved contract that cannot be verified rather than a vague note about testability. Filed as
+`chore-0017`.

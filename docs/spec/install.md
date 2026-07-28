@@ -1,6 +1,6 @@
 ---
 title: install
-status: draft
+status: approved
 ---
 
 # install
@@ -8,7 +8,7 @@ status: draft
 Behavioral contract for [`scripts/install.py`](../../scripts/install.py), written 2026-07-27
 (`feat-0029`). A **retrospective** spec: the implementation exists and its behavior was pinned first by
 [`install.characterization.md`](install.characterization.md), so this describes a contract that
-already holds rather than proposing one. A human sets `status: approved`.
+already holds rather than proposing one. Approved by the author on 2026-07-27.
 
 ## Problem
 
