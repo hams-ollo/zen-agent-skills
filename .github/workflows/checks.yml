@@ -21,10 +21,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # The declared floor and a current release. 3.9 was dropped by bug-0004:
-        # it is end-of-life upstream, and re-install was not idempotent on it under
-        # Windows. Keep the lower bound here identical to the one README states.
-        python: ["3.10", "3.13"]
+        # Brackets the supported range: the declared floor and the newest release.
+        # 3.9 was dropped by bug-0004 (end-of-life upstream, and re-install was not
+        # idempotent on it under Windows). The upper bound is the version the
+        # maintainer actually develops on, so the daily environment is not the one
+        # thing nothing tests. Keep the lower bound identical to README's claim.
+        python: ["3.10", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
