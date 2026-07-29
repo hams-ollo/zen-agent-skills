@@ -6,9 +6,9 @@ Completed work for Zen Agent Skills, newest first. This is the append-only ledge
 
 ## Releases
 
-### v0.1.0 (prepared 2026-07-29, not yet tagged)
+### v0.1.0 (2026-07-29)
 
-**No tag and no GitHub release exist yet.** This section records what `v0.1.0` will contain so that a person can publish it; `chore-0021` prepared the release and deliberately created nothing, because a public tag on a public repository is effectively permanent. Until `git tag --list` shows `v0.1.0`, read this as a plan rather than as history. The ordered publish steps and the proposed repository topics are in [`chore-0021`](.tasks/done/chore-0021-release-hygiene-v0-1-0.md).
+Tagged at [`1917dbe`](https://github.com/hams-ollo/zen-agent-skills/releases/tag/v0.1.0) on 2026-07-29, after `chore-0021` prepared the release and the author authorised publishing it. The ordered publish steps that were followed, and the repository topics that were applied, are recorded in [`chore-0021`](.tasks/done/chore-0021-release-hygiene-v0-1-0.md).
 
 Contents, derived from the task log below (2026-07-23 to 2026-07-29) rather than from memory, as measured on 2026-07-29:
 

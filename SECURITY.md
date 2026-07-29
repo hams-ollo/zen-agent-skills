@@ -10,7 +10,7 @@ Treat a skill the way you would treat a script you are about to run, not the way
 
 ## Supported versions
 
-The kit is distributed from `main`. There are no releases or version branches yet, so fixes land on `main` and adopters pick them up by pulling and re-running the installer. If that changes, this section will say so.
+The kit is distributed from `main`, and `main` is the only supported version. Releases are tagged (the first is `v0.1.0`, 2026-07-29) so that a report can name the version it was found against, but a tag is a marker in the history rather than a maintained branch: fixes land on `main` and are not backported to an earlier tag. Adopters pick them up by pulling and re-running the installer.
 
 ## What to report
 
