@@ -1,6 +1,7 @@
 ---
 name: verifier-agent
 description: Use before reconciling or landing an implementation to independently verify it against its approved spec and its task's acceptance criteria. Runs the declared verification commands and records each exact outcome, composes the spec-conformance lens so a contract divergence fails the run even when every command passes, maps each acceptance criterion to met or unmet with named evidence, and returns a deterministic pass, fail, or blocked verdict. Returns blocked rather than guessing when the spec is unapproved or no command is declared, so a verification that could not run is never recorded as a pass. Distinct from spec-conformance (the report-only lens it composes), test-author (which writes tests), house-review (which judges quality), and fix-batch (which dispatches the work). It verifies and reports; it never edits what it verifies.
+license: MIT
 ---
 
 # verifier-agent

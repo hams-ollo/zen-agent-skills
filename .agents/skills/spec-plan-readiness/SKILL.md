@@ -1,6 +1,7 @@
 ---
 name: spec-plan-readiness
 description: Use before implementation when a spec and its task decomposition must be checked for coding readiness. Applies a deterministic go/no-go gate for missing inputs, unresolved spec blockers, incomplete ordered task lists, spec-task contradictions, task-to-scenario traceability, scenario-to-test layer mapping, risk/rollback requirements, and first-safe-task selection; a blocked verdict authorizes no tests, code, or implementation delegation. Gates implementability, distinct from `spec-quality`, which judges well-formedness.
+license: MIT. Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 ---
 
 # Spec-plan readiness

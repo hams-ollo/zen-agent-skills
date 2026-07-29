@@ -11,6 +11,7 @@ description: >-
   them. Do not use it for a single fix (just do it directly) or for changes that are inherently
   sequential or interdependent (one agent's output feeds the next's input), since worktree
   isolation assumes the items do not need to see each other's work in progress.
+license: MIT
 ---
 
 # fix-batch

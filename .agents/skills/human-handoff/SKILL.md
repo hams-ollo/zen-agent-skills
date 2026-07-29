@@ -6,12 +6,13 @@ description: >-
   tuned to the reader, with internals and costs redacted when the reader is a client. Use
   this whenever the user wants to bring a person up to speed, ask a collaborator to decide
   something, prep for a meeting, or draft an update. Trigger on phrases like: "write an
-  update for my partner", "draft a message to <name> about where we are", "summary for the
-  client", "onboard the new dev", "prep for the meeting with the other engineering team",
-  "what should I tell <name> about the open questions", "put together a handoff doc for
+  update for my partner", "draft a message to a teammate about where we are", "summary for
+  the client", "onboard the new dev", "prep for the meeting with the other engineering team",
+  "what should I tell a stakeholder about the open questions", "put together a handoff doc for
   whoever picks this up", or any request to explain project status to a person rather than
   an agent. If the handoff target is a fresh agent session or a spawned subagent that will
   execute work, use agent-handoff instead.
+license: MIT
 ---
 
 # Human handoff

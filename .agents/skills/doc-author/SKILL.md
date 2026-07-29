@@ -12,6 +12,7 @@ description: >-
   the codebase or project. When the document already exists and the user wants it updated,
   revised, or its links fixed, use doc-revise instead. When the user does not know which
   document is wrong, use doc-sync instead.
+license: MIT
 ---
 
 # Doc author

@@ -1,6 +1,7 @@
 ---
 name: spec-author
 description: Use when turning a raw idea, feature request, or bug into a persistent behavioral spec before any tasks or code. Drafts a scenario-based spec (problem, goals, non-goals, constraints, Given/When/Then scenarios with stable S-NNN ids, proposed surface, open questions), composes the spec-quality lens to self-check and revise until the verdict is ready, writes it under docs/spec/ with status draft, and stops. Marks the spec draft pending explicit human approval before new-task decomposes it. Distinct from new-task (which decomposes an approved spec into tasks) and spec-quality (the review lens this composes).
+license: MIT
 ---
 
 # spec-author

@@ -1,6 +1,7 @@
 ---
 name: test-author
 description: Use after an implementation to derive runnable tests from an approved spec's Given/When/Then scenarios and a task's acceptance criteria, one faithful test per scenario tagged with its S-NNN id. Discovers and matches the repo's existing test framework, composes the test-quality lens to choose the lowest faithful layer and an exact-outcome oracle, supports characterization tests for legacy code with no coverage, and reports coverage gaps instead of writing low-value passing tests. Distinct from test-quality (the lens it composes, which judges test design), spec-conformance (audits code against a spec), and fix-batch (runs tests). It writes tests; it never edits production code.
+license: MIT
 ---
 
 # test-author

@@ -15,6 +15,15 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-07-29 (`bug-0008`) on the author's explicit instruction, and re-approved.** S-020 and
+S-021 add the two remaining rules of the skill schema this validator did not check: no angle brackets in
+`description`, and an allow-list of frontmatter properties. Both are hard failures at the consumer.
+`human-handoff` was failing the first, found by running Anthropic's reference validator over the tree.
+This is the third defect in the same field in two days, after `bug-0005` and `bug-0007`, each found by a
+different external check and none by this one. The pattern, now recorded in the constraint below, is that
+validating against this contract was never the same thing as validating against the schema the
+distribution targets enforce.
+
 **Amended 2026-07-28 (`bug-0007`) on the author's explicit instruction, and re-approved.** S-019 was
 added, along with Goal 7 and the non-goal bounding it. Eight of the nineteen shipped skills had
 frontmatter that no real YAML parser could read: a plain unquoted `description` containing a colon
@@ -66,8 +75,14 @@ validator is the kit-level lint that enforces that bar.
 
 - Standard library only.
 - A `SKILL.md` is YAML frontmatter (delimited by `---`) followed by a Markdown body.
-- Both harnesses the kit installs to cap `description` at 1024 characters. That bound is external and
-  not the kit's to choose, which is why exceeding it is an error rather than a matter of taste.
+- **The skill schema is external and this validator's job includes conforming to it, not only to this
+  contract.** The reference implementation is `quick_validate.py` in Anthropic's `skill-creator` plugin,
+  read 2026-07-29. It caps `description` at 1024 characters, forbids angle brackets in it, requires a
+  kebab-case `name` of at most 64 characters, and allows exactly six frontmatter properties: `name`,
+  `description`, `license`, `allowed-tools`, `metadata`, `compatibility`. Those bounds are not the kit's
+  to choose, which is why violating one is an error rather than a matter of taste. Three separate defects
+  in `description` shipped while this contract and the implementation agreed with each other, so a rule
+  that exists only upstream is treated here as part of the contract.
 - Frontmatter is read by a small standard-library parser, not a YAML library. A field's value is
   therefore whatever that parser yields, so where YAML syntax and the parser could disagree about what
   the value is, the contract states which one the checks mean.
@@ -208,6 +223,22 @@ validator is the kit-level lint that enforces that bar.
 - **Then** it records an error naming the field and exits non-zero, so the file cannot ship in a form no
   consumer can read. The same text quoted, or written as a block scalar, produces no finding, because
   both are valid YAML.
+
+### Scenario S-020: a description containing an angle bracket fails
+
+- **Given** a `SKILL.md` whose `description` value contains `<` or `>`
+- **When** the validator runs
+- **Then** it records an error naming the field and the schema rule, and exits non-zero. The check reads
+  the parsed value, so a description written as a block scalar is not flagged for the `>` in its own
+  indicator.
+
+### Scenario S-021: a frontmatter property outside the schema fails
+
+- **Given** a `SKILL.md` whose frontmatter declares a key other than `name`, `description`, `license`,
+  `allowed-tools`, `metadata`, or `compatibility`
+- **When** the validator runs
+- **Then** it records an error naming the offending key and the permitted set, and exits non-zero,
+  because the schema rejects an unrecognised property outright rather than ignoring it.
 
 ## Proposed Surface
 

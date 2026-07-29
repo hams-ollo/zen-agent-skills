@@ -10,6 +10,7 @@ description: >-
   concrete fix. Use when the user says "review this", "review my changes", "code review", "review
   this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before
   merging. Report-only: it never changes code.
+license: MIT
 ---
 
 # house-review

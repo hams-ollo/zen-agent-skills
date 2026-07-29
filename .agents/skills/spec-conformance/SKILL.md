@@ -1,6 +1,7 @@
 ---
 name: spec-conformance
 description: Use when closing a spec-driven feature or issue, or auditing whether an implementation actually matches its spec. Given a spec path, emits a section-by-section conformance matrix mapping every scenario and proposed surface element to conformed (with file:line or test evidence), diverged (what, why, and both sides), or not-built, plus an audited/unreconciled coverage proof. This is the spec-vs-implementation audit, distinct from spec-quality (spec well-formedness) and doc-sync (doc-vs-code drift), and it is independent of test pass/fail.
+license: MIT. Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 ---
 
 # Spec conformance

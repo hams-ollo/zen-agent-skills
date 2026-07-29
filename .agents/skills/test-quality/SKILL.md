@@ -6,6 +6,7 @@ description: >-
   including regression tests for bug fixes. Chooses the test layer and oracle: guides agents to
   pick the right test layer, avoid low-value tests, and verify meaningful behavioral oracles.
   Distinct from house-review and review-quality, which judge code changes rather than test design.
+license: MIT. Adapted from repoprompt-workflows (Balarama Bosch), MIT.
 ---
 
 # Test quality

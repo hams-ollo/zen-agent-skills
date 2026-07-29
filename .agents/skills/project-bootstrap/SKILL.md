@@ -8,6 +8,7 @@ description: >-
   this project", "fire up my harness", "give me a starting point", "bootstrap this", or points at
   an empty or nearly-empty directory they want turned into a real project. This is the front door
   of Zen Agent Skills: it calls init-worktracking so the repo comes up already tracked.
+license: MIT
 ---
 
 # project-bootstrap

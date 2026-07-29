@@ -36,6 +36,17 @@ MIN_DESC_CHARS = 40           # a real "what + when" description is not tiny
 # shipped over this limit before the check existed (bug-0005).
 MAX_DESC_CHARS = 1024
 
+# The frontmatter properties the skill schema permits. An unrecognised key is
+# rejected outright rather than ignored, so this is an allow-list and not a
+# style preference. Source: ALLOWED_PROPERTIES in quick_validate.py from
+# Anthropic's skill-creator plugin, read 2026-07-29. If a harness adds a legal
+# property, this constant is what to update; `version` is deliberately absent
+# because that reference implementation rejects it even though Anthropic's own
+# example skill documents it (bug-0008).
+ALLOWED_FRONTMATTER_KEYS = frozenset({
+    "name", "description", "license", "allowed-tools", "metadata", "compatibility",
+})
+
 # A YAML block scalar puts an indicator on the field line and the text on the
 # continuation lines below. parse_frontmatter folds those lines together, so
 # without this the indicator is counted as description content and every length
@@ -234,6 +245,17 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             errors.append(f"{rel}/SKILL.md: description is {len(desc)} chars, over the "
                           f"{MAX_DESC_CHARS}-char limit both target harnesses enforce; "
                           f"cut prose that restates the body and keep the trigger phrases")
+        # Checked on the parsed value, not the raw line: a block scalar's field line
+        # is literally `description: >-`, so a raw-text check would flag the twelve
+        # skills that use one (S-020).
+        if desc and ("<" in desc or ">" in desc):
+            errors.append(f"{rel}/SKILL.md: description contains an angle bracket, which the "
+                          f"skill schema both target harnesses enforce rejects; use a plain "
+                          f"noun instead of a `<placeholder>` in trigger phrases")
+        for key in sorted(set(fm) - ALLOWED_FRONTMATTER_KEYS):
+            errors.append(f"{rel}/SKILL.md: frontmatter key {key!r} is not in the skill schema, "
+                          f"which rejects an unrecognised property rather than ignoring it; "
+                          f"allowed: {', '.join(sorted(ALLOWED_FRONTMATTER_KEYS))}")
         if body_lines > MAX_BODY_LINES:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")

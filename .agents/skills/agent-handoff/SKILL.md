@@ -11,6 +11,7 @@ description: >-
   instructions first", or when the user is about to switch models or context windows and
   wants the work captured for a clean run. When the handoff target is a person (partner,
   client, teammate) rather than an agent, use human-handoff instead.
+license: MIT
 ---
 
 # Agent handoff

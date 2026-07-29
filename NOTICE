@@ -7,7 +7,14 @@ Third-party content
 -------------------
 
 This distribution includes agent skills adapted from vendored third-party
-material. Each adapted SKILL.md also carries a one-line provenance note.
+material. Each adapted SKILL.md also carries a one-line provenance note, and
+since 2026-07-29 a `license` field in its frontmatter naming the upstream.
+
+Both exist because this file does not travel with a packaged skill. The
+distribution unit is the skill directory, so anything at the repository root is
+left behind by the installers, by `npx skills`, and by a `.skill` archive. The
+body note is what a person reads; the frontmatter field is what a registry or a
+packaging tool can inspect. Keep all three in agreement.
 
 - repoprompt-workflows (RepoPrompt Workflows)
   - author: Balarama Bosch

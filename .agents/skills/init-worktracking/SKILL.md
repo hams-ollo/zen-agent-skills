@@ -11,6 +11,7 @@ description: >-
   system, or task files that parallel subagents can pick up, or says things like "add work
   tracking here", "set up the task system", or "scaffold the backlog". Feeds the new-task and
   fix-batch skills: one task file per worktree-isolated agent.
+license: MIT
 ---
 
 # init-worktracking

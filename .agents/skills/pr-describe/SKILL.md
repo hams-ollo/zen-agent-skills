@@ -1,6 +1,7 @@
 ---
 name: pr-describe
 description: Draft a pull request description and a matching changelog entry from a branch's diff, in the target repo's own changelog format, without touching GitHub. Determines the PR's commit range (the current branch against its merge-base with the default branch), surveys what changed, then produces a structured PR body plus a changelog line that references the work item when a .tasks/ system is present. Outputs text and surfaces the gh command to apply it; it never creates or edits a PR itself. Use when the user says "describe this PR", "write the PR body", "draft a pull request", "summarize my branch for a PR", "changelog entry for this branch", or is about to open a PR and wants the description and changelog written for them. Drafts only, safe with or without gh installed.
+license: MIT
 ---
 
 # pr-describe

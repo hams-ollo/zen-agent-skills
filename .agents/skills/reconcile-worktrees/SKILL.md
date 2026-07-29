@@ -9,6 +9,7 @@ description: >-
   checkout. It is the closing step of the kit spine: new-task authors, fix-batch dispatches to
   isolated agents, reconcile-worktrees lands the verified results. Also use it proactively after a
   fix-batch run once every spawned agent has been individually verified, as the natural next step.
+license: MIT
 ---
 
 # reconcile-worktrees

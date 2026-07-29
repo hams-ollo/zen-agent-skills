@@ -204,6 +204,80 @@ class TestDescriptionCeiling(unittest.TestCase):
         self.assertEqual(fm["description"], ">> quoted prose > with angle brackets")
 
 
+class TestSchemaConformance(unittest.TestCase):
+    """Scenarios S-020 and S-021: the two schema rules the kit was passing by accident.
+
+    Both are hard failures at the consumer, and neither was checked here. `human-handoff`
+    was violating S-020 in the field. S-021 is an allow-list, so its negative cases matter
+    as much as its positive one: rejecting a legal property would fail a valid skill and
+    look like a kit bug.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_angle_bracket_in_description_errors(self):
+        # Scenario S-020: the exact construct human-handoff shipped, a <placeholder> in a
+        # trigger phrase.
+        desc = LONG_DESC + ' Trigger on "draft a message to <name> about where we are".'
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=desc))
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("angle bracket", out)
+
+    def test_a_block_scalar_description_is_not_flagged_for_its_own_indicator(self):
+        # Scenario S-020 (negative): the field line reads `description: >-`. Checking raw
+        # text instead of the parsed value would flag the twelve skills that use one.
+        frontmatter = (f"---\nname: alpha\ndescription: >-\n  {LONG_DESC}\n---\n")
+        _write_skill(self.root, "alpha", frontmatter)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_an_unrecognised_frontmatter_key_errors(self):
+        # Scenario S-021: `version` is the likeliest wrong guess, because Anthropic's own
+        # example skill documents it as optional while their validator rejects it.
+        fm = f"---\nname: alpha\ndescription: {LONG_DESC}\nversion: 1.0.0\n---\n"
+        _write_skill(self.root, "alpha", fm)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("'version'", out)
+        self.assertIn("not in the skill schema", out)
+
+    def test_every_allowed_key_is_accepted(self):
+        # Scenario S-021 (negative): all six permitted properties together must pass, or
+        # the allow-list would reject a valid skill. `license` in particular is what
+        # chore-0022 goes on to add.
+        fm = ("---\nname: alpha\n"
+              f"description: {LONG_DESC}\n"
+              "license: MIT\n"
+              "allowed-tools: Read, Grep\n"
+              "metadata: some-value\n"
+              "compatibility: claude-code\n---\n")
+        _write_skill(self.root, "alpha", fm)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_the_shipped_kit_satisfies_both_schema_rules(self):
+        # S-020 and S-021 against the real tree, which is the assertion that would have
+        # caught human-handoff.
+        skills = sorted(p for p in (REPO_ROOT / ".agents" / "skills").iterdir() if p.is_dir())
+        offenders = {"angle_brackets": [], "unknown_keys": []}
+        for d in skills:
+            fm, _ = vs.parse_frontmatter((d / "SKILL.md").read_text(encoding="utf-8"))
+            if "<" in fm.get("description", "") or ">" in fm.get("description", ""):
+                offenders["angle_brackets"].append(d.name)
+            extra = sorted(set(fm) - vs.ALLOWED_FRONTMATTER_KEYS)
+            if extra:
+                offenders["unknown_keys"].append((d.name, extra))
+        self.assertEqual(offenders, {"angle_brackets": [], "unknown_keys": []})
+
+
 class TestFrontmatterParseability(unittest.TestCase):
     """Scenario S-019: frontmatter no real YAML parser can read fails.
 

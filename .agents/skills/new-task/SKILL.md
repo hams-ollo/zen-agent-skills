@@ -11,6 +11,7 @@ description: >-
   "break this feature into tasks", or hands over an idea they want made executable. Requires an
   existing .tasks/ system (run init-worktracking first if absent). Feeds fix-batch: one task file
   per worktree-isolated agent.
+license: MIT
 ---
 
 # new-task

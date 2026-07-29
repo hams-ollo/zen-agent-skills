@@ -12,6 +12,7 @@ description: >-
   headings", or any request to edit, refresh, or reconcile existing .md files. When the document
   does not exist yet and needs to be created from scratch, use doc-author instead. When the user
   does not know which document is wrong, use doc-sync instead.
+license: MIT
 ---
 
 # Doc revise
