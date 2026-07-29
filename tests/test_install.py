@@ -9,10 +9,14 @@ contract and promoted them: each assertion is now checked against a stated scena
 a failure means the tool diverged from its contract rather than merely changed.
 
 S-009 (an unrecognised tool is rejected) and S-010 (the platform-dependent default mode)
-have no test. Both live in `main()`, which takes no argv, so the CLI layer cannot be
-driven from a test. That is not a gap in the contract but a coverage gap caused by the
-code's shape, and it is now a contract-backed reason to give `install.py` the injectable
-entry point that `validate-skills.py` and `build-adapters.py` both have.
+once had no test. Both lived in `main()`, which took no argv, so the CLI layer could not
+be driven from a test. That was not a gap in the contract but a coverage gap caused by
+the code's shape, which made it a contract-backed reason to give `install.py` the
+injectable entry point that `validate-skills.py` and `build-adapters.py` both have.
+`chore-0017` added it, and both scenarios are covered here now, by
+`test_an_unrecognised_tool_is_rejected_before_anything_is_placed` and
+`test_the_default_mode_suits_the_platform`. S-010 is covered on the running platform's
+branch only; docs/spec/install.conformance.md records why.
 
 One testability constraint remains worked around rather than fixed:
 
