@@ -29,6 +29,10 @@ AI coding tools are useful, but their workflows are often difficult to reproduce
 
 This is a skills library, not an application or a service. It has no database, network service, or third-party Python dependency.
 
+## How this relates to adjacent projects
+
+The nearest projects by function are `obra/superpowers`, which packages a parallel subagent development lifecycle, and GitHub's Spec Kit (`github/spec-kit`), which drives a specify, plan, tasks, implement loop. This repository is a library of portable skills plus the tooling to distribute them across harnesses: it is not a framework and not an agent runtime, so there is no process your agent has to run inside. Its distinguishing property is evidence discipline: no skill ships without having been used on real work, a verification is recorded with the evidence behind it, and coverage is stated honestly rather than implied. Two capabilities follow from that, an independent verification stage that returns a `blocked` verdict instead of a pass when the contract is unapproved or no acceptance command exists ([`verifier-agent`](.agents/skills/verifier-agent/)), and documentation-drift detection that checks reader-facing prose against repository facts ([`doc-sync`](.agents/skills/doc-sync/)).
+
 ## What's included
 
 - [`.agents/skills/`](.agents/skills/): the canonical skills, one directory per skill.
