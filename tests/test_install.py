@@ -39,6 +39,26 @@ inst = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(inst)
 
 
+def _symlinks_work() -> bool:
+    """Whether this platform and account can create a directory symlink at all.
+
+    Windows without Developer Mode cannot, which is the whole reason S-011 exists.
+    Probed rather than inferred from `os.name`, since the answer depends on the
+    account's privileges and not only on the platform.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d) / "src"
+        src.mkdir()
+        try:
+            os.symlink(src, Path(d) / "link", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            return False
+        return True
+
+
+SYMLINKS_WORK = _symlinks_work()
+
+
 class InstallAcceptanceTests(unittest.TestCase):
     """Scenarios S-001 through S-008 and S-011, at the component layer."""
 
@@ -175,6 +195,72 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertIn("Nothing recorded as installed beneath", buf.getvalue())
         self.assertTrue(list((self.home / ".claude" / "skills").iterdir()),
                         "the installed home must be untouched")
+
+    def test_uninstall_honours_a_home_the_caller_has_not_resolved(self):
+        # Scenario S-007, and bug-0009. `uninstall()` is a supported entry point
+        # (chore-0017), so the scoping check cannot depend on the caller having
+        # resolved its argument the way `main()` does. Before the fix `_beneath()`
+        # compared both sides as spelled, so a relative or `..`-bearing home matched
+        # no recorded target: `mine` came out empty, nothing was removed, and the run
+        # printed the nothing-recorded line and exited zero.
+        #
+        # The rest of the suite passes the same `self.home` object to both sides, so
+        # the two spellings agree by construction and the lexical comparison succeeds
+        # by accident. Only an install and an uninstall that disagree on spelling can
+        # fail against the pre-fix code.
+        resolved = self.home.resolve()
+        spellings = {
+            "relative": Path("home"),
+            "dot-dot": self.root / ".." / self.root.name / "home",
+        }
+        placed = resolved / ".claude" / "skills"
+
+        for label, home in spellings.items():
+            with self.subTest(spelling=label):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    inst.install(["claude"], "copy", resolved, False, "core")
+                self.assertTrue(list(placed.iterdir()), "precondition: skills are on disk")
+
+                cwd = os.getcwd()
+                os.chdir(self.root)
+                try:
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        code = inst.uninstall(home, False)
+                finally:
+                    os.chdir(cwd)
+
+                out = buf.getvalue()
+                self.assertEqual(code, 0)
+                self.assertNotIn("Nothing recorded as installed beneath", out,
+                                 "an unresolved home must not read as an empty one")
+                self.assertIn("removed", out)
+                self.assertEqual(list(placed.iterdir()), [])
+                self.assertFalse((resolved / ".claude" / "rules").exists())
+                self.assertEqual(
+                    json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"], [],
+                    "the reversed entries must leave the record")
+
+    @unittest.skipUnless(SYMLINKS_WORK, "this platform or account cannot create symlinks")
+    def test_uninstall_in_symlink_mode_removes_the_links_it_placed(self):
+        # Scenario S-007 in the mode that is the POSIX default and had no test.
+        #
+        # A guard rather than a regression proof: it passes before and after bug-0009,
+        # and exists to fail against the plausible wrong fix. Every recorded target here
+        # *is* a link back to its source in this checkout, so a scoping check that
+        # resolved a target's final component would follow it out of the home entirely,
+        # match nothing, and reproduce the same silent no-op the fix removes.
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst.install(["claude"], "symlink", self.home, False, "core")
+        placed = self.home / ".claude" / "skills"
+        self.assertTrue(any(p.is_symlink() for p in placed.iterdir()),
+                        "precondition: symlink mode placed links, not copies")
+
+        code, out = self._uninstall()
+        self.assertEqual(code, 0)
+        self.assertIn("removed", out)
+        self.assertEqual(list(placed.iterdir()), [])
+        self.assertFalse((self.home / ".claude" / "rules").exists())
 
     def test_uninstall_with_no_manifest_reports_nothing_recorded(self):
         # Scenario S-008: reversing with nothing recorded is not an error.

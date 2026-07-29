@@ -309,9 +309,26 @@ def _beneath(target: str, home: Path) -> bool:
     `install` merges into the existing record rather than replacing it. Reversal
     is therefore scoped here, per S-007 and S-012: without this, uninstalling a
     throwaway home also removes the user's real installation.
+
+    Both sides are normalised first (bug-0009), because `is_relative_to` compares
+    components as spelled. S-007 scopes reversal to a directory, not to one spelling
+    of it, so a relative `home`, one carrying `..`, or one reached through a symlinked
+    parent has to match the same recorded targets an absolute one does. Without that,
+    such a caller matches nothing, every entry is classed as another home's, and the
+    run reports success having removed nothing. `main()` resolves `--home`, so the CLI
+    never hit this; `uninstall()` is a supported entry point (chore-0017) that callers
+    and tests reach directly, and the guarantee belongs with the comparison rather
+    than with one caller.
+
+    The target's final component is deliberately left unresolved. In symlink mode
+    every recorded target *is* a link this tool created, pointing back at its source
+    in this checkout, so resolving it would place the target beneath no home at all.
+    Its parent chain is safe to resolve and always contains `home`, which is what lets
+    a symlinked home normalise identically on both sides.
     """
     try:
-        return Path(target).is_relative_to(home)
+        t = Path(target)
+        return (t.parent.resolve() / t.name).is_relative_to(home.resolve())
     except (OSError, ValueError):
         return False
 

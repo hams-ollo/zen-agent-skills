@@ -2,7 +2,9 @@
 title: install conformance
 spec: docs/spec/install.md
 audited: 2026-07-27
-re_audited: 2026-07-28 (bug-0003)
+re_audited:
+  - 2026-07-28 (bug-0003)
+  - 2026-07-29 (bug-0009)
 ---
 
 # install conformance matrix
@@ -24,8 +26,8 @@ approved contract and a matrix.
 | Scenarios | S-004 an unmanaged target is refused | Conformed | `_place()` / both `return "CONFLICT"` paths, with `install()` counting them and returning 1 while the loop continues | the loop continues past a conflict, so free targets are still placed |
 | Scenarios | S-005 a lost record makes previous copies unmanaged | Conformed | `load_manifest()` returning empty entries, feeding `is_managed()` | confirmed by execution: deleting the manifest and re-running yields exit 1 with a conflict per previously-copied target |
 | Scenarios | S-006 a preview run writes nothing | Conformed | `_place()` / the `if not dry` guards, and `save_manifest()` / `if dry: return` | neither targets nor the record are created |
-| Scenarios | S-007 reversing removes what was placed beneath the given home | Conformed | `uninstall()` / `mine = [... if _beneath(e["target"], home)]`, the loop calling `_rm`, then `save_manifest(others, dry)` | amended and re-audited by `bug-0003`. The pre-fix code ignored `home` entirely and emptied the whole record |
-| Scenarios | S-012 reversing one home leaves another intact | Conformed | `_beneath()` / `Path(target).is_relative_to(home)`, and `uninstall()` retaining `others` in the record | confirmed by execution against two throwaway homes and by a test proven to fail against the pre-fix code |
+| Scenarios | S-007 reversing removes what was placed beneath the given home | Conformed | `uninstall()` / `mine = [... if _beneath(e["target"], home)]`, the loop calling `_rm`, then `save_manifest(others, dry)` | amended and re-audited by `bug-0003`. The pre-fix code ignored `home` entirely and emptied the whole record. Re-audited by `bug-0009`, which found the scoping check honouring `home` but comparing it as spelled, so an unresolved home matched no entry and reversal removed nothing while exiting zero. "The same home" in S-007 names a directory, not a spelling, so this was a divergence and not a contract gap; the spec is unamended |
+| Scenarios | S-012 reversing one home leaves another intact | Conformed | `_beneath()` / `(t.parent.resolve() / t.name).is_relative_to(home.resolve())`, and `uninstall()` retaining `others` in the record | confirmed by execution against two throwaway homes and by a test proven to fail against the pre-fix code. Re-anchored by `bug-0009`, which replaced the bare `Path(target).is_relative_to(home)` this row previously quoted. The target's final component is deliberately left unresolved: in symlink mode every recorded target is a link back to its source in this checkout, so resolving it would place it beneath no home at all |
 | Scenarios | S-008 reversing with nothing recorded is not an error | Conformed | `uninstall()` / the `if not manifest["entries"]` early return 0 | prints the nothing-recorded line |
 | Scenarios | S-009 an unrecognised tool is rejected before anything is placed | Conformed | `main()` / the `bad` check returning 2 before `install()` is called | the check precedes any placement, so a valid tool in the same list does not save it |
 | Scenarios | S-010 the default mode suits the platform | Conformed | `main()` / `default="copy" if os.name == "nt" else "symlink"` | |
@@ -53,6 +55,7 @@ to an acceptance suite by this task:
 |---|---|---|
 | S-001 through S-008 | present | one each, plus a supporting test for how the skill set is identified |
 | S-012 | present | added by `bug-0003`. Two tests: one installs to two homes and asserts reversing one leaves the other on disk and in the record, one asserts reversing an uninstalled home removes nothing. Both were run against the pre-fix `uninstall()` and failed |
+| S-007 | strengthened | `bug-0009` added two. `test_uninstall_honours_a_home_the_caller_has_not_resolved` installs to a resolved home and reverses it under two spellings `main()` would never produce, a relative one and one carrying `..`; both subtests were run against the pre-fix `_beneath()` and failed. `test_uninstall_in_symlink_mode_removes_the_links_it_placed` covers the POSIX default mode, which had no test at all; it is a guard rather than a regression proof, since it passes on both sides of the fix and exists to fail against the plausible wrong one (resolving a recorded target through its own link). It is skipped where the platform or account cannot create a symlink, probed rather than inferred from `os.name` |
 | S-011 | present | added here; asserts the message names both ways out, not merely that it raises |
 | S-005 | present | added here; the surprising-but-correct case, which is why it is worth pinning |
 | S-009 | present | added by `chore-0017`. Pairs a supported tool with an unsupported one, so it also proves the valid entry does not rescue the invocation, and asserts nothing was placed |
