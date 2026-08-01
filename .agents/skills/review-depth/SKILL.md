@@ -63,6 +63,11 @@ Optional:
 - **An explicit depth** from the user (`quick`, `standard`, or `deep`). When present it wins outright.
 - **An explicit path scope** from the user. That is the user pre-bounding the review, so compute the
   signals over the scoped paths only, and say that the scope was applied.
+- **An explicit range** from the user, such as a single historical commit. It wins over the resolved
+  default, and it is reported as supplied rather than resolved, because which one produced the
+  changeset is not recoverable from the range itself. Note that `house-review` Step 2 already assumes
+  such a range exists while its Step 1 names only two modes; that inconsistency is filed against
+  `house-review` and is not resolved here.
 
 ## Procedure
 
@@ -120,11 +125,18 @@ Five signals, all over the reviewable set:
 | `reviewable_lines` | Added plus deleted lines across the reviewable set (`git diff --numstat -M` over the range, plus each untracked file's full length, summed after exclusion). |
 | `directories` | Count of distinct parent directories holding at least one reviewable changed file. Full paths, so two sibling directories count as two. The repository root counts as one. |
 | `risk_flags` | Reviewable changed files falling in the trust-boundary classes `house-review` Step 2 orders first. Detect them by path and by diff content, and list the files that hit, with which class. |
-| `blast_radius` | Reviewable changed files whose surface other code depends on. Two tests, and a file qualifies on either: it is **a named kind** (an approved contract, a schema, a persisted format, a CI workflow, an installer or build script, a shipped template, or a rules module other files compose), or it is **executable material referenced by 5 or more other files** (count with a tracked-file search such as `git grep -l`, never a plain recursive grep: in a real repository the recursive form walks the virtualenv, the build output, and every ignored directory, and one did not finish in two minutes where `git grep` answered in under a second). The reference count applies to executable material only, never to prose: see the note below. List the files that hit, with the reason. |
-| `documentation_only` | True when every reviewable changed file is prose that *describes* the system (for example a README, a guide, a changelog) and no other file changed. False when any changed file is prose the system *runs*: a skill body, an agent prompt, a template, a scaffolded rules module. Those are executable artifacts that happen to be markdown, and a defect in one behaves like a defect in code. False for an empty reviewable set. |
+| `blast_radius` | Reviewable changed files whose surface other code depends on. Two tests, and a file qualifies on either: it is **a named kind** (an approved contract, a schema, a persisted format, a CI workflow, an installer or build script, a shipped template, or a rules module other files compose), where **a shipped template** means one that tooling copies or instantiates somewhere else, so a defect in it propagates to every consumer and cannot be recalled; a repo-local template a service renders in place, such as a GitHub pull request or issue template, is not a named kind and reaches `blast_radius` only by the reference count below, like anything else. Or it is **executable material referenced by 5 or more other files** (count with a tracked-file search such as `git grep -l`, never a plain recursive grep: in a real repository the recursive form walks the virtualenv, the build output, and every ignored directory, and one did not finish in two minutes where `git grep` answered in under a second). The reference count applies to executable material only, never to prose: see the note below. List the files that hit, with the reason. |
+| `documentation_only` | True when every reviewable changed file is prose that *describes* the system (for example a README, a guide, a changelog) and no other file changed. False when any changed file is prose the system *runs*: a skill body, an agent prompt, a template, a scaffolded rules module. Those are executable artifacts that happen to be markdown, and a defect in one behaves like a defect in code. **A work record counts as describing prose**: a task file, a backlog entry, a roadmap item, an after-action note. Nothing executes it and nothing is required to conform to it, so a defect in one is wrong rather than dangerous. False for an empty reviewable set. |
 
 `risk_flags` and `blast_radius` are lists, not booleans, because the entries are the evidence for the
 depth that follows. An empty list is a real result and is reported as empty.
+
+**Prose splits three ways, not two.** Prose that *describes* the system, and work records about it,
+are documentation. Prose the system *runs* (a skill body, a template, a rules module) is executable
+material that happens to be markdown. Prose that *governs* the code (an approved contract, a schema,
+a conformance record) is a named kind under `blast_radius`, so R2 reaches it before R3 can call it a
+docs change. That third class is what makes the generous rule for work records safe: the markdown a
+mistake actually costs something in is caught one rule earlier, by meaning rather than by file type.
 
 **Why the reference count excludes prose.** A widely linked document is not a widely depended-on
 surface. In this repository `docs/CATALOG.md` is referenced by 19 files and `CONTRIBUTING.md` by 6,
@@ -152,7 +164,7 @@ flowchart TD
   A[Changeset] --> B{User named a depth?}
   B -- yes --> U[That depth, source user]
   B -- no --> C{Risk flag or blast radius?}
-  C -- yes --> D[deep on the flagged files, remainder recomputed without the flags]
+  C -- yes --> D[deep on the flagged files, remainder re-measured and capped at standard]
   C -- no --> E{Documentation only?}
   E -- yes --> J{Over 400 lines?}
   J -- yes --> I[standard]
@@ -167,17 +179,38 @@ flowchart TD
 **R2 escalates the flagged files, not automatically the whole changeset.** When R2 fires, the flagged
 files are the `deep_anchors` and get `deep`. The **remainder** is the reviewable set minus the
 anchors, named that way because "everything else" is a list the reviewer should not have to
-reconstruct on a sixty-file change. It takes the `remainder_depth`: the depth R3 through R7 select
-when the same signal table is re-read with `risk_flags` and `blast_radius` empty. Both numbers come
-from the stated rules, so the pair is as reproducible as a single depth would be, and `house-review`
-Step 2 already orders a bounded read by risk, so this is that instruction given a number rather than
-a new mechanism.
+reconstruct on a sixty-file change. It takes the `remainder_depth`, computed in two steps:
+
+1. **Re-measure the signals over the remainder, not over the whole set.** Recount
+   `reviewable_lines` and `directories` across the remainder files only; `risk_flags` and
+   `blast_radius` are empty there by construction, since every file that hit one became an anchor.
+   Then apply R3 through R7 to that table. Reusing the whole-set counts charges the remainder for
+   lines that live in the anchors, which are exactly the lines already being read at `deep`.
+2. **Cap the result at `standard`.** R5 escalates on size alone, which is a proxy for "something in
+   here is probably risky and the rule has not worked out what". Once R2 has named the risky files
+   the proxy is spent, and paying for it twice is the cost this skill exists to remove, so a
+   remainder never reaches `deep` under R2. It can still be `quick`.
+
+Both numbers come from the stated rules, so the pair is as reproducible as a single depth would be,
+and `house-review` Step 2 already orders a bounded read by risk, so this is that instruction given a
+number rather than a new mechanism. When every reviewable file is an anchor there is no remainder and
+no `remainder_depth`.
 
 Blanket escalation was the first draft and the dogfood killed it: four of six real changesets tripped
 R2, usually on one CI workflow or one contract inside an otherwise ordinary change, and a `deep` that
 fires on two thirds of commits is just the uniform effort setting this skill exists to replace. Under
 the anchored rule, a commit that adds a code of conduct and edits ten lines of CI gets a deep read of
 the workflow and a `standard` read of the prose, instead of a full sweep of 400 lines of policy text.
+
+**The two steps above exist because the first version of the anchored rule reintroduced the same
+failure one level down.** It re-read the whole-set table with the two lists emptied, so the remainder
+inherited a line count that included the anchors, R5 fired on it, and every changeset over 600 lines
+got `deep` on both halves again. Measured 2026-07-31 on `v0.1.0..HEAD` in this repository: 1047
+reviewable lines across 7 directories, of which 30 lines were the two anchors, and the remainder
+selected `deep`, which is the uniform setting wearing a different label. Re-measured and capped, the
+same changeset yields `deep` on the two anchors and `standard` on the remaining 1017 lines. The
+407-line commit above is unaffected either way, since its remainder measures 397 lines across 3
+directories and selects `standard` from both tables.
 
 Three orderings in that table are deliberate.
 
@@ -207,15 +240,20 @@ carried out with the priority already decided.
 
 **Carry the changeset identity across, not just the depth.** The block names the range (or the
 working tree) the signals were computed over, and `house-review` reviews that same range rather than
-recomputing one of its own. Two skills each resolving "this change" independently is how a depth ends
+recomputing one of its own. This matters most when `changeset_source` is `supplied`, since a range the
+user named is one `house-review` Step 1 would not arrive at on its own, so handing it over explicitly
+is the only thing keeping the two halves on the same diff. Two skills each resolving "this change"
+independently is how a depth ends
 up describing a different diff than the review it governs.
 
 **Depth orders the budget; it never overrides it.** A selected depth is effort per file, not a
 promise that everything fits. When even the cheapest depth over the reviewable set exceeds what can
 be read, `house-review` Step 2's bounding rule wins and its coverage statement is mandatory: say what
-was not read. A scaffold commit of 2521 reviewable lines across 16 directories selects `deep` here
-and still cannot be read in full, and the honest output is a `deep` review of the anchors with the
-remainder named as unread.
+was not read. A scaffold commit of 2521 reviewable lines across 16 directories selects `deep` on its
+anchors here and still cannot be read in full, and the honest output is a `deep` review of the anchors
+with the remainder named as unread. The cap makes this case commoner rather than rarer, which is the
+point: a `standard` remainder that is honestly reported as partly unread beats a `deep` one that
+quietly was not.
 
 The selection block belongs in the output even when the answer is boring: it is what makes the effort
 spent inspectable, and what lets a second run be compared to the first.
@@ -249,6 +287,7 @@ Return this block before the review, with fields in this order:
 depth: quick | standard | deep
 source: detected | user
 changeset: the range the signals were computed over, or "working tree"
+changeset_source: resolved | supplied   # resolved per house-review Step 1, or given by the user
 rule: the identifier and text of the rule that fired, for example "R2: risk_flags non-empty"
 signals:
   reviewable_lines: N
@@ -258,7 +297,9 @@ signals:
   documentation_only: true | false
 excluded: [path: class, ...]
 deep_anchors: [file, ...]        # only when R2 fired: the files reviewed at deep
-remainder_depth: quick | standard | deep   # only when R2 fired: everything else
+remainder_lines: N               # with remainder_depth: the re-measured count, anchors excluded
+remainder_directories: N         # with remainder_depth: the re-measured spread
+remainder_depth: quick | standard   # only when R2 fired, and never deep: everything else
 detected_depth: ...              # only when source is user and detection disagreed
 detected_anchors: [file, ...]    # with detected_depth, when detection would have fired R2
 fallback: ...                    # only when a signal could not be computed: which one, and that standard was selected
@@ -268,10 +309,17 @@ Rules:
 
 - `rule` names exactly one rule. If two conditions were true, the earlier one fired and it is the one
   reported.
-- `deep_anchors` and `remainder_depth` appear together or not at all, and only under R2. The
-  remainder value names the rule it came from too, so both halves of the decision are traceable.
+- `deep_anchors` and `remainder_depth` appear together or not at all, and only under R2, along with
+  the two re-measured remainder counts. The remainder value names the rule it came from, and says so
+  when the cap bound it (for example `standard (R5, capped)`), so both halves of the decision are
+  traceable and a capped result is never mistaken for R7 landing there on its own. When every
+  reviewable file is an anchor, all four fields are omitted rather than reported as zero.
 - `risk_flags`, `blast_radius`, and `excluded` list every hit with its reason. An empty list is
   reported as empty rather than omitted.
+- `changeset_source` is always present. A range and the rule that fired do not say between them
+  whether the range was resolved or handed over, and a depth defended by a range nobody chose is a
+  different claim from one defended by a range the user named. When a path scope was applied, say that
+  on the same line.
 - `detected_depth` appears only when the user's choice and detection disagree, and it never overrides
   anything. It is one line so the disagreement is visible later. When detection would have fired R2,
   `detected_anchors` comes with it, because the files it would have escalated on are the part of the
