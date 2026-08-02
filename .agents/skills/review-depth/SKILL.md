@@ -170,7 +170,7 @@ flowchart TD
   J -- yes --> I[standard]
   J -- no --> F[quick]
   E -- no --> G{Over 600 lines or over 5 directories?}
-  G -- yes --> D
+  G -- yes --> K[deep on the whole changeset, no anchors]
   G -- no --> H{Under 150 lines and under 3 directories?}
   H -- yes --> F
   H -- no --> I
@@ -205,7 +205,8 @@ the workflow and a `standard` read of the prose, instead of a full sweep of 400 
 **The two steps above exist because the first version of the anchored rule reintroduced the same
 failure one level down.** It re-read the whole-set table with the two lists emptied, so the remainder
 inherited a line count that included the anchors, R5 fired on it, and every changeset over 600 lines
-got `deep` on both halves again. Measured 2026-07-31 on `v0.1.0..HEAD` in this repository: 1047
+got `deep` on both halves again. Measured 2026-07-31 on `v0.1.0..5ba2311` in this repository, pinned
+to a commit rather than to `HEAD` so the figure still reproduces after the branch moves: 1047
 reviewable lines across 7 directories, of which 30 lines were the two anchors, and the remainder
 selected `deep`, which is the uniform setting wearing a different label. Re-measured and capped, the
 same changeset yields `deep` on the two anchors and `standard` on the remaining 1017 lines. The

@@ -7,7 +7,7 @@ priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
 spec: docs/spec/install.md
-scenarios: []
+scenarios: [S-015]
 touched_files:
   - docs/spec/install.md
   - scripts/install.py
@@ -41,7 +41,7 @@ the tree:
 | Document | Claim | Measured |
 |---|---|---|
 | `README.md:156` | profile table gives `all` as 19 | 20 |
-| `README.md:158` | `spine` omits only the two handoff skills | omits three |
+| `README.md:160` | `spine` omits only the two handoff skills | omits three |
 | `docs/ARCHITECTURE.md:43` | `spine` "drops the handoff pair" | drops three |
 | `docs/ARCHITECTURE.md:43` | only the handoff pair plus the three no-sibling skills are separable | `review-depth` is separable too, since no skill references it |
 | `docs/GETTING-STARTED.md:140` | "installs 17 of the 19 skills" | 17 of 20 |
@@ -131,8 +131,12 @@ skill body), and it changes what a published command distributes.
 - [ ] `python scripts/build-adapters.py --dry-run` exits 0. State deliberately whether adapter
       generation should also skip drafts, and record the decision either way.
 - [ ] Existing tests still pass, unchanged in intent.
-- [ ] `docs/spec/install.md` carries a new scenario for the behaviour, is re-approved, and its id is
-      recorded in this task's `scenarios` field.
+- [ ] `docs/spec/install.md` carries **S-015**, a new scenario for the behaviour, and is re-approved.
+      The id is claimed in this task's `scenarios` field before the scenario exists, following the
+      `feat-0033` precedent, which claimed S-013 and S-014 the same way and amended the spec as part
+      of the work. S-014 is the highest id in the spec today, verified 2026-08-01. Leaving `scenarios`
+      empty would be the alternative and it is worse: `spec-plan-readiness` blocks any task not
+      traceable to a scenario, so the task would be gated with no way through.
 - [ ] The five claims in the Problem table are re-checked and confirmed true again, with no edit to
       any of the three documents.
 

@@ -197,7 +197,9 @@ module.
 2. **`remainder_depth` degenerates above the R5 threshold.** ~~The rule re-reads the same signal table
    with the two lists emptied, so `reviewable_lines` stays at the whole-set value and any changeset
    over 600 lines gets `deep` for the remainder too.~~ **Fixed 2026-07-31 on the author's
-   instruction.** Measured on `v0.1.0..HEAD`: 1047 reviewable lines across 7 directories, 30 of them
+   instruction.** Measured on `v0.1.0..5ba2311`, pinned to a commit rather than to `HEAD` because the
+   first version of this line cited a moving reference and the commit recording it falsified its own
+   figure the moment it landed: 1047 reviewable lines across 7 directories, 30 of them
    in the two anchors, yielded `deep` anchors and a `deep` remainder, so the anchor list said nothing.
    That is the failure the body already argues against in its own words, since a `deep` that fires on
    everything is the uniform effort setting this skill replaces. The fix is two steps, and **the
