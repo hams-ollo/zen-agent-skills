@@ -15,12 +15,12 @@ created: 2026-07-25
 ## Problem
 
 Every skill in this kit was blessed on a single real use. That proves each works once and leaves
-whole branches unexercised. [`ROADMAP.md`](../ROADMAP.md) Epic A item 8 names the three that have
+whole branches unexercised. [`ROADMAP.md`](../../ROADMAP.md) Epic A item 8 names the three that have
 never fired on real work:
 
-1. [`verifier-agent`](../.agents/skills/verifier-agent/SKILL.md)'s `blocked` verdict;
-2. [`test-author`](../.agents/skills/test-author/SKILL.md)'s characterization mode;
-3. [`spec-plan-readiness`](../.agents/skills/spec-plan-readiness/SKILL.md)'s blocking paths.
+1. [`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md)'s `blocked` verdict;
+2. [`test-author`](../../.agents/skills/test-author/SKILL.md)'s characterization mode;
+3. [`spec-plan-readiness`](../../.agents/skills/spec-plan-readiness/SKILL.md)'s blocking paths.
 
 `blocked` is the most important of the three, because it is the branch that protects the kit's
 honesty. `verifier-agent`'s own body says collapsing `blocked` into `pass` or `fail` is "the most
@@ -37,7 +37,7 @@ contract is to write a contract the kit actually wants.
 
 **In scope**, in this order:
 
-1. Use [`spec-author`](../.agents/skills/spec-author/SKILL.md) to draft `docs/spec/code-review.md`
+1. Use [`spec-author`](../../.agents/skills/spec-author/SKILL.md) to draft `docs/spec/code-review.md`
    from the existing shipped skill, self-checked to `ready` with the `spec-quality` lens, written
    with `status: draft`. This is a spec the kit wants regardless: `code-review` is shipped,
    load-bearing, composes a swappable lens, and has no contract.
@@ -67,7 +67,7 @@ Writing tests.
 - `code-review` is report-only and has two modes (explicit path scope, and change review against the
   merge base with a working-tree fallback). Both belong in the scenarios, as does the
   validate-before-reporting rule it inherits from
-  [`review-quality`](../.agents/rules/review-quality.md).
+  [`review-quality`](../../.agents/rules/review-quality.md).
 - After the `blocked` run is recorded, **stop**. Do not approve the spec and re-run. The second run
   against an approved contract is worth doing but is the human's call and a separate task.
 - The evaluation record is the durable output here. Keep it short enough that repeating it for the

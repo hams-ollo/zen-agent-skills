@@ -18,7 +18,7 @@ faithful test layer, naming the plausible defect each test protects, testing the
 population, asserting meaningful observable outcomes, and handling fixtures, mocks, diagnostics,
 and trust boundaries deliberately. A finished, standalone source exists in the vendored upstream
 at
-[`repoprompt-workflows-main/.agents/skills/test-quality/SKILL.md`](../repoprompt-workflows-main/.agents/skills/test-quality/SKILL.md)
+`repoprompt-workflows-main/.agents/skills/test-quality/SKILL.md`
 (moonray's RepoPrompt Workflows, MIT, by Balarama Bosch). It is a report-only lens with no
 harness-specific machinery. It is not yet a first-class kit skill.
 
@@ -27,7 +27,7 @@ harness-specific machinery. It is not yet a first-class kit skill.
 **In scope:** create `.agents/skills/test-quality/SKILL.md` by porting the upstream source and
 adapting it to the kit:
 
-1. Adapt to house style ([`.agents/rules/house-style.md`](../.agents/rules/house-style.md)):
+1. Adapt to house style ([`.agents/rules/house-style.md`](../../.agents/rules/house-style.md)):
    remove every em-dash, convert Title-Case headings to sentence case, keep sources named, use
    relative markdown links. The source also contains a few curly quotation marks and en-dash-like
    glyphs; normalize those too.

@@ -18,8 +18,8 @@ created: 2026-07-27
 
 ## Problem
 
-[`docs/spec/validate-skills.md`](../docs/spec/validate-skills.md) is `status: approved` and describes
-eight scenarios. [`scripts/validate-skills.py`](../scripts/validate-skills.py) performs four checks
+[`docs/spec/validate-skills.md`](../../docs/spec/validate-skills.md) is `status: approved` and describes
+eight scenarios. [`scripts/validate-skills.py`](../../scripts/validate-skills.py) performs four checks
 that appear in none of them:
 
 | Check | Severity | Added by |
@@ -35,7 +35,7 @@ an approved contract is a separate human decision." That was correct as a bounda
 not self-approve a contract) but it is not a resolution, and recording it a third time would make it
 a habit.
 
-There is a second, sharper cost. [`docs/spec/validate-skills.conformance.md`](../docs/spec/validate-skills.conformance.md)
+There is a second, sharper cost. [`docs/spec/validate-skills.conformance.md`](../../docs/spec/validate-skills.conformance.md)
 records `audited: S-001 ... S-008, and all three Proposed Surface elements` with one accepted
 divergence. That matrix is honest about what it checked and is nonetheless misleading, because it
 certifies full conformance against a contract that now describes less than half of what the tool
@@ -145,7 +145,7 @@ build. That reasoning is already recorded in the `feat-0023` changelog entry and
 contract.
 
 Note on scenario coverage: S-009 through S-015 all have existing tests in
-[`tests/test_validate_skills.py`](../tests/test_validate_skills.py) except S-015. Either add that
+[`tests/test_validate_skills.py`](../../tests/test_validate_skills.py) except S-015. Either add that
 test as part of this task or record the gap explicitly in the regenerated matrix; do not let the
 matrix imply coverage that does not exist.
 

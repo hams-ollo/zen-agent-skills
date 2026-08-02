@@ -26,7 +26,7 @@ S-008 requires an absent value to stay valid. Without S-007 a typo travels silen
 request description, where GitHub ignores it and the issue never closes, which is the exact
 silent-failure class the spec exists to prevent.
 
-[`.tasks/validate.py`](validate.py) currently checks that every `REQUIRED` field is present and does
+[`.tasks/validate.py`](../validate.py) currently checks that every `REQUIRED` field is present and does
 not reject unknown keys, so an `external` value is tolerated today but unchecked.
 
 ## Scope
@@ -60,7 +60,7 @@ work and would make this task non-atomic.
 - [ ] A test proves a task file with no `external` key validates cleanly (S-008).
 - [ ] Both accepted forms, `#123` and `owner/repo#123`, are proven to pass.
 - [ ] Each test is tagged with the scenario id it covers, per the convention in
-      [`tests/test_install.py`](../tests/test_install.py).
+      [`tests/test_install.py`](../../tests/test_install.py).
 - [ ] `python .tasks/validate.py --strict` still exits 0 over the existing backlog.
 - [ ] `.tasks/_TEMPLATE.md` and `.tasks/README.md` document the field, its two accepted forms, and
       that it is optional.

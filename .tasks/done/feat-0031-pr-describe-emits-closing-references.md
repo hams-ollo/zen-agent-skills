@@ -20,7 +20,7 @@ created: 2026-07-28
 reference for every linked task, so merging the pull request closes the upstream issue without
 anyone remembering to.
 
-[`pr-describe`](../.agents/skills/pr-describe/SKILL.md) already drafts the pull request body and
+[`pr-describe`](../../.agents/skills/pr-describe/SKILL.md) already drafts the pull request body and
 already reads the `.tasks/` system to reference the work item, so it holds both halves and is the
 only place this belongs. It says nothing about issue references today.
 
@@ -44,7 +44,7 @@ and which the spec lists as a Non-Goal; Azure Boards.
 shortcut.** `pr-describe` is a skill: a prose procedure an agent follows, not a script with an entry
 point. There is nothing to import and call. `feat-0030`'s half is code and is tested; this half is
 verified by running it on real work and recording the result, in the format `feat-0024` established
-at [`docs/spec/house-review.verification.md`](../docs/spec/house-review.verification.md).
+at [`docs/spec/house-review.verification.md`](../../docs/spec/house-review.verification.md).
 
 Four details are load-bearing and each maps to a documented GitHub rule, so state them in the body
 rather than assuming an agent infers them:

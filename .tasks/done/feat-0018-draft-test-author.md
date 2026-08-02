@@ -15,9 +15,9 @@ created: 2026-07-24
 
 ROADMAP Epic B item 5 is `test-author`: derive focused acceptance tests from an approved spec and a
 task's acceptance criteria, retaining characterization-test support for legacy code with no coverage,
-composing the blessed [`test-quality`](../.agents/skills/test-quality/SKILL.md) lens, and running
+composing the blessed [`test-quality`](../../.agents/skills/test-quality/SKILL.md) lens, and running
 between implementation and reconciliation so test evidence is part of the spine. The behavioral
-contract is already written and passes `spec-quality` at [`docs/spec/test-author.md`](../docs/spec/test-author.md)
+contract is already written and passes `spec-quality` at [`docs/spec/test-author.md`](../../docs/spec/test-author.md)
 (drafted by the `spec-author` dogfood). The discipline exists upstream only inside the RPCE Test
 workflow (gitignored `repoprompt-workflows-main/.agents/workflows/Test.md`), so it must be extracted
 into a portable `SKILL.md`, not folded in. `test-author` is the only spine skill that actually writes
@@ -52,7 +52,7 @@ themselves; building the `verifier-agent`; changing `test-quality`, `spec-qualit
   and oracle choice. Do not restate either lens's rules inline.
 - Mirror the spec's Constraints exactly (mode inference and override, characterization labeling,
   no new framework, scenario-id traceability, position in the spine). Follow
-  [`.agents/rules/house-style.md`](../.agents/rules/house-style.md).
+  [`.agents/rules/house-style.md`](../../.agents/rules/house-style.md).
 
 ## Acceptance criteria (mechanically verifiable)
 

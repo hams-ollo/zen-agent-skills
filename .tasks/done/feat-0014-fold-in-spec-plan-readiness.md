@@ -18,7 +18,7 @@ code, and delegation until an approved spec plus an ordered, repository-grounded
 implementable (scenarios, tasks, validation, risks, rollback notes, task-to-scenario
 traceability, and a first safe task all explicit). A finished, standalone source exists in the
 vendored upstream at
-[`repoprompt-workflows-main/.agents/skills/spec-plan-readiness/SKILL.md`](../repoprompt-workflows-main/.agents/skills/spec-plan-readiness/SKILL.md)
+`repoprompt-workflows-main/.agents/skills/spec-plan-readiness/SKILL.md`
 (moonray's RepoPrompt Workflows, MIT, by Balarama Bosch). It is a report-only gate with no
 harness-specific machinery. It is not yet a first-class kit skill.
 
@@ -27,7 +27,7 @@ harness-specific machinery. It is not yet a first-class kit skill.
 **In scope:** create `.agents/skills/spec-plan-readiness/SKILL.md` by porting the upstream source
 and adapting it to the kit:
 
-1. Adapt to house style ([`.agents/rules/house-style.md`](../.agents/rules/house-style.md)):
+1. Adapt to house style ([`.agents/rules/house-style.md`](../../.agents/rules/house-style.md)):
    remove every em-dash, convert Title-Case headings to sentence case, keep sources named, use
    relative markdown links.
 2. Keep `name: spec-plan-readiness` matching the directory; keep the `description` concise and

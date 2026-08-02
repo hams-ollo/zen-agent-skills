@@ -25,7 +25,7 @@ inside a single file, saying they are a draft and that they shipped.
 
 | Location | Claim | Contradicted by |
 |---|---|---|
-| [`code-review/SKILL.md:26`](../../.agents/skills/code-review/SKILL.md) | "the skill overall is a draft pending field iteration" | line 112, "Shipped 2026-07-24, blessed after dogfooding" |
+| [`code-review/SKILL.md:26`](../../.agents/skills/house-review/SKILL.md) | "the skill overall is a draft pending field iteration" | line 112, "Shipped 2026-07-24, blessed after dogfooding" |
 | [`pr-describe/SKILL.md:25-26`](../../.agents/skills/pr-describe/SKILL.md) | "the skill overall is a draft pending field iteration" | line 124, "Shipped 2026-07-24, blessed" |
 | [`project-bootstrap/SKILL.md:23-24`](../../.agents/skills/project-bootstrap/SKILL.md) | "the skill overall is still a draft pending field iteration" | line 100, "Shipped 2026-07-24" |
 
@@ -34,7 +34,7 @@ inside a single file, saying they are a draft and that they shipped.
 | Location | Claim | Fact |
 |---|---|---|
 | [`test-quality/SKILL.md:10-11`](../../.agents/skills/test-quality/SKILL.md) | "The planned `test-author` skill composes this lens" | `test-author` shipped 2026-07-24 |
-| [`code-review/SKILL.md:110`](../../.agents/skills/code-review/SKILL.md) | "a future `test-quality`" | `test-quality` shipped 2026-07-24 |
+| [`code-review/SKILL.md:110`](../../.agents/skills/house-review/SKILL.md) | "a future `test-quality`" | `test-quality` shipped 2026-07-24 |
 | [`spec-conformance/SKILL.md:12`](../../.agents/skills/spec-conformance/SKILL.md) | "`verifier-agent`, a planned kit skill" | `verifier-agent` shipped 2026-07-24 |
 | [`spec-quality/SKILL.md:16`](../../.agents/skills/spec-quality/SKILL.md) | "`spec-author` (a planned skill in this kit)" | `spec-author` shipped 2026-07-24 |
 

@@ -16,7 +16,7 @@ created: 2026-07-24
 ROADMAP Epic B item 2 is `spec-author`: draft a persistent, executable spec from a raw idea before
 task decomposition. The blessed `spec-quality` lens reviews specs but nothing drafts them; the spine
 has a lens and no author. The behavioral contract is already written and passes `spec-quality` at
-[`docs/spec/spec-author.md`](../docs/spec/spec-author.md), and `spec-plan-readiness` gated this build
+[`docs/spec/spec-author.md`](../../docs/spec/spec-author.md), and `spec-plan-readiness` gated this build
 as `implementable` with this task as the first safe task. The drafting discipline exists upstream
 only inside the RPCE Spec workflow (gitignored `repoprompt-workflows-main/.agents/workflows/Spec.md`),
 so it must be extracted into a portable `SKILL.md`, not folded in.
@@ -25,7 +25,7 @@ so it must be extracted into a portable `SKILL.md`, not folded in.
 
 **In scope:** author `.agents/skills/spec-author/SKILL.md`, harness-agnostic, delivering scenarios
 S-001, S-002, S-004, and S-005 of the spec: draft the seven-section spec with stable `S-NNN`
-scenario ids and frontmatter `status: draft`; compose the [`spec-quality`](../.agents/skills/spec-quality/SKILL.md)
+scenario ids and frontmatter `status: draft`; compose the [`spec-quality`](../../.agents/skills/spec-quality/SKILL.md)
 lens to self-check and revise until its verdict is `ready` (do not restate the lens's rules inline);
 keep the run read-only for implementation surfaces (write only the spec file); ask exactly one
 clarifying question when the idea is too vague to yield an observable contract. Cross-link
@@ -42,7 +42,7 @@ writing the spec for `test-author`); implementing any spec; changing `spec-quali
 - The spec format and the `status` field semantics are fixed by `docs/spec/spec-author.md`
   Constraints and Proposed Surface; mirror them exactly. `spec-author` never sets `status: approved`.
 - Keep the body under the 500-line progressive-disclosure guideline and follow
-  [`.agents/rules/house-style.md`](../.agents/rules/house-style.md).
+  [`.agents/rules/house-style.md`](../../.agents/rules/house-style.md).
 
 ## Acceptance criteria (mechanically verifiable)
 

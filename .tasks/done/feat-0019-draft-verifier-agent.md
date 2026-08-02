@@ -15,15 +15,15 @@ created: 2026-07-24
 
 ROADMAP Epic B item 7 is `verifier-agent`: independently test an implementation against its approved
 specification and task acceptance criteria before reconciliation, composing the blessed
-[`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md) lens, producing structured pass,
+[`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md) lens, producing structured pass,
 fail, or blocked evidence, running the declared commands, and never editing the implementation it
 verifies. The behavioral contract is approved at
-[`docs/spec/verifier-agent.md`](../docs/spec/verifier-agent.md), drafted by `spec-author` and
+[`docs/spec/verifier-agent.md`](../../docs/spec/verifier-agent.md), drafted by `spec-author` and
 self-checked to `ready` by `spec-quality`.
 
 It is the last core skill of the delivery loop. Every other stage exists:
-[`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md) already forward-declares this skill
-as its composer, and [`fix-batch`](../.agents/skills/fix-batch/SKILL.md) requires an independent
+[`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md) already forward-declares this skill
+as its composer, and [`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) requires an independent
 verification pass but leaves its procedure to the agent running it, so verification depth and
 evidence vary between runs. Nothing today combines a command result, a conformance matrix, and a
 task's acceptance criteria into a single deterministic verdict, which is what makes "verified" an
@@ -40,7 +40,7 @@ matrix so a to-fix divergence fails the run even when every command passes, whil
 already recorded as accepted-with-reason does not; map each acceptance criterion to `met` or `unmet`
 with named evidence; verify against criteria alone when no spec exists, stating that conformance was
 not assessed; emit a deterministic `pass | fail | blocked` verdict in a `## Output format` schema
-following the [`spec-plan-readiness`](../.agents/skills/spec-plan-readiness/SKILL.md) idiom; return
+following the [`spec-plan-readiness`](../../.agents/skills/spec-plan-readiness/SKILL.md) idiom; return
 the report inline unless a destination is supplied; and never edit the implementation, its tests, or
 its spec, reporting repairable defects as findings instead. Cross-link `spec-conformance`,
 `test-author`, `fix-batch`, and `spec-plan-readiness`. Mark it a draft in `ROADMAP.md` and
@@ -62,12 +62,12 @@ verification pass, which is a separate follow-up once this skill has been used.
   ordered field schema, plus an explicit rule for when each verdict applies, so two runs over the
   same evidence agree.
 - Mirror the never-edit discipline `test-author` already states for production code
-  ([`test-author/SKILL.md`](../.agents/skills/test-author/SKILL.md) step 4), and keep the structure
+  ([`test-author/SKILL.md`](../../.agents/skills/test-author/SKILL.md) step 4), and keep the structure
   of that skill: intro positioning against siblings, `## When to use` / `## When not to use`,
   `## Inputs`, numbered `## Procedure`, `## Output format`, `## Notes`, `## Conventions`.
 - Independence is the reason this skill exists. Say plainly that the verifier should not be the agent
   that wrote the implementation where the harness allows that separation.
-- Follow [`.agents/rules/house-style.md`](../.agents/rules/house-style.md); keep the body under the
+- Follow [`.agents/rules/house-style.md`](../../.agents/rules/house-style.md); keep the body under the
   500-line guideline.
 
 ## Acceptance criteria (mechanically verifiable)

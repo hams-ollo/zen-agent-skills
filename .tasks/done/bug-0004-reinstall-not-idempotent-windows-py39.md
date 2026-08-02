@@ -44,7 +44,7 @@ the first defect found by running the kit anywhere other than there.
 
 Two facts in the code make the failure coherent, and both are worth confirming before fixing:
 
-1. **The manifest keys on a path string.** [`is_managed()`](../scripts/install.py) compares
+1. **The manifest keys on a path string.** [`is_managed()`](../../scripts/install.py) compares
    `str(target)` against the recorded `"target"` string. If the string a run computes differs from
    the string the previous run recorded, the installer does not recognize its own file and reports a
    conflict.
@@ -59,7 +59,7 @@ non-existent paths differently from existing ones, and that difference narrowed 
 on the failing combination before changing anything.
 
 CI is now the reproduction environment: `windows-latest` with `python-version: "3.9"` in
-[`.github/workflows/checks.yml`](../.github/workflows/checks.yml) reproduces it every run.
+[`.github/workflows/checks.yml`](../../.github/workflows/checks.yml) reproduces it every run.
 
 ## Resolution (2026-07-28)
 

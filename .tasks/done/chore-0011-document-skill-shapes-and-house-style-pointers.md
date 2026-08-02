@@ -23,7 +23,7 @@ Two related gaps, one cosmetic and one functional. The 2026-07-25 review pass fo
 19 skills follow the full section shape (`When to use` / `When not to use` / `Inputs` / `Procedure` /
 `Output format` / `Notes` / `Conventions`), and that `## Conventions` appears in only 8 of 19.
 
-Nothing violates [`AGENTS.md`](../AGENTS.md), which mandates only frontmatter plus a body. **The
+Nothing violates [`AGENTS.md`](../../AGENTS.md), which mandates only frontmatter plus a body. **The
 inconsistency is not itself the defect.** Two shapes are in use and both are legitimate: workflow
 skills carry a procedure, while lenses (`spec-quality`, `test-quality`, `review-quality`) carry an
 `Intent` / `Workflow` / `Output format` shape because they are composed rather than run. The defect
@@ -48,7 +48,7 @@ section, taking the set from seven to six.
 house style inline, so they are fine and are **not** in scope.
 
 This matters because the house-style module is swappable by design. An adopter who replaces
-[`.agents/rules/house-style.md`](../.agents/rules/house-style.md) with their own voice is silently
+[`.agents/rules/house-style.md`](../../.agents/rules/house-style.md) with their own voice is silently
 ignored by any skill that never points at it, which breaks the promise the kit makes about that file.
 
 ## Scope
@@ -64,8 +64,8 @@ inline. Changing the content of `house-style.md` itself.
 ## Implementation notes
 
 - **Two of the six need different wording, and getting this wrong would be a real regression.**
-  [`init-worktracking`](../.agents/skills/init-worktracking/SKILL.md) and
-  [`new-task`](../.agents/skills/new-task/SKILL.md) operate on a *target* repository, and
+  [`init-worktracking`](../../.agents/skills/init-worktracking/SKILL.md) and
+  [`new-task`](../../.agents/skills/new-task/SKILL.md) operate on a *target* repository, and
   `init-worktracking` explicitly warns against hardcoding this kit's voice into a scaffolded repo
   ("Do not invent house rules and do not import another project's voice"). For those two, the pointer
   must say to follow **the target repo's** conventions, and may mention this kit's module only as the
