@@ -200,8 +200,18 @@ module.
    a commit range" at Invocation (line 151), then enumerates three Modes whose third is "a path scope
    plus a range" (line 152), and gives a Range resolution chain with no explicit-range branch (line
    153). No scenario covers a bare range with no path scope. `pr-describe` was checked and does **not**
-   share the gap: its Step 1 honours "any explicit base/range the user gave". Needs its own task; it is
-   an edit to `house-review` and to an approved contract.
+   share the gap: its Step 1 honours "any explicit base/range the user gave". **Fixed 2026-08-03 as
+   `chore-0024`, on a separate branch**, which names three modes in Step 1, amends the Modes and Range
+   resolution rows, adds scenario S-013, and adopts the same `supplied` / `resolved` vocabulary this
+   skill reports. Verified against its diff rather than its report: all five acceptance commands
+   reproduce, and it made one edit beyond its brief, tightening the preconditions of S-002, S-003 and
+   S-004 from "naming no scope" to "naming neither a path scope nor a range", without which S-013 and
+   S-002 would both fire on a bare range with different outcomes.
+   **Reconciliation note, for whoever merges the two branches.** This skill's Inputs section still says
+   the inconsistency "is filed against `house-review` and is not resolved here", which is true on this
+   branch and false once `chore-0024` lands. It is deliberately not pre-corrected here: asserting a fix
+   that lives on an unmerged branch would be the same class of error as citing `HEAD` for a
+   measurement. Update that sentence at reconciliation, not before.
 2. **`remainder_depth` degenerates above the R5 threshold.** ~~The rule re-reads the same signal table
    with the two lists emptied, so `reviewable_lines` stays at the whole-set value and any changeset
    over 600 lines gets `deep` for the remainder too.~~ **Fixed 2026-07-31 on the author's
