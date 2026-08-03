@@ -191,9 +191,17 @@ module.
 
 1. **`house-review` Step 1 defines no explicit-range mode.** Its two modes are an explicit path scope
    and branch against merge-base with a working-tree fallback. Reviewing a historical commit needs a
-   range neither mode produces, and Step 2 already assumes one exists ("a path scope with an explicit
-   base or range is a narrowed change review"). Step 1 should name the third mode Step 2 relies on.
-   Needs its own task; it is an edit to `house-review`.
+   range neither mode produces. **Corrected 2026-08-03**: this originally said Step 2 assumes such a
+   range exists. It does not. The presuming sentence ("a path scope with an explicit base or range is a
+   narrowed change review") is at `house-review` Step 1 line 61, inside the same step that names only
+   two modes, which makes the finding sharper rather than weaker: the step contradicts itself. Found by
+   the agent dispatched for this finding, and verified here. **The gap is also in the approved
+   contract**, which is why it is not a one-line edit: `docs/spec/house-review.md` permits "a base, or
+   a commit range" at Invocation (line 151), then enumerates three Modes whose third is "a path scope
+   plus a range" (line 152), and gives a Range resolution chain with no explicit-range branch (line
+   153). No scenario covers a bare range with no path scope. `pr-describe` was checked and does **not**
+   share the gap: its Step 1 honours "any explicit base/range the user gave". Needs its own task; it is
+   an edit to `house-review` and to an approved contract.
 2. **`remainder_depth` degenerates above the R5 threshold.** ~~The rule re-reads the same signal table
    with the two lists emptied, so `reviewable_lines` stays at the whole-set value and any changeset
    over 600 lines gets `deep` for the remainder too.~~ **Fixed 2026-07-31 on the author's
