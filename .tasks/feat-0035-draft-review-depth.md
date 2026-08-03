@@ -177,7 +177,7 @@ validate step, both because a dependent already covered the gap, which is the ch
 
 Findings: 1 major, 3 minor, 1 nit, all on the anchor; the remainder came out clean and is recorded as
 clean rather than padded. The major one is mechanically reproducible: CI's link step and
-`python .tasks/validate.py --strict` both pass while 101 relative links are broken across 68 files in
+`python .tasks/validate.py --strict` both pass while 101 relative links are broken across 36 files in
 `.tasks/done/`, because CI globs root, `.github/`, and `docs/` only and `.tasks/validate.py` has no
 link check at all. Root cause is the closeout move: `../` in a task file is correct in `.tasks/` and
 one level too shallow in `.tasks/done/`. `.agents/` was checked and is **not** a gap, which is why the
