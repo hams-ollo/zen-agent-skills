@@ -425,7 +425,8 @@ Progress is not measured by how much code appeared. It is measured by whether th
 
 ## 📚 Where to go next
 
-- 🚪 Read the main [README](../README.md) for the repository overview and complete command reference.
+- 🚪 Read the main [README](../README.md) for the repository overview.
+- ⚙️ Read the [installation reference](INSTALL.md) for every profile, harness, and troubleshooting step.
 - 🔗 Read [linking tasks to GitHub issues](ISSUE-LINKING.md) if your team plans work on a GitHub board.
 - 🧰 Browse the [skill catalog](CATALOG.md) to see what is shipped, planned, or still being tested.
 - 🧱 Read the [architecture guide](ARCHITECTURE.md) if you want to understand how the kit stays portable.

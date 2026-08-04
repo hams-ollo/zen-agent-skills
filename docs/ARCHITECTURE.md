@@ -114,4 +114,4 @@ python .tasks/validate.py --strict
 
 The test suite is not optional here. [`tests/`](../tests/) covers the distribution tooling itself, so a change to `install.py` or `build-adapters.py` is exactly the case the suite exists to catch.
 
-The [README](../README.md) provides the adopter-facing quick start and integration commands.
+The [README](../README.md) provides the adopter-facing overview and quick start; [`INSTALL.md`](INSTALL.md) holds the complete integration and troubleshooting reference.
