@@ -40,8 +40,8 @@ the tree:
 
 | Document | Claim | Measured |
 |---|---|---|
-| `README.md:156` | profile table gives `all` as 19 | 20 |
-| `README.md:160` | `spine` omits only the two handoff skills | omits three |
+| `docs/INSTALL.md:66` | profile table gives `all` as 19 | 20 |
+| `docs/INSTALL.md:70` | `spine` omits only the two handoff skills | omits three |
 | `docs/ARCHITECTURE.md:43` | `spine` "drops the handoff pair" | drops three |
 | `docs/ARCHITECTURE.md:43` | only the handoff pair plus the three no-sibling skills are separable | `review-depth` is separable too, since no skill references it |
 | `docs/GETTING-STARTED.md:140` | "installs 17 of the 19 skills" | 17 of 20 |
