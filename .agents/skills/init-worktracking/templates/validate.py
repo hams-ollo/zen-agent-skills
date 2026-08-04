@@ -4,7 +4,8 @@
 Ships with the init-worktracking scaffold. Checks the mechanical integrity a
 multi-agent workflow depends on: every task file has a well-formed frontmatter,
 ids are unique and match their filenames, every depends_on resolves to a real
-task, and (with --strict) every touched_files path exists.
+task, every relative markdown link resolves from where the file actually lives,
+and (with --strict) every touched_files path exists.
 
 Standard library only, so it runs anywhere a bare Python 3 does. Exits non-zero
 on any error, so it drops cleanly into CI or a pre-commit hook.
@@ -34,6 +35,12 @@ ID_RE = re.compile(r"^(bug|feat|chore|epic)-\d{4}$")
 SCENARIO_RE = re.compile(r"^S-\d{3}$")
 
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
+
+# A complete markdown link: bracketed text followed immediately by a parenthesised
+# target. A bare closing fragment is not matched, which is how prose that merely
+# describes a link escapes being treated as one.
+LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:")
 
 
 def parse_frontmatter(text: str):
@@ -89,6 +96,35 @@ def task_files():
             if p.name not in SKIP_NAMES:
                 files.append(p)
     return files
+
+
+def markdown_files():
+    """Every Markdown file under .tasks/, not only the task files.
+
+    Wider than task_files() on purpose: a broken link in README.md is exactly as
+    clickable as one in a task file, and excluding it would leave a hole for no
+    benefit.
+    """
+    return sorted(TASKS_DIR.rglob("*.md"))
+
+
+def broken_links(path):
+    """Relative link targets in `path` that do not resolve from its own directory.
+
+    Resolving against `path.parent` rather than against the repository root is the
+    whole point. A task file is authored in .tasks/, where `../src/x.py` is
+    correct, and the lifecycle moves it to .tasks/done/ at closeout, where `../`
+    now means .tasks/ and every such link dangles. Checking a link where the file
+    currently lives is what makes that move fail loudly instead of silently.
+    """
+    found = []
+    for match in LINK_RE.finditer(path.read_text(encoding="utf-8")):
+        target = match.group(1).split("#")[0].strip()
+        if not target or target.startswith(LINK_SKIP_PREFIXES):
+            continue
+        if not (path.parent / target).exists():
+            found.append(target)
+    return found
 
 
 def main() -> int:
@@ -187,6 +223,20 @@ def main() -> int:
     for tid, where in ids_seen.items():
         if len(where) > 1:
             err(where[0], f"duplicate id {tid!r} also in: {', '.join(where[1:])}")
+
+    # Links are checked in done/ too, unlike touched_files. The asymmetry is
+    # deliberate: a completed task's touched_files are a historical claim that
+    # harms nobody once a file is renamed, whereas a link is a live affordance a
+    # reader clicks and gets nothing from. So a rename that orphans a link in the
+    # ledger is a thing to fix, not a thing to exempt.
+    for f in markdown_files():
+        rel = f.relative_to(REPO_ROOT).as_posix()
+        for target in broken_links(f):
+            hint = ""
+            if (f.parent / ".." / target).exists():
+                hint = (" (one level too shallow; a file moved to done/ needs "
+                        "one more '../')")
+            err(rel, f"relative link does not resolve: {target}{hint}")
 
     for f, msg in warnings:
         print(f"WARN  {f}: {msg}")

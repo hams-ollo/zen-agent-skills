@@ -1,11 +1,15 @@
-"""Acceptance tests for the `external` field in .tasks/validate.py.
+"""Acceptance tests for .tasks/validate.py.
 
-Derived from docs/spec/tracker-links.md. Each test is tagged with the scenario id it
-covers. Standard library only, per the conventions section of AGENTS.md.
+Two areas, added by two tasks. The `external` field tests are derived from
+docs/spec/tracker-links.md and each is tagged with the scenario id it covers. The link
+tests come from `bug-0011` and have no spec behind them; the validator as a whole has no
+contract yet, only the `external` field does.
 
-Scope is deliberately narrow. `.tasks/validate.py` had no test file before `feat-0030`,
-and backfilling coverage for the whole validator is separate work; these cover only the
-two scenarios this task owns, so the file does not pretend to be a full suite.
+Standard library only, per the conventions section of AGENTS.md.
+
+Scope is still deliberately narrow. `.tasks/validate.py` had no test file before
+`feat-0030`, and backfilling coverage for the whole validator remains separate work; the
+file does not pretend to be a full suite.
 """
 import contextlib
 import importlib.util
@@ -40,8 +44,8 @@ Body content is not what this test exercises.
 """
 
 
-class ExternalFieldTests(unittest.TestCase):
-    """Scenarios S-007 and S-008."""
+class TasksRootTestCase(unittest.TestCase):
+    """A throwaway repository root with a .tasks/ tree, shared by both areas."""
 
     def setUp(self):
         # Mirror a real repository: a root holding .tasks/ and the file the fixture
@@ -63,15 +67,19 @@ class ExternalFieldTests(unittest.TestCase):
         tv.REPO_ROOT = self._real_repo_root
         self._tmp.cleanup()
 
-    def _write(self, external_line):
-        (self.tasks / "feat-0099-test.md").write_text(
-            TASK.format(external=external_line), encoding="utf-8")
-
     def _run(self):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = tv.main(["--strict"])
         return code, buf.getvalue()
+
+
+class ExternalFieldTests(TasksRootTestCase):
+    """Scenarios S-007 and S-008."""
+
+    def _write(self, external_line):
+        (self.tasks / "feat-0099-test.md").write_text(
+            TASK.format(external=external_line), encoding="utf-8")
 
     def test_a_malformed_external_fails_validation(self):
         # Scenario S-007: a value GitHub would not recognise must fail before it can
@@ -107,6 +115,84 @@ class ExternalFieldTests(unittest.TestCase):
         self._write('external: "hams-ollo/zen-agent-skills#123"\n')
         code, out = self._run()
         self.assertEqual(code, 0, out)
+
+
+class RelativeLinkTests(TasksRootTestCase):
+    """`bug-0011`: links are validated where the file currently lives.
+
+    The defect these pin down is not a malformed link. It is a correct link that stops
+    being correct because the file moved: a task authored in .tasks/ links to
+    `../README.md`, the lifecycle moves it to .tasks/done/ at closeout, and `../` now
+    means .tasks/. 101 links across 36 files had broken this way while every command in
+    the repository reported success.
+    """
+
+    def _write(self, body, *, in_done=False):
+        """Write a task file carrying `body`, either in .tasks/ or in .tasks/done/."""
+        if in_done:
+            directory = self.tasks / "done"
+            directory.mkdir(exist_ok=True)
+            status = "done"
+        else:
+            directory = self.tasks
+            status = "open"
+        (directory / "feat-0099-test.md").write_text(
+            TASK.format(external="").replace("status: open", f"status: {status}")
+            + "\n" + body + "\n",
+            encoding="utf-8")
+
+    def test_a_link_that_the_move_to_done_breaks_is_caught(self):
+        # The whole defect in one case: `../README.md` resolves from .tasks/ and does
+        # not from .tasks/done/, and only the second is an error.
+        self._write("See [the readme](../README.md).", in_done=True)
+        code, out = self._run()
+        self.assertNotEqual(code, 0, f"a dangling link must exit non-zero\n{out}")
+        self.assertIn("feat-0099-test.md", out)
+        self.assertIn("../README.md", out)
+
+    def test_the_same_link_is_valid_before_the_move(self):
+        # The other half of the pair. Without this the check could be passing for the
+        # wrong reason, by rejecting the link everywhere rather than by resolving it
+        # against the directory the file is actually in.
+        self._write("See [the readme](../README.md).")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_absolute_and_fragment_only_targets_are_skipped(self):
+        # Matching the docs link step in .github/workflows/checks.yml: off-disk schemes
+        # are not the filesystem's to resolve, and a bare `#anchor` has no target to
+        # check. Anchor validation is a separate question from this one.
+        self._write(
+            "[web](https://example.com/x) [plain](http://example.com/x) "
+            "[mail](mailto:someone@example.com) [anchor](#a-heading)")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_a_fragment_is_stripped_before_the_target_is_resolved(self):
+        # `../README.md#section` points at a real file, so it must pass; the fragment
+        # is not part of the path.
+        self._write("See [a section](../README.md#a-heading).")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_prose_that_merely_quotes_link_syntax_is_not_treated_as_a_link(self):
+        # A bare closing fragment is how a document talks *about* a link. Task files in
+        # this repository genuinely contain one, so a looser pattern would fail the
+        # build on documentation rather than on a broken link.
+        self._write("The skills all end their links with `](../nope/missing.md)`.")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_a_non_task_document_under_tasks_is_checked_too(self):
+        # The link scan is deliberately wider than the task-file scan: a broken link in
+        # .tasks/README.md is exactly as clickable as one in a task file, and that file
+        # is skipped by every other check in the validator.
+        self._write("No links here.")
+        (self.tasks / "README.md").write_text(
+            "See [nothing](../nowhere/missing.md).\n", encoding="utf-8")
+        code, out = self._run()
+        self.assertNotEqual(code, 0, f"README.md must be link-checked\n{out}")
+        self.assertIn("../nowhere/missing.md", out)
 
 
 if __name__ == "__main__":

@@ -19,14 +19,14 @@ created: 2026-07-27
 
 ## Problem
 
-[`scripts/build-adapters.py`](../scripts/build-adapters.py) has tests but no spec. It is the only
+[`scripts/build-adapters.py`](../../scripts/build-adapters.py) has tests but no spec. It is the only
 kit script in that state: `validate-skills.py` has
-[`docs/spec/validate-skills.md`](../docs/spec/validate-skills.md), and `install.py` has neither but
+[`docs/spec/validate-skills.md`](../../docs/spec/validate-skills.md), and `install.py` has neither but
 is also not the subject of a test suite that claims spec provenance.
 
 The 2026-07-27 `doc-sync` run made the gap visible rather than merely present. Three places in
 `README.md` and `docs/ARCHITECTURE.md` claimed the test suite is "derived from the specifications
-under `docs/spec/`". Adding [`tests/test_build_adapters.py`](../tests/test_build_adapters.py)
+under `docs/spec/`". Adding [`tests/test_build_adapters.py`](../../tests/test_build_adapters.py)
 falsified that claim, and the honest short-term fix was to soften the prose (finding `D-007`,
 applied 2026-07-27) rather than to close the gap. This task closes it, after which the original,
 stronger wording can come back.

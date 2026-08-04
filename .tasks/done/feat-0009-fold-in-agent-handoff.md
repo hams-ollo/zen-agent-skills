@@ -26,7 +26,7 @@ harness-specific tool machinery, so this is the lightest possible port.
 **In scope:** copy `~/.claude/skills/agent-handoff/SKILL.md` into
 `.agents/skills/agent-handoff/SKILL.md`, adapted with light kit-reference tightening only:
 point the inline "no em-dashes" convention default at the kit's swappable module
-[`.agents/rules/house-style.md`](../../rules/house-style.md) while keeping the portable intent
+[`.agents/rules/house-style.md`](../../.agents/rules/house-style.md) while keeping the portable intent
 (a scaffolded target repo's own `AGENTS.md`/house-style still governs there), and make the
 existing mention of `human-handoff` a clickable sibling link. Land as a draft; blessing waits
 for its dogfood use (already satisfied by producing this fold-in's handoff brief) plus user

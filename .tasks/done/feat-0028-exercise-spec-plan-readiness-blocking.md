@@ -38,7 +38,7 @@ and acting on it immediately would defeat the point of recording it. `chore-0015
 ## Outcome (2026-07-27)
 
 `verdict: blocked` with three gaps across all three `source` values, recorded at
-[`build-adapters.readiness.md`](../docs/spec/build-adapters.readiness.md). It reached the
+[`build-adapters.readiness.md`](../../docs/spec/build-adapters.readiness.md). It reached the
 non-short-circuit path, which is the branch worth exercising: both inputs were readable, so evaluation
 proceeded through the spec, plan, and consistency checks rather than returning the cheap missing-input
 blocker.

@@ -26,7 +26,7 @@ first-class kit skill.
 **In scope:** copy `D:\zen-solutions-studio\agents\skills\doc-revise\SKILL.md` into
 `.agents/skills/doc-revise/SKILL.md`, adapted with light kit-reference tightening only: point
 the inline "no em-dashes" convention default at the kit's swappable module
-[`.agents/rules/house-style.md`](../../rules/house-style.md) while keeping the portable intent,
+[`.agents/rules/house-style.md`](../../.agents/rules/house-style.md) while keeping the portable intent,
 and make the existing mention of `doc-author` a clickable sibling link. Land as a draft;
 blessing waits for a real in-kit dogfood use (a consistency/refresh pass across the docs) plus
 user sign-off.

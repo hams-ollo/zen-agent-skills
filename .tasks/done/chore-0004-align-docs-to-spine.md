@@ -21,24 +21,24 @@ created: 2026-07-24
 
 Six spine skills shipped on 2026-07-24 (`spec-quality`, `spec-author`, `spec-plan-readiness`,
 `test-quality`, `spec-conformance`, `test-author`), and the kit introduced two new first-class
-artifact directories along the way: [`docs/spec/`](../docs/spec/) for behavioral contracts and
-[`tests/`](../tests/) for the kit's first test suite. [`ROADMAP.md`](../ROADMAP.md) and
-[`CHANGELOG.md`](../CHANGELOG.md) record all of this correctly, but the reader-facing documentation
+artifact directories along the way: [`docs/spec/`](../../docs/spec/) for behavioral contracts and
+[`tests/`](../../tests/) for the kit's first test suite. [`ROADMAP.md`](../../ROADMAP.md) and
+[`CHANGELOG.md`](../../CHANGELOG.md) record all of this correctly, but the reader-facing documentation
 still describes a pre-Epic-B world, and in places contradicts itself:
 
 - [`README.md`](../README.md) never mentions the spine. Its capability sentence omits specification,
   testing, and verification, and its "How the workflow fits together" Mermaid stops at the old
   six-skill chain (`project-bootstrap` through `pr-describe`), so the most visible architecture
   diagram in the repository is stale.
-- [`docs/CATALOG.md`](../docs/CATALOG.md) contradicts itself: it lists `test-author` as shipped in the
+- [`docs/CATALOG.md`](../../docs/CATALOG.md) contradicts itself: it lists `test-author` as shipped in the
   spine table and *again* as `planned` in Tier B; and two shipped skills are still described as being
   composed by "the planned `spec-author`" and "the planned `test-author`", both of which shipped.
-- [`docs/PROJECT-STATUS.md`](../docs/PROJECT-STATUS.md) is dated the same day as the spine work yet
+- `docs/PROJECT-STATUS.md` is dated the same day as the spine work yet
   reports the previous shipping wave and names `ci-scaffold`/`release-cut` as the next work.
-- [`docs/PLATFORM-PITCH.md`](../docs/PLATFORM-PITCH.md) lists six shipped skills under "What is
+- `docs/PLATFORM-PITCH.md` lists six shipped skills under "What is
   evolving next" and carries a disclaimer that they are "not claims that the current release already
   provides them", which is now inaccurate.
-- [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) and [`AGENTS.md`](../AGENTS.md) do not mention
+- [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) and [`AGENTS.md`](../../AGENTS.md) do not mention
   `docs/spec/` or `tests/` as repository artifacts.
 
 Documentation that misreports what shipped is worse than missing documentation: it teaches an adopter
@@ -72,14 +72,14 @@ this task's own closing line, since both are already current.
 
 ## Implementation notes
 
-- Use the [`doc-revise`](../.agents/skills/doc-revise/SKILL.md) skill: revise in place, preserve each
+- Use the [`doc-revise`](../../.agents/skills/doc-revise/SKILL.md) skill: revise in place, preserve each
   document's existing voice and audience, and ground every claim in the repository rather than
   restating the roadmap.
 - Each document has a distinct audience and the rewrite should respect it: `README.md` is for
   adopters, `docs/GETTING-STARTED.md` is plain-language for founders, `docs/PLATFORM-PITCH.md` is a
   vision pitch, `docs/PROJECT-STATUS.md` is a partner-facing snapshot, and `AGENTS.md`/
   `docs/ARCHITECTURE.md` are for agents and maintainers.
-- Follow [`.agents/rules/house-style.md`](../.agents/rules/house-style.md): sentence-case headings,
+- Follow [`.agents/rules/house-style.md`](../../.agents/rules/house-style.md): sentence-case headings,
   no em-dashes, named sources, relative markdown links, Mermaid for diagrams.
 - `ROADMAP.md` is authoritative when documents disagree (per `AGENTS.md` section 2).
 

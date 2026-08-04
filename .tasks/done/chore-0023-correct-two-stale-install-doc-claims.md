@@ -19,7 +19,7 @@ Two documents still describe an `install.py` that no longer exists. Both were no
 harder kind to notice because nothing fails.
 
 **1. The test suite's docstring claims a gap that `chore-0017` closed.**
-[`tests/test_install.py`](../tests/test_install.py) lines 11 to 15 read: "S-009 (an unrecognised tool
+[`tests/test_install.py`](../../tests/test_install.py) lines 11 to 15 read: "S-009 (an unrecognised tool
 is rejected) and S-010 (the platform-dependent default mode) have no test. Both live in `main()`,
 which takes no argv, so the CLI layer cannot be driven from a test." That paragraph closes by calling
 the injectable entry point "a contract-backed reason" to add.
@@ -31,7 +31,7 @@ live in the same file as the paragraph denying they exist:
 correctly; only the suite's own header is behind.
 
 **2. The S-014 row's figure is eleven characters out of date.**
-[`docs/spec/install.conformance.md`](../docs/spec/install.conformance.md) line 34 records "Confirmed
+[`docs/spec/install.conformance.md`](../../docs/spec/install.conformance.md) line 34 records "Confirmed
 by execution: `core=2298`, `spine=12489`, `all=14262`". A run on 2026-07-29
 (`python scripts/install.py --dry-run --home ./.tmp/zen-home`) reports `all=14273`. `core` and `spine`
 are unchanged.

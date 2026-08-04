@@ -41,7 +41,7 @@ it is pinning has destroyed its own baseline.
 ## Outcome (2026-07-27)
 
 Eight characterization tests, all passing, `scripts/install.py` unchanged. Recorded at
-[`install.characterization.md`](../docs/spec/install.characterization.md).
+[`install.characterization.md`](../../docs/spec/install.characterization.md).
 
 The mode behaved as specified: it inferred characterization from the absent spec, skipped the Step 1
 spec gate (which is the mode working, not a gap), matched the repo's stdlib `unittest` convention, and
