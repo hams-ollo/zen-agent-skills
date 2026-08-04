@@ -207,11 +207,12 @@ module.
    reproduce, and it made one edit beyond its brief, tightening the preconditions of S-002, S-003 and
    S-004 from "naming no scope" to "naming neither a path scope nor a range", without which S-013 and
    S-002 would both fire on a bare range with different outcomes.
-   **Reconciliation note, for whoever merges the two branches.** This skill's Inputs section still says
-   the inconsistency "is filed against `house-review` and is not resolved here", which is true on this
-   branch and false once `chore-0024` lands. It is deliberately not pre-corrected here: asserting a fix
-   that lives on an unmerged branch would be the same class of error as citing `HEAD` for a
-   measurement. Update that sentence at reconciliation, not before.
+   **Reconciliation note, now discharged.** This skill's Inputs section said the inconsistency "is
+   filed against `house-review` and is not resolved here", which was true on this branch alone and
+   false once `chore-0024` landed. It was deliberately not pre-corrected, because asserting a fix that
+   lived on an unmerged branch would have been the same class of error as citing `HEAD` for a
+   measurement. The two were merged on 2026-08-03 and the sentence was rewritten in the same operation,
+   which is the only point at which it could be made true.
 2. **`remainder_depth` degenerates above the R5 threshold.** ~~The rule re-reads the same signal table
    with the two lists emptied, so `reviewable_lines` stays at the whole-set value and any changeset
    over 600 lines gets `deep` for the remainder too.~~ **Fixed 2026-07-31 on the author's

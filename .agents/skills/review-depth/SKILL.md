@@ -65,10 +65,9 @@ Optional:
   signals over the scoped paths only, and say that the scope was applied.
 - **An explicit range** from the user, such as a single historical commit. It wins over the resolved
   default, and it is reported as supplied rather than resolved, because which one produced the
-  changeset is not recoverable from the range itself. Note that `house-review` Step 1 names two modes
-  and then presumes a third in the same step, where it says a path scope with an explicit base or range
-  is a narrowed change review; that inconsistency is filed against `house-review` and is not resolved
-  here.
+  changeset is not recoverable from the range itself. `house-review` Step 1 names this as one of its
+  three modes and reports the same two values, `supplied` and `resolved`, so the vocabulary is shared
+  rather than parallel and neither skill has to translate the other's.
 
 ## Procedure
 
