@@ -17,7 +17,7 @@ created: 2026-07-27
 
 ## Problem
 
-[`scripts/build-adapters.py`](../scripts/build-adapters.py) emits two kinds of shared material and
+[`scripts/build-adapters.py`](../../scripts/build-adapters.py) emits two kinds of shared material and
 guards them differently, and only one of the two guards is in the contract.
 
 The rules loop skips a destination that already exists, so an adopter who edits
@@ -34,8 +34,8 @@ guess wrong.
 
 ## Scope
 
-**In scope:** state the intended behavior in [`docs/spec/build-adapters.md`](../docs/spec/build-adapters.md),
-then regenerate [`build-adapters.conformance.md`](../docs/spec/build-adapters.conformance.md) so the
+**In scope:** state the intended behavior in [`docs/spec/build-adapters.md`](../../docs/spec/build-adapters.md),
+then regenerate [`build-adapters.conformance.md`](../../docs/spec/build-adapters.conformance.md) so the
 "behavior found outside the contract" section can be retired.
 
 Decide first which behavior is intended, since the wording follows from it:

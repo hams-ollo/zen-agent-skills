@@ -22,11 +22,11 @@ Run the shipped checker before dispatching work to agents:
 
     python .tasks/validate.py
 
-It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task, and (with `--strict`) that every `touched_files` path exists. It exits non-zero on any error, so it drops cleanly into CI or a pre-commit hook.
+It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task, that every relative markdown link resolves from the directory the file is actually in, and (with `--strict`) that every `touched_files` path exists. It exits non-zero on any error, so it drops cleanly into CI or a pre-commit hook.
 
 ## Lifecycle
 
-`open -> in_progress -> done`. On done: move the file to `done/`, set `status: done`, add one dated line to `../CHANGELOG.md` referencing the task id, and (if it completed a roadmap Feature) strike that Feature through in `../ROADMAP.md`. See the task-lifecycle section of `AGENTS.md`.
+`open -> in_progress -> done`. On done: move the file to `done/`, set `status: done`, re-anchor the file's relative links for their new depth (a task authored in `.tasks/` links to `../x`; from `done/` that is `../../x`), add one dated line to `../CHANGELOG.md` referencing the task id, and (if it completed a roadmap Feature) strike that Feature through in `../ROADMAP.md`. See the task-lifecycle section of `AGENTS.md`.
 
 ## Frontmatter fields
 

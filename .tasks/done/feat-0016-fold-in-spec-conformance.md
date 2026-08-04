@@ -17,7 +17,7 @@ ROADMAP Epic B item 6 is `spec-conformance`: an audit of every approved scenario
 public-surface element against code and test evidence, producing a positive conformance matrix
 of `Conformed`, `Diverged`, or `Not-built` items plus an explicit unreconciled set. It reports,
 never repairs. A finished, standalone source exists in the vendored upstream at
-[`repoprompt-workflows-main/.agents/skills/spec-conformance/SKILL.md`](../repoprompt-workflows-main/.agents/skills/spec-conformance/SKILL.md)
+`repoprompt-workflows-main/.agents/skills/spec-conformance/SKILL.md`
 (moonray's RepoPrompt Workflows, MIT, by Balarama Bosch). It is a report-only lens with no
 harness-specific machinery. It is not yet a first-class kit skill.
 
@@ -26,7 +26,7 @@ harness-specific machinery. It is not yet a first-class kit skill.
 **In scope:** create `.agents/skills/spec-conformance/SKILL.md` by porting the upstream source
 and adapting it to the kit:
 
-1. Adapt to house style ([`.agents/rules/house-style.md`](../.agents/rules/house-style.md)):
+1. Adapt to house style ([`.agents/rules/house-style.md`](../../.agents/rules/house-style.md)):
    remove every em-dash, convert Title-Case headings to sentence case, keep sources named, use
    relative markdown links.
 2. Keep `name: spec-conformance` matching the directory; keep the `description` concise and

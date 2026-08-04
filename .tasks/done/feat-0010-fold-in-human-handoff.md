@@ -25,7 +25,7 @@ harness-specific tool machinery), and is the human-reader counterpart to `agent-
 **In scope:** copy `D:\zen-solutions-studio\agents\skills\human-handoff\SKILL.md` into
 `.agents/skills/human-handoff/SKILL.md`, adapted with light kit-reference tightening only:
 point the inline "no em-dashes" convention default at the kit's swappable module
-[`.agents/rules/house-style.md`](../../rules/house-style.md) while keeping the portable intent,
+[`.agents/rules/house-style.md`](../../.agents/rules/house-style.md) while keeping the portable intent,
 and make the existing mention of `agent-handoff` a clickable sibling link. Land as a draft;
 blessing waits for a real in-kit dogfood use (a partner-style status update of the kit) plus
 user sign-off.

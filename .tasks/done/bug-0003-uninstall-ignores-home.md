@@ -20,7 +20,7 @@ created: 2026-07-28
 `python scripts/install.py --uninstall --home <dir>` removes **every target the manifest records,
 from every home ever installed to from this checkout**, not the targets under `<dir>`.
 
-The `home` parameter of [`uninstall()`](../scripts/install.py) is accepted and then never read. The
+The `home` parameter of [`uninstall()`](../../scripts/install.py) is accepted and then never read. The
 function loads the manifest, iterates `manifest["entries"]` in full, deletes each target, and calls
 `save_manifest([])` to empty the record. Nothing filters on the home the caller asked for.
 
@@ -42,7 +42,7 @@ recoverable.
 
 This is the kit's own worst category: a command that reports success while destroying work the user
 did not ask it to touch. It is also a live trap for the documented evaluation path, since
-[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) and [`SECURITY.md`](../SECURITY.md) both suggest a
+[`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) and [`SECURITY.md`](../../SECURITY.md) both suggest a
 throwaway `--home` for previewing, and anyone who installs there for real and later uninstalls loses
 their working installation.
 

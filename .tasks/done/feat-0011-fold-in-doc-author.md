@@ -26,7 +26,7 @@ with no harness-specific tool machinery. It is not yet a first-class kit skill.
 **In scope:** copy `~/.claude/skills/doc-author/SKILL.md` into
 `.agents/skills/doc-author/SKILL.md`, adapted with light kit-reference tightening only: point
 the inline "no em-dashes" convention default at the kit's swappable module
-[`.agents/rules/house-style.md`](../../rules/house-style.md) while keeping the portable intent;
+[`.agents/rules/house-style.md`](../../.agents/rules/house-style.md) while keeping the portable intent;
 make the existing mention of `doc-revise` a clickable sibling link; and in the bootstrap
 section, link `init-worktracking` and add a pointer to `project-bootstrap` as the umbrella
 front door this skill composes with. Land as a draft; blessing waits for a real in-kit dogfood

@@ -17,7 +17,7 @@ ROADMAP Epic B item 1 is `spec-quality`: a reusable quality gate for scenario-ba
 specifications that keeps contracts observable, non-redundant, grounded in repository context,
 traceable through stable scenario IDs, and free of implementation planning. A finished,
 standalone source already exists in the vendored upstream at
-[`repoprompt-workflows-main/.agents/skills/spec-quality/SKILL.md`](../repoprompt-workflows-main/.agents/skills/spec-quality/SKILL.md)
+`repoprompt-workflows-main/.agents/skills/spec-quality/SKILL.md`
 (moonray's RepoPrompt Workflows, MIT, by Balarama Bosch). It is a report-only lens with no
 harness-specific machinery, so this is a fold-in-and-adapt, the same move already proven on
 `fix-batch`, `doc-author`, and the handoffs. It is not yet a first-class kit skill.
@@ -27,7 +27,7 @@ harness-specific machinery, so this is a fold-in-and-adapt, the same move alread
 **In scope:** create `.agents/skills/spec-quality/SKILL.md` by porting the upstream source and
 adapting it to the kit:
 
-1. Adapt to house style ([`.agents/rules/house-style.md`](../.agents/rules/house-style.md)):
+1. Adapt to house style ([`.agents/rules/house-style.md`](../../.agents/rules/house-style.md)):
    remove every em-dash (use commas, colons, or parentheses), convert Title-Case headings to
    sentence case, keep sources named, use relative markdown links. The upstream is em-dash-heavy
    and Title-Case, so this is real line-level editing, not a copy.

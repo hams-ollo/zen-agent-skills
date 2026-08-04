@@ -17,7 +17,7 @@ created: 2026-07-27
 
 ## Problem
 
-[`verifier-agent`](../.agents/skills/verifier-agent/SKILL.md) has two preconditions that produce
+[`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) has two preconditions that produce
 `blocked`: an unapproved spec (`S-005`) and a missing or unrunnable verification command (`S-006`).
 The contract does not say what happens when **both** are true at once, and its two halves point
 different ways.
@@ -30,7 +30,7 @@ text, and they produce different records for the same situation.
 This is not hypothetical. The `feat-0024` run hit exactly that state: `docs/spec/code-review.md` was
 `status: draft` **and** `code-review` had no declared verification command, so `S-005` and `S-006`
 were satisfied simultaneously. The record at
-[`code-review.verification.md`](../docs/spec/code-review.verification.md) reports one blocking reason
+[`code-review.verification.md`](../../docs/spec/house-review.verification.md) reports one blocking reason
 because that is what the procedure literally produces, and flags the ambiguity rather than resolving
 it on its own authority.
 

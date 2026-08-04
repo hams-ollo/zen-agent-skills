@@ -16,19 +16,19 @@ created: 2026-07-24
 
 Dogfooding the `code-review` skill on the kit's Python scripts surfaced real findings:
 
-- **major** [`scripts/install.py:119`](../scripts/install.py): copy-mode symlink-ownership uses a
+- **major** [`scripts/install.py:119`](../../scripts/install.py): copy-mode symlink-ownership uses a
   string-prefix test (`str(points_to).startswith(str(src.resolve()))`) instead of path equality, so
   a symlink whose resolved target is a string prefix of a skill path (a sibling with a prefix name)
   is misclassified as ours, unlinked, and replaced. Violates the "never clobbers a file it did not
   create" promise.
-- **minor** [`scripts/build-adapters.py`](../scripts/build-adapters.py): the skill `description` is
+- **minor** [`scripts/build-adapters.py`](../../scripts/build-adapters.py): the skill `description` is
   interpolated raw into generated YAML frontmatter, so a description with a YAML-significant
   sequence would emit a malformed adapter.
-- **minor** [`scripts/install.py:174`](../scripts/install.py): in `uninstall()`, `remaining` is
+- **minor** [`scripts/install.py:174`](../../scripts/install.py): in `uninstall()`, `remaining` is
   passed to `save_manifest` but never appended to (dead, misleading code).
-- **minor** [`scripts/install.py:126`](../scripts/install.py): copy-mode idempotency silently
+- **minor** [`scripts/install.py:126`](../../scripts/install.py): copy-mode idempotency silently
   relies on the manifest; a lost manifest turns re-runs into CONFLICTs (undocumented).
-- **nit** [`scripts/install.py:66`](../scripts/install.py): `is_managed` assumes every manifest
+- **nit** [`scripts/install.py:66`](../../scripts/install.py): `is_managed` assumes every manifest
   entry has a `target` key.
 
 ## Scope

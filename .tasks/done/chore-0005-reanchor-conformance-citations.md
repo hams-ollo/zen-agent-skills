@@ -14,9 +14,9 @@ created: 2026-07-24
 ## Problem
 
 The `verifier-agent` dogfood (`feat-0019`, recorded at
-[`docs/spec/validate-skills.verification.md`](../docs/spec/validate-skills.verification.md)) found
+[`docs/spec/validate-skills.verification.md`](../../docs/spec/validate-skills.verification.md)) found
 that every evidence citation inside `main()` in
-[`docs/spec/validate-skills.conformance.md`](../docs/spec/validate-skills.conformance.md) is off by
+[`docs/spec/validate-skills.conformance.md`](../../docs/spec/validate-skills.conformance.md) is off by
 +8 lines. The `chore-0003` refactor inserted the `skills_dir` parameter, the missing-directory
 guard, and the `_rel` helper above that code, shifting everything below. The classifications are all
 still correct; only the pointers rotted. The `parse_frontmatter` citations are unaffected, since that
@@ -29,7 +29,7 @@ authoritative while being unverifiable, which is worse than an audit that is obv
 ## Scope
 
 **In scope:** re-anchor every citation in the conformance matrix to a durable reference.
-[`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md) already permits `file:symbol`
+[`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md) already permits `file:symbol`
 evidence, which does not drift when unrelated code is inserted above it. Use the enclosing function
 plus the distinguishing branch or expression, so a reader can locate the evidence by searching rather
 than by counting lines. Record in the document that the citations were re-anchored and why.
@@ -37,7 +37,7 @@ than by counting lines. Record in the document that the citations were re-anchor
 **Out of scope:** changing any classification, status, or disposition in the matrix (the audit's
 findings stand, including the S-008 accepted-with-reason divergence); re-running the full
 `spec-conformance` audit; editing `scripts/validate-skills.py`, the tests, or the spec; rewriting
-[`docs/spec/validate-skills.verification.md`](../docs/spec/validate-skills.verification.md), which is
+[`docs/spec/validate-skills.verification.md`](../../docs/spec/validate-skills.verification.md), which is
 the dated record of a run and correctly reports the drift as it stood.
 
 ## Implementation notes

@@ -17,13 +17,13 @@ created: 2026-07-27
 
 ## Problem
 
-Two approved scenarios in [`docs/spec/install.md`](../docs/spec/install.md) have no test and cannot
+Two approved scenarios in [`docs/spec/install.md`](../../docs/spec/install.md) have no test and cannot
 get one. `S-009` (an unrecognised tool is rejected before anything is placed) and `S-010` (the
 placement mode defaults to what the platform can do) both live in `main()`, which calls
 `parse_args()` with no argv, so the CLI layer cannot be driven from a test.
 
-Both [`validate-skills.py`](../scripts/validate-skills.py) and
-[`build-adapters.py`](../scripts/build-adapters.py) were given injectable entry points when they were
+Both [`validate-skills.py`](../../scripts/validate-skills.py) and
+[`build-adapters.py`](../../scripts/build-adapters.py) were given injectable entry points when they were
 brought under test (`chore-0003` and `feat-0026`). `install.py` was not, so it is the only kit script
 whose argument handling is unreachable from the suite.
 

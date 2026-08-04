@@ -20,12 +20,12 @@ created: 2026-07-27
 The 2026-07-27 review pass hardened three parts of the batch loop that had never met a repository
 with a build environment:
 
-1. [`fix-batch`](../.agents/skills/fix-batch/SKILL.md) Step 2 now requires resolving what git will
+1. [`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) Step 2 now requires resolving what git will
    not carry into a worktree (`node_modules/`, `.venv/`, `.env`, build caches) before dispatch,
    because the acceptance command cannot run without it, `verifier-agent` returns `blocked` for a
    runner it cannot find, and a `blocked` item is not reconciled. Unresolved, every item in a batch
    stalls at once and none of them look broken.
-2. [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md) Steps 2, 5, and 8 now
+2. [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md) Steps 2, 5, and 8 now
    enumerate tracked edits, staged edits, and untracked files separately, apply the first via a
    patch file and the last via an explicit copy, and reconcile the landed paths against the
    worktree's `git status` list before any worktree is removed.
