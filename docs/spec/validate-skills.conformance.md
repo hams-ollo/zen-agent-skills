@@ -108,8 +108,10 @@ standard rather than calling it, conformance to the spec is not evidence of conf
 standard, and the only closing move is to run the reference implementation. This matrix is now audited
 against both.
 
-The whole set is verified end to end: all nineteen skills pass Anthropic's `quick_validate.py`, 19 of
-19, alongside this repository's own validator reporting 0 errors and 0 warnings.
+The whole set is verified end to end, measured 2026-07-29: all nineteen skills pass Anthropic's
+`quick_validate.py`, 19 of 19, alongside this repository's own validator reporting 0 errors and 0
+warnings. Dated because the denominator moves whenever a skill is added, and an undated count reads as
+a claim about now rather than as the record it is.
 
 ## Citation maintenance
 

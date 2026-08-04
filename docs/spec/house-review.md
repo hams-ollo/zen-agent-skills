@@ -15,6 +15,21 @@ Amended 2026-07-27 (`chore-0012`): the skill was renamed from `code-review` to `
 resolve a collision with harness built-in review commands, and both Open Questions were resolved into
 the contract. Reopened to `draft` for that amendment; a human sets `status: approved`.
 
+**Amended 2026-08-03 (`chore-0024`) on the author's explicit instruction, and re-approved.** S-013 adds
+a bare explicit range, and the Modes and Range resolution rows now account for it. This repairs an
+internal inconsistency rather than expanding scope: the Invocation row already permitted "a base, or a
+commit range", and the two rows beneath it enumerated no mode and no resolution branch that such an
+input could reach, so the table contradicted itself across three consecutive rows. The amendment also
+states which side wins when an explicit range meets the resolved default, and that the difference
+between the two is reported, because a range does not say on its own whether it was resolved or handed
+over.
+
+Adding S-013 forced one further edit, recorded here rather than left to be noticed: S-002, S-003, and
+S-004 each opened on "a request naming no scope", which a bare range satisfies, so on its own S-013
+would have fired at the same time as S-002 with a different outcome. Their preconditions now read
+"naming neither a path scope nor a range", which is what they meant when a bare range was not yet
+contemplated. No behavior those three describe has changed.
+
 ## Problem
 
 `house-review` is shipped, load-bearing, and composes a swappable lens, and it has no contract. Three
@@ -72,25 +87,35 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 - **Then** it reviews that range restricted to the named paths, as a change review rather than a
   full-file review, because a request naming a range is asking about a change.
 
-### Scenario S-002: with no scope named, the branch's own range is reviewed
+### Scenario S-013: a bare explicit range is reviewed as given, not resolved
+
+- **Given** a request naming an explicit base or commit range and no path scope, such as a single
+  historical commit
+- **When** the skill runs
+- **Then** it reviews that range as a change review, without computing a merge-base range of its own,
+  and reports the changeset as supplied rather than resolved, because a range does not carry any record
+  of which of the two produced it.
+
+### Scenario S-002: with neither a scope nor a range named, the branch's own range is reviewed
 
 - **Given** a git repository with at least one commit, on a branch ahead of its merge-base with the
-  default branch, and a request naming no scope
+  default branch, and a request naming neither a path scope nor a range
 - **When** the skill runs
 - **Then** it reviews the committed range from that merge-base to `HEAD`, and notes any uncommitted
   changes as available to fold in rather than silently including or ignoring them.
 
 ### Scenario S-003: an empty committed range falls back to the working tree
 
-- **Given** a request naming no scope where the committed range is empty, because the work sits on the
-  default branch or is not yet committed
+- **Given** a request naming neither a path scope nor a range, where the committed range is empty,
+  because the work sits on the default branch or is not yet committed
 - **When** the skill runs
 - **Then** it reviews the working-tree changes, tracked edits together with untracked files, rather
   than reporting that there is nothing to review.
 
 ### Scenario S-004: nothing to review is stated, not worked around
 
-- **Given** a request naming no scope where both the committed range and the working tree are empty
+- **Given** a request naming neither a path scope nor a range, where both the committed range and the
+  working tree are empty
 - **When** the skill runs
 - **Then** it states that there is nothing to review and stops, without selecting a substitute scope.
 
@@ -149,8 +174,8 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 | Element | Detail |
 |---|---|
 | Invocation | A request to review, optionally naming a path scope, a base, or a commit range |
-| Modes | Explicit path scope (full-file review), change review (default, no scope named), or a path scope plus a range (change review narrowed to those paths) |
-| Range resolution | Merge-base with the default branch, then working tree, then nothing to review |
+| Modes | Explicit path scope (full-file review); explicit range with no path scope (change review over the range as given); a path scope plus a range (change review narrowed to those paths); or change review of the resolved default (when neither is named) |
+| Range resolution | An explicit range if the request named one, else merge-base with the default branch, then working tree, then nothing to review. Which of the two produced the changeset is reported, as supplied or resolved |
 | Severities | `blocker`, `major`, `minor`, `nit`, defined by the `review-quality` lens |
 | Output | A verdict line, then findings ordered by severity, each with `file:line`, issue, why, and fix |
 | Side effects | None. No file is written, no commit is made |
@@ -160,3 +185,6 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 None. Both questions this spec opened were resolved by `chore-0012` on 2026-07-27: a range supplied
 alongside a path scope narrows a change review to those paths (now `S-012`), and the name collision
 was resolved by renaming the skill rather than by asserting a distinction. Re-approved by the author on 2026-07-27.
+
+The `chore-0024` amendment on 2026-08-03 opens none. It closes a contradiction the table already
+carried rather than deciding anything new, and it was re-approved on the same day.

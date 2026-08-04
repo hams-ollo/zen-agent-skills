@@ -43,27 +43,40 @@ Settled decisions (resolved with the user); these are not up for re-litigation:
 - **Report-only.** The skill never edits or commits. Each finding carries a concrete fix in text.
 - **Findings are validated before reporting** (the lens's govern/revalidate step). A confident
   false positive costs more than a missed nit.
-- **Two review modes**: an explicit path scope reviews named files in full; otherwise the default
-  is the branch vs its merge-base with the default branch (with a working-tree fallback), reusing
-  [`pr-describe`](../pr-describe/SKILL.md)'s changeset logic.
+- **Three review modes**: an explicit path scope reviews named files in full; an explicit base or
+  range reviews that range as given, winning over the default and reported as supplied rather than
+  resolved; otherwise the default is the branch vs its merge-base with the default branch (with a
+  working-tree fallback), reusing [`pr-describe`](../pr-describe/SKILL.md)'s changeset logic. A path
+  scope and a range together narrow the second mode rather than producing a fourth.
 
 ## Procedure
 
 ### Step 1: pick what to review
 
-There are two modes. Decide which the request is.
+There are three modes, decided by two things a request either names or does not: a **path scope**, and
+an **explicit base or commit range**. Work out which of the two it named before reading any code.
 
-**Explicit path scope (review named files or paths).** When the user points at specific files, a
-directory, or a path glob ("review these scripts", "review `src/auth/`"), review those files as
-they stand, in full. This is a review of existing code, not a diff, so there is no range to
+**A path scope with no range (review the named files in full).** When the user points at specific
+files, a directory, or a path glob ("review these scripts", "review `src/auth/`"), review those files
+as they stand, in full. This is a review of existing code, not a diff, so there is no range to
 compute; just read the named files.
 
-**A path scope with an explicit base or range is a narrowed change review, not a full-file one.**
-If the user names both ("review `src/auth/` on this branch"), compute the range as below and restrict
-it to the named paths. A request that names a range is asking about a change, so reviewing those
-files in full would answer a question they did not ask.
+**An explicit range (review that range as given).** When the user names a base or a commit range
+("review `abc123`", "review this against `main`"), that range *is* the changeset. Do not compute a
+merge-base range of your own: **the explicit range wins over the resolved default below**, because the
+user has already answered the question resolution exists to answer. Report the changeset as
+**supplied rather than resolved**, since a range carries no record of which of the two produced it and
+that difference is not recoverable later from the range itself. When a skill composed with this one
+hands a range across, review that same range instead of resolving a second one; two skills each
+resolving "this change" independently is how a review ends up describing a different diff than the
+decision that governed it.
 
-**Change review (the default when no scope is named).** Reuse `pr-describe`'s changeset logic so
+**A path scope alongside an explicit range narrows this mode; it does not turn it into a full-file
+review.** If the user names both ("review `src/auth/` on this branch"), review the range restricted to
+the named paths. A request that names a range is asking about a change, so reviewing those files in
+full would answer a question they did not ask.
+
+**Neither named (change review of the resolved default).** Reuse `pr-describe`'s changeset logic so
 "review this" means the same thing across the kit:
 
 1. Confirm a git repo with at least one commit. Find the current branch and the default branch
@@ -75,6 +88,10 @@ files in full would answer a question they did not ask.
    - Range empty (on the default branch, or work uncommitted): review the working-tree changes
      (`git diff HEAD` plus untracked files). Do not dead-end.
    - Both empty: nothing to review, say so and stop.
+
+Report a changeset reached this way as **resolved**, the counterpart to the supplied case above. Naming
+which one it was costs a word and keeps a later reader from having to guess whether the diff under
+review was chosen or computed.
 
 ### Step 2: survey what is under review, and bound it before reading
 
