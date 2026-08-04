@@ -19,7 +19,7 @@ four drift instances the dogfood missed**, all of exactly the kind `doc-sync` ex
 
 | Missed | Why the run missed it |
 |---|---|
-| [`code-review/SKILL.md:26`](../../.agents/skills/code-review/SKILL.md) "the skill overall is a draft" while line 112 says shipped | "draft" was not in the staleness vocabulary, and the contradiction is between two lines 86 apart |
+| [`code-review/SKILL.md:26`](../../.agents/skills/house-review/SKILL.md) "the skill overall is a draft" while line 112 says shipped | "draft" was not in the staleness vocabulary, and the contradiction is between two lines 86 apart |
 | [`pr-describe/SKILL.md:25`](../../.agents/skills/pr-describe/SKILL.md) same contradiction | same |
 | [`project-bootstrap/SKILL.md:23`](../../.agents/skills/project-bootstrap/SKILL.md) same contradiction | same |
 | [`test-quality/SKILL.md:10-11`](../../.agents/skills/test-quality/SKILL.md) "The planned `test-author`" | the claim wraps: "The planned" ends line 10, the skill name opens line 11, and matching was line-scoped |

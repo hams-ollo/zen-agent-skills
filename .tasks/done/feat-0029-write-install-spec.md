@@ -16,7 +16,7 @@ created: 2026-07-27
 
 ## Problem
 
-[`scripts/install.py`](../scripts/install.py) is the last kit script with no contract. It is also the
+[`scripts/install.py`](../../scripts/install.py) is the last kit script with no contract. It is also the
 one that matters most to an adopter, because it is how the skills reach a harness at all, and the
 2026-07-27 pass found a blocker in exactly that path: it was shipping every skill without the rules
 module they compose, so `house-review` arrived with no rubric.

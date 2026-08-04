@@ -14,15 +14,15 @@ created: 2026-07-24
 
 ## Problem
 
-[`scripts/validate-skills.py`](../scripts/validate-skills.py) is the kit-level lint that gates
+[`scripts/validate-skills.py`](../../scripts/validate-skills.py) is the kit-level lint that gates
 every shipped skill, but it has zero tests. The `test-quality` dogfood (`feat-0015`) named the
-bug population precisely: `parse_frontmatter` ([`validate-skills.py:24`](../scripts/validate-skills.py))
+bug population precisely: `parse_frontmatter` ([`validate-skills.py:24`](../../scripts/validate-skills.py))
 mishandling malformed input (missing closing `---`, a folded-continuation line that matches
 `word:` and gets misread as a new key, quoted values), and the `name`/`description`/body-length
 error and warning branches in `main`. It also surfaced a real testability blocker: `main` binds
-`SKILLS_DIR` at module level ([`validate-skills.py:18`](../scripts/validate-skills.py)), so the
+`SKILLS_DIR` at module level ([`validate-skills.py:18`](../../scripts/validate-skills.py)), so the
 scan cannot be pointed at a fixture directory without a subprocess. The tool's observable contract
-is already written down at [`docs/spec/validate-skills.md`](../docs/spec/validate-skills.md) (from
+is already written down at [`docs/spec/validate-skills.md`](../../docs/spec/validate-skills.md) (from
 the `spec-conformance` dogfood), so the oracle already exists.
 
 ## Scope
@@ -45,7 +45,7 @@ check that `docs/spec/validate-skills.conformance.md` accepted as a divergence.
 
 ## Implementation notes
 
-- Standard library only, per [`AGENTS.md`](../AGENTS.md) section 6 (no third-party dependency).
+- Standard library only, per [`AGENTS.md`](../../AGENTS.md) section 6 (no third-party dependency).
   Use `unittest` and `tempfile`.
 - `validate-skills.py` has a hyphen in its name, so it is not importable with a normal `import`.
   Load it in the test with `importlib.util.spec_from_file_location`, rather than renaming the

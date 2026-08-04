@@ -20,10 +20,10 @@ created: 2026-07-27
 The spine's front half and back half disagree about what a task file must carry, and the disagreement
 has now surfaced twice.
 
-[`spec-plan-readiness`](../.agents/skills/spec-plan-readiness/SKILL.md) Step 3 requires "risks,
+[`spec-plan-readiness`](../../.agents/skills/spec-plan-readiness/SKILL.md) Step 3 requires "risks,
 rollback notes, or failure-handling expectations" for any task that touches more than one module,
 changes a persisted format, or cannot be reversed by reverting one commit. Neither
-[`new-task`](../.agents/skills/new-task/SKILL.md) nor [`_TEMPLATE.md`](_TEMPLATE.md) has any notion of
+[`new-task`](../../.agents/skills/new-task/SKILL.md) nor [`_TEMPLATE.md`](../_TEMPLATE.md) has any notion of
 risk or rollback, so a task authored perfectly to the `new-task` bar fails the gate by construction
 whenever the risk rule fires.
 

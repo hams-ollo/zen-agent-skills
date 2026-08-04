@@ -13,9 +13,9 @@ created: 2026-07-24
 
 ## Problem
 
-[docs/CATALOG.md](../docs/CATALOG.md) Tier C lists the Content OS pipeline skills as
+[docs/CATALOG.md](../../docs/CATALOG.md) Tier C lists the Content OS pipeline skills as
 `produce, cut, clips, edit, brief, idea-discovery`, which disagrees with the canonical list in
-[ROADMAP.md](../ROADMAP.md) Epic C (`produce, clip-machine, repurpose, video-editing,
+[ROADMAP.md](../../ROADMAP.md) Epic C (`produce, clip-machine, repurpose, video-editing,
 video-cutting, episode-brief, youtube-transcript, idea-discovery`). The two documents should agree.
 
 ## Scope

@@ -18,7 +18,7 @@ created: 2026-07-27
 
 ## Problem
 
-The kit's review skill is named `code-review`, and [`scripts/install.py`](../scripts/install.py)
+The kit's review skill is named `code-review`, and [`scripts/install.py`](../../scripts/install.py)
 places it at `~/.claude/skills/code-review/`. Claude Code already ships a built-in `/code-review`
 command. The skill body currently resolves the collision by asserting it three times in prose:
 
@@ -49,7 +49,7 @@ the skill directory name, its `name:` frontmatter, and every reference to it in 
 ## Implementation notes
 
 If the decision is to rename, the sibling-link check in
-[`scripts/validate-skills.py`](../scripts/validate-skills.py) catches stale
+[`scripts/validate-skills.py`](../../scripts/validate-skills.py) catches stale
 `../code-review/SKILL.md` references automatically, so the acceptance command below covers most of
 the rename's blast radius. It does not cover prose mentions that are not links; grep for those.
 
