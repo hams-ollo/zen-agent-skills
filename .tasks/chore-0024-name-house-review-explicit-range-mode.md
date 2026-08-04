@@ -48,10 +48,11 @@ Scenarios have the matching hole: `S-001` covers a path scope, `S-012` covers a 
 path scope, and `S-002` through `S-004` cover the no-scope resolution chain. **Nothing covers a bare
 range with no path scope**, which is exactly the single-historical-commit case.
 
-**This is now half of a live seam.** `review-depth` (Epic B #10, in flight on another branch) has an
-`explicit range` input and a `changeset_source: resolved | supplied` output field for precisely this
-distinction, and its Inputs section records the `house-review` inconsistency as filed rather than
-resolved there. `review-depth` hands a supplied range across to `house-review`; `house-review` has no
+**This is now half of a live seam.** `review-depth` (Epic B #10, in flight on another branch when this
+task was authored, merged into the same branch on 2026-08-03) has an `explicit range` input and a
+`changeset_source: resolved | supplied` output field for precisely this distinction, and its Inputs
+section recorded the `house-review` inconsistency as filed rather than resolved there until the merge
+discharged it. `review-depth` hands a supplied range across to `house-review`; `house-review` has no
 documented mode to receive it. The two halves of one handoff disagree.
 
 Found by dogfooding the `review-depth` draft (`feat-0035`, finding 1), and re-verified against the
@@ -78,9 +79,11 @@ because a contradiction inside one step is worse than a gap between two.
 
 **Out of scope:**
 
-- **`.agents/skills/review-depth/SKILL.md`.** Mid-flight on another branch, so it does not exist on
-  this one and is named in prose rather than linked. Match its vocabulary; do not edit it. Anything
-  that would need changing there is reported as a finding below, not fixed.
+- **[`.agents/skills/review-depth/SKILL.md`](../.agents/skills/review-depth/SKILL.md).** Was mid-flight
+  on another branch while this task was authored, so it did not exist here and was named in prose
+  rather than linked; the two branches were merged on 2026-08-03 and it is now present and linked.
+  Match its vocabulary; do not edit it. Anything that would need changing there is reported as a
+  finding below, not fixed.
 - **[`.agents/skills/pr-describe/SKILL.md`](../.agents/skills/pr-describe/SKILL.md).** Checked and
   clean: its Step 1 already honours "any explicit base/range the user gave" (line 51) and its Design
   choices already name the override (line 36). It is the model to match, not a file to change.
@@ -147,9 +150,10 @@ create one as a side effect; `house-review` is a prose procedure with no code to
 verification record already explains why exercising a skill branch means something weaker than
 exercising a branch of a program.
 
-**Cross-branch id collisions are live.** `bug-0011` exists on an open PR and `feat-0036` exists on
-another branch, so neither is free despite what `.tasks/.scaffold.json` shows locally. `chore` high
-water was 23, hence `chore-0024`. Update `id_high_water.chore` to 24.
+**Cross-branch id collisions were live when this was authored.** `bug-0011` was on an open pull
+request and `feat-0036` on another branch, so neither was free despite what `.tasks/.scaffold.json`
+showed locally. `chore` high water was 23, hence `chore-0024`. Both have since landed, and the
+counters were reconciled to the union `{bug: 12, feat: 37, chore: 24}` on 2026-08-03.
 
 **This file's relative links resolve from `.tasks/`.** They break on the move to `.tasks/done/`, and
 an open PR adds a validator check for exactly that, so expect the closeout to require re-anchoring
@@ -187,11 +191,13 @@ every `../` link to `../../`.
 - [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
 - [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
 
-## Findings handed back, not fixed
+## Findings handed back, since discharged
 
-1. **`review-depth`'s Inputs section will need one sentence re-anchored once both branches land.** It
-   currently says the `house-review` inconsistency "is filed against `house-review` and is not
-   resolved here". After this task lands, that inconsistency is resolved, so the sentence describes a
-   state that no longer holds. It should point at `chore-0024` as the resolution, or drop the note.
-   Not fixed here: `review-depth` is mid-flight on another branch and editing it from this one would
-   collide. Whoever reconciles the two branches owns this line.
+1. **`review-depth`'s Inputs section needed one sentence re-anchored once both branches landed.** It
+   said the `house-review` inconsistency "is filed against `house-review` and is not resolved here",
+   which stopped being true the moment this task landed. It was not fixed from this branch, where
+   `review-depth` was mid-flight elsewhere and editing it would have collided; it was handed to
+   whoever reconciled the two. **Discharged on 2026-08-03 in the merge that joined them**, which is
+   the only point at which the sentence could be made true. It now records that `house-review` names
+   this as one of its three modes and reports the same `supplied` and `resolved` values, so the
+   vocabulary is shared rather than parallel.

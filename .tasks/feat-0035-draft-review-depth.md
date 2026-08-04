@@ -201,7 +201,8 @@ module.
    plus a range" (line 152), and gives a Range resolution chain with no explicit-range branch (line
    153). No scenario covers a bare range with no path scope. `pr-describe` was checked and does **not**
    share the gap: its Step 1 honours "any explicit base/range the user gave". **Fixed 2026-08-03 as
-   `chore-0024`, on a separate branch**, which names three modes in Step 1, amends the Modes and Range
+   `chore-0024`**, authored on a separate branch and merged into this one the same day, so both halves
+   are now present here. It names three modes in Step 1, amends the Modes and Range
    resolution rows, adds scenario S-013, and adopts the same `supplied` / `resolved` vocabulary this
    skill reports. Verified against its diff rather than its report: all five acceptance commands
    reproduce, and it made one edit beyond its brief, tightening the preconditions of S-002, S-003 and
