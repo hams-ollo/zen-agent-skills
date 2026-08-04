@@ -137,7 +137,7 @@ State the outcome explicitly rather than letting the feature persist by default.
 
     python .tasks/validate.py --strict && python scripts/validate-skills.py && python -m unittest discover -s tests -p "test_*.py"
 
-    python -c "import pathlib,sys; r=lambda p: pathlib.Path(p).read_text(encoding='utf-8'); t=r('.tasks/_TEMPLATE.md'); f=r('.agents/skills/fix-batch/SKILL.md'); p=r('.agents/skills/pr-describe/SKILL.md'); c=[('## Decisions' in t), ('delete this section' in t.split('## Decisions')[1][:900]), ('Decisions' in f and 'own task file' in f), ('Decisions' in p)]; sys.exit(0 if all(c) else 'failed: ' + str(c))"
+    python -c "import pathlib,sys; r=lambda p: pathlib.Path(p).read_text(encoding='utf-8'); t=r('.tasks/_TEMPLATE.md'); f=r('.agents/skills/fix-batch/SKILL.md'); p=r('.agents/skills/pr-describe/SKILL.md'); d=t.partition('## Decisions')[2][:900]; c=[('## Decisions' in t), ('delete this section' in d), ('Decisions' in f and 'own task file' in f), ('Decisions' in p)]; sys.exit(0 if all(c) else 'failed: ' + str(c))"
 
 - [ ] `.tasks/_TEMPLATE.md` carries a `## Decisions` section after `## Implementation notes`, listing
       the three admissible entry kinds and the four-item exclusion list, and stating the
