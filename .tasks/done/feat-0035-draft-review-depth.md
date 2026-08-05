@@ -2,7 +2,7 @@
 id: feat-0035
 title: Draft the review-depth skill (deterministic review-effort selection composing house-review)
 type: feat
-status: in_progress
+status: done
 priority: P2
 parent: "ROADMAP Epic B #10: review-depth"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-07-29
 
 ROADMAP Epic B item 10 is `review-depth`: select quick, standard, or deep review from deterministic
 signals (change size, directory spread, severe risk flags, blast radius, documentation-only scope),
-compose it with [`house-review`](../.agents/skills/house-review/SKILL.md) so review effort matches
+compose it with [`house-review`](../../.agents/skills/house-review/SKILL.md) so review effort matches
 risk, and let an explicit user choice always override detection.
 
 Today `house-review` has exactly one effort setting. Its Step 2 already tells the reviewer to bound
@@ -27,7 +27,7 @@ that means one of two failures, and which one you get depends on the reviewer's 
 the change. Either small changes are over-reviewed, which trains the author to skim reviews, or
 large risky ones are under-reviewed, which is the failure that actually costs something.
 
-The gap is not the rubric, which is settled in [`review-quality`](../.agents/rules/review-quality.md).
+The gap is not the rubric, which is settled in [`review-quality`](../../.agents/rules/review-quality.md).
 It is that nothing decides how much reviewing a given change has earned, and nothing makes that
 decision reproducible. Two runs over the same diff should reach the same depth, and the reason
 should be inspectable rather than felt.
@@ -62,11 +62,11 @@ a multi-lens deep review that runs `test-quality` alongside `review-quality`, wh
 
 ## Implementation notes
 
-- **Compose, do not restate.** [`chore-0010`](done/chore-0010-spec-plan-readiness-compose-test-quality.md)
+- **Compose, do not restate.** [`chore-0010`](chore-0010-spec-plan-readiness-compose-test-quality.md)
   exists because `spec-plan-readiness` copied `test-quality`'s layer taxonomy inline and created two
   copies free to drift. The same trap is wide open here: it is tempting to explain what a deep review
   checks by listing the eight rubric categories. Do not. The categories and the four severities stay
-  in [`review-quality.md`](../.agents/rules/review-quality.md), reached by link. The trust-boundary
+  in [`review-quality.md`](../../.agents/rules/review-quality.md), reached by link. The trust-boundary
   classes that set a risk flag are `house-review` Step 2's own ordering classes, referenced rather
   than re-enumerated; what this skill adds is a mechanical way to detect them, not a second list of
   what they are.
@@ -76,7 +76,7 @@ a multi-lens deep review that runs `test-quality` alongside `review-quality`, wh
   "quick" invites exactly that reading.
 - **Order the selection rule so escalation wins.** Check risk flags and blast radius *before*
   documentation-only. In this repository that ordering is load-bearing rather than theoretical: an
-  approved contract under [`docs/spec/`](../docs/spec/) is a markdown file, so a change that edits
+  approved contract under [`docs/spec/`](../../docs/spec/) is a markdown file, so a change that edits
   one is documentation-only by file type and high blast radius by meaning. The order is what stops a
   contract edit from being waved through as a docs change.
 - **Be honest about where determinism ends.** Line counts, directory counts, and file-type checks are
@@ -92,7 +92,7 @@ a multi-lens deep review that runs `test-quality` alongside `review-quality`, wh
   under 1024 characters and free of angle brackets, and write it as a block scalar so a real YAML
   parser can read it. The `bug-0007` and `bug-0008` task files in `.tasks/done/` record what went
   wrong here before, and why each of those constraints is an error rather than a preference.
-- Follow [`.agents/rules/house-style.md`](../.agents/rules/house-style.md); keep the body under the
+- Follow [`.agents/rules/house-style.md`](../../.agents/rules/house-style.md); keep the body under the
   500-line guideline; any diagram is Mermaid.
 
 ## Acceptance criteria (mechanically verifiable)
@@ -287,7 +287,7 @@ moves, and see the major finding above for why no check would catch it.
 
 - [x] Acceptance command(s) pass locally. Run 2026-07-31; see the note on the one criterion whose
       wording needs amending rather than whose command failed.
-- [ ] Conventions in AGENTS.md's conventions section followed.
+- [x] Conventions in AGENTS.md's conventions section followed. Re-verified 2026-08-05: `validate-skills.py` 20/0/0.
 - [ ] Dogfooded against at least two real changesets in this repository, one documentation-only and
       one large and multi-directory, with the selected depth recorded per changeset, judged right or
       wrong by hand, and the skill iterated from what the run found.
@@ -320,7 +320,8 @@ moves, and see the major finding above for why no check would catch it.
       stale, is dated 2026-07-29 and therefore correctly records what was measured then. `docs/CATALOG.md`
       has no `review-depth` row and `ROADMAP.md` Epic B item 10 is unstruck, both intended and both
       confirmed clean rather than assumed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md`
       referencing this task id.
-- [ ] Author sign-off on the dogfood evidence before the skill is blessed. Until then the skill stays
+- [x] **Author sign-off given 2026-08-05.** The two dogfood boxes above stay unticked and are accepted unmet rather than ticked, because the per-changeset records cannot be reconstructed and ticking them from the skill body's summary of itself is the manufactured evidence this kit forbids. What the sign-off accepts is the recorded evidence as it stands: six in-repository changesets and one external repository, with the iterations they produced named in the body. `ROADMAP` Epic B #10 struck, `docs/CATALOG.md` row added, counts in `docs/GETTING-STARTED.md` moved to 20. One gap is recorded rather than closed: `review-depth` has never been through Anthropic's `quick_validate.py`, which last ran against 19 skills on 2026-07-29, filed as `chore-0028`.
+      Original wording: Author sign-off on the dogfood evidence before the skill is blessed. Until then the skill stays
       a draft, the roadmap item stays unstruck, and no `docs/CATALOG.md` row claims it is shipped.
