@@ -23,6 +23,10 @@ is expanded over sibling references before anything is placed, so it can never s
 skill whose composed sibling is missing. --uninstall is unaffected by the profile: it
 reverses every recorded target beneath --home, whichever run placed it.
 
+A skill whose frontmatter carries `metadata.status: draft` is placed by no profile,
+including `all`, so a skill the kit has not blessed is never distributed to an adopter
+(S-015). No marker means shipped, so the exclusion is always a deliberate act.
+
 Discovery targets (per tool), each skill linked/copied as <base>/<skill-name>:
     claude    -> ~/.claude/skills
     opencode  -> ~/.agents/skills
@@ -86,6 +90,21 @@ SIBLING_REF_RE = re.compile(r"\]\(\.\./([^/)]+)/SKILL\.md")
 DESC_FIELD_RE = re.compile(r"^description:\s*(.*)$")
 BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 
+# The draft marker (S-015). `metadata` is one of the six frontmatter properties the
+# skill schema permits, so a nested `status` under it is the only spelling that is both
+# legal for the external validator and mechanical here. A bare top-level `status:` key
+# would be rejected outright by validate-skills.py's allow-list, and the flow form
+# `metadata: {status: draft}` trips its plain-scalar-with-a-colon check, so only the
+# block form below is read:
+#
+#     metadata:
+#       status: draft
+#
+# Deliberately not a YAML parser, for the same reason DESC_FIELD_RE is not one.
+METADATA_KEY_RE = re.compile(r"^metadata:\s*$")
+STATUS_FIELD_RE = re.compile(r"^\s+status:\s*(\S.*?)\s*$")
+DRAFT_STATUS = "draft"
+
 
 def discover_skills():
     if not SKILLS_DIR.is_dir():
@@ -118,6 +137,71 @@ def description_of(skill_dir: Path) -> str:
             if raw.strip():
                 parts.append(raw.strip())
     return " ".join(p for p in parts if p).strip()
+
+
+def status_of(skill_dir: Path) -> str:
+    """The skill's `metadata.status` value, lowercased, or "" when it carries none.
+
+    Only the frontmatter's `metadata:` block is read, so a `status:` line written
+    anywhere in the body is prose and not a marker. That distinction is load-bearing:
+    several skills in this kit discuss draft status in their bodies, and reading one of
+    those as a marker would drop a shipped skill from every profile with no signal.
+
+    An unrecognised value reads as shipped rather than as a draft, so a typo
+    over-delivers (today's defect) instead of silently under-delivering (the worse one).
+    """
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    inside = False
+    for raw in lines[1:]:
+        if raw.strip() == "---":
+            break
+        if inside:
+            if raw.strip() and not raw[:1].isspace():
+                inside = False  # a new top-level key ended the metadata block
+            else:
+                m = STATUS_FIELD_RE.match(raw)
+                if m:
+                    return m.group(1).strip().strip('"').strip("'").lower()
+        if not inside and METADATA_KEY_RE.match(raw):
+            inside = True
+    return ""
+
+
+def partition_drafts(skills):
+    """Split discovered skills into (shipped, drafts).
+
+    Absence of a marker means shipped, so this only ever holds back a skill that says
+    so itself. Applied before a profile is resolved, so the closure in resolve_profile
+    runs over the shipped set rather than around it.
+    """
+    draft_names = {d.name for d in skills if status_of(d) == DRAFT_STATUS}
+    return ([d for d in skills if d.name not in draft_names],
+            [d for d in skills if d.name in draft_names])
+
+
+def draft_conflicts(selected, seed, draft_names) -> list:
+    """Contradictions between what a profile would place and the draft markers.
+
+    Two shapes, both of which would otherwise resolve silently and wrongly:
+
+    - A selected skill references a draft sibling. Dropping the reference reintroduces
+      the dangling-sibling defect S-013 exists to prevent; pulling the draft in defeats
+      the marker. Neither is this tool's call to make, so it places nothing and says so.
+    - A profile seed names a draft. The seed is filtered against the shipped set, so
+      such a name would otherwise vanish from the request without a word.
+    """
+    problems = []
+    for name in (seed or []):
+        if name in draft_names:
+            problems.append(f"the profile seed names {name!r}, which is marked a draft")
+    for d in selected:
+        for ref in sorted(sibling_refs(d) & set(draft_names)):
+            problems.append(f"{d.name} references {ref!r} as a sibling, "
+                            f"and {ref!r} is marked a draft")
+    return problems
 
 
 def sibling_refs(skill_dir: Path) -> set:
@@ -252,7 +336,26 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
         print(f"No skills found under {SKILLS_DIR}.")
         return 0
 
-    skills, added = resolve_profile(profile, all_skills)
+    # Drafts are removed before the profile is resolved (S-015), so the closure that
+    # keeps a profile sound (S-013) runs over the shipped set rather than around it.
+    shipped, drafts = partition_drafts(all_skills)
+    skills, added = resolve_profile(profile, shipped)
+
+    problems = draft_conflicts(skills, PROFILE_SEEDS[profile], {d.name for d in drafts})
+    if problems:
+        print(f"Refusing to place anything for profile {profile!r}: it collides with a "
+              f"draft marker, and every way through is wrong without a person deciding.")
+        for p in problems:
+            print(f"  - {p}")
+        print("\nEither bless the draft by removing its marker, or mark the skill that "
+              "references it a draft too. Placing it would ship a reference to a skill "
+              "this run did not place; skipping the reference would ship the dangling "
+              "sibling the closure exists to prevent.")
+        return 2
+
+    if drafts:
+        print(f"{len(drafts)} skill(s) marked a draft are excluded from every profile, "
+              f"including 'all': {', '.join(d.name for d in drafts)}.\n")
     if added:
         print(f"Profile {profile!r} was expanded to stay closed over sibling references: "
               f"{len(added)} skill(s) added ({', '.join(added)}). A skill that composes a "
@@ -318,7 +421,9 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
         print(f"\nWARNING: no rules module at {RULES_DIR}. Skills that reference "
               f"../../rules/ (house-review's rubric, the house-style module) will "
               f"dangle in the installed layout.")
-    budgets = profile_budgets(all_skills)
+    # Over the shipped set, not everything discovered: a draft is placed by no profile,
+    # so counting its description would report a budget no run can incur (S-015).
+    budgets = profile_budgets(shipped)
     print(f"\n{tag}Done: profile {profile!r}, {len(skills)} of {len(all_skills)} skill(s) "
           f"x {len(tools)} tool(s), plus the rules module"
           + (f", plus {len(hooks)} hook(s)." if hooks else "."))

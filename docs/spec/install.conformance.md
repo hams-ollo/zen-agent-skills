@@ -6,6 +6,7 @@ re_audited:
   - 2026-07-28 (bug-0003)
   - 2026-07-29 (bug-0009)
   - 2026-08-05 (bug-0010)
+  - 2026-08-05 (feat-0036)
 ---
 
 # install conformance matrix
@@ -33,19 +34,33 @@ approved contract and a matrix.
 | Scenarios | S-009 an unrecognised tool is rejected before anything is placed | Conformed | `main()` / the `bad` check returning 2 before `install()` is called | the check precedes any placement, so a valid tool in the same list does not save it |
 | Scenarios | S-010 the default mode suits the platform | Conformed | `main()` / `default="copy" if os.name == "nt" else "symlink"` | |
 | Scenarios | S-011 a refused link reports what to do instead | Conformed | `_link()` / the `except (OSError, NotImplementedError)` raising `SystemExit` with guidance | names Developer Mode and `--mode copy`; confirmed by execution |
-| Scenarios | S-013 a profile places a closed subset and reports expansion | Conformed | `resolve_profile()` / the closure loop over `sibling_refs()`, `install()` / the expansion notice, and `main()` / the `args.profile not in PROFILE_SEEDS` check returning 2 | the closure is computed from each body's `../<name>/SKILL.md` references rather than listed, so a skill that gains a reference cannot leave a profile shipping a dangling one. Confirmed by execution, measured 2026-07-28: `core` resolves to 3 with no expansion, `spine` to 17 having added 4 (`doc-author`, `doc-revise`, `spec-quality`, `test-quality`), `all` to 19, and every profile has zero references to a skill it does not place. An unrecognised profile exits 2 before placement, matching S-009's shape. Dated for the same reason as S-014 below: the totals move whenever a skill is added, and an undated count reads as a claim about now rather than as the record it is |
-| Scenarios | S-014 the run reports its description budget | Conformed | `profile_budgets()`, `description_of()`, and `install()` / the `Description budget:` print | reports the installed profile's total and every profile's, as counts. Confirmed by execution, re-measured 2026-07-29 with `--dry-run --home ./.tmp/zen-home`: `core=2298`, `spine=12489`, `all=14273`. Dated because the total moves whenever a `description` is edited: `all` was `14262` when first recorded, and the edits in `bug-0007`, `bug-0008`, and `chore-0022` moved it. `description_of()` strips a block-scalar indicator, without which the four skills using one would each inflate the figure by three |
+| Scenarios | S-013 a profile places a closed subset and reports expansion | Conformed | `resolve_profile()` / the closure loop over `sibling_refs()`, `install()` / the expansion notice, and `main()` / the `args.profile not in PROFILE_SEEDS` check returning 2 | the closure is computed from each body's `../<name>/SKILL.md` references rather than listed, so a skill that gains a reference cannot leave a profile shipping a dangling one. Confirmed by execution, measured 2026-07-28: `core` resolves to 3 with no expansion, `spine` to 17 having added 4 (`doc-author`, `doc-revise`, `spec-quality`, `test-quality`), `all` to 19, and every profile has zero references to a skill it does not place. An unrecognised profile exits 2 before placement, matching S-009's shape. Dated for the same reason as S-014 below: the totals move whenever a skill is added, and an undated count reads as a claim about now rather than as the record it is. **Re-measured 2026-08-05 (`feat-0036`)**: `core` resolves to 3 with no expansion, `spine` to 18 having added 5 (`doc-author`, `doc-revise`, `review-depth`, `spec-quality`, `test-quality`), `all` to 20. The 2026-07-28 figures above are kept rather than overwritten, because they are the record of what was true then. The movement is `feat-0035` blessing `review-depth`, not `feat-0036`: `house-review` is a `spine` seed and references `review-depth`, so the closure now pulls it in, and the same figures resolve identically against the pre-`feat-0036` `install.py`, measured by running it. Closure itself is unchanged; it now runs over the shipped set (S-015) rather than over everything discovered |
+| Scenarios | S-014 the run reports its description budget | Conformed | `profile_budgets()`, `description_of()`, and `install()` / the `Description budget:` print | reports the installed profile's total and every profile's, as counts. Confirmed by execution, re-measured 2026-07-29 with `--dry-run --home ./.tmp/zen-home`: `core=2298`, `spine=12489`, `all=14273`. Dated because the total moves whenever a `description` is edited: `all` was `14262` when first recorded, and the edits in `bug-0007`, `bug-0008`, and `chore-0022` moved it. `description_of()` strips a block-scalar indicator, without which the four skills using one would each inflate the figure by three. **Re-measured 2026-08-05 (`feat-0036`)** with the same command: `core=2298`, `spine=13398`, `all=15182`. The 2026-07-29 figures above are kept as the record of that date rather than overwritten. `core` is unmoved; `spine` and `all` moved because `feat-0035` blessed `review-depth`, adding a twentieth description and pulling it into `spine` through `house-review`. The identical figures resolve against the pre-`feat-0036` `install.py`, measured by running it, so none of this movement is this task's. What `feat-0036` does change is the input: the budget is now computed over the shipped set, so a draft's description is excluded from every profile's total, since no run can incur it |
+| Scenarios | S-015 a skill marked a draft is placed by no profile | Conformed | `status_of()`, `partition_drafts()`, and `install()` / `shipped, drafts = partition_drafts(all_skills)` feeding `resolve_profile(profile, shipped)`, the held-back notice, `profile_budgets(shipped)`, and `draft_conflicts()` returning 2 before anything is placed | added by `feat-0036`. The partition runs *before* the profile is resolved, so the S-013 closure computes over the shipped set rather than around it. Absence of a marker means shipped, and so does any unrecognised value, so a typo over-delivers (the visible defect) rather than silently withholding a skill (the invisible one). `status_of()` reads only the frontmatter's `metadata:` block, never the body, because `validate-skills.py`'s `DRAFT_STATUS_RE` matches `status: draft` anywhere in a file and several skills discuss draft status in prose. The summary's denominator stays `len(all_skills)`, so a held-back draft is reported as discovered but not placed. Confirmed by execution against a fixture tree, and against the real tree, which has no draft today and still reports `20 of 20`. The marker is carried by the skill and not by a list here, per the constraint the amendment added |
 | Proposed Surface | Invocation and its six flags | Conformed | `main()` / the `argparse` definitions | `--tools`, `--profile`, `--mode`, `--home`, `--dry-run`, `--uninstall` |
+| Proposed Surface | Draft marker | Conformed | `METADATA_KEY_RE`, `STATUS_FIELD_RE`, `DRAFT_STATUS`, and `status_of()` | added by `feat-0036`. The nested block form (`metadata:` then an indented `status:`) is the only legal spelling and the reason is external, not preference: `ALLOWED_FRONTMATTER_KEYS` in `validate-skills.py` rejects a bare top-level `status:`, and its `check_frontmatter_is_parseable` rejects the flow form `metadata: {status: draft}`. Both were confirmed by running that validator against fixture skills |
 | Proposed Surface | Placed per tool | Conformed | `install()` / the per-skill `_place` and the rules placement | |
 | Proposed Surface | Record | Conformed | `load_manifest()`, `save_manifest()`, `is_managed()`, and `install()` / `home = home.expanduser().resolve()` | the row says "a manifest of the targets this tool created" without constraining how a target is spelled, which is why `bug-0010`'s relative entries were a divergence from S-003 and S-007 rather than from this row. Every recorded target is now absolute, asserted directly by a test |
-| Proposed Surface | Exit code | Conformed | `main()` / `return 2`, and `install()` / `return 1 if conflicts else 0` | |
-| Proposed Surface | Output | Conformed | `install()` / the per-target print, the conflict summary, and the closing count | |
+| Proposed Surface | Exit code | Conformed | `main()` / `return 2`, and `install()` / the `if problems` block returning 2 and `return 1 if conflicts else 0` | re-audited by `feat-0036`, which amended the row to add the draft collision. It exits 2, the same class as an unrecognised tool or profile, and returns before the placement loop, so nothing is placed |
+| Proposed Surface | Output | Conformed | `install()` / the per-target print, the conflict summary, the drafts-held-back notice, and the closing count | re-audited by `feat-0036`, which amended the row to add the held-back drafts. The notice names each withheld skill, because a skill silently absent from an install is the failure the whole draft axis introduces the risk of |
 
 ## Coverage proof
 
-- **audited**: S-001 through S-014, and all Proposed Surface elements. Every spec item was
-  checked.
+- **audited**: all 15 scenarios the spec defines, S-001 through S-015 with no gap in the ids, matched
+  one for one by the 15 `Scenarios` rows above; and all 12 elements of its Proposed Surface table,
+  covered by 6 `Proposed Surface` rows. The two element figures differ for one reason, and it is worth
+  naming so a reader can check the matrix without reconstructing the grouping: the row
+  `Invocation and its six flags` is compound, auditing the `Invocation` element together with the six
+  flag elements (`--tools`, `--profile`, `--mode`, `--home`, `--dry-run`, `--uninstall`), which is 7 of
+  the 12. The other 5 elements (`Placed per tool`, `Draft marker`, `Record`, `Exit code`, `Output`)
+  have a row each, so 7 + 5 = 12 and nothing is unaudited. Counted 2026-08-05 against both files;
+  `feat-0036` added the `Draft marker` element and re-audited `Exit code` and `Output`.
 - **unreconciled**: none. No item diverged and none is unbuilt.
+- **caveat on S-015's audit standing**: the scenario is new as of 2026-08-05 and the spec amendment
+  carrying it is awaiting the author's re-read, so this row audits code against a contract clause that
+  is written but not yet re-approved. Recorded rather than deferred, because leaving the matrix
+  claiming "S-001 through S-014, every spec item was checked" beside a spec that carries fifteen would
+  be the falser of the two states.
 
 ## Test coverage of spec invariants
 
@@ -63,6 +78,7 @@ to an acceptance suite by this task:
 | S-009 | present | added by `chore-0017`. Pairs a supported tool with an unsupported one, so it also proves the valid entry does not rescue the invocation, and asserts nothing was placed |
 | S-010 | present, one branch | added by `chore-0017`. See the note below |
 | S-013 | present | added by `feat-0033`. Five tests: closure holds for every profile (the load-bearing one, since a subset shipping a skill without its composed sibling fails silently), the default places fewer than all, the three profiles are strictly nested, an expanded seed is reported, and a closed seed is not reported as expanded. Plus a rejection test asserting exit 2 and that nothing was placed |
+| S-015 | present | added by `feat-0036`. Nine tests in `DraftMarkerTests`, run against a fixture skill tree rather than `.agents/skills/`, because no skill there carries a marker (`review-depth`, the draft this was filed on, was blessed by `feat-0035`) and marking one to make a test pass would regress that. Every placement oracle compares the placed set **by name** against a literal expected set, not by count, because the bug population is the inverse of the defect being fixed: a marker read too eagerly withholds a shipped skill and an adopter's next re-install simply stops refreshing it, with no error anywhere. Coverage: the draft is placed by no profile including `all`; an unmarked and an explicitly-shipped skill are both placed; a `status: draft` line in the body is not a marker; `status_of` reads each form, including the deliberate typo and case cases; closure still holds with a draft present, asserted against what landed on disk; a placed skill referencing a draft places nothing and exits 2; a seed naming a draft does the same; the run names what it withheld; a draft costs no profile any budget. Eight of the nine were run against the pre-`feat-0036` `install.py` and failed; the closure guard passes on both sides by design |
 | S-014 | present | added by `feat-0033`. Three tests: the summary carries the installed profile's total and every profile's, a smaller profile costs strictly fewer characters, and a block-scalar description is measured without its indicator |
 
 Every scenario now has a covering test. `chore-0017` gave `main()` the optional `argv` parameter that
@@ -76,6 +92,16 @@ skills. Once the default profile became `spine`, that assertion failed, correctl
 longer places all of them. The test now requests `--profile all` explicitly, so it still asserts what
 S-001 means (every skill in the requested set) rather than being weakened to match the new default.
 The suite's other pre-existing scenarios were left asserting over the whole set for the same reason.
+
+**One pre-existing test was changed by `feat-0036`, for the same class of reason.**
+`test_install_places_every_skill_and_the_rules_module` asserted that a `--profile all` run places every
+directory `discover_skills()` returns. S-015 narrows S-001's "every skill" to every *shipped* skill, so
+the expected set is now derived from the frontmatter by `_marked_draft`, a second reader local to the
+test file. That derivation is deliberately not `partition_drafts()`: building the expectation from the
+code under test would let a misclassifying partition move the expectation and the placed set together,
+leaving the test green through exactly the failure S-015 exists to catch. The two sets are identical
+today, since no skill carries a marker, so the change asserts the same thing it always did while
+staying correct the day one does.
 
 **S-010 is covered on one branch only, and the reason is worth recording.** The rule reads `os.name`,
 and faking that to exercise the other platform breaks `pathlib`, which selects `PosixPath` or

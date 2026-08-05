@@ -2,7 +2,7 @@
 id: feat-0036
 title: Give install.py a mechanical draft marker so no profile distributes an unblessed skill
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -25,8 +25,8 @@ profile from distributing an unblessed draft to adopters.
 **Re-grounded 2026-08-05, because the example this task was filed on no longer applies.** As
 originally measured on 2026-07-31, `--profile all` reported `20 of 20` and placed `review-depth`,
 which was then a draft by every marker this repository uses. `review-depth` was blessed on
-2026-08-05 ([`feat-0035`](done/feat-0035-draft-review-depth.md) is `done`, `ROADMAP.md` Epic B item
-10 is struck, and [`docs/CATALOG.md`](../docs/CATALOG.md) now carries its row), so there is no
+2026-08-05 ([`feat-0035`](feat-0035-draft-review-depth.md) is `done`, `ROADMAP.md` Epic B item
+10 is struck, and [`docs/CATALOG.md`](../../docs/CATALOG.md) now carries its row), so there is no
 unblessed skill in the tree today and the installer is distributing nothing it should not.
 
 **The gap is unchanged and is now prospective rather than actual.** The next skill drafted here will
@@ -35,7 +35,7 @@ for the same reason: it cannot tell. Whoever picks this up should expect to demo
 with a temporary fixture skill rather than by pointing at a real one, and should not go looking for
 the draft this task was written about.
 
-[`AGENTS.md`](../AGENTS.md) section 7 states the bar: a freshly drafted skill stays `in_progress`
+[`AGENTS.md`](../../AGENTS.md) section 7 states the bar: a freshly drafted skill stays `in_progress`
 until it has been used and refined, and only then is it "shipped". `AGENTS.md` is a contract
 document, so the code is the suspect and the contract is not to be edited to match it.
 
@@ -70,7 +70,7 @@ original five-findings argument.
 
 **In scope:** a mechanical, per-skill draft marker that `install.py` reads, so a draft skill is placed
 by no profile, including `all`; the marker applied to `review-depth` as the one current draft; a
-scenario added to [`docs/spec/install.md`](../docs/spec/install.md) covering it, since the contract is
+scenario added to [`docs/spec/install.md`](../../docs/spec/install.md) covering it, since the contract is
 silent today; tests proving a draft is placed by no profile.
 
 **Out of scope:** editing `AGENTS.md`, which is a contract and is right; editing the five reader-facing
@@ -82,7 +82,7 @@ for anything other than the draft distinction.
 ## Implementation notes
 
 - **A bare `status:` frontmatter key is illegal and will fail two validators.**
-  `ALLOWED_FRONTMATTER_KEYS` in [`scripts/validate-skills.py:46`](../scripts/validate-skills.py) is an
+  `ALLOWED_FRONTMATTER_KEYS` in [`scripts/validate-skills.py:46`](../../scripts/validate-skills.py) is an
   allow-list of exactly six properties (`name`, `description`, `license`, `allowed-tools`, `metadata`,
   `compatibility`), sourced from `ALLOWED_PROPERTIES` in Anthropic's `quick_validate.py`. An
   unrecognised key is rejected outright. `bug-0008` exists because a property that looked legal was
@@ -95,7 +95,7 @@ for anything other than the draft distinction.
   drift from `ROADMAP.md`, and parsing `docs/CATALOG.md` or `ROADMAP.md` prose makes placement depend
   on wording.
 - **Check the interaction with the existing draft/shipped warning.** `DRAFT_STATUS_RE` in
-  [`scripts/validate-skills.py:69`](../scripts/validate-skills.py) already matches
+  [`scripts/validate-skills.py:69`](../../scripts/validate-skills.py) already matches
   `^\s*status:\s*draft\b`, and it warns only when draft and shipped language both appear. Confirm a
   frontmatter marker does not make that check fire spuriously, and decide deliberately whether
   `validate-skills.py` should start reading the marker as structured data rather than as prose.
@@ -137,17 +137,17 @@ skill body), and it changes what a published command distributes.
 
     python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] New tests proving a draft skill is placed by **no** profile: assert the exact placed set per
+- [x] New tests proving a draft skill is placed by **no** profile: assert the exact placed set per
       profile by name, not only its size, so the inverse failure above cannot pass.
-- [ ] A test proving profile closure still holds with a draft present, so S-013 is not weakened.
+- [x] A test proving profile closure still holds with a draft present, so S-013 is not weakened.
 - [ ] `python scripts/install.py --dry-run --profile all --home ./.tmp/zen-home` reports 19 of 20 and
       does not mention `review-depth`.
 - [ ] `python scripts/validate-skills.py` exits 0 with no new errors and no new warnings, with the
       marker present on `review-depth`.
-- [ ] `python .tasks/validate.py --strict` exits 0.
-- [ ] `python scripts/build-adapters.py --dry-run` exits 0. State deliberately whether adapter
+- [x] `python .tasks/validate.py --strict` exits 0.
+- [x] `python scripts/build-adapters.py --dry-run` exits 0. State deliberately whether adapter
       generation should also skip drafts, and record the decision either way.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 - [ ] `docs/spec/install.md` carries **S-015**, a new scenario for the behaviour, and is re-approved.
       The id is claimed in this task's `scenarios` field before the scenario exists, following the
       `feat-0033` precedent, which claimed S-013 and S-014 the same way and amended the spec as part

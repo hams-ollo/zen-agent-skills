@@ -63,6 +63,30 @@ def _symlinks_work() -> bool:
 SYMLINKS_WORK = _symlinks_work()
 
 
+def _marked_draft(skill_dir: Path) -> bool:
+    """Whether a skill's frontmatter marks it a draft, read independently of install.py.
+
+    A second, deliberately crude reader: walk to the closing `---` and look for a line
+    that is exactly `status: draft`. It exists so a test asserting which skills get
+    placed has an oracle that does not call `status_of` or `partition_drafts`, the code
+    it is checking. An expectation built from those would move together with the actual
+    set if either ever misclassified a skill, which is the one failure S-015 is for.
+
+    Crude on purpose: it does not check that the line sits under `metadata:`, so it is
+    the looser of the two readers. That direction is safe here, since the two agreeing
+    is the assertion and a spurious disagreement fails loudly rather than passing.
+    """
+    lines = (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    for raw in lines[1:]:
+        if raw.strip() == "---":
+            return False
+        if raw.strip() == "status: draft":
+            return True
+    return False
+
+
 @contextlib.contextmanager
 def _working_directory(path: Path):
     """Run a block with the process working directory moved, then restore it.
@@ -121,7 +145,18 @@ class InstallAcceptanceTests(unittest.TestCase):
     def test_install_places_every_skill_and_the_rules_module(self):
         # Scenarios S-001 and S-002: one directory per skill under the requested tool's
         # discovery path, plus the rules module.
-        expected = {d.name for d in inst.discover_skills()}
+        #
+        # S-015 narrows S-001's "every skill" to every *shipped* skill, so the expected
+        # set is the shipped one rather than everything discovered. The two are identical
+        # while no skill carries a draft marker, which is the case as of 2026-08-05;
+        # deriving the shipped set means the day one does, this test keeps asserting
+        # S-001 instead of failing for a reason it has no opinion about.
+        #
+        # Derived by `_marked_draft` and deliberately NOT by `inst.partition_drafts`. The
+        # partition is the code under test here: if it ever misclassified a skill, an
+        # expectation built from it would move with the actual set and this test would
+        # stay green through exactly the failure S-015 exists to catch.
+        expected = {d.name for d in inst.discover_skills() if not _marked_draft(d)}
         code, _ = self._install()
         self.assertEqual(code, 0)
         placed = {p.name for p in (self.home / ".claude" / "skills").iterdir()}
@@ -591,6 +626,191 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(code, 0)
         remaining = list((self.home / ".claude" / "skills").iterdir())
         self.assertEqual(remaining, [])
+
+
+def _fixture_skill(skills_dir, name, description, status=None, refs=(), body_extra=""):
+    """Write a minimal, valid SKILL.md into a fixture skills tree.
+
+    `status` is written as the nested block form the marker requires. The flow form
+    (`metadata: {status: draft}`) is deliberately not used here: validate-skills.py
+    rejects a plain frontmatter scalar containing ": ", so it is not a legal spelling
+    in this kit and a fixture written that way would be testing a shape no skill can use.
+    """
+    d = skills_dir / name
+    d.mkdir(parents=True, exist_ok=True)
+    lines = ["---", f"name: {name}", f"description: {description}"]
+    if status is not None:
+        lines += ["metadata:", f"  status: {status}"]
+    lines += ["---", "", f"# {name}", ""]
+    lines += [f"Composes [`{r}`](../{r}/SKILL.md)." for r in refs]
+    if body_extra:
+        lines.append(body_extra)
+    (d / "SKILL.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class DraftMarkerTests(unittest.TestCase):
+    """Scenario S-015: a skill marked a draft is placed by no profile.
+
+    Run against a fixture skill tree, deliberately, and not against `.agents/skills/`.
+    No skill there carries a draft marker as of 2026-08-05 (`review-depth`, the draft
+    this behaviour was filed on, was blessed by `feat-0035`), so a real-tree test would
+    prove nothing, and marking a real skill a draft to make one pass would regress that
+    blessing and falsify a shipped catalog row.
+
+    The bug population is not the over-delivery this fixes. It is the inverse: a marker
+    read too eagerly drops a shipped skill from every profile, and an adopter's next
+    re-install simply stops refreshing it with no error anywhere. A count assertion
+    cannot see that, so every placement oracle here compares the placed set by name
+    against an exact expected set.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+
+        self._real = (inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.MANIFEST = self.root / "manifest.json"
+        # alpha composes beta, so `core` can only be sound as {alpha, beta}: that is the
+        # S-013 closure, and it has to keep working with a draft in the tree.
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "spine": ["alpha", "delta"], "all": None}
+
+    def tearDown(self):
+        inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST = self._real
+        self._tmp.cleanup()
+
+    def _tree(self):
+        """alpha (unmarked) -> beta (explicitly shipped); delta shipped; gamma a draft."""
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"])
+        _fixture_skill(self.skills, "beta", "does beta things when asked", status="shipped")
+        _fixture_skill(self.skills, "gamma", "an unblessed draft nobody should receive",
+                       status="draft")
+        _fixture_skill(self.skills, "delta", "does delta things when asked")
+
+    def _install(self, profile, home=None, dry=False):
+        home = home or self.root / f"home-{profile}"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.install(["claude"], "copy", home, dry, profile)
+        return code, buf.getvalue(), home
+
+    @staticmethod
+    def _placed(home):
+        base = home / ".claude" / "skills"
+        return {p.name for p in base.iterdir()} if base.is_dir() else set()
+
+    def test_a_draft_skill_is_placed_by_no_profile(self):
+        # Scenario S-015, and the whole point of the marker: `all` included.
+        self._tree()
+        expected = {"core": {"alpha", "beta"},
+                    "spine": {"alpha", "beta", "delta"},
+                    "all": {"alpha", "beta", "delta"}}
+        for profile, names in expected.items():
+            with self.subTest(profile=profile):
+                code, _, home = self._install(profile)
+                self.assertEqual(code, 0)
+                self.assertEqual(self._placed(home), names)
+                self.assertNotIn("gamma", self._placed(home))
+
+    def test_an_unmarked_skill_and_an_explicitly_shipped_one_are_both_placed(self):
+        # Scenario S-015 (negative), the inverse failure stated directly: absence of a
+        # marker means shipped. `alpha` carries none and `beta` says `shipped`; both are
+        # placed by the profile that asks for everything.
+        self._tree()
+        _, _, home = self._install("all")
+        self.assertEqual(self._placed(home), {"alpha", "beta", "delta"})
+
+    def test_the_marker_is_read_from_frontmatter_and_not_from_the_body(self):
+        # Scenario S-015 (negative). Several skills in this kit discuss draft status in
+        # prose, and validate-skills.py's DRAFT_STATUS_RE matches `status: draft` anywhere
+        # in the file. Reading the body the same way would drop a shipped skill from every
+        # profile with no signal, which is the failure worth protecting against here.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked",
+                       body_extra="This skill writes `status: draft` into every spec it "
+                                  "authors, and the spec is a draft until approved.\n")
+        self.assertEqual(inst.status_of(self.skills / "alpha"), "")
+        _, _, home = self._install("all")
+        self.assertEqual(self._placed(home), {"alpha"})
+
+    def test_status_of_reads_each_marker_form(self):
+        # Scenario S-015 at the lowest faithful layer. The unrecognised value is the
+        # deliberate case: it reads as shipped, so a typo over-delivers rather than
+        # silently withholding a skill.
+        self._tree()
+        _fixture_skill(self.skills, "typo", "a marker nobody spelled right", status="drafft")
+        _fixture_skill(self.skills, "cased", "a marker in the wrong case", status="Draft")
+        self.assertEqual(inst.status_of(self.skills / "alpha"), "")
+        self.assertEqual(inst.status_of(self.skills / "beta"), "shipped")
+        self.assertEqual(inst.status_of(self.skills / "gamma"), "draft")
+        self.assertEqual(inst.status_of(self.skills / "typo"), "drafft")
+        self.assertEqual(inst.status_of(self.skills / "cased"), "draft")
+
+    def test_profile_closure_still_holds_with_a_draft_present(self):
+        # Scenarios S-013 and S-015 together: excluding drafts must not weaken the
+        # closure. Asserted against what actually landed on disk, so it runs through the
+        # draft-aware resolution rather than around it.
+        self._tree()
+        names = {d.name for d in inst.discover_skills()}
+        for profile in inst.PROFILE_SEEDS:
+            with self.subTest(profile=profile):
+                _, _, home = self._install(profile)
+                placed = self._placed(home)
+                self.assertTrue(placed, "precondition: the profile placed something")
+                for name in placed:
+                    missing = (inst.sibling_refs(self.skills / name) & names) - placed
+                    self.assertEqual(missing, set(),
+                                     f"{profile} shipped {name} without {sorted(missing)}")
+
+    def test_a_profile_that_would_ship_a_reference_to_a_draft_places_nothing(self):
+        # Scenario S-015: the case the closure and the marker disagree about. Dropping
+        # the reference reintroduces the dangling sibling S-013 prevents, and following
+        # it defeats the marker, so the run refuses and names both skills.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["gamma"])
+        _fixture_skill(self.skills, "gamma", "an unblessed draft nobody should receive",
+                       status="draft")
+        code, out, home = self._install("all")
+        self.assertEqual(code, 2)
+        self.assertEqual(self._placed(home), set(), "nothing may be placed when refused")
+        self.assertFalse((home / ".claude" / "rules").exists())
+        self.assertIn("alpha", out)
+        self.assertIn("'gamma'", out)
+        self.assertIn("Refusing to place anything", out)
+
+    def test_a_profile_seed_naming_a_draft_places_nothing(self):
+        # Scenario S-015: the other silent resolution. The seed is filtered against the
+        # shipped set, so without this the requested skill vanishes without a word.
+        self._tree()
+        inst.PROFILE_SEEDS = {"core": ["alpha", "gamma"], "all": None}
+        code, out, home = self._install("core")
+        self.assertEqual(code, 2)
+        self.assertEqual(self._placed(home), set())
+        self.assertIn("profile seed names 'gamma'", out)
+
+    def test_the_run_names_the_drafts_it_held_back(self):
+        # Scenario S-015: a skill silently absent from an install is the failure mode
+        # this whole change is about, so the run has to say what it withheld. The
+        # reported totals count the draft as discovered but not placed.
+        self._tree()
+        _, out, _ = self._install("all")
+        self.assertIn("gamma", out)
+        self.assertIn("excluded from every profile", out)
+        self.assertIn("3 of 4 skill(s)", out)
+
+    def test_a_draft_costs_no_profile_any_description_budget(self):
+        # Scenario S-014 under S-015: the budget has to track what is placed. Counting a
+        # draft would report a cost no run can incur.
+        self._tree()
+        long_draft = "d" * 400
+        _fixture_skill(self.skills, "gamma", long_draft, status="draft")
+        shipped, drafts = inst.partition_drafts(inst.discover_skills())
+        self.assertEqual([d.name for d in drafts], ["gamma"])
+        budgets = inst.profile_budgets(shipped)
+        self.assertEqual(budgets["all"], sum(len(inst.description_of(d)) for d in shipped))
+        _, out, _ = self._install("all")
+        self.assertIn(f"all={budgets['all']}", out)
+        self.assertNotIn(str(len(long_draft) + budgets["all"]), out)
 
 
 class HookRegistrationTests(unittest.TestCase):
