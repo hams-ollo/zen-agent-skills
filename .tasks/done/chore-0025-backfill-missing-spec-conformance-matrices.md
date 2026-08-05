@@ -2,7 +2,7 @@
 id: chore-0025
 title: Backfill the four spec conformance matrices the kit is missing, and settle the sibling naming
 type: chore
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic B #6: spec-conformance"
 depends_on: []
@@ -23,14 +23,14 @@ was not built. Five specs have one (`build-adapters`, `install`, `tracker-links`
 
 | Spec | Sibling present | Note |
 |---|---|---|
-| [`doc-sync.md`](../docs/spec/doc-sync.md) | none | shipped as `feat-0020` |
-| [`house-review.md`](../docs/spec/house-review.md) | `house-review.verification.md` only | not a conformance matrix, and not the name the convention uses |
-| [`spec-author.md`](../docs/spec/spec-author.md) | none | shipped as `feat-0017` |
-| [`test-author.md`](../docs/spec/test-author.md) | none | shipped as `feat-0018` |
+| [`doc-sync.md`](../../docs/spec/doc-sync.md) | none | shipped as `feat-0020` |
+| [`house-review.md`](../../docs/spec/house-review.md) | `house-review.verification.md` only | not a conformance matrix, and not the name the convention uses |
+| [`spec-author.md`](../../docs/spec/spec-author.md) | none | shipped as `feat-0017` |
+| [`test-author.md`](../../docs/spec/test-author.md) | none | shipped as `feat-0018` |
 
 All four skills shipped. All four specs are `status: approved`. So the kit is carrying four approved
 contracts with no recorded audit of whether the thing built actually matches them, which is the
-precise gap [`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md) exists to close. A
+precise gap [`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md) exists to close. A
 convention followed five times out of nine is a convention held by memory, and this is what that
 looks like after four months.
 
