@@ -11,13 +11,27 @@
 // papered over. A gate, when one is added, maps cleanly: throwing errors the tool result,
 // and the model sees the reason.
 //
-//   delegation-reminder -> tool.execute.after (task): warn log.  [best-effort]
+//   delegation-reminder   -> tool.execute.after (task):        warn log. [best-effort]
+//   spec-conformance-gate -> tool.execute.after (write/edit):  throw.    [enforced]
+//
+// The gate maps cleanly where the reminder does not: throwing errors the tool result, so
+// the model sees the reason and must reconcile before closing. That asymmetry is the whole
+// reason the module distinguishes the two shapes.
 //
 // See .agents/hooks/README.md for the module contract.
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const HOOKS_DIR = ".agents/hooks";
+
+// Pull a file path out of opencode tool args without guessing the exact key name.
+function extractPath(args) {
+  if (!args || typeof args !== "object") return "";
+  for (const k of ["filePath", "file_path", "path", "notebook_path", "filename"]) {
+    if (typeof args[k] === "string" && args[k]) return args[k];
+  }
+  return "";
+}
 
 // Windows ships `python`, most other platforms `python3`. Try in order rather than
 // assuming: this kit's CI runs all three major platforms, so a hard-coded interpreter
@@ -59,18 +73,37 @@ async function note(client, result) {
 export const ZenHooks = async ({ worktree, directory, client }) => {
   const root = () => worktree || directory || process.cwd();
   return {
-    "tool.execute.after": async (input) => {
+    "tool.execute.after": async (input, output) => {
       const tool = input?.tool;
-      if (tool !== "task") return;
       const rootDir = root();
-      // The payload is normalized to the shape every hook in the module reads, so the
-      // Python stays harness-agnostic and this adapter owns the translation.
-      const result = runHook("delegation-reminder.py", {
-        hook_event_name: "PostToolUse",
-        tool_name: "Task",
-        cwd: rootDir,
-      }, rootDir);
-      await note(client, result);
+
+      // The payloads below are normalized to the shape every hook in the module reads, so
+      // the Python stays harness-agnostic and this adapter owns the translation.
+      if (tool === "task") {
+        await note(client, runHook("delegation-reminder.py", {
+          hook_event_name: "PostToolUse",
+          tool_name: "Task",
+          cwd: rootDir,
+        }, rootDir));
+        return;
+      }
+
+      if (tool === "write" || tool === "edit") {
+        const args = output?.args || input?.args || {};
+        const filePath = extractPath(args);
+        if (!filePath) return;
+        const gate = runHook("spec-conformance-gate.py", {
+          hook_event_name: "PostToolUse",
+          tool_name: tool,
+          tool_input: { file_path: filePath },
+          cwd: rootDir,
+        }, rootDir);
+        if (gate && gate.decision === "block") {
+          // Errors the edit result. The model sees the reason and must reconcile (write
+          // the matrix, or declare it in frontmatter) before the close can stand.
+          throw new Error(gate.reason);
+        }
+      }
     },
   };
 };

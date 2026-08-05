@@ -79,7 +79,12 @@ python scripts/install.py --with-hooks
 
 That places the module and then prints a registration block. **Nothing fires until you paste that block into `~/.claude/settings.json` yourself.** The installer does not edit your settings, for two reasons: a settings file is the one thing here the uninstall manifest cannot cleanly reverse, and a guardrail you did not knowingly switch on is indistinguishable from a bug when it fires.
 
-Today the module ships one hook, `delegation-reminder`, which notes after a delegated agent reports back that its summary is a claim rather than evidence. It never blocks. See [`.agents/hooks/README.md`](../.agents/hooks/README.md) for the module contract and the rules a new hook has to satisfy.
+Today the module ships two hooks, one of each shape:
+
+- **`delegation-reminder`** notes, after a delegated agent reports back, that its summary is a claim rather than evidence. It never blocks.
+- **`spec-conformance-gate`** blocks when work a contract governs is closed and nothing records whether the implementation actually matches that contract. Every block names its escape: run `spec-conformance`, or add a `conformance:` key to the frontmatter declaring the audit lives elsewhere.
+
+See [`.agents/hooks/README.md`](../.agents/hooks/README.md) for the module contract and the rules a new hook has to satisfy.
 
 To back out: remove the block from your settings to deactivate, and `--uninstall` to remove the files.
 

@@ -63,6 +63,7 @@ The [hooks module](../.agents/hooks/README.md) is the answer to the second kind.
 | Hook | Shape | Fires when |
 |---|---|---|
 | `delegation-reminder` | reminder | a delegated agent reports back, to note that its summary is a claim and not evidence |
+| `spec-conformance-gate` | gate | work a contract governs is closed with no audit of whether the implementation matches it |
 
 These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
 

@@ -181,6 +181,16 @@ HOOK_SUBPATHS = {
     "opencode": Path(".agents") / "hooks",
 }
 
+# Each hook in the module and the PostToolUse matcher that must wake it. A matcher may be
+# broader than the hook's own condition, since every hook re-checks; it may never be
+# narrower, or the hook is placed and silently never fires. `tests/test_hooks.py`
+# asserts the delegation matcher against the hook's own tool set for exactly that reason.
+HOOK_REGISTRATIONS = [
+    ("delegation-reminder.py", "^Task$|^Agent$|^TaskOutput$|agent_run"),
+    ("spec-conformance-gate.py", "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
+]
+
+
 def hook_interpreter() -> str:
     """The interpreter name to write into a hook registration.
 
@@ -204,19 +214,22 @@ def claude_registration(home: Path) -> str:
     The path is absolute and resolved rather than `~/...`, because whether a tilde is
     expanded depends on how the harness spawns the command, and a registration that
     silently does not run is the worst outcome available here.
+
+    Built from HOOK_REGISTRATIONS rather than written out, so a hook added to the module
+    without a matcher here is a mistake that shows up as a missing entry instead of a hook
+    that was placed and never fires.
     """
-    script = home / HOOK_SUBPATHS["claude"] / "delegation-reminder.py"
-    command = f"{hook_interpreter()} \"{script}\""
-    return json.dumps({
-        "hooks": {
-            "PostToolUse": [
-                {
-                    "matcher": "^Task$|^Agent$|^TaskOutput$|agent_run",
-                    "hooks": [{"type": "command", "command": command}],
-                }
-            ]
-        }
-    }, indent=2)
+    hooks_home = home / HOOK_SUBPATHS["claude"]
+    entries = []
+    for script_name, matcher in HOOK_REGISTRATIONS:
+        if not (HOOKS_DIR / script_name).is_file():
+            continue
+        command = f"{hook_interpreter()} \"{hooks_home / script_name}\""
+        entries.append({
+            "matcher": matcher,
+            "hooks": [{"type": "command", "command": command}],
+        })
+    return json.dumps({"hooks": {"PostToolUse": entries}}, indent=2)
 
 
 def discover_hooks():

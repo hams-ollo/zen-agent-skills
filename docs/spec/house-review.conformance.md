@@ -88,6 +88,6 @@ They answer different questions and neither replaces the other:
 
 A spec can have one, both, or neither. The distinction is now stated in the layout table in
 `AGENTS.md` and is what the spec-closeout gate in
-[`feat-0039`](../../.tasks/feat-0039-spec-conformance-gate-hook.md) will look for: the gate accepts
+[`feat-0039`](../../.tasks/done/feat-0039-spec-conformance-gate-hook.md) will look for: the gate accepts
 a `<stem>.conformance.*` sibling, so a `.verification.md` alone does not satisfy it, and before this
 task `house-review` would have blocked on exactly that.

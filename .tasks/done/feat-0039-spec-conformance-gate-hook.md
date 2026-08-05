@@ -2,7 +2,7 @@
 id: feat-0039
 title: Add the spec-conformance gate hook, adapted so 'approved' is not treated as a closing status
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic B #13: telemetry-guard (reframed as enforcement hooks)"
 depends_on: [feat-0038, chore-0025]
@@ -35,8 +35,8 @@ set is:
 
 `approved` is in that list. In this kit `approved` does not mean closed. It means the opposite end of
 the lifecycle: a human has signed off on the contract so that
-[`new-task`](../.agents/skills/new-task/SKILL.md) may decompose it, which is the `S-003` gate
-[`spec-author`](../.agents/skills/spec-author/SKILL.md) enforces. Every one of this repository's nine
+[`new-task`](../../.agents/skills/new-task/SKILL.md) may decompose it, which is the `S-003` gate
+[`spec-author`](../../.agents/skills/spec-author/SKILL.md) enforces. Every one of this repository's nine
 specs is `status: approved` right now. Dropping upstream's file in unmodified would block the next
 edit to all nine, and would demand a conformance matrix for a spec whose implementation has not been
 written yet. The hook would be uninstalled within an hour and the idea would be discredited by its
