@@ -23,7 +23,7 @@ omits what it did not do still passes through unchallenged.
 
 The observed failure is on record. Two of three agents in the `feat-0025` batch found their task
 file's premise factually wrong about the code, and nothing in the system captured it. That produced
-[`feat-0037`](../feat-0037-task-file-decision-log-v1.md), which has the agent write its decisions into
+[`feat-0037`](feat-0037-task-file-decision-log-v1.md), which has the agent write its decisions into
 its own task file. That is the semantic half. The mechanical half is missing: there is no required
 set of fields whose absence stops the report from being accepted.
 

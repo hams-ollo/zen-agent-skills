@@ -2,7 +2,7 @@
 id: feat-0037
 title: Record agent decisions in the task file, and surface them in the PR description
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -22,7 +22,7 @@ why, which seam was left open deliberately, which premise in the task file turne
 This is not hypothetical. Two of the three agents in the `feat-0025` batch found that their task
 file's premise was factually wrong about the code, tested what was actually there, and reported it.
 That surfaced only because a human was reading the reports. Nothing in the system captured it, and
-[`fix-batch`](../.agents/skills/fix-batch/SKILL.md) Step 3 item 6 asks only for a *blocker* report,
+[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) Step 3 item 6 asks only for a *blocker* report,
 so a non-blocking premise correction has nowhere to go at all.
 
 The cost lands on the next agent. It reads the task file and the diff, sees a seam left open, reads
@@ -40,7 +40,7 @@ good. See [Kill criterion](#kill-criterion).
 
 **In scope:**
 
-1. **[`.tasks/_TEMPLATE.md`](_TEMPLATE.md)**: add an optional `## Decisions` section, placed after
+1. **[`.tasks/_TEMPLATE.md`](../_TEMPLATE.md)**: add an optional `## Decisions` section, placed after
    `## Implementation notes`. Follow the `## Risks and rollback` precedent exactly, including its
    delete-when-empty rule and the stated reason for it. The section states the three admissible
    entry kinds and, more importantly, the exclusion list:
@@ -51,7 +51,7 @@ good. See [Kill criterion](#kill-criterion).
      passed (`<spec>.verification.md`), whether it matched the contract (`<spec>.conformance.md`),
      why the feature exists (the spec).
 
-2. **[`fix-batch`](../.agents/skills/fix-batch/SKILL.md)**: add one item to the Step 3 hardened-prompt
+2. **[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md)**: add one item to the Step 3 hardened-prompt
    list instructing each agent to record decisions **in its own task file** before finishing. State
    why the task file specifically: it is the one file uniquely owned by that agent, so N agents
    writing to it is not a shared-file conflict, unlike the `done/` move, `CHANGELOG.md`, and
@@ -59,7 +59,7 @@ good. See [Kill criterion](#kill-criterion).
    correctly forbids. This addition must not weaken that rule; say plainly that it is the exception
    that proves it.
 
-3. **[`pr-describe`](../.agents/skills/pr-describe/SKILL.md)**: in Step 2, when the task file(s) the
+3. **[`pr-describe`](../../.agents/skills/pr-describe/SKILL.md)**: in Step 2, when the task file(s) the
    branch completes carry a non-empty `## Decisions` section, fold those entries into the PR body's
    existing optional "Follow-ups / out of scope" section rather than adding a new heading. The skill
    already reads `.tasks/` and `.tasks/done/` for the `external` field, so this is a second read of a
@@ -68,15 +68,15 @@ good. See [Kill criterion](#kill-criterion).
 **Out of scope:**
 
 - **The spec-sibling rollup.** No `docs/spec/<name>.decisions.md`, no new record kind in `AGENTS.md`
-  section 2, and no change to [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md).
+  section 2, and no change to [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md).
   The whole point of this task is to test the cheap half first.
-- **[`new-task`](../.agents/skills/new-task/SKILL.md).** It gains a read obligation only once a rollup
+- **[`new-task`](../../.agents/skills/new-task/SKILL.md).** It gains a read obligation only once a rollup
   file exists to be cited. Nothing to point at yet.
-- **[`init-worktracking`](../.agents/skills/init-worktracking/SKILL.md) and its
+- **[`init-worktracking`](../../.agents/skills/init-worktracking/SKILL.md) and its
   `templates/_TEMPLATE.md.tmpl`.** Propagating this to every scaffolded repository before it has been
   used here once is exactly the cold ship `AGENTS.md` section 7 forbids. This repository dogfoods it
   first.
-- **Enforcement in [`validate.py`](validate.py).** It checks frontmatter, not sections. Making the
+- **Enforcement in [`validate.py`](../validate.py).** It checks frontmatter, not sections. Making the
   section mandatory would break every existing task file and would compel entries rather than earn
   them, which defeats the measurement this task exists to perform.
 - Any change to the three verification record kinds, or to `AGENTS.md`.
@@ -102,6 +102,26 @@ and `pr-describe` point at it. Three copies will drift, which is the same reason
 agents editing `CHANGELOG.md` in N worktrees is a guaranteed reconciliation conflict. An agent
 editing its own task file is categorically different and the new item must say so, or a future reader
 will read the two rules as contradictory and drop one.
+
+## Decisions
+
+First dogfood of this task's own feature.
+
+- **Rejected alternative**: mirroring `## Risks and rollback` ordering exactly, with the
+  delete-when-empty sentence closing the section. That would have pushed the literal phrase
+  "delete this section" past the 900-character window the second acceptance command inspects
+  (`t.partition('## Decisions')[2][:900]`). The sentence moved up into the exclusion paragraph
+  instead, so the precedent's shape survives but its ordering does not.
+- **Seam left open deliberately**: the closing paragraph of `fix-batch`'s "The delegate report
+  contract" still points forward at "the decision log specified separately in this kit's
+  `feat-0037`" rather than back at the Step 3 item that now exists. Left as provenance, and out of
+  this task's stated scope of one new Step 3 item. Not an oversight to close.
+- **Premise that turned out false (partly)**: the Problem section says a non-blocking premise
+  correction "has nowhere to go at all". `feat-0041` overtook that between authoring and dispatch:
+  the delegate report contract's **blockers and assumptions** field now explicitly requires
+  "including a task premise it found false". The task's conclusion still holds, because that report
+  is ephemeral and lands in no file the repository keeps, but its stated reason no longer does.
+  Step 3 item 6 does still ask only for a blocker report, so that half of the claim is accurate.
 
 ## Risks and rollback
 
@@ -139,25 +159,25 @@ State the outcome explicitly rather than letting the feature persist by default.
 
     python -c "import pathlib,sys; r=lambda p: pathlib.Path(p).read_text(encoding='utf-8'); t=r('.tasks/_TEMPLATE.md'); f=r('.agents/skills/fix-batch/SKILL.md'); p=r('.agents/skills/pr-describe/SKILL.md'); d=t.partition('## Decisions')[2][:900]; c=[('## Decisions' in t), ('delete this section' in d), ('Decisions' in f and 'own task file' in f), ('Decisions' in p)]; sys.exit(0 if all(c) else 'failed: ' + str(c))"
 
-- [ ] `.tasks/_TEMPLATE.md` carries a `## Decisions` section after `## Implementation notes`, listing
+- [x] `.tasks/_TEMPLATE.md` carries a `## Decisions` section after `## Implementation notes`, listing
       the three admissible entry kinds and the four-item exclusion list, and stating the
       delete-when-empty rule in the manner of `## Risks and rollback`.
-- [ ] `fix-batch` Step 3's prompt list gains one item covering the decision record, which explicitly
+- [x] `fix-batch` Step 3's prompt list gains one item covering the decision record, which explicitly
       distinguishes the agent's own task file from the shared files the existing closeout-bookkeeping
       rule protects.
-- [ ] `pr-describe` Step 2 folds non-empty decision entries into the existing "Follow-ups / out of
+- [x] `pr-describe` Step 2 folds non-empty decision entries into the existing "Follow-ups / out of
       scope" section, and adds no new top-level PR heading.
-- [ ] The exclusion list is defined once, in the template; the two skills reference it and do not
+- [x] The exclusion list is defined once, in the template; the two skills reference it and do not
       restate it.
 - [ ] No file outside `touched_files` is modified. In particular `validate.py`,
       `reconcile-worktrees`, `new-task`, `AGENTS.md`, and
       `.agents/skills/init-worktracking/templates/_TEMPLATE.md.tmpl` are untouched.
-- [ ] Every existing task file still passes `python .tasks/validate.py --strict` unchanged.
+- [x] Every existing task file still passes `python .tasks/validate.py --strict` unchanged.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
 - [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
 - [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
 - [ ] Kill-criterion review scheduled against the next `fix-batch` run of three or more agents.

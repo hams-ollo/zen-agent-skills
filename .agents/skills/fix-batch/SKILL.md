@@ -187,6 +187,19 @@ Every prompt must include, in substance:
    that a missing field blocks acceptance. An agent that learns the required shape only when you
    reject its report has already lost the context that made the fields cheap to produce, and
    reconstructing them afterwards costs a round trip you did not need to spend.
+8. **An instruction to record its decisions in its own task file** before it finishes, and to leave
+   that file otherwise alone. The admissible entry kinds and the exclusion list are defined once, in
+   the target repository's task template (in this kit, the `## Decisions` section of
+   `.tasks/_TEMPLATE.md`). Point the agent at that definition instead of restating it, and tell it
+   to delete the section when it has nothing of those kinds rather than pad it. This is the
+   **exception that proves** the closeout-bookkeeping rule below, not a weakening of it: that rule
+   holds because the `done/` move, `CHANGELOG.md`, and `ROADMAP.md` are the *same* files for every
+   item in the batch, so N agents editing them in N worktrees collide by construction. An agent's
+   own task file is the one file in the batch that exactly one agent owns, so no second agent can
+   conflict with it. Everything shared still stays out. This item is also the semantic counterpart
+   to [the delegate report contract](#the-delegate-report-contract), which asks what is checkably
+   true about the change while this asks what the agent learned that the change does not show. It is
+   not a tenth report field.
 
 **Keep closeout bookkeeping out of every prompt.** Do not ask agents to move their own task file to
 `done/`, update the changelog, or tick the roadmap. Those touch the same one or two files for every
@@ -335,7 +348,7 @@ needs a cross-worktree view, it belongs in your own Step 6 checks, not in the co
 
 This contract is the mechanical half only. The semantic half, where the agent writes its rejected
 alternatives, falsified premises, and deliberately open seams into its own task file, is the
-decision log specified separately in this kit's `feat-0037`. The two compose and neither restates
+decision log that Step 3 item 8 asks every prompt to carry. The two compose and neither restates
 the other: this one asks what is checkably true about the change, that one asks what the agent
 learned that the change does not show.
 
