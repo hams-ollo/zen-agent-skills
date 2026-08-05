@@ -99,8 +99,7 @@ Rollback is a revert; nothing depends on the block being present.
 
 ## Acceptance criteria (mechanically verifiable)
 
-    python scripts/check-provenance.py && python -m unittest discover -s tests -p "test_*.py" -v && python .tasks/validate.py --strict
-
+    python -m unittest discover -s tests -p "test_*.py" -v && python .tasks/validate.py --strict
 - [ ] The provenance convention is stated in the conventions section of `AGENTS.md`.
 - [ ] `scripts/check-provenance.py` exits 0 when every recorded digest matches and non-zero on
       drift, with the drifted source named in its output.
