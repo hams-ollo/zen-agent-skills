@@ -65,7 +65,7 @@ Neither is a code defect. Both are contracts that stopped describing what shippe
 - Any change to `spec-author`'s or `doc-sync`'s skill bodies. The implementations are the correct
   side of both divergences; that is the whole premise of this task.
 - The `S-011` link-check gap in the same matrix. That one is a real defect in the skill, not a
-  stale contract, and is [`bug-0014`](bug-0014-doc-sync-applied-edit-has-no-link-check.md).
+  stale contract, and is [`bug-0014`](done/bug-0014-doc-sync-applied-edit-has-no-link-check.md).
 - Re-auditing the other two specs backfilled by `chore-0025`. `house-review` and `test-author` came
   back with no unreconciled items.
 - Renumbering any scenario. Ids are stable and never reused, and both skills' own bodies say so.

@@ -205,6 +205,17 @@ Then:
   pointing at a contract, a ledger, or vendored material is reported as not applicable, not applied.
 - **Compose [`doc-revise`](../doc-revise/SKILL.md)** for the edit itself. Its discipline governs:
   do not restate its rules here.
+- **Re-check the edited document's relative links after writing, and before recording anything.**
+  The composed editing discipline verifies links after a structural change, and correcting a stale
+  claim is usually not one, so this check belongs here and is unconditional: every applied edit gets
+  it. Name the mechanism rather than the intention. Run the repository's own link checker over the
+  edited document (in this kit, `python .tasks/validate.py --strict`, which resolves every relative
+  link against the directory the file actually lives in, alongside the CI docs link step that does
+  the same for the root, `.github/`, and `docs/` trees). Where the repository has no such checker,
+  resolve each relative link in the edited document from that document's own directory and confirm
+  the target exists. **A link the edit broke is repaired in the same pass, or the edit is reverted.**
+  It is never left dangling and never recorded as applied: an applied entry claiming a correction
+  that broke a link is a worse record than no entry.
 - **Record the audit trail.** Each applied entry names the finding id, the document, the claim
   corrected, the evidence, and the confidence it carried. Someone reading it later must be able to
   tell a mechanical correction from an applied judgment call, and see the basis for it, without
