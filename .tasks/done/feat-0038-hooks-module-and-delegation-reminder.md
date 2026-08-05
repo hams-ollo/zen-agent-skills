@@ -2,7 +2,7 @@
 id: feat-0038
 title: Establish .agents/hooks/ as a portable module and seed it with delegation-reminder
 type: feat
-status: in_progress
+status: done
 priority: P1
 parent: "ROADMAP Epic B #13: telemetry-guard (reframed as enforcement hooks)"
 depends_on: []
@@ -19,7 +19,7 @@ created: 2026-08-05
 `.agents/hooks/` exists in this repository and is empty. Every rule the kit enforces today is
 enforced by prose: a skill body tells an agent what to do, and the rule holds only for as long as
 the model keeps it in context. That works for rules an agent consults deliberately, like the rubric
-in [`review-quality.md`](../.agents/rules/review-quality.md). It fails for rules that must fire at a
+in [`review-quality.md`](../../.agents/rules/review-quality.md). It fails for rules that must fire at a
 moment the agent is not thinking about them.
 
 The clearest case is delegated work. `AGENTS.md` and the user's own global rules both say that a
@@ -27,7 +27,7 @@ subagent's report is a claim rather than evidence, and that the delegating agent
 a real diff, test run, or rendered behavior. Nothing enforces it. The failure is not hypothetical
 here: two of three agents in the `feat-0025` batch worked from task files whose premise was
 factually wrong about the code, and the system captured none of it. That is the observation that
-produced [`feat-0037`](feat-0037-task-file-decision-log-v1.md), which records decisions after the
+produced [`feat-0037`](../feat-0037-task-file-decision-log-v1.md), which records decisions after the
 fact. It does not add a checkpoint at the hand-off itself.
 
 Balarama Bosch's [repoprompt-workflows](https://github.com/moonray/repoprompt-workflows) (MIT) ships
@@ -54,7 +54,7 @@ the set. The blocking gate follows separately in `feat-0039`.
 - Wire the three harnesses, following upstream's pattern: a Claude Code registration merged into
   settings, a repo-scoped `.codex/hooks.json`, and an `.opencode/plugins/` adapter that shells out
   to the same Python. One implementation, three thin adapters.
-- Teach [`install.py`](../scripts/install.py) to carry the hooks module, reusing its existing
+- Teach [`install.py`](../../scripts/install.py) to carry the hooks module, reusing its existing
   symlink/copy mode handling and CONFLICT detection rather than adding a second install path.
 - Add unit tests under `tests/` driving each hook's `main()` with synthetic payloads.
 - Document the module in `AGENTS.md` (layout table and conventions) and in `docs/CATALOG.md` and
