@@ -2,7 +2,7 @@
 id: chore-0024
 title: Name house-review's bare explicit-range mode in Step 1 and in its approved contract
 type: chore
-status: in_progress
+status: done
 priority: P1
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -18,7 +18,7 @@ created: 2026-08-03
 ## Problem
 
 Reviewing a single historical commit is a real invocation of
-[`house-review`](../.agents/skills/house-review/SKILL.md), and the skill documents no mode that
+[`house-review`](../../.agents/skills/house-review/SKILL.md), and the skill documents no mode that
 produces it. Worse than an omission: the skill body already relies on that mode existing, one line
 below the sentence that says there are only two.
 
@@ -34,7 +34,7 @@ never establish. An agent that reads the step in order is told the request is on
 told what to do when it is a third.
 
 **The approved contract has the same gap, in a sharper form.**
-[`docs/spec/house-review.md`](../docs/spec/house-review.md) carries `status: approved`, and its
+[`docs/spec/house-review.md`](../../docs/spec/house-review.md) carries `status: approved`, and its
 Proposed Surface disagrees with itself across three consecutive rows:
 
 | Row | What it says today | Consistent? |
@@ -64,7 +64,7 @@ because a contradiction inside one step is worse than a gap between two.
 
 **In scope:**
 
-1. Amend [`docs/spec/house-review.md`](../docs/spec/house-review.md): give Modes a bare
+1. Amend [`docs/spec/house-review.md`](../../docs/spec/house-review.md): give Modes a bare
    explicit-range entry, give Range resolution an explicit-range branch that wins over the merge-base
    default, add one scenario for a bare range with no path scope, and record the amendment and
    re-approval inline and dated.
@@ -79,25 +79,25 @@ because a contradiction inside one step is worse than a gap between two.
 
 **Out of scope:**
 
-- **[`.agents/skills/review-depth/SKILL.md`](../.agents/skills/review-depth/SKILL.md).** Was mid-flight
+- **[`.agents/skills/review-depth/SKILL.md`](../../.agents/skills/review-depth/SKILL.md).** Was mid-flight
   on another branch while this task was authored, so it did not exist here and was named in prose
   rather than linked; the two branches were merged on 2026-08-03 and it is now present and linked.
   Match its vocabulary; do not edit it. Anything that would need changing there is reported as a
   finding below, not fixed.
-- **[`.agents/skills/pr-describe/SKILL.md`](../.agents/skills/pr-describe/SKILL.md).** Checked and
+- **[`.agents/skills/pr-describe/SKILL.md`](../../.agents/skills/pr-describe/SKILL.md).** Checked and
   clean: its Step 1 already honours "any explicit base/range the user gave" (line 51) and its Design
   choices already name the override (line 36). It is the model to match, not a file to change.
 - Changing what any mode *does*. This is a contract and a skill body catching up to an input both
   already half-admit, not new behavior. In particular, `S-012`'s resolution (a range plus a path
   scope narrows a change review) stands exactly as `chore-0012` recorded it.
-- Both rules modules, [`house-style.md`](../.agents/rules/house-style.md) and
-  [`review-quality.md`](../.agents/rules/review-quality.md). Nothing here touches the rubric, the
+- Both rules modules, [`house-style.md`](../../.agents/rules/house-style.md) and
+  [`review-quality.md`](../../.agents/rules/review-quality.md). Nothing here touches the rubric, the
   severities, or the house conventions.
 - Any other `docs/spec/` contract. The gap is specific to this one.
 - **The skill's frontmatter `description`.** It says the skill "determines the review range (the
   current branch against its merge-base with the default branch, with a working-tree fallback)", which
   describes the default and stays true as the default. Editing it would move `install.py`'s description
-  budget, and the S-014 row of [`docs/spec/install.conformance.md`](../docs/spec/install.conformance.md)
+  budget, and the S-014 row of [`docs/spec/install.conformance.md`](../../docs/spec/install.conformance.md)
   records those figures as dated evidence, so a body fix should not silently invalidate them. Confirm
   after the change that the budget still reads `core=2298, spine=12489, all=14273`.
 
@@ -106,7 +106,7 @@ because a contradiction inside one step is worse than a gap between two.
 **The amendment is authorised, and the authorisation is the load-bearing part.** The author gave
 explicit instruction to amend and re-approve on 2026-08-03. This repository's precedent is that an
 approved contract is amended only on explicit author instruction, and that the amendment is recorded
-inline with its date. Follow the shape at [`docs/spec/install.md`](../docs/spec/install.md) line 13,
+inline with its date. Follow the shape at [`docs/spec/install.md`](../../docs/spec/install.md) line 13,
 which `feat-0033` wrote: a bold dated line naming the task, the instruction, and the re-approval, then
 a sentence on what moved and why.
 
@@ -136,7 +136,7 @@ with its own procedure.
 `validate-skills.py` fails on this and it is the check that caught the kit's worst shipping defect. If
 Step 1 needs to name the contract, name it in prose rather than linking to it.
 
-**[`docs/spec/house-review.verification.md`](../docs/spec/house-review.verification.md) is expected to
+**[`docs/spec/house-review.verification.md`](../../docs/spec/house-review.verification.md) is expected to
 need no change, but read it before concluding that.** It records a `blocked` verifier-agent run from
 2026-07-27 whose entire subject is the approval precondition (the spec carried `status: draft` that
 day), plus two observations about precondition ordering. It asserts nothing about Modes, Range
@@ -186,10 +186,11 @@ every `../` link to `../../`.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally. **Run 2026-08-05**: validate-skills 20/0/0, validate.py --strict, 140 tests, build-adapters --dry-run, install --dry-run. All pass.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents. **2026-08-05: no finding.** The only reader-facing mention of `house-review` is `docs/GETTING-STARTED.md:372`, which describes it as report-only and says nothing about modes or range resolution, so this amendment leaves it true. The contract and its matrix are ledger and contract kinds, not current-state. Original text:
+      `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
 
 ## Findings handed back, since discharged
 
