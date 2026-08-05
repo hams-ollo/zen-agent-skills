@@ -46,6 +46,11 @@ A block with no stated escape is a trap. Whoever hits it has to read the source 
 | Hook | Shape | Event | Fires when |
 |---|---|---|---|
 | [`delegation-reminder.py`](delegation-reminder.py) | reminder | `PostToolUse` | a delegated agent's report returns |
+| [`spec-conformance-gate.py`](spec-conformance-gate.py) | **gate** | `PostToolUse` | work a contract governs is closed with no conformance matrix |
+
+The gate recognises two closing shapes for one rule. A spec file reaching a terminal status is the portable shape, for repositories whose specs carry a closing status. A task file carrying a `spec:` reference being set to `status: done` is the shape this kit uses, and without it the gate would be inert here: this repository's spec lifecycle is `draft` then `approved` and stops. **A guardrail that cannot fire in the repository that ships it is one nobody has ever seen work.**
+
+`approved` is deliberately not a terminal status, and a test pins that. Treating it as one blocks a human approving a brand-new spec and demands an audit of an implementation that does not exist yet, which is the normal workflow here.
 
 ## Wiring
 

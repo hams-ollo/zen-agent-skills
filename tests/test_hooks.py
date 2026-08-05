@@ -184,18 +184,56 @@ class WiringConsistencyTests(unittest.TestCase):
     anyone remembering to come back here.
     """
 
-    def matcher_sources(self):
-        """Every harness matcher expected to cover the hook's tool set, as (name, regex)."""
+    HOOK = "delegation-reminder.py"
+
+    def _entries(self):
+        """PostToolUse entries from each wiring, as (source name, [(command, matcher)])."""
         codex = json.loads(
             (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-        yield ".codex/hooks.json", codex["hooks"]["PostToolUse"][0]["matcher"]
+        yield ".codex/hooks.json", [
+            (h["command"], e["matcher"])
+            for e in codex["hooks"]["PostToolUse"] for h in e["hooks"]]
 
         spec = importlib.util.spec_from_file_location(
             "install_mod", REPO_ROOT / "scripts" / "install.py")
         install_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(install_mod)
         block = json.loads(install_mod.claude_registration(Path("/tmp/home")))
-        yield "install.py claude_registration", block["hooks"]["PostToolUse"][0]["matcher"]
+        yield "install.py claude_registration", [
+            (h["command"], e["matcher"])
+            for e in block["hooks"]["PostToolUse"] for h in e["hooks"]]
+
+    def matcher_sources(self):
+        """Each wiring's matcher for the delegation hook, found by script name not index.
+
+        Looking it up by position broke the moment a second hook was registered, which is
+        the kind of brittleness this class exists to remove rather than reproduce.
+        """
+        for name, entries in self._entries():
+            matchers = [m for cmd, m in entries if self.HOOK in cmd]
+            self.assertEqual(len(matchers), 1,
+                             f"{name} should register {self.HOOK} exactly once")
+            yield name, matchers[0]
+
+    def test_every_hook_in_the_module_is_registered_everywhere(self):
+        """A hook that ships without a matcher is placed and never fires.
+
+        That is the failure the feat-0038 dogfood found on the Agent tool name: installed,
+        correct-looking, and silently inert. This asserts the module and its wirings cannot
+        drift apart in the other direction either, by a hook being added and not wired.
+        """
+        shipped = {p.name for p in HOOKS_DIR.glob("*.py")}
+        self.assertTrue(shipped, "no hooks found to check")
+        for name, entries in self._entries():
+            commands = " ".join(cmd for cmd, _ in entries)
+            for hook in sorted(shipped):
+                with self.subTest(source=name, hook=hook):
+                    self.assertIn(hook, commands, f"{hook} is not registered in {name}")
+        adapter = (REPO_ROOT / ".opencode" / "plugins" / "zen-hooks.mjs").read_text(
+            encoding="utf-8")
+        for hook in sorted(shipped):
+            with self.subTest(source=".opencode adapter", hook=hook):
+                self.assertIn(hook, adapter, f"{hook} is not invoked by the opencode adapter")
 
     def test_every_matcher_covers_every_delegation_tool(self):
         for name, matcher in self.matcher_sources():
