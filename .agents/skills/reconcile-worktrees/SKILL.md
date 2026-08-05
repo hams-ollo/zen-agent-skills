@@ -24,7 +24,9 @@ skill consolidates the results. It assumes each worktree has already been throug
 verification pass via [`verifier-agent`](../verifier-agent/SKILL.md) (`fix-batch`'s Step 6 is what
 runs it against every worktree in a batch). This skill is about combining already-trusted changes,
 not about trusting them in the first place. If a worktree has not been independently verified yet,
-run [`verifier-agent`](../verifier-agent/SKILL.md) against it first.
+run [`verifier-agent`](../verifier-agent/SKILL.md) against it first. The same holds for the report
+the worktree arrived with: it meets `fix-batch`'s delegate report contract, or the worktree does not
+land. Step 1 is where that is checked.
 
 ## Why this exists
 
@@ -58,6 +60,21 @@ or use the base sha `fix-batch` recorded at dispatch. If a worktree's base diffe
 checkout's current `HEAD`, flag that explicitly. Changes made against a since-moved base need extra
 care, because the diff you are about to apply may no longer cleanly represent "just this worktree's
 changes" once `main` has moved.
+
+**Then check each worktree's delegate report against the contract.**
+[`fix-batch`](../fix-batch/SKILL.md#the-delegate-report-contract) requires a fixed field set from
+every agent it dispatches, on the rule that an unmet field stops the work from advancing. That rule
+has to hold at this end too, or it is not a gate: a worktree whose report is missing a required
+field does not land, however clean its diff looks. Close the gap first, using the same two remedies
+`fix-batch` names (ask the same agent for a focused follow-up, or get the field yourself from the
+narrowest source that answers it, which for a missing validation result means running the acceptance
+command in that worktree), and record in the Step 7 report which one you used.
+
+A worktree that arrived with no report at all, from an older run or one made by hand, is the same
+case rather than an exception: either reconstruct the fields yourself from the diff and a real run of
+the acceptance command, and say in the report that you were the source, or leave the worktree in
+place unlanded. Landing an unreported worktree because its diff looks reasonable is how an unverified
+change enters the main checkout wearing a verified batch's clothes.
 
 ### Step 2: enumerate all three kinds of change in each worktree, not just the tracked edits
 
@@ -122,7 +139,9 @@ still conflict or silently undo each other when combined.
 ### Step 5: apply changes to the main working tree deliberately, one worktree at a time
 
 Apply one worktree at a time rather than bulk-merging all of them, so that if something goes wrong
-you know immediately which worktree caused it. Each worktree takes **two** operations, because the
+you know immediately which worktree caused it. Only worktrees that cleared Step 1's report check are
+eligible; skip any that did not and say so, rather than applying one because its diff looks fine.
+Each worktree takes **two** operations, because the
 tracked and untracked populations from Step 2 travel differently:
 
 ```
@@ -182,7 +201,8 @@ are safely elsewhere: it is your only copy until then.
 
 Two cleanup cases that are not "changes landed":
 
-- **A worktree whose agent failed, was killed, or returned `blocked`.** Its changes are not landing,
+- **A worktree whose agent failed, was killed, returned `blocked`, or whose report never met the
+  contract.** Its changes are not landing,
   but it is still the only copy of whatever it did produce. Leave it in place and say so in the
   Step 7 report rather than removing it, so the next run does not mistake an abandoned worktree for
   a reviewed one.
