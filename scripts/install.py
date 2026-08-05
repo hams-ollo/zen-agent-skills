@@ -51,6 +51,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 RULES_DIR = REPO_ROOT / ".agents" / "rules"
+HOOKS_DIR = REPO_ROOT / ".agents" / "hooks"
 MANIFEST = REPO_ROOT / "scripts" / ".install-manifest.json"
 
 TOOL_SUBPATHS = {
@@ -173,7 +174,72 @@ def is_managed(target: Path, manifest) -> bool:
     return any(e.get("target") == tp for e in manifest["entries"])
 
 
-def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE) -> int:
+# Where each tool expects the hooks module, as a sibling of its skills directory. Absent
+# from this map means the tool has no hook mechanism this installer knows how to place.
+HOOK_SUBPATHS = {
+    "claude": Path(".claude") / "hooks",
+    "opencode": Path(".agents") / "hooks",
+}
+
+# Each hook in the module and the PostToolUse matcher that must wake it. A matcher may be
+# broader than the hook's own condition, since every hook re-checks; it may never be
+# narrower, or the hook is placed and silently never fires. `tests/test_hooks.py`
+# asserts the delegation matcher against the hook's own tool set for exactly that reason.
+HOOK_REGISTRATIONS = [
+    ("delegation-reminder.py", "^Task$|^Agent$|^TaskOutput$|agent_run"),
+    ("spec-conformance-gate.py", "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
+]
+
+
+def hook_interpreter() -> str:
+    """The interpreter name to write into a hook registration.
+
+    Not hardcoded to `python3`. On Windows that name usually resolves to the Microsoft
+    Store's app-execution alias, which prints an install advertisement and exits without
+    running anything, so a registration naming it produces a hook that fails silently
+    forever. Found by dogfooding feat-0038 on Windows, where the first draft did exactly
+    that. Mirrors how `--mode` already defaults per platform.
+    """
+    return "python" if os.name == "nt" else "python3"
+
+
+def claude_registration(home: Path) -> str:
+    """The settings.json block a user pastes to activate the hooks.
+
+    Printed rather than merged. Editing someone's settings file is the one step of this
+    install the uninstall manifest cannot cleanly reverse, and a hook is the only thing
+    the kit ships that runs inside their session, so the placement is automated and the
+    activation is not: nothing fires until a person pastes this in.
+
+    The path is absolute and resolved rather than `~/...`, because whether a tilde is
+    expanded depends on how the harness spawns the command, and a registration that
+    silently does not run is the worst outcome available here.
+
+    Built from HOOK_REGISTRATIONS rather than written out, so a hook added to the module
+    without a matcher here is a mistake that shows up as a missing entry instead of a hook
+    that was placed and never fires.
+    """
+    hooks_home = home / HOOK_SUBPATHS["claude"]
+    entries = []
+    for script_name, matcher in HOOK_REGISTRATIONS:
+        if not (HOOKS_DIR / script_name).is_file():
+            continue
+        command = f"{hook_interpreter()} \"{hooks_home / script_name}\""
+        entries.append({
+            "matcher": matcher,
+            "hooks": [{"type": "command", "command": command}],
+        })
+    return json.dumps({"hooks": {"PostToolUse": entries}}, indent=2)
+
+
+def discover_hooks():
+    if not HOOKS_DIR.is_dir():
+        return []
+    return sorted(p for p in HOOKS_DIR.glob("*.py"))
+
+
+def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
+            with_hooks: bool = False) -> int:
     all_skills = discover_skills()
     if not all_skills:
         print(f"No skills found under {SKILLS_DIR}.")
@@ -189,6 +255,9 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE) 
     entries = {e["target"]: e for e in manifest["entries"]}
     conflicts = 0
     tag = "[dry-run] " if dry else ""
+    hooks = discover_hooks() if with_hooks else []
+    if with_hooks and not hooks:
+        print(f"--with-hooks was given but no hooks were found under {HOOKS_DIR}.\n")
 
     for tool in tools:
         base = home / TOOL_SUBPATHS[tool]
@@ -220,6 +289,20 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE) 
                 }
             print(f"{tag}{status:9} {tool:8} rules  -> {rules_target}")
 
+        # The hooks module, opt-in. Placed as the sibling <base>/../hooks, which for
+        # Claude Code is the directory it already reads hooks from.
+        if with_hooks and hooks and tool in HOOK_SUBPATHS:
+            hooks_target = home / HOOK_SUBPATHS[tool]
+            status = _place(HOOKS_DIR, hooks_target, mode, dry, manifest)
+            if status == "CONFLICT":
+                conflicts += 1
+            else:
+                entries[str(hooks_target)] = {
+                    "tool": tool, "name": "hooks",
+                    "target": str(hooks_target), "mode": mode, "source": str(HOOKS_DIR),
+                }
+            print(f"{tag}{status:9} {tool:8} hooks  -> {hooks_target}")
+
     save_manifest(list(entries.values()), dry)
     if conflicts:
         print(f"\n{conflicts} CONFLICT(s): a real file exists at those targets. "
@@ -230,7 +313,14 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE) 
               f"dangle in the installed layout.")
     budgets = profile_budgets(all_skills)
     print(f"\n{tag}Done: profile {profile!r}, {len(skills)} of {len(all_skills)} skill(s) "
-          f"x {len(tools)} tool(s), plus the rules module.")
+          f"x {len(tools)} tool(s), plus the rules module"
+          + (f", plus {len(hooks)} hook(s)." if hooks else "."))
+    if hooks and "claude" in tools:
+        # Deliberately the last thing printed, and deliberately not done for the user.
+        print(f"\n{tag}The hooks are placed but INACTIVE. Nothing runs until you register "
+              f"them. Merge this into ~/.claude/settings.json:\n")
+        print(claude_registration(home))
+        print(f"\nRemove that block to deactivate; `--uninstall` removes the files.")
     # A count, not a percentage: the harness budget scales with the context window and
     # is shared with skills this tool cannot see, so a proportion here would be invented.
     print(f"{tag}Description budget: {budgets[profile]} characters for this profile "
@@ -292,7 +382,11 @@ def _link(src: Path, target: Path):
 
 
 def _copy(src: Path, target: Path):
-    shutil.copytree(src, target)
+    # Byte-caches are not part of any module the kit distributes, and the hooks module
+    # grows one as soon as the test suite imports it. Copying it would ship a stale .pyc
+    # into an adopter's home for a source file that is about to be a symlink or a
+    # different version.
+    shutil.copytree(src, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
 
 def _rm(target: Path):
@@ -379,6 +473,9 @@ def main(argv=None) -> int:
     ap.add_argument("--profile", default=DEFAULT_PROFILE,
                     help="which skills to place: " + ", ".join(PROFILE_SEEDS)
                          + f" (default: {DEFAULT_PROFILE})")
+    ap.add_argument("--with-hooks", action="store_true",
+                    help="also place .agents/hooks/ (opt-in: hooks run inside your "
+                         "session, and stay inactive until you register them)")
     ap.add_argument("--home", default=None,
                     help="override the base home dir (for testing/unusual setups)")
     args = ap.parse_args(argv)
@@ -396,7 +493,7 @@ def main(argv=None) -> int:
     if args.profile not in PROFILE_SEEDS:
         print(f"Unknown profile: {args.profile!r}. Choose from {list(PROFILE_SEEDS)}.")
         return 2
-    return install(tools, args.mode, home, args.dry_run, args.profile)
+    return install(tools, args.mode, home, args.dry_run, args.profile, args.with_hooks)
 
 
 if __name__ == "__main__":

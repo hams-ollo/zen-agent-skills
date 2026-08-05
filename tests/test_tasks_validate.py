@@ -168,6 +168,19 @@ class RelativeLinkTests(TasksRootTestCase):
         code, out = self._run()
         self.assertEqual(code, 0, out)
 
+    def test_a_file_scheme_link_is_skipped(self):
+        # An adopting repository may mandate absolute `file:` links in its own house
+        # style, and this checker has no standing to resolve a path outside the
+        # repository. Before this was skipped, every such link was read as relative and
+        # reported broken, so a repository that had committed to the convention could
+        # not run the validator at all. Its own conventions win; see the skill's
+        # Conventions section.
+        self._write(
+            "[a module](file:///d:/some-repo/src/thing.py) "
+            "[a doc](file:///c:/other/README.md)")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
     def test_a_fragment_is_stripped_before_the_target_is_resolved(self):
         # `../README.md#section` points at a real file, so it must pass; the fragment
         # is not part of the path.

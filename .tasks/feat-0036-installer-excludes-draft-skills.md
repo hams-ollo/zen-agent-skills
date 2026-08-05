@@ -19,12 +19,21 @@ created: 2026-07-31
 
 ## Problem
 
-`scripts/install.py` has no way to tell a draft skill from a shipped one, so `--profile all`
-distributes an unblessed draft to adopters. Measured 2026-07-31:
-`python scripts/install.py --dry-run --profile all --home ./.tmp/zen-home` reports `20 of 20` and
-places `review-depth`, which is a draft by every marker this repository uses:
-[`feat-0035`](feat-0035-draft-review-depth.md) is `in_progress`, `ROADMAP.md` Epic B item 10 is
-unstruck, and [`docs/CATALOG.md`](../docs/CATALOG.md) has no row for it.
+`scripts/install.py` has no way to tell a draft skill from a shipped one, so nothing stops a
+profile from distributing an unblessed draft to adopters.
+
+**Re-grounded 2026-08-05, because the example this task was filed on no longer applies.** As
+originally measured on 2026-07-31, `--profile all` reported `20 of 20` and placed `review-depth`,
+which was then a draft by every marker this repository uses. `review-depth` was blessed on
+2026-08-05 ([`feat-0035`](done/feat-0035-draft-review-depth.md) is `done`, `ROADMAP.md` Epic B item
+10 is struck, and [`docs/CATALOG.md`](../docs/CATALOG.md) now carries its row), so there is no
+unblessed skill in the tree today and the installer is distributing nothing it should not.
+
+**The gap is unchanged and is now prospective rather than actual.** The next skill drafted here will
+sit in `.agents/skills/` in exactly the state `review-depth` was in, and the installer will place it
+for the same reason: it cannot tell. Whoever picks this up should expect to demonstrate the defect
+with a temporary fixture skill rather than by pointing at a real one, and should not go looking for
+the draft this task was written about.
 
 [`AGENTS.md`](../AGENTS.md) section 7 states the bar: a freshly drafted skill stays `in_progress`
 until it has been used and refined, and only then is it "shipped". `AGENTS.md` is a contract
@@ -34,9 +43,12 @@ document, so the code is the suspect and the contract is not to be edited to mat
 `docs/CATALOG.md`, and nothing mechanical carries it, so no tool can act on it. That is why the
 installer cannot be blamed for a wrong decision: it is not making one.
 
-**Five documentation claims are false today because of this**, found by the `doc-sync` pass on
-2026-07-31 (findings D-001, D-002, D-004, D-005, D-006). Each is true of the blessed set and false of
-the tree:
+**Five documentation claims were false because of this**, found by the `doc-sync` pass on
+2026-07-31 (findings D-001, D-002, D-004, D-005, D-006). Each was true of the blessed set and false
+of the tree. **All five were resolved on 2026-08-05 by blessing `review-depth` rather than by this
+task**, which is the opposite of the repair this task proposed: the blessed set moved to match the
+tree instead of the installer being taught to hide the difference. Kept here as the record of what
+the defect looked like in practice, and as the shape to expect the next time:
 
 | Document | Claim | Measured |
 |---|---|---|
@@ -46,8 +58,13 @@ the tree:
 | `docs/ARCHITECTURE.md:43` | only the handoff pair plus the three no-sibling skills are separable | `review-depth` is separable too, since no skill references it |
 | `docs/GETTING-STARTED.md:140` | "installs 17 of the 19 skills" | 17 of 20 |
 
-Fixing this task makes all five true again with **no documentation edit**, which is the reason it is
-the root fix rather than one repair among six.
+That resolution weakens this task's original argument, and the weakening should be stated rather
+than left for the next reader to notice. The claim was that fixing the installer makes all five
+documentation claims true with no documentation edit, which made it the root fix rather than one
+repair among six. Blessing made them true instead. What survives is narrower and still real: a
+marker is what lets any tool act on the draft/shipped distinction at all, and without one the same
+five claims go false again the day a twenty-first skill is drafted. Decide on that basis, not on the
+original five-findings argument.
 
 ## Scope
 

@@ -26,9 +26,9 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## The contract-driven delivery spine (Epic B, in progress)
 
-These skills make the roadmap's contract-driven delivery spine real. All eight were dogfooded on real in-kit work before being blessed: seven on 2026-07-24 and `doc-sync` on 2026-07-25. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Four (`spec-author`, `test-author`, `verifier-agent`, `doc-sync`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
+These skills make the roadmap's contract-driven delivery spine real. All nine were dogfooded on real in-kit work before being blessed: seven on 2026-07-24, `doc-sync` on 2026-07-25, and `review-depth` on 2026-08-05. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Four (`spec-author`, `test-author`, `verifier-agent`, `doc-sync`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
 
-With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. `doc-sync` closes the documentation half of that loop, and the spine continues at the roadmap level with `user-testing`, which is not built yet.
+With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. `doc-sync` closes the documentation half of that loop and `review-depth` decides how hard the review half looks. Where the spine goes next is no longer a single skill: the roadmap's open items are about making its rules hold mechanically rather than by an agent remembering them (an evidence gate so a finding must prove its citation, a required evidence contract from every delegated agent, and repeat detection so a review-fix loop cannot spin), plus `user-testing`, which stays held until there is real user-facing work to author it against. The enforcement half of that shift already ships as the [hooks module](../.agents/hooks/README.md).
 
 | Skill | Status | What it does |
 |---|---|---|
@@ -40,6 +40,7 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 | `test-author` | shipped (Epic B) | Derives runnable tests from an approved spec's scenarios (tagged by `S-NNN`), matching the repo's own test framework and composing `test-quality` for layer and oracle. Acceptance and characterization modes; writes tests, never production code. |
 | `verifier-agent` | shipped (Epic B) | Independently verifies an implementation before reconciliation: runs the declared commands, composes `spec-conformance` so a contract divergence fails the run even when tests pass, maps each acceptance criterion to evidence, and returns a deterministic pass, fail, or blocked verdict. Verifies and reports; never edits what it verifies. |
 | `doc-sync` | shipped (Epic B) | Detects documentation drift by checking prose claims against repository facts, classifying every document as current-state (correctable with approval), contract (report-only, human-owned) or ledger (skipped). Dry run is the default and detection never changes a file. Composes `doc-revise` for editing discipline. Authored in-kit against `docs/spec/doc-sync.md`, dogfooded on this repository's own documentation (`feat-0020`), and blessed after its apply path repointed three dangling references (`chore-0006`). |
+| `review-depth` | shipped (Epic B) | Chooses how hard to look before `house-review` looks: quick, standard, or deep, selected from a stated signal table (reviewable changed lines, directory spread, trust-boundary risk flags, blast radius, documentation-only scope) so two runs over the same diff reach the same depth and the reason is inspectable. An explicit user choice always overrides detection. Composes into `house-review` rather than duplicating its rubric, which lives in the `review-quality` lens. Blessed 2026-08-05; using it is what exposed the mode contradiction inside `house-review` that `chore-0024` then fixed. |
 
 ## Tier B: semi-scalable (great for teams and clients)
 
@@ -53,6 +54,19 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 ## Tier C: hyper-specific (personal, stays out of the shared kit)
 
 The author's Content OS pipeline: `produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`. These are showcase and portfolio demos ("look what is possible"), not plug-and-play for others. They live in their own repo, not here.
+
+## Hooks: the rules that do not depend on remembering
+
+Every skill above is prose. An agent follows it for as long as it holds it in context, which is fine for a rule you consult on purpose and useless for a rule that has to fire when nobody is thinking about it.
+
+The [hooks module](../.agents/hooks/README.md) is the answer to the second kind. A hook is a small program your harness runs at a lifecycle event, and it comes in exactly two shapes: a **reminder** injects context and never blocks, and a **gate** refuses, but only when the condition can be decided mechanically rather than interpreted.
+
+| Hook | Shape | Fires when |
+|---|---|---|
+| `delegation-reminder` | reminder | a delegated agent reports back, to note that its summary is a claim and not evidence |
+| `spec-conformance-gate` | gate | work a contract governs is closed with no audit of whether the implementation matches it |
+
+These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
 
 ## The two building blocks the whole kit reuses
 

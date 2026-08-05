@@ -96,7 +96,10 @@ jobs:
                   continue
               for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", path.read_text(encoding="utf-8")):
                   target = match.group(1).split("#")[0].strip()
-                  if not target or target.startswith(("http://", "https://", "mailto:")):
+                  # Kept in step with LINK_SKIP_PREFIXES in .tasks/validate.py. An
+                  # absolute `file:` link names a location on someone's disk, so it
+                  # is not this step's to resolve.
+                  if not target or target.startswith(("http://", "https://", "mailto:", "file://")):
                       continue
                   if not (path.parent / target).exists():
                       broken.append(f"{doc} -> {target}")

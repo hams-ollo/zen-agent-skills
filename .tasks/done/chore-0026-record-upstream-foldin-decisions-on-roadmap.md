@@ -2,12 +2,17 @@
 id: chore-0026
 title: Record the upstream fold-in decisions on the roadmap, including what was declined and why
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
 touched_files:
   - ROADMAP.md
+  - docs/CATALOG.md
+  - .tasks/feat-0040-evidence-gate-and-finding-signature.md
+  - .tasks/feat-0041-delegate-evidence-contract-for-fix-batch.md
+  - .tasks/feat-0042-repeat-and-futility-classification.md
+  - .tasks/feat-0043-vendored-sync-provenance-convention.md
 created: 2026-08-05
 ---
 
@@ -83,19 +88,20 @@ heading rather than a numbered item, which is honest but coarse.
 
     python .tasks/validate.py --strict && python scripts/validate-skills.py
 
-- [ ] Epic B #13 leads with enforcement hooks and names `feat-0038` and `feat-0039`, with telemetry
+- [x] Epic B #13 leads with enforcement hooks and names `feat-0038` and `feat-0039`, with telemetry
       stated as the second phase.
-- [ ] Epic B #11 states both current hold reasons and a concrete re-evaluation trigger.
-- [ ] Epic B #8 states its hold reason in current terms.
-- [ ] Four new Epic B items exist for `feat-0040` through `feat-0043`.
-- [ ] A declined list names `track-work`, the `Backlog` workflow, the upstream installer model, the
+- [x] Epic B #11 states both current hold reasons and a concrete re-evaluation trigger.
+- [x] Epic B #8 states its hold reason in current terms.
+- [x] Four new Epic B items exist for `feat-0040` through `feat-0043`.
+- [x] A declined list names `track-work`, the `Backlog` workflow, the upstream installer model, the
       four workflows as whole artifacts, and the `test-quality-reminder` deferral, each with one
       line of reasoning.
-- [ ] Every relative link in the edited file resolves, per `validate.py`'s link check.
+- [x] Every relative link in the edited file resolves, per `validate.py`'s link check.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally. Run 2026-08-05.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents. **One finding, applied.** `docs/CATALOG.md` said the spine "continues at the roadmap level with `user-testing`, which is not built yet", which this task's own edits made incomplete: the open spine work is now four items about making its rules hold mechanically, and `review-depth` has since shipped. Rewritten. Original text:
+      `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
