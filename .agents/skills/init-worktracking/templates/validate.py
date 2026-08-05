@@ -40,7 +40,32 @@ SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 # target. A bare closing fragment is not matched, which is how prose that merely
 # describes a link escapes being treated as one.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:")
+# `file://` belongs here for a different reason than the other three. Those are
+# network schemes this checker has no business fetching. This one is an absolute
+# path outside the repository: an adopting repository may write absolute `file:`
+# links as its documented house style, and such a path is not this checker's to
+# resolve, because it names a location on someone's disk rather than a place inside
+# the repository. Treating one as relative reported every such link as broken, which
+# made the validator unusable in exactly the repositories that had committed to the
+# convention.
+#
+# `file://` and not a bare `file:`, deliberately. The two-slash form covers
+# `file:///d:/x` and `file://host/share`, which is every form the house style in
+# question produces. A bare `file:` is legal in the URI spec, is not what anyone
+# writes in Markdown, and is short enough that matching it risks swallowing a
+# genuinely broken relative link that happens to start the same way.
+#
+# THREE copies of this rule exist and must stay in step: here, the
+# `init-worktracking` template that ships into an adopter's tree, and the inline
+# check in `.github/workflows/checks.yml`. The template cannot import from this
+# repository, which is why the duplication is tolerated rather than fixed.
+#
+# Deliberately NOT a fourth and fifth copy: `scripts/validate-skills.py` and
+# `scripts/build-adapters.py` carry a similar-looking tuple guarding a different
+# rule, that a skill body's links may not escape the installed skill tree. An
+# absolute link there is a portability defect the contract already forbids, so
+# adding `file://` to those would weaken a real check rather than fix this one.
+LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "file://")
 
 
 def parse_frontmatter(text: str):
