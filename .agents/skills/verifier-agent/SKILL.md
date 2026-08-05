@@ -104,6 +104,13 @@ drifted, the report is a finding: say which citations no longer resolve and whet
 classifications still hold. Do not silently re-point them, and do not treat a stale artifact as
 fresh evidence.
 
+That check is the evidence gate from [`review-quality`](../../rules/review-quality.md) applied to
+someone else's report, and its two outcomes are the same here. A citation whose quoted text still
+appears in the file at a shifted line has drifted, not died: report the drift and keep the
+classification, because the code moved and the audit did not. A citation whose text appears nowhere
+in the file is not evidence at all, and the matrix row resting on it is unsupported until someone
+re-derives it.
+
 What matters for the verdict is the `unreconciled` set and the disposition already recorded against
 each item:
 
@@ -123,6 +130,15 @@ result, a code location, or a test. A criterion is `met` only when you can point
 When nothing demonstrates a criterion, mark it `unmet` and state that no evidence was found. Do not
 infer satisfaction from a green suite, from an adjacent criterion, or from the implementer's own
 report. An unevidenced criterion is a gap in the verification, and saying so is the useful result.
+
+**Cite code the way a review finding cites it.** Evidence naming a code location, whether it sits in
+`criteria` or in `findings`, uses the evidence shape in
+[`review-quality`](../../rules/review-quality.md): the path, the line range, the enclosing symbol
+where the file has one, and an exact quote of the cited lines. Where the evidence is that something
+is missing, for example that no test covers a criterion, use that lens's absence form instead: quote
+the nearest anchor, name what is absent in one line, and state the search that established it so a
+reader can rerun it. A verification record and a review finding then point at code the same way, and
+one drift check covers both.
 
 ### 5. Return the verdict, and change nothing
 
@@ -161,6 +177,7 @@ criteria:
 findings:
   - defect: ...
     where: ...
+    evidence: ...
 ```
 
 Rules:
@@ -175,6 +192,10 @@ Rules:
 - `conformance` reads `not assessed: no spec supplied` when no spec was given, and is never inferred
   from test results.
 - `findings` holds defects observed but not repaired, and never becomes a list of changes made.
+- `evidence`, wherever it names a code location, carries the `review-quality` evidence shape: path,
+  lines, symbol where there is one, and an exact quote, or that lens's absence form when the
+  evidence is that something is missing. `where` stays the short human-readable pointer; `evidence`
+  is what a reader checks it against.
 
 ## Notes
 

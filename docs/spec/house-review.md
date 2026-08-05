@@ -24,6 +24,16 @@ states which side wins when an explicit range meets the resolved default, and th
 between the two is reported, because a range does not say on its own whether it was resolved or handed
 over.
 
+**Amended 2026-08-05 (`feat-0040`).** S-014 through S-018 add the evidence gate and the stable
+finding signature: what a finding must prove before it is reported, what happens when its quote has
+drifted, and how a finding whose evidence is an absence is cited. The Proposed Surface gains an
+Evidence row and a Signature row, and the Output row now names both. This is an addition, not a
+correction: no existing scenario changes, and S-007 (an unsubstantiated candidate is dropped) keeps
+its wording, since the gate is the mechanism that makes it checkable rather than a new rule beside
+it. The frontmatter is left at `approved` for the author to confirm at closeout, because in this
+repository `approved` is not a terminal status and an amendment does not reopen a contract by
+itself.
+
 Adding S-013 forced one further edit, recorded here rather than left to be noticed: S-002, S-003, and
 S-004 each opened on "a request naming no scope", which a bare range satisfies, so on its own S-013
 would have fired at the same time as S-002 with a different outcome. Their preconditions now read
@@ -53,6 +63,10 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 4. Leave the reviewed code unchanged.
 5. Report coverage honestly when the change is too large to review completely.
 6. Stay portable across harnesses, so the same findings are produced whatever channel carries them.
+7. Make every citation in the review checkable against the file it names, so a reader can follow any
+   finding to the code without trusting the reviewer.
+8. Give every finding an identity that survives the code moving, so the same defect is countable
+   across reviewers and runs.
 
 ## Non-Goals
 
@@ -64,8 +78,11 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 
 ## Constraints
 
-- The rubric, the severity scheme, and the validate-before-reporting protocol live in the swappable
-  `review-quality` lens, not in the skill. The skill composes them by reference.
+- The rubric, the severity scheme, the validate-before-reporting protocol, the evidence shape, the
+  evidence gate's branches, and the signature format live in the swappable `review-quality` lens,
+  not in the skill. The skill composes them by reference.
+- Counting how often a signature repeats across runs, and judging a repeated finding futile, are out
+  of this contract. The skill emits signatures and reads nothing from them.
 - Changeset resolution is shared with `pr-describe`, so "review this" and "describe this" resolve to
   the same range in the same repository state.
 - The default output is Markdown, so the skill works in any harness. A harness may carry the same
@@ -169,6 +186,49 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 - **Then** the findings, their severities, and the validate-before-reporting rule are identical to the
   Markdown form; only the output channel differs.
 
+### Scenario S-014: a finding whose quoted evidence resolves nowhere is dropped
+
+- **Given** a candidate finding whose quoted code is not present anywhere in the file it cites, at
+  the revision under review, or whose cited path does not resolve at all
+- **When** the review is written
+- **Then** that candidate is absent from the review entirely, rather than reported at a lower
+  severity, hedged, or marked possible, and the review reports how many candidates the gate dropped
+  without restating them.
+
+### Scenario S-015: a quote found at a shifted line is re-anchored, not dropped
+
+- **Given** a candidate finding whose quoted code is present in the cited file but at a different
+  line than the citation states, because a later edit moved it
+- **When** the review is written
+- **Then** the finding is reported with its line corrected to where the text actually is, is marked
+  as re-anchored, and keeps the same signature it would have had before the code moved, because the
+  pointer drifted and the defect did not.
+
+### Scenario S-016: a finding about something absent is citable
+
+- **Given** a finding whose subject does not exist in the code, such as a missing test or an
+  unhandled branch, so there is no offending line to quote
+- **When** the review is written
+- **Then** the finding is reported with a quote of the nearest anchor, a one-line statement of what
+  is absent, and the rerunnable search that established the absence, and the gate admits it on that
+  evidence rather than dropping it for having nothing to quote.
+
+### Scenario S-017: every reported finding carries a stable signature
+
+- **Given** any review that reports at least one finding
+- **When** the review is written
+- **Then** each finding carries a signature composed of its severity, its evidence path, its rubric
+  category, and a slug of its summary, containing no line number, so the same defect reported by a
+  second reviewer or in a later run produces the same signature.
+
+### Scenario S-018: depth does not change what a finding must prove
+
+- **Given** a review running at a depth selected by `review-depth`, including the cheapest one
+- **When** the review is written
+- **Then** the evidence shape, the gate, and the drop-rather-than-hedge rule are applied unchanged,
+  because depth sets how much is read and how exhaustively the rubric is swept, never the standard
+  of proof a finding must meet.
+
 ## Proposed Surface
 
 | Element | Detail |
@@ -177,14 +237,24 @@ only the diff it was given, or hardcode a severity scheme, and nothing would obj
 | Modes | Explicit path scope (full-file review); explicit range with no path scope (change review over the range as given); a path scope plus a range (change review narrowed to those paths); or change review of the resolved default (when neither is named) |
 | Range resolution | An explicit range if the request named one, else merge-base with the default branch, then working tree, then nothing to review. Which of the two produced the changeset is reported, as supplied or resolved |
 | Severities | `blocker`, `major`, `minor`, `nit`, defined by the `review-quality` lens |
-| Output | A verdict line, then findings ordered by severity, each with `file:line`, issue, why, and fix |
+| Evidence | Per finding: path, line range, symbol where the file has one, and an exact quote, resolved against the revision under review. A finding about something absent carries an anchor quote, what is absent, and the search that established it |
+| Signature | Per finding: `severity`, evidence path, rubric category slug, and a summary slug, joined by `\|`, carrying no line number. Format defined by the `review-quality` lens |
+| Output | A verdict line, a gate drop count when anything was dropped, then findings ordered by severity, each with `file:line`, its evidence, its signature, the issue, why, and fix |
 | Side effects | None. No file is written, no commit is made |
 
 ## Open Questions
 
-None. Both questions this spec opened were resolved by `chore-0012` on 2026-07-27: a range supplied
+One, opened by the `feat-0040` amendment and stated at the end of this section.
+
+Both questions this spec originally opened were resolved by `chore-0012` on 2026-07-27: a range supplied
 alongside a path scope narrows a change review to those paths (now `S-012`), and the name collision
 was resolved by renaming the skill rather than by asserting a distinction. Re-approved by the author on 2026-07-27.
 
 The `chore-0024` amendment on 2026-08-03 opens none. It closes a contradiction the table already
 carried rather than deciding anything new, and it was re-approved on the same day.
+
+The `feat-0040` amendment on 2026-08-05 opens one, deliberately left rather than decided here:
+whether a finding dropped by the gate should be recoverable on request (a reviewer asked "what did
+you drop?" has a reasonable question, and answering it hands over exactly the unverifiable claims
+the gate removed). The contract states the count only. Whoever needs the other half should decide it
+against a real case, not in advance.
