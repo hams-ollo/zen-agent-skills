@@ -63,11 +63,25 @@ python scripts/install.py --profile all
 |---|---|---|
 | `core` | 3 | Scaffold a project, track work in it, describe the change at the end |
 | `spine` | 17 | The contract-driven delivery loop. **The default** |
-| `all` | 19 | Everything, adding the two handoff skills |
+| `all` | 20 | Everything, adding the two handoff skills |
 
 A profile is expanded over sibling references before anything is placed, so it can never install a skill whose composed sibling is missing, and the run says when it expanded what you asked for. That is also why the sizes jump the way they do rather than offering a middle: most of the skills reference each other, so any profile reaching into that group brings the group with it.
 
 Defaulting to `spine` means `agent-handoff` and `human-handoff` are not placed. Nothing is removed if you already installed them: this command only places and updates, and reversal is `--uninstall`. Pass `--profile all` to keep them refreshed.
+
+## Hooks, if you want enforcement (opt-in)
+
+Everything above is Markdown your agent reads. Hooks are different: they are small Python programs your harness runs at a lifecycle event, inside your session, in your repository. So they are not installed by default and they are not activated by this installer.
+
+```bash
+python scripts/install.py --with-hooks
+```
+
+That places the module and then prints a registration block. **Nothing fires until you paste that block into `~/.claude/settings.json` yourself.** The installer does not edit your settings, for two reasons: a settings file is the one thing here the uninstall manifest cannot cleanly reverse, and a guardrail you did not knowingly switch on is indistinguishable from a bug when it fires.
+
+Today the module ships one hook, `delegation-reminder`, which notes after a delegated agent reports back that its summary is a claim rather than evidence. It never blocks. See [`.agents/hooks/README.md`](../.agents/hooks/README.md) for the module contract and the rules a new hook has to satisfy.
+
+To back out: remove the block from your settings to deactivate, and `--uninstall` to remove the files.
 
 ## Or install with `npx skills`
 

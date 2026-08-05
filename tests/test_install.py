@@ -323,7 +323,10 @@ class InstallAcceptanceTests(unittest.TestCase):
         expected = "copy" if os.name == "nt" else "symlink"
         seen = []
 
-        def recording_install(tools, mode, home, dry, profile=inst.DEFAULT_PROFILE):
+        # *args/**kwargs deliberately: this double asserts on `mode` alone, so pinning the
+        # rest of install()'s arity here only means a new parameter breaks a test that has
+        # no opinion about it (which is exactly what feat-0038's --with-hooks did).
+        def recording_install(tools, mode, *args, **kwargs):
             seen.append(mode)
             return 0
 

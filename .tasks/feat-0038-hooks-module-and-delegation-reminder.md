@@ -2,7 +2,7 @@
 id: feat-0038
 title: Establish .agents/hooks/ as a portable module and seed it with delegation-reminder
 type: feat
-status: open
+status: in_progress
 priority: P1
 parent: "ROADMAP Epic B #13: telemetry-guard (reframed as enforcement hooks)"
 depends_on: []

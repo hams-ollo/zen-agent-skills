@@ -54,6 +54,18 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 
 The author's Content OS pipeline: `produce`, `clip-machine`, `repurpose`, `video-editing`, `video-cutting`, `episode-brief`, `youtube-transcript`, `idea-discovery`. These are showcase and portfolio demos ("look what is possible"), not plug-and-play for others. They live in their own repo, not here.
 
+## Hooks: the rules that do not depend on remembering
+
+Every skill above is prose. An agent follows it for as long as it holds it in context, which is fine for a rule you consult on purpose and useless for a rule that has to fire when nobody is thinking about it.
+
+The [hooks module](../.agents/hooks/README.md) is the answer to the second kind. A hook is a small program your harness runs at a lifecycle event, and it comes in exactly two shapes: a **reminder** injects context and never blocks, and a **gate** refuses, but only when the condition can be decided mechanically rather than interpreted.
+
+| Hook | Shape | Fires when |
+|---|---|---|
+| `delegation-reminder` | reminder | a delegated agent reports back, to note that its summary is a claim and not evidence |
+
+These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
+
 ## The two building blocks the whole kit reuses
 
 - **`AGENTS.md`** as the canonical, cross-tool instruction file.

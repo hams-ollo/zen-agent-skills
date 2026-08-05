@@ -28,6 +28,13 @@ packaging tool can inspect. Keep all three in agreement.
       - .agents/skills/test-quality/SKILL.md
       - .agents/skills/spec-conformance/SKILL.md
 
+  - also adapted into the hooks module (feat-0038). Same upstream, same license.
+    These are Python rather than skill bodies, so the provenance note lives in each
+    file's docstring instead of in frontmatter:
+      - .agents/hooks/delegation-reminder.py
+    The harness wiring in .codex/hooks.json and .opencode/plugins/zen-hooks.mjs
+    follows the shape of upstream's equivalents and is credited the same way.
+
   - note: maintainability-review, when folded in, is doubly vendored. Upstream
     itself carries it from cursor/plugins ("thermo-nuclear" code-quality review
     lens, MIT, https://github.com/cursor/plugins). Record both provenances then.
