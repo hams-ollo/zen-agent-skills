@@ -4,7 +4,7 @@ title: Add repeat detection and futility classification so a review-fix loop can
 type: feat
 status: open
 priority: P2
-parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
+parent: "ROADMAP Epic B #17: repeat detection and futility classification"
 depends_on: [feat-0040]
 touched_files:
   - .agents/skills/fix-batch/SKILL.md

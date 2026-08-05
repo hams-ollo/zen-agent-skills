@@ -5,7 +5,7 @@ type: feat
 status: open
 priority: P1
 depends_on: []
-parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
+parent: "ROADMAP Epic B #15: evidence gate and stable finding signature"
 touched_files:
   - .agents/skills/house-review/SKILL.md
   - .agents/rules/review-quality.md
@@ -74,10 +74,9 @@ and `feat-0035` (`review-depth`) both changed `.agents/skills/house-review/SKILL
 sequence around: edit the shipped versions of those files, which already contain the explicit-range
 mode and the review-depth composition.
 
-Note that both task files are still `status: in_progress` in `.tasks/` even though their work
-shipped, so the backlog reads as though they were unfinished. That is a closeout gap, not a blocker
-for this task, and it is not this task's job to fix. If it is still true when this is picked up,
-file it rather than absorbing it.
+Both task files read as unfinished when this was written, and both were closed out on 2026-08-05,
+`chore-0024` as a missed closeout and `feat-0035` on author sign-off. Nothing here is blocked on
+them.
 
 `review-depth` selects how hard to look. This task governs what a finding must prove once the depth
 is chosen. The two compose and neither subsumes the other, so read the shipped `review-depth`
