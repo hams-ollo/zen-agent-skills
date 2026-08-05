@@ -68,7 +68,7 @@ Consider where the check belongs among step 5's four bullets. It has to come aft
 before the applied record is emitted, because an applied entry claiming a correction that broke a
 link is a worse record than no entry.
 
-The related open work is [`bug-0013`](bug-0013-validator-rejects-file-scheme-links.md), which fixes
+The related open work is [`bug-0013`](done/bug-0013-validator-rejects-file-scheme-links.md), which fixes
 those same checkers rejecting `file://` links. The two do not conflict, but a fix here that leans on
 the checker inherits whatever `bug-0013` has not yet repaired, so land `bug-0013` first if both are
 in flight.
