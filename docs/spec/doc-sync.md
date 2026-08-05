@@ -161,8 +161,9 @@ reported, and which must not be read as drift at all.
 - **Given** a documentation set and a git reference or commit range describing a change
 - **When** doc-sync runs scoped to that change
 - **Then** it audits only those documents in scope that reference the changed files or describe the
-  behavior they implement, and the audited set records the narrowed scope rather than implying the
-  whole set was checked.
+  behavior they implement, the audited set records the narrowed scope, and the documents left unread
+  by the narrowing are listed in `not_audited` with that reason, rather than implying the whole set
+  was checked.
 
 ### Scenario S-010: a document's kind cannot be determined
 
@@ -215,7 +216,8 @@ reported, and which must not be read as drift at all.
 | Inputs (optional) | Change scope (a git reference or commit range); approved findings (a list of identifiers); report destination |
 | `mode` | `dry-run` (the default) or `apply`. `apply` requires a non-empty approved-findings list; invoked without one it makes no edits and reports as a dry run |
 | `audited` | Every document read, with its classification and the scope under which it was read |
-| `skipped` | Every document not audited, with the reason it was not audited (for example ledger history, or a narrowed change scope) |
+| `skipped` | Every document that was classified and then deliberately excluded from the audit, with the reason (for example ledger history). A skipped document was read far enough to place it |
+| `not_audited` | Every document that was in scope and never read at all, with the reason (for example a narrowed change scope, or a budget that ran out mid-run), so a partial audit is never reported as a whole one |
 | `findings` | Per finding: `id` (`D-NNN`), `document`, `kind`, `claim`, `evidence`, `confidence`, `proposed_correction` |
 | `proposed_correction` | The change that would resolve the drift: to the document for a `current-state` finding, to the code for a `contract` finding |
 | `kind` | `current-state`, `contract`, or `ledger` |
@@ -229,3 +231,13 @@ reported, and which must not be read as drift at all.
 None. The two questions raised against the first draft were resolved by the maintainer on
 2026-07-25 and now live in the contract: see Goal 9 with S-014 for approval and auditability, and
 the vendored-material constraint with S-015.
+
+Amended on 2026-08-05 by `chore-0027` and re-checked to `ready` with the `spec-quality` lens: the
+Proposed Surface now carries `skipped` and `not_audited`
+as two fields with distinct meanings, and `S-009` names `not_audited` as where a narrowed scope
+records what went unread. This closes the single divergence recorded in
+[`doc-sync.conformance.md`](doc-sync.conformance.md). The contract had lagged the skill rather than
+the skill having erred: the field split emerged from the `feat-0020` dogfood, after this spec was
+written, because collapsing the two makes a document nobody read indistinguishable from a ledger
+deliberately passed over, which is the failure Goal 6 and `S-006` exist to prevent. The amendment
+decided nothing new, and it needs a maintainer's re-approval.

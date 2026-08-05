@@ -81,7 +81,14 @@ section the change does not justify. A typical shape, trimmed to fit the change:
   of the diff.
 - **Verification**: how it was checked, from the test files touched or the repo's test
   command; say "not covered by tests" honestly rather than implying coverage that is absent.
-- **Follow-ups / out of scope** (optional): only if there is something real to note.
+- **Follow-ups / out of scope** (optional): only if there is something real to note. When a task
+  file this branch completes carries a non-empty `## Decisions` section, fold those entries in
+  here, under this heading and under no new one: a rejected alternative, a deliberately open seam,
+  or a premise the task got wrong is exactly what a reviewer needs and cannot read off the diff.
+  Look in `.tasks/done/` as well as `.tasks/`, the same two places the closing-reference rule below
+  already reads. The task template owns which entries are admissible (in this kit, the
+  `## Decisions` section of `.tasks/_TEMPLATE.md`), so quote or compress the entries rather than
+  re-deriving the list, and emit nothing when the section is absent.
 
 Match the tone and any PR-template headings the repo already uses (check
 `.github/PULL_REQUEST_TEMPLATE.md` if present and fill it rather than overriding it).

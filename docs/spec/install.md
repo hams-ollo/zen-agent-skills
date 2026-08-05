@@ -16,6 +16,14 @@ description characters. The amendment also records the constraint that decides h
 be, which is not a matter of preference: the skills reference each other, so a profile is only sound if
 it is closed over those references.
 
+**Amended 2026-08-05 (`feat-0036`) on the author's explicit instruction, following the `feat-0033`
+precedent above. Pending the author's re-read: the amendment is written, the approval is not this
+task's to grant.** S-015 adds a draft axis. The kit's own contribution bar (`AGENTS.md` section 7)
+says a freshly drafted skill is not shipped until it has been used and refined, and until now that
+distinction lived only in prose (`ROADMAP.md`, `docs/CATALOG.md`), so no tool could act on it and
+this one placed every skill it found. The amendment also states what happens where the draft axis
+and the closure of S-013 disagree, because both silent resolutions are defects.
+
 **Amended 2026-07-28 (`bug-0003`) and re-approved by the author on 2026-07-28.** S-007 was scoped to
 the home it was given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
 was satisfied by an implementation that removed every recorded target from every home ever installed
@@ -54,11 +62,22 @@ overwritten exists only as a branch.
 8. Let a run place a coherent subset of the skills rather than all of them, and say what the subset
    costs, because every installed description is loaded so an agent can route to it and that budget is
    shared with skills this tool cannot see.
+9. Distribute only the skills the kit considers shipped, so a draft in the tree is never handed to an
+   adopter as though it were blessed.
 
 ## Non-Goals
 
 - Generating project-level adapters for harnesses that read repository configuration. That is
-  `build-adapters.py`.
+  `build-adapters.py`. **The draft axis of S-015 deliberately stops at this tool's boundary and is not
+  carried into adapter generation**, decided 2026-08-05 (`feat-0036`) and recorded here rather than
+  left in a report, since a decision nobody can find later is one that gets re-made. Three reasons, in
+  order: `build-adapters.py` has its own approved contract, and extending the axis to it is that
+  contract's amendment to make, not this one's; this tool distributes to an adopter's global discovery
+  directory, where an unblessed skill arrives looking blessed, while adapter generation writes into one
+  named project at the request of whoever runs it; and the two failure modes differ, since an adapter
+  is a derived artifact regenerated on demand rather than something an adopter's harness silently keeps
+  loading. The inconsistency is real and is worth its own task: a maintainer who wants a draft withheld
+  everywhere should amend `build-adapters.md` too.
 - Judging whether a skill is well-formed. That is `validate-skills.py`.
 - Installing dependencies, or changing any harness setting beyond placing directories where it looks.
 - Managing, updating, or removing skills the tool did not place, including a user's own.
@@ -78,6 +97,11 @@ overwritten exists only as a branch.
   a skill may compose a sibling's discipline by reference and deliberately not restate it. A subset that
   omits a referenced sibling therefore ships the same dangling-reference defect the kit's own validator
   raises as an error. Any subset this tool places must be closed over those references.
+- Whether a skill is a draft is a property of the skill, so it has to be carried by the skill itself
+  rather than by a list inside this tool or by prose in a planning document. A list here is a second
+  source of truth that drifts from `ROADMAP.md`; parsing prose makes placement depend on wording. The
+  marker's spelling is constrained from outside: the skill frontmatter schema is an allow-list of six
+  properties, of which `metadata` is the only one that can carry a status at all.
 - The reference graph, and not editorial judgment, bounds the available subsets. Measured 2026-07-28 it
   has one strongly connected component of fourteen skills, every member of which reaches seventeen. The
   only separable skills are `agent-handoff` and `human-handoff` (a closed pair) and
@@ -186,6 +210,23 @@ overwritten exists only as a branch.
   as a character count and not as a proportion of any harness's budget, which depends on the context
   window and on skills this tool cannot see.
 
+### Scenario S-015: a skill marked a draft is placed by no profile
+
+- **Given** a skill whose own frontmatter marks it a draft
+- **When** the tool runs with any profile, including the one that asks for everything
+- **Then** that skill is placed for no requested tool, the run names what it held back rather than
+  omitting it silently, the reported totals count it as discovered but not placed, and its description
+  is excluded from every profile's budget, since no run can incur it.
+- **And** a skill carrying no marker is placed exactly as before, because absence means shipped and a
+  skill can therefore only ever be withheld deliberately. That direction is the one worth stating: the
+  over-delivery this scenario prevents ships something extra and visible, while reading a marker too
+  eagerly stops refreshing a skill an adopter already relies on, with nothing anywhere to say so.
+- **And** when a skill the profile would place references a draft, or when the profile's own requested
+  set names one, nothing is placed and the run exits non-zero naming both skills. Both silent
+  resolutions are defects: following the reference ships the draft the marker exists to withhold, and
+  dropping it ships the dangling sibling S-013 exists to prevent. Which side is wrong, the marker or
+  the reference, is a person's call and not this tool's.
+
 ## Proposed Surface
 
 | Element | Detail |
@@ -198,9 +239,10 @@ overwritten exists only as a branch.
 | `--dry-run` | Preview: report what would be placed, write nothing |
 | `--uninstall` | Remove the recorded targets beneath `--home` and drop those entries from the record, leaving entries for other homes |
 | Placed per tool | Each skill's directory under that tool's discovery path, plus the rules module as their sibling |
+| Draft marker | Carried by the skill itself, in the `metadata` frontmatter property the skill schema permits: `metadata.status: draft`. No marker, or any other value, means shipped |
 | Record | A manifest of the targets this tool created, enabling re-run recognition in copy mode |
-| Exit code | non-zero on an unrecognised tool or profile, or any unmanaged-target conflict, zero otherwise |
-| Output | one line per target with its outcome, then a summary carrying the placed count and the description-character total per profile; conflicts and any closure expansion additionally summarised |
+| Exit code | non-zero on an unrecognised tool or profile, a profile colliding with a draft marker, or any unmanaged-target conflict, zero otherwise |
+| Output | one line per target with its outcome, then a summary carrying the placed count and the description-character total per profile; conflicts, any closure expansion, and any skills held back as drafts additionally summarised |
 
 A note on what the default change does **not** do, because the quiet version of it would be a defect.
 Defaulting to `spine` means `agent-handoff` and `human-handoff` stop being refreshed by a default run.

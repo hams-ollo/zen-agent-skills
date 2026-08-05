@@ -27,7 +27,7 @@ subagent's report is a claim rather than evidence, and that the delegating agent
 a real diff, test run, or rendered behavior. Nothing enforces it. The failure is not hypothetical
 here: two of three agents in the `feat-0025` batch worked from task files whose premise was
 factually wrong about the code, and the system captured none of it. That is the observation that
-produced [`feat-0037`](../feat-0037-task-file-decision-log-v1.md), which records decisions after the
+produced [`feat-0037`](feat-0037-task-file-decision-log-v1.md), which records decisions after the
 fact. It does not add a checkpoint at the hand-off itself.
 
 Balarama Bosch's [repoprompt-workflows](https://github.com/moonray/repoprompt-workflows) (MIT) ships

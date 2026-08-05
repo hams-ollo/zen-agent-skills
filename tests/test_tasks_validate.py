@@ -208,5 +208,92 @@ class RelativeLinkTests(TasksRootTestCase):
         self.assertIn("../nowhere/missing.md", out)
 
 
+class MislabelledLinkTests(TasksRootTestCase):
+    """`bug-0012`: the class underneath a dangling link, a link that resolves wrongly.
+
+    `bug-0011` closed the dangling class by resolving every link from the directory the
+    file actually lives in. It cannot see this one. `.tasks/README.md` exists, so
+    `../README.md` written from `.tasks/done/` resolves, existence is satisfied, and the
+    reader still lands on a file the link text never named. Three completed task files
+    in this repository carried exactly that link while every check reported success.
+
+    The fixture differs from RelativeLinkTests in the one way that matters: it creates
+    `.tasks/README.md` as well as the root `README.md`, which is what makes the wrong
+    target resolvable and the defect reachable at all.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # The second README is the whole premise. Without it `../README.md` from done/
+        # dangles and bug-0011's check reports it, so this class would be testing that
+        # check rather than this one.
+        (self.tasks / "README.md").write_text("the tasks readme\n", encoding="utf-8")
+
+    def _write(self, body):
+        """Write a completed task file in .tasks/done/ carrying `body`."""
+        directory = self.tasks / "done"
+        directory.mkdir(exist_ok=True)
+        (directory / "feat-0099-test.md").write_text(
+            TASK.format(external="").replace("status: open", "status: done")
+            + "\n" + body + "\n",
+            encoding="utf-8")
+
+    def _run_lenient(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = tv.main([])
+        return code, buf.getvalue()
+
+    def test_text_naming_a_path_that_resolves_elsewhere_is_reported(self):
+        # The defect itself. The text names `README.md`, which is a real file at the
+        # repository root; the target opens `.tasks/README.md`. Both exist, so nothing
+        # dangles and only this check can see the difference.
+        self._write("[`README.md`](../README.md) says the installer is idempotent.")
+        code, out = self._run()
+        self.assertNotEqual(
+            code, 0,
+            f"a link opening a file its text does not name must be reported\n{out}")
+        self.assertIn("feat-0099-test.md", out)
+        self.assertIn("../README.md", out)
+        self.assertIn(".tasks/README.md", out)
+
+    def test_text_naming_the_path_it_actually_opens_is_not_reported(self):
+        # The true-negative half of the pair above. Without it the check could pass for
+        # the wrong reason, by firing on any path-shaped link text rather than on a
+        # mismatch. `.tasks/README.md` is what `../README.md` means from done/, so this
+        # link is correct and must stay silent.
+        self._write("[`.tasks/README.md`](../README.md) has 6 relative links.")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_prose_link_text_is_not_reported(self):
+        # Link text that reads as a sentence names no path, so there is nothing to
+        # compare and nothing to claim. Firing here would be the expensive failure: it
+        # pressures an author into rewording a historical record to satisfy a checker.
+        self._write("See [the readme](../README.md) for the spine.")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_path_with_a_line_suffix_is_not_reported(self):
+        # `path:line` is a citation of a location, not a claim about which file the link
+        # opens, and this exact link is correct today in done/bug-0002. Under the
+        # prefer-under-firing rule the suffix form is left alone rather than parsed.
+        self._write("[`.tasks/README.md:29`](../README.md) cites section 5.")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_the_finding_is_a_warning_rather_than_an_error(self):
+        # A deliberate, recorded decision, not an accident of implementation. The check
+        # is a heuristic and it ships to every scaffolded repository, so a default run
+        # reports it without failing; only --strict, which this repository's CI uses,
+        # promotes it. A heuristic that fails an adopter's clean tree is the failure
+        # this task's risk section says costs most.
+        self._write("[`README.md`](../README.md) says the installer is idempotent.")
+        code, out = self._run_lenient()
+        self.assertEqual(code, 0, f"a default run must not fail on a heuristic\n{out}")
+        self.assertIn("WARN", out)
+        self.assertIn("../README.md", out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 title: doc-sync conformance
 spec: docs/spec/doc-sync.md
 audited: 2026-08-05
+revised: 2026-08-05 (bug-0014, S-011 row only; then chore-0027, the skipped/not_audited rows and the coverage proof; the audit itself was not re-run)
 ---
 
 # doc-sync conformance matrix
@@ -36,9 +37,9 @@ findings, and modified nothing. Where a row is corroborated by that run, it is n
 | Scenarios | S-006 the documentation set is clean | Conformed | Step 4 / "Report the audited set positively ... otherwise a clean verdict is indistinguishable from a run that did not look", and the output rule requiring a non-empty `audited` alongside `clean` | the output rule is what makes this mechanical rather than aspirational |
 | Scenarios | S-007 a document names something that does not exist | Conformed | Step 3 / `grounded` definition, "A named file, skill, command, or path does not exist; a link resolves to nothing" | corroborated by the dogfood, which surfaced all three dangling references to a `document` skill that never existed in this repository |
 | Scenarios | S-008 a claim is stale but the judgment is not mechanical | Conformed | Step 3 / `suspected` definition, "Name the fact, and state the reading under which the claim would still be true, so dismissing it takes one step" | the "reading under which the claim would still be true" clause matches the contract word for word, and is the part that makes one-step dismissal possible |
-| Scenarios | S-009 the run is scoped to a change | Conformed | Step 0 / "**Narrow by what a change could have invalidated** when a change scope was supplied", and Step 4 / "Whenever the scope was narrowed ... say so and list what went unread in `not_audited`" | the audited set carries a `scope: full \| change-scoped` field, which is how the narrowing is recorded rather than implied |
+| Scenarios | S-009 the run is scoped to a change | Conformed | Step 0 / "**Narrow by what a change could have invalidated** when a change scope was supplied", and Step 4 / "Whenever the scope was narrowed ... say so and list what went unread in `not_audited`" | the audited set carries a `scope: full \| change-scoped` field, which is how the narrowing is recorded rather than implied. `chore-0027` amended the scenario to name `not_audited` as where the unread documents go, which the skill already required and the contract did not say |
 | Scenarios | S-010 a document's kind cannot be determined | Conformed | Step 1 / "**An unclassifiable document is treated as a contract.** When you cannot confidently place a document, the fail-safe is report-only. The failure mode must be inaction, never an unauthorized edit" | the fail-safe direction is stated explicitly, which is the whole content of this scenario |
-| Scenarios | S-011 an approved correction is written | **Diverged** | Step 5 composes [`doc-revise`](../../.agents/skills/doc-revise/SKILL.md) for the edit and states "do not restate its rules here" | **Spec side:** the edit changes only the drifted claim, leaves surrounding text and voice intact, **and every relative link in the edited document still resolves to a file that exists**. **Code side:** the first two obligations are delegated to `doc-revise`, which carries them. The link-resolution obligation is delegated nowhere and stated nowhere. Disposition below |
+| Scenarios | S-011 an approved correction is written | Conformed | Step 5 composes [`doc-revise`](../../.agents/skills/doc-revise/SKILL.md) for the edit, then requires "**Re-check the edited document's relative links after writing, and before recording anything.** ... **A link the edit broke is repaired in the same pass, or the edit is reverted.** It is never left dangling and never recorded as applied" | all three obligations now land: the first two stay delegated to `doc-revise`, and the link-resolution obligation is stated in `doc-sync` itself, unconditional on every applied edit, naming `python .tasks/validate.py --strict` and the CI docs link step as the mechanism rather than describing the check in the abstract, and sequenced before the `applied` record is emitted. Gap closed by `bug-0014` on 2026-08-05 |
 | Scenarios | S-012 a suspicion cannot be grounded | Conformed | Step 2 / "**A claim you cannot tie to a fact produces no finding at all.** Not a low-confidence finding, not a note: nothing" | the contract's "the report does not mention it" is matched exactly by "nothing", closing the tempting middle option |
 | Scenarios | S-013 no report destination is supplied | Conformed | Step 4 / "Return the report inline unless a report destination was supplied", and the surface row for report delivery | |
 | Scenarios | S-014 an applied change is auditable afterwards | Conformed | Step 5 / "Each applied entry names the finding id, the document, the claim corrected, the evidence, and the confidence it carried", with "Someone reading it later must be able to tell a mechanical correction from an applied judgment call ... without re-running the audit" | all five fields required by the contract are named, and the `applied` block in the output format carries each |
@@ -47,7 +48,8 @@ findings, and modified nothing. Where a row is corroborated by that run, it is n
 | Proposed Surface | Inputs (optional): change scope, approved findings, report destination | Conformed | "Inputs", Step 0, Step 5, Step 4 respectively | |
 | Proposed Surface | `mode`: `dry-run` default, `apply` requires non-empty approved list | Conformed | output rules / "`mode: dry-run` is the default. An apply invocation with no approved findings makes no edits and reports as a dry run" | |
 | Proposed Surface | `audited`: every document read, with classification and scope | Conformed | output format `audited` block carrying `document`, `kind`, `scope` | |
-| Proposed Surface | `skipped`: every document not audited, with reason | **Diverged** | output format carries **two** fields, `skipped` and `not_audited`, distinguished by an explicit rule | **Spec side:** one field, `skipped`, holding "every document not audited, with the reason (for example ledger history, or a narrowed change scope)". **Code side:** `skipped` means classified and deliberately excluded (a ledger); `not_audited` means nothing is known about it. Disposition below |
+| Proposed Surface | `skipped`: classified and deliberately excluded, with reason | Conformed | output rules / "`skipped` means the document was classified and deliberately excluded (a ledger)", and "`skipped` states a reason per document, so an omission is always visible", against the amended surface row | was half of the **Diverged** row `chore-0025` recorded against a contract carrying one collapsed field. `chore-0027` amended the contract to carry both, which is what the skill has always emitted |
+| Proposed Surface | `not_audited`: in scope and never read, with reason | Conformed | output rules / "`not_audited` holds documents that were in scope and never read, whether the scope was bounded up front or the budget ran out mid-run", with Step 0 / "**Record what you did not reach** in `not_audited`, with the reason" | the other half of the same amendment. The skill's own rule that the two "are different claims" is the argument the contract now records |
 | Proposed Surface | `findings`: `id`, `document`, `kind`, `claim`, `evidence`, `confidence`, `proposed_correction` | Conformed | output format `findings` block | all seven fields present with the contract's names |
 | Proposed Surface | `proposed_correction` targets document or code by kind | Conformed | output rules and Step 3 | |
 | Proposed Surface | `kind`: `current-state`, `contract`, `ledger` | Conformed | Step 1 classification table | the three values match exactly |
@@ -59,22 +61,26 @@ findings, and modified nothing. Where a row is corroborated by that run, it is n
 
 ## Coverage proof
 
-**Audited** (28 items): scenarios S-001 through S-015 (all fifteen); the twelve Proposed Surface
-rows; and the Open Questions section.
+**Audited** (29 items): scenarios S-001 through S-015 (all fifteen); the thirteen Proposed Surface
+rows, one more than at the original audit because `chore-0027` split the collapsed `skipped` row in
+two; and the Open Questions section.
 
-**Unreconciled** (2 items):
+**Unreconciled** (0 items): none. Every audited item is `Conformed`.
+
+**Reconciled since the audit** (2 items):
 
 | Item | Disposition | Reasoning |
 |---|---|---|
-| S-011: the link-resolution obligation on an applied edit is stated nowhere | **to-fix** | The contract requires that after an applied correction, "every relative link in the edited document still resolves to a file that exists". `doc-sync` delegates the edit to `doc-revise` and correctly refuses to restate its rules, but this obligation is not one of `doc-revise`'s rules, so the delegation drops it. Nothing in either skill instructs the post-edit link check. **This is a real gap, not a wording quibble**: `bug-0011` found 101 broken links in this repository produced by exactly this class of unchecked edit, and `bug-0013` is open against the very checker that would catch it. The cheapest honest repair is one clause in `doc-sync`'s Step 5 requiring a link re-check on each edited document, since the tooling to do it already exists. Reported, not fixed: this lens never repairs. |
-| Proposed Surface: one `skipped` field (spec) vs. `skipped` plus `not_audited` (implementation) | **accepted-with-reason** | The implementation splits one contract field into two, which is a divergence in shape but an improvement in truthfulness, and the skill argues the case in its own output rules: `skipped` means the document was classified and deliberately excluded, `not_audited` means nothing is known about it. Collapsing them, as the contract does, makes a document nobody read indistinguishable from a ledger deliberately passed over, which is precisely the "a partial audit read as a whole one" failure that Goal 6 and S-006 exist to prevent. Accepting the code side. **The correct repair is to amend the spec's Proposed Surface to carry both fields**, not to collapse the implementation. Not done here: the spec is `status: approved`, so amending it is a human's call. |
+| `S-011`: an applied edit had no link-resolution obligation | **fixed in the skill** (`bug-0014`, 2026-08-05) | The one real defect this audit found. Closed in `doc-sync`'s own body rather than in the contract, because the contract was right and the skill did not satisfy it. The `S-011` row above now reads `Conformed` against the added clause. |
+| Proposed Surface: one `skipped` field (spec) vs. `skipped` plus `not_audited` (implementation) | **closed by amending the contract** (`chore-0027`, 2026-08-05) | `chore-0025` recorded this as **accepted-with-reason**: the implementation splits one contract field into two, a divergence in shape but an improvement in truthfulness, and the skill argues the case in its own output rules. Collapsing them, as the contract did, makes a document nobody read indistinguishable from a ledger deliberately passed over, which is precisely the "a partial audit read as a whole one" failure that Goal 6 and S-006 exist to prevent. That disposition accepted the code side and named the repair: amend the spec's Proposed Surface to carry both fields. `chore-0027` did so, and also amended `S-009` to name `not_audited`, so the second field has scenario coverage rather than living only in the surface table. No skill body changed. The amended spec is still `status: approved` and needs a maintainer's re-approval. |
 
 **Not-built**: none. Every scenario and every surface element has evidence.
 
 ## Note on what this matrix is worth
 
-Fifteen scenarios produced one real defect (`S-011`) and one contract-lagging-implementation
-divergence. That ratio is worth stating because it is the argument for doing these audits at all:
-`doc-sync` had shipped, been iterated twice, and been dogfooded on 38 documents, and the missing
-link-resolution obligation survived all of it. No test covers it, no validator sees it, and the
-dogfood could not have caught it because that run applied nothing.
+Fifteen scenarios produced one real defect (`S-011`, closed by `bug-0014` on 2026-08-05) and one
+contract-lagging-implementation divergence (closed by `chore-0027` the same day, by amending the
+contract rather than the skill). That ratio is worth stating because it is the argument
+for doing these audits at all: `doc-sync` had shipped, been iterated twice, and been dogfooded on 38
+documents, and the missing link-resolution obligation survived all of it. No test covers it, no
+validator sees it, and the dogfood could not have caught it because that run applied nothing.

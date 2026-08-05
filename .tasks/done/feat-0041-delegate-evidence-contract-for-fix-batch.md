@@ -2,7 +2,7 @@
 id: feat-0041
 title: Require a structured evidence contract from every fix-batch delegate report
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic B #16: delegate evidence contract for fix-batch"
 depends_on: []
@@ -14,10 +14,10 @@ created: 2026-08-05
 
 ## Problem
 
-[`fix-batch`](../.agents/skills/fix-batch/SKILL.md) dispatches worktree-isolated agents and then has
+[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) dispatches worktree-isolated agents and then has
 to decide whether what came back is real. Its weakest seam is the shape of that return: an agent
 reports in prose, and the orchestrator judges a narrative. `feat-0022` wired
-[`verifier-agent`](../.agents/skills/verifier-agent/SKILL.md) into Step 6, which is a genuine
+[`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) into Step 6, which is a genuine
 improvement, but verification runs against the work rather than against the report, so a report that
 omits what it did not do still passes through unchallenged.
 
@@ -47,7 +47,7 @@ in prose without either running it or lying, which turns a soft claim into a che
 - Define the orchestrator's remedy when a report is incomplete: request a focused follow-up from the
   same agent, or read the narrowest file slice needed, and record which was done and why.
 - Add the equivalent acceptance check to
-  [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md), so a worktree cannot land
+  [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md), so a worktree cannot land
   on the strength of a report that would not have been accepted.
 
 **Out of scope:**
@@ -84,18 +84,36 @@ satisfiable from inside a single worktree. Nothing in it may require knowledge o
 
     python scripts/validate-skills.py && python .tasks/validate.py --strict && python -m unittest discover -s tests -p "test_*.py" -v
 
-- [ ] `fix-batch` states the required report fields and that a missing field blocks acceptance.
-- [ ] The validation command and its verbatim result are separate required fields.
-- [ ] The incomplete-report remedy is stated, including the requirement to record which remedy was
+- [x] `fix-batch` states the required report fields and that a missing field blocks acceptance.
+- [x] The validation command and its verbatim result are separate required fields.
+- [x] The incomplete-report remedy is stated, including the requirement to record which remedy was
       used.
-- [ ] `reconcile-worktrees` refuses to land a worktree whose report does not meet the contract.
-- [ ] The contract references `feat-0037`'s decision log rather than restating it.
-- [ ] Dogfood evidence recorded in the closeout: a real dispatch produces a conforming report, and
+- [x] `reconcile-worktrees` refuses to land a worktree whose report does not meet the contract.
+- [x] The contract references `feat-0037`'s decision log rather than restating it.
+- [x] Dogfood evidence recorded in the closeout: a real dispatch produces a conforming report, and
       the closeout states whether any field was hard for the agent to produce.
+
+## Implementation record
+
+The dispatch that implemented this task is itself the first dogfood run, since the prompt was
+written against the pre-contract `fix-batch` and hand-rolled its own report shape. That draft asked
+for nine fields, seven of which survive into the contract verbatim. The two differences are the
+evidence:
+
+- The draft omitted **tests added, changed, or run** and **blockers and assumptions**. Both are
+  checkable in one pass and both are places where an agent's silence is currently indistinguishable
+  from a clean result, so the contract keeps them.
+- The draft required a **decisions** field (rejected alternatives, falsified premises, open seams).
+  That is `feat-0037`'s decision log, folded into the mechanical report by hand because no contract
+  existed to point at. The contract names it as the composing semantic half instead of absorbing it,
+  which is what the Out of scope section asks for.
+
+No field was hard to produce from inside a single worktree. The one that cost anything was the
+verbatim validation result, which is the point: it cost a real command run.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

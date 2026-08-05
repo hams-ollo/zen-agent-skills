@@ -32,7 +32,10 @@ has a lens but no author.
 
 ## Constraints
 
-- Specs are Markdown with YAML frontmatter and live under `docs/spec/<slug>.md`.
+- Specs are Markdown with YAML frontmatter, named `<slug>.md`, and are written to the repository's
+  existing spec location when it has one, so a run adopts the convention already in place rather
+  than imposing a second one. `docs/spec/<slug>.md` is the documented fallback, used only when the
+  repository has no spec location of its own.
 - The skill composes `spec-quality` rather than restating its rules inline.
 - Specification work is read-only for implementation surfaces: a run creates or edits only the spec
   file, never implementation source.
@@ -45,9 +48,10 @@ has a lens but no author.
 
 - **Given** a one-line feature idea and no existing spec
 - **When** spec-author runs
-- **Then** it writes a Markdown file at `docs/spec/<slug>.md` containing frontmatter with
-  `status: draft` and all seven body sections (Problem, Goals, Non-Goals, Constraints, Scenarios,
-  Proposed Surface, Open Questions), with at least one scenario carrying a stable `S-NNN` id.
+- **Then** it writes a Markdown file named `<slug>.md` to the repository's spec location, containing
+  frontmatter with `status: draft` and all seven body sections (Problem, Goals, Non-Goals,
+  Constraints, Scenarios, Proposed Surface, Open Questions), with at least one scenario carrying a
+  stable `S-NNN` id.
 
 ### Scenario S-002: self-check with spec-quality
 
@@ -67,8 +71,8 @@ has a lens but no author.
 
 - **Given** any drafting run
 - **When** spec-author completes
-- **Then** the only file created or modified is the spec under `docs/spec/`, and no implementation
-  source file is written.
+- **Then** the only file created or modified is the spec in the repository's spec location, and no
+  implementation source file is written.
 
 ### Scenario S-005: vague idea triggers one clarifying question
 
@@ -77,11 +81,23 @@ has a lens but no author.
 - **Then** it asks the user exactly one clarifying question and writes no file until the answer
   arrives.
 
+### Scenario S-006: the spec goes where the repository already keeps specs
+
+- **Given** a repository that already keeps its specs in a directory of its own
+- **When** spec-author writes the spec
+- **Then** it writes the spec into that directory.
+
+### Scenario S-007: a repository with no spec directory gets the documented fallback
+
+- **Given** a repository with no spec directory of its own
+- **When** spec-author writes the spec
+- **Then** it writes the spec to `docs/spec/<slug>.md`.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
-| Output file | `docs/spec/<slug>.md`, Markdown with YAML frontmatter |
+| Output file | `<slug>.md`, Markdown with YAML frontmatter, written to the repository's existing spec location; `docs/spec/<slug>.md` when the repository has none |
 | Frontmatter `status` | `draft` (author-set) or `approved` (human-set only) |
 | Body sections | Problem, Goals, Non-Goals, Constraints, Scenarios, Proposed Surface, Open Questions |
 | Scenario ids | stable `S-NNN`, never renumbered |
@@ -89,3 +105,14 @@ has a lens but no author.
 ## Open Questions
 
 None.
+
+Amended on 2026-08-05 by `chore-0027` and re-checked to `ready` with the `spec-quality` lens: the
+Constraints, the Proposed Surface output-file row, and scenarios `S-001` and `S-004` now say the
+spec is written to the repository's spec location rather than to a fixed path, and two new
+scenarios state which location that is, `S-006` for a repository that already keeps specs somewhere
+and `S-007` for the `docs/spec/<slug>.md` fallback. No existing id was renumbered or reused. This
+closes the single divergence recorded in
+[`spec-author.conformance.md`](spec-author.conformance.md). The contract had lagged the skill rather
+than the skill having erred: this spec was written for this repository before `spec-author` was
+generalised to run in repositories that already keep specs somewhere of their own. The amendment
+decided nothing new, and it needs a maintainer's re-approval.

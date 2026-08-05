@@ -35,6 +35,22 @@ What is wrong or missing, and why it matters. Point at the exact code, function,
 
 Any known constraints, the intended approach, edge cases, or prior art in the codebase to mirror. Optional if the Problem + Scope are unambiguous.
 
+## Decisions
+
+Optional, and **required** when the work produced an entry of one of these three kinds. Keep each
+entry to a line or two:
+
+- **A rejected alternative**: what was chosen against, and why.
+- **A seam left open deliberately**, so the next agent does not read it as an oversight and close it.
+- **A premise that turned out false**: what the task claimed, and what the code actually did.
+
+Nothing else belongs here, because something else already owns it: what changed (git), whether the
+tests passed (`<spec>.verification.md`), whether it matched the contract (`<spec>.conformance.md`),
+why the feature exists (the spec). When none of the three kinds apply, delete this section rather
+than leaving it empty: a heading every task carries and most leave blank teaches authors to skip it.
+
+An entry recoverable from `git log` or a verification record is a defect in the entry, not a bonus.
+
 ## Risks and rollback
 
 Optional, and **required** when any of these hold, because a readiness gate checks for it:

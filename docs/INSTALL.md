@@ -62,7 +62,7 @@ python scripts/install.py --profile all
 | Profile | Skills | What it is |
 |---|---|---|
 | `core` | 3 | Scaffold a project, track work in it, describe the change at the end |
-| `spine` | 17 | The contract-driven delivery loop. **The default** |
+| `spine` | 18 | The contract-driven delivery loop. **The default** |
 | `all` | 20 | Everything, adding the two handoff skills |
 
 A profile is expanded over sibling references before anything is placed, so it can never install a skill whose composed sibling is missing, and the run says when it expanded what you asked for. That is also why the sizes jump the way they do rather than offering a middle: most of the skills reference each other, so any profile reaching into that group brings the group with it.

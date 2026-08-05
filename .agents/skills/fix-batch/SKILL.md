@@ -182,6 +182,24 @@ Every prompt must include, in substance:
    attributed to it, and a regex that did not handle a case the task asserted it handled). Both
    reported it and tested what was actually there instead of forcing a test onto a premise that did
    not hold. An agent that quietly "makes it work" hides a defect in your task authoring.
+7. **The report contract, quoted into the prompt rather than summarized.** Give the agent the exact
+   field list from [the delegate report contract](#the-delegate-report-contract) and tell it plainly
+   that a missing field blocks acceptance. An agent that learns the required shape only when you
+   reject its report has already lost the context that made the fields cheap to produce, and
+   reconstructing them afterwards costs a round trip you did not need to spend.
+8. **An instruction to record its decisions in its own task file** before it finishes, and to leave
+   that file otherwise alone. The admissible entry kinds and the exclusion list are defined once, in
+   the target repository's task template (in this kit, the `## Decisions` section of
+   `.tasks/_TEMPLATE.md`). Point the agent at that definition instead of restating it, and tell it
+   to delete the section when it has nothing of those kinds rather than pad it. This is the
+   **exception that proves** the closeout-bookkeeping rule below, not a weakening of it: that rule
+   holds because the `done/` move, `CHANGELOG.md`, and `ROADMAP.md` are the *same* files for every
+   item in the batch, so N agents editing them in N worktrees collide by construction. An agent's
+   own task file is the one file in the batch that exactly one agent owns, so no second agent can
+   conflict with it. Everything shared still stays out. This item is also the semantic counterpart
+   to [the delegate report contract](#the-delegate-report-contract), which asks what is checkably
+   true about the change while this asks what the agent learned that the change does not show. It is
+   not a tenth report field.
 
 **Keep closeout bookkeeping out of every prompt.** Do not ask agents to move their own task file to
 `done/`, update the changelog, or tick the roadmap. Those touch the same one or two files for every
@@ -206,6 +224,13 @@ concern or accepting it as a real conflict. If it is a false alarm, resume the a
 precise explanation of what it actually found and confirmation to proceed.
 
 ### Step 6: the mandatory verification pass, do this for every single agent, no exceptions
+
+**Start with the report, before you run anything.** Check it against
+[the delegate report contract](#the-delegate-report-contract). A report missing a required field is
+not accepted, and the item is not mergeable until that gap is closed by one of the two remedies the
+contract names. This is a different question from the verdict below, and it is the one verification
+cannot answer for you: `verifier-agent` runs against the work, so a report that omits what the agent
+did not do still passes it.
 
 This is the step that actually matters. For each completed agent, before treating any of its work
 as done, run [`verifier-agent`](../verifier-agent/SKILL.md) against that worktree. Independence is
@@ -263,9 +288,69 @@ verdict:
 ### Step 7: report a consolidated, verified summary, do not auto-merge
 
 Present, per item: what changed, what you personally verified (tests you ran yourself, diffs you
-checked), and anything you found and corrected during verification. Do not commit or merge
+checked), the report's contract status (conforming, or which field was missing and which remedy
+closed it), and anything you found and corrected during verification. Do not commit or merge
 anything automatically. Landing the verified worktrees into the main working tree is a separate,
 deliberate step, see [`reconcile-worktrees`](../reconcile-worktrees/SKILL.md).
+
+## The delegate report contract
+
+Every agent this skill dispatches returns a report in a fixed shape. The shape is the point: an
+agent reporting in free prose is asking you to judge a narrative, and a narrative can omit what it
+did not do without ever saying anything false. Balarama Bosch's
+[repoprompt-workflows](https://github.com/moonray/repoprompt-workflows) (MIT) requires the same kind
+of compact evidence contract from every delegate before a gate may advance; the field list below is
+the subset of it that a single `fix-batch` run can actually check, with upstream's ledger, budget,
+and lineage bookkeeping left out because there is no durable ledger here to carry it.
+
+| Field | What it must contain | What you check it against |
+|---|---|---|
+| **task id** | The id of the task file it was dispatched with | your dispatch list |
+| **covered criteria** | Which of the task's acceptance criteria (or spec scenario ids) the change covers, and which it deliberately does not | the task file |
+| **files changed** | Every path it touched, new files included, one line each on what changed | `git diff --binary HEAD` plus `ls-files --others --exclude-standard` in that worktree |
+| **tests added, changed, or run** | Each test file or case it wrote or modified, and which suite it ran, or `none` with a reason | the diff and the validation result |
+| **validation command** | The command it ran, verbatim, exactly as typed | the acceptance command in the task file |
+| **validation result** | The verbatim tail of that command's output, not a summary of it | re-running the command yourself |
+| **findings** | Anything real it found that was not the assignment: a defect noticed in passing, an unexpected diff, an opportunistic fix. `none` is a valid answer and is not the same as silence | the diff |
+| **blockers and assumptions** | What stopped it, and every assumption it had to make to proceed, including a task premise it found false | Step 5, which is where a blocker gets checked rather than believed |
+| **recommended next step** | One of: ready to reconcile, needs a named follow-up, or blocked, and why | your own read of the item |
+
+Findings carry the evidence shape the target repository's review lens defines (in this kit,
+[`review-quality.md`](../../rules/review-quality.md)). Do not define a second shape here.
+
+**A missing field blocks acceptance.** Not "note it and move on". Until every field is present, the
+item is not mergeable, does not enter the Step 7 report as verified, and does not go to
+`reconcile-worktrees`. Never close a gap by inference from the report's prose: "the tests presumably
+passed, since it says the task is complete" is exactly the soft claim this contract exists to
+delete. The load-bearing pair is the validation command and its verbatim result, kept as two fields
+on purpose, because that pair cannot be answered without either running the command or lying, which
+is the one property a prose summary can never have.
+
+**Transcript-style reports do not satisfy it.** A narrative of what the agent did, a reasoning dump,
+an unbounded log paste, or whole files pasted in are volume, not evidence, and they block acceptance
+the same way a missing field does. Bound the verbatim result to the tail that shows the outcome.
+
+**When a report is incomplete, there are exactly two remedies.** Ask the same agent for a focused
+follow-up naming precisely the missing fields, which is the default because it costs one round trip
+and leaves the evidence with the party that has it. Or get the field yourself from the narrowest
+source that answers it: run the validation command in that worktree, read the one file slice.
+Prefer the second when the agent is gone or unresponsive, and when the missing field is the
+validation result, since running it yourself is stronger evidence than asking again.
+
+**Record which remedy you used, per item**: what was missing, which move you made, and what it
+produced. Without that record the batch report cannot distinguish a field the agent proved from one
+you proved on its behalf, and that distinction is the entire reason for asking.
+
+**Every field is answerable from inside one worktree.** That is a constraint on the contract, not a
+convenience: `fix-batch` agents cannot see each other's work by design, so a field requiring
+knowledge of the batch would be unanswerable for every agent at once. If you want something that
+needs a cross-worktree view, it belongs in your own Step 6 checks, not in the contract.
+
+This contract is the mechanical half only. The semantic half, where the agent writes its rejected
+alternatives, falsified premises, and deliberately open seams into its own task file, is the
+decision log that Step 3 item 8 asks every prompt to carry. The two compose and neither restates
+the other: this one asks what is checkably true about the change, that one asks what the agent
+learned that the change does not show.
 
 ## Running this in Claude Code
 
