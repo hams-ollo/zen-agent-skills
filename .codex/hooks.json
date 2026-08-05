@@ -10,7 +10,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "^Task$|^TaskOutput$|agent_run",
+        "matcher": "^Task$|^Agent$|^TaskOutput$|agent_run",
         "hooks": [
           {
             "type": "command",

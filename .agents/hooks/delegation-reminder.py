@@ -54,8 +54,16 @@ REMINDER = (
 # and is deliberately allowed to be broad; this set is the precise one. Keeping both
 # means a matcher wide enough to catch `Task` can never fire on the unrelated task-list
 # tools (`TaskCreate`, `TaskUpdate`, `TaskList`, ...) that merely contain the word.
+#
+# `Agent` is here because the name is not stable across harnesses in the way the first
+# draft assumed. Vanilla Claude Code dispatches subagents through `Task`; the Agent SDK
+# surface exposes the same capability as `Agent`. A set covering only one of them leaves
+# the hook silently inert on the other, which is the worst failure available to a
+# guardrail: nothing is reported, so nothing looks wrong. Found while dogfooding
+# feat-0038, where the reminder did not fire on an `Agent` delegation.
 DELEGATION_TOOLS = {
-    "Task",        # built-in subagent dispatch
+    "Task",        # vanilla Claude Code subagent dispatch
+    "Agent",       # the same capability on the Agent SDK surface
     "TaskOutput",  # retrieval of a background agent's output
     "agent_run",   # generic delegation used by some harnesses
 }

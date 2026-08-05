@@ -181,24 +181,42 @@ HOOK_SUBPATHS = {
     "opencode": Path(".agents") / "hooks",
 }
 
-# Printed after a --with-hooks install rather than merged into the user's settings file.
-# Editing someone's settings.json is the one step of this install that is not a file
-# placement the manifest can cleanly reverse, and a hook is the only thing the kit ships
-# that runs inside their session. So the placement is automated and the activation is not:
-# nothing fires until a person pastes this in.
-CLAUDE_REGISTRATION = """\
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "^Task$|^TaskOutput$|agent_run",
-        "hooks": [
-          {"type": "command", "command": "python3 ~/.claude/hooks/delegation-reminder.py"}
-        ]
-      }
-    ]
-  }
-}"""
+def hook_interpreter() -> str:
+    """The interpreter name to write into a hook registration.
+
+    Not hardcoded to `python3`. On Windows that name usually resolves to the Microsoft
+    Store's app-execution alias, which prints an install advertisement and exits without
+    running anything, so a registration naming it produces a hook that fails silently
+    forever. Found by dogfooding feat-0038 on Windows, where the first draft did exactly
+    that. Mirrors how `--mode` already defaults per platform.
+    """
+    return "python" if os.name == "nt" else "python3"
+
+
+def claude_registration(home: Path) -> str:
+    """The settings.json block a user pastes to activate the hooks.
+
+    Printed rather than merged. Editing someone's settings file is the one step of this
+    install the uninstall manifest cannot cleanly reverse, and a hook is the only thing
+    the kit ships that runs inside their session, so the placement is automated and the
+    activation is not: nothing fires until a person pastes this in.
+
+    The path is absolute and resolved rather than `~/...`, because whether a tilde is
+    expanded depends on how the harness spawns the command, and a registration that
+    silently does not run is the worst outcome available here.
+    """
+    script = home / HOOK_SUBPATHS["claude"] / "delegation-reminder.py"
+    command = f"{hook_interpreter()} \"{script}\""
+    return json.dumps({
+        "hooks": {
+            "PostToolUse": [
+                {
+                    "matcher": "^Task$|^Agent$|^TaskOutput$|agent_run",
+                    "hooks": [{"type": "command", "command": command}],
+                }
+            ]
+        }
+    }, indent=2)
 
 
 def discover_hooks():
@@ -288,7 +306,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
         # Deliberately the last thing printed, and deliberately not done for the user.
         print(f"\n{tag}The hooks are placed but INACTIVE. Nothing runs until you register "
               f"them. Merge this into ~/.claude/settings.json:\n")
-        print(CLAUDE_REGISTRATION)
+        print(claude_registration(home))
         print(f"\nRemove that block to deactivate; `--uninstall` removes the files.")
     # A count, not a percentage: the harness budget scales with the context window and
     # is shared with skills this tool cannot see, so a proportion here would be invented.

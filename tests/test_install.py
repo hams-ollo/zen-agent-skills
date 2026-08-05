@@ -454,5 +454,51 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(remaining, [])
 
 
+class HookRegistrationTests(unittest.TestCase):
+    """feat-0038: the settings block a user pastes to activate the hooks.
+
+    The defect worth protecting against is a registration that parses fine, looks right,
+    and never runs. Found by dogfooding on Windows: the first draft hardcoded `python3`,
+    which there resolves to the Microsoft Store app-execution alias, prints an install
+    advertisement, and exits without executing the hook. Nothing surfaces that failure,
+    so the guardrail is simply absent forever.
+    """
+
+    def test_the_interpreter_matches_the_platform(self):
+        expected = "python" if os.name == "nt" else "python3"
+        self.assertEqual(inst.hook_interpreter(), expected)
+
+    def test_the_registration_names_a_runnable_interpreter(self):
+        block = inst.claude_registration(Path("/tmp/home"))
+        command = json.loads(block)["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+        self.assertTrue(command.startswith(inst.hook_interpreter() + " "))
+        if os.name == "nt":
+            # The specific regression: `python3 ` as the command prefix is the broken form.
+            self.assertFalse(command.startswith("python3 "))
+
+    def test_the_registration_path_is_absolute_and_has_no_tilde(self):
+        # Whether a tilde is expanded depends on how the harness spawns the command, and a
+        # registration that silently does not run is the worst outcome available here.
+        block = inst.claude_registration(Path("/tmp/home"))
+        command = json.loads(block)["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+        self.assertNotIn("~", command)
+        self.assertIn("delegation-reminder.py", command)
+
+    def test_the_registration_is_valid_json_the_user_can_paste(self):
+        # It is printed for a human to merge into settings.json. If it does not parse,
+        # every downstream instruction in INSTALL.md is wrong.
+        block = inst.claude_registration(Path("/tmp/home"))
+        parsed = json.loads(block)
+        entry = parsed["hooks"]["PostToolUse"][0]
+        self.assertEqual(entry["hooks"][0]["type"], "command")
+        self.assertTrue(entry["matcher"])
+        # Deliberately NOT asserting the matcher's exact text here. Pinning the string in
+        # this file is what broke when `Agent` was added to the hook: the code and two of
+        # the three wirings were updated and this assertion was left behind, failing for a
+        # change that was correct. What the matcher must actually satisfy is that it
+        # covers the hook's own tool set, and that belongs in one place across all the
+        # wirings: see WiringConsistencyTests in tests/test_hooks.py.
+
+
 if __name__ == "__main__":
     unittest.main()

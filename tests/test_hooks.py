@@ -169,5 +169,52 @@ class ModuleContractTests(unittest.TestCase):
                 self.assertEqual(code, 0)
 
 
+class WiringConsistencyTests(unittest.TestCase):
+    """The delegation tool set is encoded in more than one place. This is where they meet.
+
+    `DELEGATION_TOOLS` lives in the hook; the harness matchers live in `.codex/hooks.json`
+    and in the registration `install.py` prints. A tool added to one and not the others
+    produces a hook that is silently inert on whichever harness was missed, which is the
+    worst failure available to a guardrail: nothing fires, so nothing looks wrong.
+
+    That is not hypothetical. Adding `Agent` to the set (found by dogfooding, where the
+    reminder did not fire on an Agent SDK delegation) updated the hook, the Codex matcher,
+    and the installer, and left a test pinning the old string. These tests assert the
+    relationship rather than any one spelling, so the next tool added is covered without
+    anyone remembering to come back here.
+    """
+
+    def matcher_sources(self):
+        """Every harness matcher expected to cover the hook's tool set, as (name, regex)."""
+        codex = json.loads(
+            (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        yield ".codex/hooks.json", codex["hooks"]["PostToolUse"][0]["matcher"]
+
+        spec = importlib.util.spec_from_file_location(
+            "install_mod", REPO_ROOT / "scripts" / "install.py")
+        install_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(install_mod)
+        block = json.loads(install_mod.claude_registration(Path("/tmp/home")))
+        yield "install.py claude_registration", block["hooks"]["PostToolUse"][0]["matcher"]
+
+    def test_every_matcher_covers_every_delegation_tool(self):
+        for name, matcher in self.matcher_sources():
+            for tool in sorted(dr.DELEGATION_TOOLS):
+                with self.subTest(source=name, tool=tool):
+                    self.assertRegex(
+                        tool, matcher,
+                        f"{name} does not fire for {tool!r}, so the hook is inert there")
+
+    def test_no_matcher_fires_on_the_task_list_tools(self):
+        # The matcher is allowed to be broader than the hook's set, since the hook
+        # re-checks. It is not allowed to be so broad that it wakes the hook on every
+        # todo-list update, which is the noise that gets a guardrail uninstalled.
+        for name, matcher in self.matcher_sources():
+            for tool in ("TaskCreate", "TaskUpdate", "TaskList", "TaskStop"):
+                with self.subTest(source=name, tool=tool):
+                    self.assertNotRegex(
+                        tool, matcher, f"{name} fires on the unrelated {tool!r}")
+
+
 if __name__ == "__main__":
     unittest.main()
