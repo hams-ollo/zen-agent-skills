@@ -12,5 +12,10 @@
     "ROADMAP.md",
     "CHANGELOG.md"
   ],
-  "id_high_water": {"bug": 13, "feat": 43, "chore": 26, "epic": 0}
+  "id_high_water": {
+    "bug": 14,
+    "feat": 43,
+    "chore": 27,
+    "epic": 0
+  }
 }
