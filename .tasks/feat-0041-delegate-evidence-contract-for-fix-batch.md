@@ -4,7 +4,7 @@ title: Require a structured evidence contract from every fix-batch delegate repo
 type: feat
 status: open
 priority: P1
-parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
+parent: "ROADMAP Epic B #16: delegate evidence contract for fix-batch"
 depends_on: []
 touched_files:
   - .agents/skills/fix-batch/SKILL.md

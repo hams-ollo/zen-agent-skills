@@ -4,7 +4,7 @@ title: Establish a reproducible provenance convention for material folded in fro
 type: feat
 status: open
 priority: P2
-parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
+parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: []
 touched_files:
   - AGENTS.md
