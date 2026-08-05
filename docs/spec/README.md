@@ -43,15 +43,15 @@ something else today.
 |---|---|---|---|
 | [`build-adapters`](build-adapters.md) | approved | 14 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
-| [`house-review`](house-review.md) | approved | 13 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
-| [`install`](install.md) | approved | 14 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
-| [`spec-author`](spec-author.md) | approved | 5 | [conformance](spec-author.conformance.md) |
+| [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
+| [`install`](install.md) | approved | 15 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
+| [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
 | [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Nine specs, 107 scenarios, every one with a conformance matrix as of 2026-08-05.
+Nine specs, 115 scenarios, every one with a conformance matrix as of 2026-08-05.
 
 ## A limit worth knowing before reading any matrix
 
