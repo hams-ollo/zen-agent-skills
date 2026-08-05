@@ -240,6 +240,13 @@ def discover_hooks():
 
 def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
             with_hooks: bool = False) -> int:
+    # Resolved here and not only in `main()` (bug-0010), because every target below is
+    # built from `home` and written verbatim into a persisted record. A relative spelling
+    # records a string whose meaning depends on the reader's current directory, which
+    # `bug-0009`'s normalisation cannot repair: there is no fixed path to normalise
+    # toward. `install()` is a supported entry point (chore-0017), so the guarantee that a
+    # recorded target is absolute belongs with the recording rather than with one caller.
+    home = home.expanduser().resolve()
     all_skills = discover_skills()
     if not all_skills:
         print(f"No skills found under {SKILLS_DIR}.")

@@ -2,7 +2,7 @@
 id: bug-0010
 title: Resolve home in install() so the manifest never records a relative target
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP#tooling install.py"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-07-29
 
 ## Problem
 
-[`install()`](../scripts/install.py) builds each target from the `home` it was handed and records the
+[`install()`](../../scripts/install.py) builds each target from the `home` it was handed and records the
 result verbatim:
 
     base = home / TOOL_SUBPATHS[tool]
@@ -114,7 +114,7 @@ reproduction still holds as written, but the two files no longer read the way `b
 **The contract does not need amending.** The Record row of the Proposed Surface says "A manifest of the
 targets this tool created" without constraining how a target is spelled, and S-003 and S-007 are already
 violated by the current behavior rather than under-specified by it. State this rather than assuming it,
-and leave [`docs/spec/install.md`](../docs/spec/install.md) alone.
+and leave [`docs/spec/install.md`](../../docs/spec/install.md) alone.
 
 ## Risks and rollback
 
@@ -126,6 +126,15 @@ This changes the content written into a persisted record, so the rule fires.
   the cwd of a past run. Any such manifest was produced by a direct programmatic call, never by the CLI,
   so the realistic population is developer scratch state. **Confirm this reading before implementing**;
   if migration is wanted instead, it is a separate decision and probably a separate task.
+  **Confirmed 2026-08-05, and no migration was written.** Both claims hold. `main()` has resolved
+  `--home` since before this record existed, so nothing the shipped CLI wrote can hold a relative
+  target; `scripts/.install-manifest.json` is gitignored and untracked, so no such file travels with a
+  clone; and every test redirects `MANIFEST` to a temp path, so the suite cannot leave one behind either.
+  That leaves a developer's own scratch file as the entire realistic population. A migration would also
+  have to invent the cwd of a past run to give a relative entry any meaning, which is a guess rather than
+  a repair, and guessing wrong would delete or orphan a directory in someone's home. Deleting such a file
+  by hand is the correct remedy, and S-005 already makes the consequence of doing so visible rather than
+  silent.
 - Post-fix entries are absolute, so a manifest containing both forms is possible. Absolute entries behave
   correctly and relative ones behave exactly as badly as they do today, so the fix does not make any
   existing record worse.
@@ -136,21 +145,46 @@ This changes the content written into a persisted record, so the rule fires.
 
     python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] A test installs with a relative home, installs again with the absolute spelling, and asserts the
+- [x] A test installs with a relative home, installs again with the absolute spelling, and asserts the
       second run exits zero with no CONFLICT (S-003).
-- [ ] A test installs with a relative home, reverses it from a different working directory, and asserts
+      `test_a_second_run_recognises_what_a_relative_home_placed`.
+- [x] A test installs with a relative home, reverses it from a different working directory, and asserts
       the targets are removed from disk rather than reported `gone` and dropped from the record (S-007).
-- [ ] Both tests are confirmed to **fail** against the pre-fix `install()`, not merely to pass after.
-- [ ] Every recorded `target` is absolute after an install, asserted directly.
-- [ ] The two existing tests that assert on the recorded string are re-read and, if changed, changed to
-      compare resolved forms rather than weakened.
-- [ ] `docs/spec/install.md` left unamended, with the reason stated.
-- [ ] `docs/spec/install.conformance.md` S-003 and S-007 rows record this re-audit.
-- [ ] Existing tests still pass.
+      `test_a_relative_home_is_reversible_and_never_orphans_its_targets`, in two subtests. No single
+      reversal can carry both halves of that assertion, and the reason is worth recording: pre-fix, a
+      relative entry is claimed only when the reversal runs from the directory the install's spelling
+      assumed, while post-fix an entry is claimed only when `home` names the directory actually
+      installed to. Those are different runs. So one subtest names the installed directory from another
+      cwd (removed from disk, record emptied; pre-fix it matched nothing), and one repeats the install's
+      own relative spelling from another cwd (nothing removed and nothing dropped; pre-fix this is the
+      `gone`-plus-emptied-record orphaning).
+- [x] Both tests are confirmed to **fail** against the pre-fix `install()`, not merely to pass after.
+      Captured by reverting the one line, running the three new tests, and restoring it: 4 failures
+      across 3 tests, including `AssertionError: 1 != 0` for the re-run exit code and
+      `'gone ' unexpectedly found in ...` for the orphaning.
+- [x] Every recorded `target` is absolute after an install, asserted directly.
+      `test_every_recorded_target_is_absolute`.
+- [x] The two existing tests that assert on the recorded string are re-read and, if changed, changed to
+      compare resolved forms rather than weakened. Both assertions are in one test,
+      `test_uninstall_of_one_home_leaves_another_homes_install_intact`, not in two sibling tests; they
+      now compare against `str(other_home.resolve())`. The `/var` versus `/private/var` case cannot be
+      reproduced on Windows, so this is reasoned rather than observed and CI's macOS legs are the check.
+- [x] `docs/spec/install.md` left unamended, with the reason stated. The Record row constrains what the
+      manifest holds, not how a target is spelled, and S-003's "the same arguments" and S-007's "the same
+      home" both name a directory rather than a spelling. Current behavior violated them; it did not
+      expose a gap in them.
+- [x] `docs/spec/install.conformance.md` S-003 and S-007 rows record this re-audit. The Record row of the
+      Proposed Surface and the test-coverage table are updated with it too.
+- [x] Existing tests still pass.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally. 144 tests, all passing (141 before, plus 3).
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+      No finding. The reader-facing surface is the CLI, and `main()` already resolved `--home`, so no
+      prose claim changes: [`docs/INSTALL.md`](../../docs/INSTALL.md) describes the manifest as what lets
+      the tool recognise files it created, which is now more true rather than less, and
+      [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)'s `--home ./.tmp/zen-home` example was always
+      resolved by `main()`. The defect was reachable only from a direct programmatic call. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

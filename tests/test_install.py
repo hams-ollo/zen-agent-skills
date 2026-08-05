@@ -63,6 +63,24 @@ def _symlinks_work() -> bool:
 SYMLINKS_WORK = _symlinks_work()
 
 
+@contextlib.contextmanager
+def _working_directory(path: Path):
+    """Run a block with the process working directory moved, then restore it.
+
+    The `bug-0010` regressions need an install and its reversal to disagree about the
+    current directory, since that is the only way a relative recorded target can be
+    observed to mean two different places. Restoring in a `finally` matters more here
+    than usual: a leaked `chdir` would silently re-point every later test's relative
+    path, and the suite installs into directories it then deletes.
+    """
+    previous = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
+
+
 class InstallAcceptanceTests(unittest.TestCase):
     """Scenarios S-001 through S-008 and S-011, at the component layer."""
 
@@ -127,6 +145,48 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertIn("updated", out)
         self.assertNotIn("CONFLICT", out)
 
+    def test_a_second_run_recognises_what_a_relative_home_placed(self):
+        # Scenario S-003, and bug-0010. `install()` is a supported entry point
+        # (chore-0017) and, before the fix, recorded each target exactly as `home` spelled
+        # it, so a relative home wrote relative strings into a persisted record.
+        # `is_managed()` compares `e.get("target") == str(target)` as an exact string, so
+        # the second run matched nothing it had placed and reported a CONFLICT against its
+        # own work, which is the opposite of what S-003 requires.
+        #
+        # Every other re-run test passes one already-absolute `self.home` to both runs, so
+        # the two spellings agree by construction and the exact-string comparison succeeds
+        # by accident. Only two runs that disagree on spelling can fail against the
+        # pre-fix `install()`.
+        with _working_directory(self.root):
+            with contextlib.redirect_stdout(io.StringIO()):
+                inst.install(["claude"], "copy", Path("home"), False, "core")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = inst.install(["claude"], "copy", self.home.resolve(), False, "core")
+
+        out = buf.getvalue()
+        self.assertEqual(code, 0)
+        self.assertNotIn("CONFLICT", out, "the tool must not refuse its own previous run")
+        self.assertIn("updated", out)
+
+    def test_every_recorded_target_is_absolute(self):
+        # Scenarios S-003 and S-007 (supporting), and bug-0010. Both consequences follow
+        # from one property of the record, and they fail at different layers: the
+        # exact-string comparison in `is_managed()` and the existence check in
+        # `uninstall()`. Asserting the property itself names the cause rather than only
+        # those two symptoms, and it holds for a reader of the record that no scenario
+        # here has thought of yet.
+        with _working_directory(self.root):
+            with contextlib.redirect_stdout(io.StringIO()):
+                inst.install(["claude"], "copy", Path("home"), False, "core")
+
+        recorded = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+        self.assertTrue(recorded, "precondition: the run recorded its targets")
+        self.assertEqual([e["target"] for e in recorded
+                          if not Path(e["target"]).is_absolute()], [],
+                         "a relative recorded target means whatever the reader's "
+                         "directory makes it mean")
+
     def test_an_unmanaged_file_at_a_target_is_reported_and_skipped(self):
         # Scenario S-004: an unmanaged target is refused, not overwritten.
         target = self.home / ".claude" / "skills" / "doc-sync"
@@ -162,7 +222,17 @@ class InstallAcceptanceTests(unittest.TestCase):
         # failed: uninstall ignored its `home` argument, removed every recorded target,
         # and emptied the whole record, so reversing a throwaway home destroyed the real
         # installation while reporting success.
+        #
+        # The two record assertions below compare against the *resolved* spelling of
+        # `other_home` (bug-0010). `install()` now resolves the home it is handed, and
+        # `tempfile` does not promise a resolved path: on macOS it hands out one under
+        # `/var`, a symlink to `/private/var`, so the recorded target is the resolved form
+        # and a substring check against the unresolved one fails. That failure would be
+        # correct and the assertion would be what is wrong, so this compares resolved
+        # forms rather than being loosened until it passes. It cannot be observed on
+        # Windows, where the two spellings agree; CI's macOS legs are the check.
         other_home = self.root / "other-home"
+        other_home_recorded = str(other_home.resolve())
 
         self._install()                                    # into self.home
         buf = io.StringIO()
@@ -170,7 +240,7 @@ class InstallAcceptanceTests(unittest.TestCase):
             inst.install(["claude"], "copy", other_home, False)
 
         recorded = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
-        self.assertTrue(any(str(other_home) in e["target"] for e in recorded),
+        self.assertTrue(any(other_home_recorded in e["target"] for e in recorded),
                         "both homes should be in one record, or this test proves nothing")
 
         code, out = self._uninstall()                      # reverse self.home only
@@ -185,7 +255,7 @@ class InstallAcceptanceTests(unittest.TestCase):
         # And is still recorded, so it can be reversed later.
         left = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
         self.assertTrue(left, "the other home's entries must remain in the record")
-        self.assertTrue(all(str(other_home) in e["target"] for e in left))
+        self.assertTrue(all(other_home_recorded in e["target"] for e in left))
         self.assertIn("Kept", out)
 
     def test_uninstall_reports_when_nothing_is_recorded_for_this_home(self):
@@ -244,6 +314,75 @@ class InstallAcceptanceTests(unittest.TestCase):
                 self.assertEqual(
                     json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"], [],
                     "the reversed entries must leave the record")
+
+    def test_a_relative_home_is_reversible_and_never_orphans_its_targets(self):
+        # Scenario S-007, and bug-0010. `install()` records each target as `home` spelled
+        # it, so before the fix a relative home persisted relative strings. Such a string
+        # has no fixed meaning: `Path.resolve()` reads it against whatever the current
+        # directory happens to be when the record is read, which is why `bug-0009`'s
+        # normalisation of both sides of the comparison could not repair it.
+        #
+        # Two reversals are needed, because no single one can fail against the pre-fix
+        # code in both of its ways. Pre-fix, a relative entry is claimed only when the
+        # reversal runs from the directory the install's spelling assumed; post-fix, an
+        # entry is claimed only when `home` names the directory actually installed to.
+        # Those are different runs, so each is a subtest:
+        #
+        # - `same directory`: the reversal names the installed directory from another cwd.
+        #   Pre-fix the relative entries resolve beneath the wrong parent, match nothing,
+        #   and the run reports nothing recorded while removing nothing.
+        # - `same spelling`: the reversal repeats the install's own relative spelling from
+        #   another cwd, so both sides resolve consistently and the entries are claimed.
+        #   Pre-fix `Path(e["target"]).exists()` is then False, so every target is reported
+        #   `gone` rather than removed and `save_manifest(others, dry)` drops all of them
+        #   while their directories stay on disk: created, no longer recorded, and
+        #   therefore permanently unmanaged. That is the state this test exists to forbid,
+        #   and it is worse than the no-op `bug-0009` fixed.
+        resolved = self.home.resolve()
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        placed = resolved / ".claude" / "skills"
+
+        def install_with_a_relative_home():
+            with _working_directory(self.root):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    inst.install(["claude"], "copy", Path("home"), False, "core")
+
+        def reverse_from_elsewhere(home):
+            with _working_directory(elsewhere):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = inst.uninstall(home, False)
+            return code, buf.getvalue()
+
+        def recorded():
+            return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+        with self.subTest(reversal="same directory, another cwd"):
+            install_with_a_relative_home()
+            self.assertTrue(list(placed.iterdir()), "precondition: skills are on disk")
+
+            code, out = reverse_from_elsewhere(Path("..") / "home")
+            self.assertEqual(code, 0)
+            self.assertIn("removed", out)
+            self.assertNotIn("gone ", out, "a target on disk must not read as absent")
+            self.assertEqual(list(placed.iterdir()), [])
+            self.assertFalse((resolved / ".claude" / "rules").exists())
+            self.assertEqual(recorded(), [], "the reversed entries must leave the record")
+
+        with self.subTest(reversal="same spelling, another cwd"):
+            install_with_a_relative_home()
+            before = recorded()
+            self.assertTrue(before, "precondition: the run recorded its targets")
+
+            code, out = reverse_from_elsewhere(Path("home"))
+            self.assertEqual(code, 0)
+            self.assertNotIn("gone ", out)
+            self.assertTrue(list(placed.iterdir()),
+                            "nothing was removed, so the targets are still on disk")
+            self.assertEqual(recorded(), before,
+                             "a target still on disk must stay recorded, or the tool has "
+                             "orphaned what it created")
 
     @unittest.skipUnless(SYMLINKS_WORK, "this platform or account cannot create symlinks")
     def test_uninstall_in_symlink_mode_removes_the_links_it_placed(self):
