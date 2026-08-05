@@ -26,7 +26,7 @@ artifact directories along the way: [`docs/spec/`](../../docs/spec/) for behavio
 [`CHANGELOG.md`](../../CHANGELOG.md) record all of this correctly, but the reader-facing documentation
 still describes a pre-Epic-B world, and in places contradicts itself:
 
-- [`README.md`](../README.md) never mentions the spine. Its capability sentence omits specification,
+- [`README.md`](../../README.md) never mentions the spine. Its capability sentence omits specification,
   testing, and verification, and its "How the workflow fits together" Mermaid stops at the old
   six-skill chain (`project-bootstrap` through `pr-describe`), so the most visible architecture
   diagram in the repository is stale.

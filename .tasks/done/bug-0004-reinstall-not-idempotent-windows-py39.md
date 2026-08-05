@@ -24,7 +24,7 @@ run, on Windows with Python 3.9. The command exits 1.
 40 CONFLICT(s): a real file exists at those targets. Move or remove them, then re-run.
 ```
 
-This contradicts the documented promise. [`README.md`](../README.md) says "The installer is
+This contradicts the documented promise. [`README.md`](../../README.md) says "The installer is
 idempotent, so it is safe to run again after the kit changes", and `docs/spec/install.md` carries a
 scenario for re-run recognition. A user on this combination cannot re-run the installer at all after
 the first install: they are told to move or remove files the installer itself created.

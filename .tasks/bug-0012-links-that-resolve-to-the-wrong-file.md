@@ -97,20 +97,30 @@ shipped scaffold emits.
 
     python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] A test proving a link whose text names a path but resolves elsewhere is reported, failing
+- [x] A test proving a link whose text names a path but resolves elsewhere is reported, failing
       against the pre-fix validator.
-- [ ] A test proving prose link text (`[the readme](../README.md)`) is **not** reported.
-- [ ] A test proving path-with-line-suffix text (`` [`.tasks/README.md:29`](../README.md) ``) is
+- [x] A test proving prose link text (`[the readme](../README.md)`) is **not** reported.
+- [x] A test proving path-with-line-suffix text (`` [`.tasks/README.md:29`](../README.md) ``) is
       **not** reported, since that link is correct from `done/`.
-- [ ] `python .tasks/validate.py --strict` exits 0 on the repaired tree, and reported non-zero (or
+- [x] `python .tasks/validate.py --strict` exits 0 on the repaired tree, and reported non-zero (or
       warned, per the decision above) on the tree before the three re-anchors.
-- [ ] The three links named in the Problem table resolve to the root `README.md`; the two correct ones
+- [x] The three links named in the Problem table resolve to the root `README.md`; the two correct ones
       are byte-identical to their current state.
-- [ ] The same check exists in the template validator, verified against a freshly scaffolded throwaway
+- [x] The same check exists in the template validator, verified against a freshly scaffolded throwaway
       repository as `bug-0011` did.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
+
+**Closure is blocked on [`bug-0015`](bug-0015-link-check-fires-inside-code-spans.md), and the code in
+this task has already landed.** Recorded 2026-08-05 during reconciliation, so the open status is not
+read as unfinished work. Every acceptance criterion above is met and verified independently, and the
+change is in the working tree. What cannot happen yet is the move to `.tasks/done/`: the two
+illustrations of the defect in the Problem table and the Implementation notes sit inside code spans,
+and the check this task added reads link syntax by regex without knowing what a code span is, so from
+`done/` it fires on this file's own examples and `--strict` fails. Rewording them is the repair this
+task's own risk section warns against, so `bug-0015` fixes the checker instead and closes this task in
+the same pass.
 
 - [ ] Acceptance command(s) pass locally.
 - [ ] Conventions in AGENTS.md's conventions section followed.

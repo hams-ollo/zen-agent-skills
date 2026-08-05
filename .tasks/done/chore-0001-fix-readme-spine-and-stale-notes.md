@@ -13,7 +13,7 @@ created: 2026-07-24
 
 ## Problem
 
-[README.md](../README.md) has three real inaccuracies: the "workflow spine" mermaid diagram is
+[README.md](../../README.md) has three real inaccuracies: the "workflow spine" mermaid diagram is
 in the wrong order (`new-task` before `init-worktracking`, and it omits `project-bootstrap`); the
 Install section still says the installer "lands in Phase 3" though `scripts/install.py` is shipped;
 and line 3 has a broken placeholder link `[Zen Solutions](https://github.com/)`.

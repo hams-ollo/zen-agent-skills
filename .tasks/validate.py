@@ -7,6 +7,11 @@ ids are unique and match their filenames, every depends_on resolves to a real
 task, every relative markdown link resolves from where the file actually lives,
 and (with --strict) every touched_files path exists.
 
+It also warns when a link's text names one path and the link opens another, the
+class underneath a dangling link. That one is a heuristic rather than a fact, so
+it is reported as a warning on purpose: see mislabelled_links() for why a false
+positive there is more expensive than a miss.
+
 Standard library only, so it runs anywhere a bare Python 3 does. Exits non-zero
 on any error, so it drops cleanly into CI or a pre-commit hook.
 
@@ -72,6 +77,18 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # absolute link there is a portability defect the contract already forbids, so
 # adding `file://` to those would weaken a real check rather than fix this one.
 LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "file://")
+
+# The same links LINK_RE matches, with the text captured as well. A second pattern
+# rather than a second group on LINK_RE so that pattern stays character-for-character
+# comparable with the copy in .github/workflows/checks.yml.
+LINK_TEXT_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+# Link text that is path-shaped: no whitespace, and made only of the characters a
+# repository path uses. Prose fails this on the first space, which is the cheapest
+# reliable way to tell "README.md" from "the readme".
+TEXT_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+# A trailing `:29`, as in `.tasks/README.md:29`. Text in that form cites a location
+# inside a file rather than claiming which file the link opens, so it is left alone.
+LINE_SUFFIX_RE = re.compile(r":\d+$")
 
 
 def parse_frontmatter(text: str):
@@ -155,6 +172,56 @@ def broken_links(path):
             continue
         if not (path.parent / target).exists():
             found.append(target)
+    return found
+
+
+def mislabelled_links(path):
+    """Links in `path` whose text names one repository path and which open another.
+
+    The class underneath broken_links(). `.tasks/README.md` exists, so `../README.md`
+    written from `.tasks/done/` resolves to it rather than to the root README: existence
+    is satisfied, nothing dangles, and the reader still lands somewhere the link text
+    never named. Three completed task files in this repository carried exactly that link
+    while every check reported success (bug-0012).
+
+    Returns a list of `(text, target, actual)` triples, where `actual` is the
+    repository-relative path the link really opens.
+
+    This is a heuristic, and its false positives are the design problem, so it is
+    deliberately a quiet one. It fires only when all of the following hold:
+
+      * the text is path-shaped, so prose like `the readme` is never compared;
+      * the text carries no `:line` suffix, which cites a location rather than naming
+        the file a link opens;
+      * the text names a file that actually exists when read from the repository root,
+        so a bare word that merely looks path-shaped is ignored;
+      * the link's own target resolves, since a dangling one is broken_links()' finding
+        and reporting it twice helps nobody;
+      * and the two are different files.
+
+    Preferring to under-fire is the point. A false positive on a completed task file
+    pressures an author into rewording a historical record to satisfy a checker, which
+    is worse than a missed link. That is also why callers report this as a warning.
+    """
+    found = []
+    for match in LINK_TEXT_RE.finditer(path.read_text(encoding="utf-8")):
+        text = match.group(1).strip().strip("`").strip()
+        target = match.group(2).split("#")[0].strip()
+        if not target or target.startswith(LINK_SKIP_PREFIXES):
+            continue
+        if not text or not TEXT_PATH_RE.match(text) or LINE_SUFFIX_RE.search(text):
+            continue
+        named = REPO_ROOT / text
+        actual = path.parent / target
+        if not named.is_file() or not actual.exists():
+            continue
+        try:
+            if named.resolve() == actual.resolve():
+                continue
+            rel = actual.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+        except (OSError, ValueError):
+            continue
+        found.append((text, target, rel))
     return found
 
 
@@ -282,6 +349,13 @@ def main(argv=None) -> int:
                 hint = (" (one level too shallow; a file moved to done/ needs "
                         "one more '../')")
             err(rel, f"relative link does not resolve: {target}{hint}")
+        # A warning and not an error, deliberately. The check above states a fact
+        # (the file is not there); this one states a judgement about what an author
+        # meant, and it ships to every repository the scaffold touches. Failing an
+        # adopter's clean tree on a guess is the one outcome worth designing against,
+        # so a default run reports it and only --strict promotes it.
+        for text, target, actual in mislabelled_links(f):
+            warn(rel, f"link text names {text} but {target} opens {actual}")
 
     for f, msg in warnings:
         print(f"WARN  {f}: {msg}")
