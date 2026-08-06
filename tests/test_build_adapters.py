@@ -13,13 +13,14 @@ where files land relative to each other, so `TestEmittedTreeResolves` emits the 
 kit into a temp directory and resolves every relative link on disk. That test fails
 against verbatim inlining, which is the known-bad behavior it was written for.
 
-Every scenario S-001 through S-013 has a covering test. The runs that write do so
+Every scenario S-001 through S-017 has a covering test. The runs that write do so
 into a temp directory; the one test that targets the repository itself (S-011) uses
 a preview run, so it asserts the no-op without depending on it.
 """
 import contextlib
 import importlib.util
 import io
+import json
 import re
 import tempfile
 import unittest
@@ -241,6 +242,107 @@ class TestInvocationContract(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("bogus", printed)
             self.assertEqual([p for p in out.rglob("*") if p.is_file()], [])
+
+
+class TestPluginTarget(unittest.TestCase):
+    """Scenarios S-015, S-016, S-017: the Claude Code plugin distribution tree.
+
+    test-quality notes: the defect this class exists for is an installed plugin
+    whose composed lens is absent, which is silent in the same way the original
+    dangling-link defect was. A manifest validator cannot see it, and neither can
+    a unit test on `rewrite_links`, because the plugin target rewrites nothing:
+    the layout is what makes the source links resolve. So the faithful layer is
+    the filesystem, and the oracle is resolving every link on disk against the
+    emitted tree and asserting that none of them leaves the plugin root, since
+    installing a plugin copies that directory and a path leaving it lands
+    nowhere.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.out = Path(self._tmp.name)
+        self.code, self.printed = _run(["--target", "plugin", "--out", str(self.out)])
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_the_plugin_tree_and_its_two_manifests_are_emitted(self):
+        # Scenario S-015. The oracle is on the manifest values rather than on the
+        # keys being present: a marketplace entry naming a different plugin, or a
+        # source that is not the emitted root, installs something other than what
+        # was built, and both are well-formed JSON.
+        expected = len(ba.discover_skills())
+        self.assertEqual(self.code, 0)
+        self.assertEqual(len(list(self.out.glob("skills/*/SKILL.md"))), expected)
+        self.assertEqual(list(self.out.glob(".cursor/rules/*")), [],
+                         "the plugin target is not an inlining target")
+        self.assertEqual(list(self.out.glob(".github/prompts/*")), [])
+
+        read = lambda f: json.loads((self.out / ".claude-plugin" / f).read_text(encoding="utf-8"))
+        plugin, market = read("plugin.json"), read("marketplace.json")
+        listed, = market["plugins"]
+        self.assertEqual(listed["source"], "./")
+        self.assertEqual(listed["name"], plugin["name"])
+        self.assertEqual(listed["version"], plugin["version"])
+        self.assertIn(f"for {expected} skill(s)", self.printed)
+        self.assertIn("2 plugin manifest file(s)", self.printed)
+
+    def test_every_link_in_the_emitted_tree_resolves_inside_the_plugin_root(self):
+        # Scenario S-016, resolved on disk rather than read out of the link text.
+        # The text is what looks right; what dangles is the path it lands on once
+        # the directory has been copied to the install location. Both halves
+        # matter: a link that resolves only because the kit happens to sit above
+        # the output root is the exact defect, and it would pass an existence
+        # check alone.
+        root = self.out.resolve()
+        broken, escaped, checked = [], [], 0
+        for f in sorted(root.glob("skills/*/SKILL.md")):
+            for target in LINK.findall(f.read_text(encoding="utf-8")):
+                if target.lower().startswith(SKIP_PREFIXES):
+                    continue
+                checked += 1
+                resolved = f.parent / target.split("#")[0]
+                if not resolved.exists():
+                    broken.append(f"{f.parent.name} -> {target}")
+                elif not resolved.resolve().is_relative_to(root):
+                    escaped.append(f"{f.parent.name} -> {target}")
+        self.assertGreater(checked, 100, "expected the real kit's link volume")
+        self.assertEqual(broken, [], f"{len(broken)} dangling link(s): {broken[:5]}")
+        self.assertEqual(escaped, [], f"{len(escaped)} link(s) leaving the plugin: {escaped[:5]}")
+
+    def test_house_review_reaches_its_rubric_from_inside_the_plugin(self):
+        # Scenario S-016, on the skill that loses the most to a dangling lens: its
+        # severities and rubric categories live entirely in that file, so it
+        # arrives looking complete and reviews against nothing.
+        skill = self.out / "skills" / "house-review" / "SKILL.md"
+        links = {t for t in LINK.findall(skill.read_text(encoding="utf-8"))
+                 if t.endswith("rules/review-quality.md")}
+        self.assertEqual(len(links), 1, f"expected one rubric reference, got {links}")
+        rubric = (skill.parent / links.pop()).resolve()
+        self.assertTrue(rubric.is_file(), "the rubric reference does not resolve to a file")
+        self.assertTrue(rubric.is_relative_to(self.out.resolve()))
+        self.assertIn("blocker", rubric.read_text(encoding="utf-8"))
+        # One authoritative copy. The module is swappable by design, and a copy
+        # per skill would make swapping it twenty edits instead of one.
+        self.assertEqual([p.relative_to(self.out).as_posix()
+                          for p in self.out.rglob("review-quality.md")],
+                         ["rules/review-quality.md"])
+
+    def test_the_plugin_target_is_opt_in(self):
+        # Scenario S-017. Both halves, because the contrast is the requirement:
+        # asserting the absence alone would also pass if the target emitted
+        # nothing at all. The risk guarded is a default run, whose --out is the
+        # working directory, writing a .claude-plugin/ into the project that
+        # invoked it, where it becomes the hand-maintained manifest this
+        # generator exists to replace.
+        self.assertTrue((self.out / ".claude-plugin").is_dir(),
+                        "requested explicitly, the manifests must be written")
+        with tempfile.TemporaryDirectory() as tmp:
+            default = Path(tmp)
+            code, _ = _run(["--out", str(default)])
+            self.assertEqual(code, 0)
+            self.assertFalse((default / ".claude-plugin").exists())
+            self.assertFalse((default / "skills").exists())
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 id: feat-0034
 title: Add a plugin target to build-adapters.py so the kit installs as a Claude Code plugin
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0007]
@@ -37,21 +37,21 @@ with no rubric at all, and it reproduces it on the most visible distribution cha
 **Re-scoped 2026-08-05 by author decision, and the amendment below is authorized by the author on
 that decision.** The four options this task originally presented are resolved: the manifest is a
 generated artifact, emitted by a new plugin target in
-[`scripts/build-adapters.py`](../scripts/build-adapters.py), not a hand-written file. The rejected
+[`scripts/build-adapters.py`](../../scripts/build-adapters.py), not a hand-written file. The rejected
 three are recorded under Decisions rather than deleted.
 
 **In scope:**
 
-- A `plugin` target in [`scripts/build-adapters.py`](../scripts/build-adapters.py), alongside the
+- A `plugin` target in [`scripts/build-adapters.py`](../../scripts/build-adapters.py), alongside the
   existing `cursor` and `vscode` emitters, that emits the plugin tree including
   `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json`, and places the skills and the
   rules module at paths that resolve from the installed location.
-- A scenario for that target in [`docs/spec/build-adapters.md`](../docs/spec/build-adapters.md), plus
+- A scenario for that target in [`docs/spec/build-adapters.md`](../../docs/spec/build-adapters.md), plus
   the Proposed Surface rows it changes.
-- Tests in [`tests/test_build_adapters.py`](../tests/test_build_adapters.py) matching the shape of the
+- Tests in [`tests/test_build_adapters.py`](../../tests/test_build_adapters.py) matching the shape of the
   existing per-scenario tests.
 - A row per new scenario in
-  [`docs/spec/build-adapters.conformance.md`](../docs/spec/build-adapters.conformance.md).
+  [`docs/spec/build-adapters.conformance.md`](../../docs/spec/build-adapters.conformance.md).
 
 **The spec amendment, authorized explicitly, with one hard constraint:**
 
@@ -79,7 +79,7 @@ granted here.
 ## Implementation notes
 
 **The mechanism already exists; this is a fourth target, not a new idea.**
-[`rewrite_links()`](../scripts/build-adapters.py) solves precisely this problem for Cursor and VS
+[`rewrite_links()`](../../scripts/build-adapters.py) solves precisely this problem for Cursor and VS
 Code today: it rewrites the three legal link classes (sibling skill, rules module, skill-local
 supporting file) and `emit_shared_assets()` places the material those rewritten links point at.
 `SHARED = "../../.agents"` is hardcoded on the assumption that both existing adapter directories sit
@@ -92,7 +92,7 @@ target is likely to need a real change rather than an addition.
 task and it is the check a schema validator cannot perform. `claude plugin validate` passing is not
 evidence the install is sound: the skill loads and reads correctly, and only the absent rubric is
 missing. Confirm on disk that a rules-module reference resolves from wherever the plugin build puts
-it. Do this for [`house-review`](../.agents/skills/house-review/SKILL.md) in particular, which is the
+it. Do this for [`house-review`](../../.agents/skills/house-review/SKILL.md) in particular, which is the
 skill that fails most silently without its rubric.
 
 **The acceptance command takes a path.** `claude plugin validate` with no argument exits non-zero on
@@ -118,13 +118,49 @@ manifest describing skills a parser rejects is worse than no manifest. It is in 
   knowing the cache layout precisely and pins the kit to it.
 - **Rejected: inline each lens into the skills that compose it.** No links to break and
   `house-review` carries its own rubric, at the cost of swappability entirely, contradicting the
-  reason [`review-quality.md`](../.agents/rules/review-quality.md) was split out.
+  reason [`review-quality.md`](../../.agents/rules/review-quality.md) was split out.
 - **Chosen: generate the plugin build**, because the problem is already solved once in this
   repository, the solution is specified and tested, and the rewriting rules are exactly the ones a
   plugin needs. A hand-maintained manifest duplicating what a generator could emit is the parallel
   copy the portability contract exists to prevent, and this repository has been bitten three times by
   a hand-maintained second copy (`house-review`'s rubric, `bug-0006`'s parser, and the three
   frontmatter readers in `scripts/`).
+- **False premise: "a plugin tree may not have that depth."** It has exactly that depth. A skill lands
+  at `skills/<name>/SKILL.md`, two levels below the plugin root, the same as `.cursor/rules/` and
+  `.github/prompts/`. What differs is not the depth but the `.agents/` segment: an inlined adapter
+  reaches `../../.agents/rules/<file>` while a plugin skill reaches `../../rules/<file>`. So `SHARED`
+  is unchanged and still correct for the two inlining targets, and the new per-target property is
+  *where the shared material lands* (`LAYOUTS`), not how far up to reach for it.
+- **Rejected: rewriting the plugin bodies through `rewrite_links()`** with a plugin-specific prefix.
+  The plugin layout is chosen to preserve the geometry every source link is already written for
+  (`skills/<name>/` to `rules/<file>` mirrors `.agents/skills/<name>/` to `.agents/rules/<file>`), so
+  all three legal link classes resolve untouched and each rewrite would only have to reproduce its own
+  input. Re-emitting the file would also mean re-serialising its frontmatter through this module's
+  reader, which models `name` and `description` and would silently drop any other key a `SKILL.md`
+  carries. The plugin target therefore copies the file verbatim and calls no rewriter, and the
+  invariant is proved on disk by S-016 rather than by the rewrite rules.
+- **Rejected: adding `plugin` to the default `--target` set.** `--out` defaults to the working
+  directory, so a default run would write `.claude-plugin/` into whatever project invoked it, which is
+  the committed hand-maintained manifest this re-scope exists to prevent. Confirmed by mutation: the
+  default also breaks the pre-existing S-011 test, because a run into the kit itself would write
+  `rules/` and `skills/` trees that the same-file no-op guard does not cover. `plugin` is opt-in, and
+  S-017 holds it there.
+- **Seam left open: nothing refuses `--target plugin --out .` from the kit root.** It would write a
+  plugin tree into this repository. The guard is that the target is opt-in, not that the tool checks
+  its destination; a refusal is unspecified behaviour and was not invented here. If that is wanted, it
+  is a follow-up with its own scenario.
+- **Seam left open: the plugin's name, version, and authorship live in one `PLUGIN` mapping** in
+  [`build-adapters.py`](../../scripts/build-adapters.py), because the repository carries no other version
+  source to read. Both manifests are generated from it, so they cannot disagree; cutting a release
+  means editing that one mapping.
+- **Seam left open deliberately, from the `doc-sync` pass at closeout: no reader-facing install
+  instructions for the plugin path.** The original scope named a README pointer to it. That finding
+  was dismissed rather than applied, because nothing is published: a documented install path for a
+  plugin no one can install is a promise the repository cannot keep, and this task's own risk section
+  says a broken distribution channel is worse than an absent one because it looks supported. What the
+  documentation does now say is that the generator has the target, in
+  [`README.md`](../../README.md) and [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). The install
+  instructions belong with publishing, which is the author's.
 
 ## Risks and rollback
 
@@ -144,35 +180,35 @@ one because it looks supported.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] `python scripts/build-adapters.py --target plugin --out <throwaway>` emits the plugin tree,
+- [x] `python scripts/build-adapters.py --target plugin --out <throwaway>` emits the plugin tree,
       reports its counts, and exits zero.
-- [ ] `claude plugin validate <throwaway>` passes against the generated manifest, with the command
+- [x] `claude plugin validate <throwaway>` passes against the generated manifest, with the command
       and its verbatim output recorded.
-- [ ] A skill emitted through the plugin path resolves its rules-module reference **on disk from the
+- [x] A skill emitted through the plugin path resolves its rules-module reference **on disk from the
       installed location**, verified by resolving the path rather than by reading the link text.
-- [ ] `house-review` in particular arrives with its rubric reachable.
-- [ ] The rules module has exactly one authoritative copy in the emitted tree, or the decision to
+- [x] `house-review` in particular arrives with its rubric reachable.
+- [x] The rules module has exactly one authoritative copy in the emitted tree, or the decision to
       duplicate it is recorded with its reason.
-- [ ] The new scenario exists in `docs/spec/build-adapters.md` with the next free `S-NNN` id, the
+- [x] The new scenario exists in `docs/spec/build-adapters.md` with the next free `S-NNN` id, the
       Proposed Surface rows are updated, and a dated amendment note is present that states
       re-approval is pending.
-- [ ] `docs/spec/build-adapters.md` still reads `status: approved`, unchanged.
-- [ ] A test per new scenario in `tests/test_build_adapters.py`, tagged with its `S-NNN` id in the
+- [x] `docs/spec/build-adapters.md` still reads `status: approved`, unchanged.
+- [x] A test per new scenario in `tests/test_build_adapters.py`, tagged with its `S-NNN` id in the
       same style as the existing tests.
-- [ ] A conformance row per new scenario in `docs/spec/build-adapters.conformance.md`, with evidence
+- [x] A conformance row per new scenario in `docs/spec/build-adapters.conformance.md`, with evidence
       by code location.
-- [ ] An unrecognized target is still rejected non-zero, and `cursor` and `vscode` still emit exactly
+- [x] An unrecognized target is still rejected non-zero, and `cursor` and `vscode` still emit exactly
       what they did before.
-- [ ] Existing tests still pass, unchanged in intent.
-- [ ] Nothing is published, submitted, or registered, and no `.claude-plugin/` directory is written
+- [x] Existing tests still pass, unchanged in intent.
+- [x] Nothing is published, submitted, or registered, and no `.claude-plugin/` directory is written
       into the repository itself.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only
       a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.
