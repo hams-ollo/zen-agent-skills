@@ -36,6 +36,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULE_PATH = REPO_ROOT / "scripts" / "install.py"
@@ -1128,6 +1129,54 @@ class HookRegistrationTests(unittest.TestCase):
         # change that was correct. What the matcher must actually satisfy is that it
         # covers the hook's own tool set, and that belongs in one place across all the
         # wirings: see WiringConsistencyTests in tests/test_hooks.py.
+
+
+class CheckReportsWhatItComparedTests(unittest.TestCase):
+    """The three defects the automated reviewer found on chore-0031's pull request.
+
+    All three are the same underlying question in different clothes: what does `--check`
+    say about something it did not, or could not, actually compare? A digest labelled with
+    the wrong artifact, a crash where the mode promises an exit code, and an empty baseline
+    treated as a real one all leave the reader believing the check answered a question it
+    never asked.
+    """
+
+    def test_the_adopted_path_names_the_record_not_the_install(self):
+        # `revised` compares the recorded baseline against the source, so calling the left
+        # side "installed" printed a digest matching no file on disk. An adopter running a
+        # checksum on their own lens got a third number and no way to reconcile it.
+        moved = inst._compare({"a.md": "aa" * 32}, {"a.md": "bb" * 32},
+                              "recorded", "source now")
+        joined = "\n".join(moved)
+        self.assertIn("recorded aaaaaaaaaaaa", joined)
+        self.assertIn("source now bbbbbbbbbbbb", joined)
+        self.assertNotIn("installed", joined)
+
+    def test_the_derived_path_still_says_installed(self):
+        # The default labels were correct for the divergence path and must not regress.
+        moved = inst._compare({"a.md": "aa" * 32}, {"a.md": "bb" * 32})
+        self.assertIn("installed aaaaaaaaaaaa, source bbbbbbbbbbbb", "\n".join(moved))
+
+    def test_an_absence_is_reported_against_the_side_it_is_absent_from(self):
+        self.assertIn("in the source now, absent from the recorded",
+                      "\n".join(inst._compare({}, {"a.md": "aa" * 32},
+                                              "recorded", "source now")))
+
+    def test_an_unreadable_file_is_an_error_verdict_not_a_traceback(self):
+        # digest_tree() reads bytes, and --check promises 0/1/2 rather than a stack trace.
+        entry = {"target": str(Path(__file__)), "source": str(Path(__file__).parent),
+                 "digests": {"x": "aa" * 32}, "name": "alpha"}
+        with mock.patch.object(inst, "digest_tree", side_effect=PermissionError("locked")):
+            status, message = inst._check_entry(entry)
+        self.assertEqual(status, "error")
+        self.assertIn("locked", message)
+
+    def test_an_empty_digest_map_is_no_baseline_at_all(self):
+        # Falsiness, not `is None`: an entry recording {} is exactly as unanswerable as one
+        # recording nothing, and reporting it as comparable was a clean-looking partial.
+        status, message = inst._check_entry({"target": ".", "source": ".", "digests": {}})
+        self.assertEqual(status, "unknown")
+        self.assertIn("Re-install", message)
 
 
 if __name__ == "__main__":

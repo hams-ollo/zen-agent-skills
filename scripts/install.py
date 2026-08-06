@@ -500,8 +500,8 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
     # Printed on every run, because the whole point of the check is that nothing else
     # tells you the copy has gone stale: a reader who never learns the flag exists is in
     # the state chore-0031 was filed on.
-    print(f"{tag}Run `install.py --check` (with the same --home) to see whether an "
-          f"installed set still matches this kit.")
+    print(f"{tag}Run `python scripts/install.py --check` (with the same --home, if you "
+          f"passed one) to see whether an installed set still matches this kit.")
     return 1 if conflicts else 0
 
 
@@ -637,18 +637,27 @@ def uninstall(home: Path, dry: bool) -> int:
     return 0
 
 
-def _compare(installed: dict, source: dict) -> list:
-    """Every per-file disagreement between an installed target and its current source."""
+def _compare(left: dict, right: dict, left_label: str = "installed",
+             right_label: str = "source") -> list:
+    """Every per-file disagreement between two digest maps.
+
+    The labels are parameters because the two callers compare different things. The derived
+    path really does hold a digest of the installed tree, but the adopted path passes the
+    *recorded baseline*, and naming that "installed" printed a number matching nothing on
+    disk: an adopter checksumming their own lens got a third value and no way to reconcile
+    it. Reported by the automated reviewer on this pull request, which is the second time
+    that reviewer has caught a class the local checks could not (see bug-0012).
+    """
     problems = []
-    for rel, digest in source.items():
-        found = installed.get(rel)
+    for rel, digest in right.items():
+        found = left.get(rel)
         if found is None:
-            problems.append(f"{rel}: in the source, absent from the install")
+            problems.append(f"{rel}: in the {right_label}, absent from the {left_label}")
         elif found != digest:
-            problems.append(f"{rel}: installed {found[:12]}, source {digest[:12]}")
-    for rel in installed:
-        if rel not in source:
-            problems.append(f"{rel}: in the install, absent from the source")
+            problems.append(f"{rel}: {left_label} {found[:12]}, {right_label} {digest[:12]}")
+    for rel in left:
+        if rel not in right:
+            problems.append(f"{rel}: in the {left_label}, absent from the {right_label}")
     return problems
 
 
@@ -678,7 +687,10 @@ def _check_entry(entry) -> tuple:
     target = Path(entry.get("target", ""))
     source = Path(entry.get("source", ""))
     recorded = entry.get("digests")
-    if recorded is None:
+    # Falsiness, not `is None`: a `digests` map that is present but empty is no more of a
+    # baseline than a missing one, and treating it as valid let a hand-edited manifest
+    # report `revised` at exit 0 for an entry nothing had been recorded for.
+    if not recorded:
         return "unknown", ("installed before digests were recorded, so whether it is "
                            "current is unknown. Re-install to establish a baseline.")
     if not (target.exists() or target.is_symlink()):
@@ -694,16 +706,26 @@ def _check_entry(entry) -> tuple:
         if same:
             return "linked", "links to its source, so it cannot be stale"
 
-    current = digest_tree(source)
+    try:
+        current = digest_tree(source)
+    except OSError as exc:
+        return "error", (f"the kit's source could not be read, so nothing can be compared "
+                         f"against it: {exc}")
     if entry.get("name") in ADOPTED_ENTRY_NAMES:
-        moved = _compare(recorded, current)
+        # The baseline, not the installed tree: naming it "installed" printed a digest
+        # matching no file on disk (reported on this pull request).
+        moved = _compare(recorded, current, "recorded", "source now")
         if not moved:
             return "ok", f"the kit's copy is unchanged since this install "\
                          f"({len(recorded)} file(s))"
         return "revised", ("the kit's copy has changed since this install; yours is yours "
                            "to keep:\n" + "\n".join(f"      {p}" for p in moved))
 
-    problems = _compare(digest_tree(target), current)
+    try:
+        problems = _compare(digest_tree(target), current)
+    except OSError as exc:
+        return "error", (f"the installed copy could not be read, so whether it is current "
+                         f"is unanswerable: {exc}")
     if not problems:
         return "ok", f"{len(current)} file(s) match the source"
     return "diverged", ("DIVERGED from the source:\n"
