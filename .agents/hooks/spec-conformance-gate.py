@@ -45,6 +45,15 @@ exit    always 0
 Adapted from `spec-conformance-gate.py` in RepoPrompt Workflows by Balarama Bosch (MIT),
 https://github.com/moonray/repoprompt-workflows. Shape B, the `approved` removal, and the
 repository-root resolution are this kit's.
+
+Provenance
+----------
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/hooks/spec-conformance-gate.py
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 55a654f4f1e223bcef89803b0832e114f28406604674df9f3196b04f2fcfa6fb
+note: backfilled baseline (feat-0043). The snapshot this file was adapted from is gone, so the digest pins upstream as of the retrieved date, not the exact bytes adapted.
 """
 import json
 import os

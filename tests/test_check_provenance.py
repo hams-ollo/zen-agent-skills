@@ -1,0 +1,320 @@
+"""Acceptance tests for scripts/check-provenance.py.
+
+Covers feat-0043: the provenance convention stated in the conventions section of AGENTS.md,
+exercised through the checker that enforces it. Standard library only, per that same section.
+
+test-quality notes: every scenario runs at the lowest faithful layer, calling main() with an
+injected fetcher and an injected root rather than spawning a subprocess or touching the
+network. A test that hits GitHub is a test that fails when GitHub is slow, and it would prove
+the network works rather than that the comparison does. The fetcher seam exists for exactly
+this reason.
+
+Oracles assert the exact exit code plus the specific text the caller needs (the drifted URL,
+the recorded and upstream digests), never "does not crash". A checker that fetched nothing and
+printed nothing would also not crash, and would also exit 0.
+
+The defect each group protects against:
+  match         - the comparison passes everything, so drift is never reported at all
+  drift         - drift is detected but the output does not say which source moved,
+                  leaving a non-zero exit with nothing to act on
+  unreachable   - the network is down and the script dies in a traceback, which reads as a
+                  defect in the script rather than as an unreachable host
+  unlocatable   - an honestly-recorded unlocatable source is treated as a failure, which
+                  would pressure the next author into guessing a URL instead of recording
+                  the truth: the exact failure the convention exists to prevent
+  malformed     - a record missing its digest, or carrying a placeholder one, passes silently
+  real records  - a backfilled block in this repository is malformed and nobody notices
+                  until the day someone runs the checker with a network
+"""
+import hashlib
+import importlib.util
+import io
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MODULE_PATH = REPO_ROOT / "scripts" / "check-provenance.py"
+
+# Hyphenated filename, so it is not importable by a normal import statement.
+_spec = importlib.util.spec_from_file_location("check_provenance", MODULE_PATH)
+cp = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cp)
+
+UPSTREAM = b"# upstream content\nthe bytes we adapted from\n"
+UPSTREAM_SHA = hashlib.sha256(UPSTREAM).hexdigest()
+URL = "https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/x/SKILL.md"
+
+
+def block(sha=UPSTREAM_SHA, url=URL, retrieved="2026-08-06"):
+    return (
+        "## Provenance\n\n"
+        "```provenance\n"
+        f"source: {url}\n"
+        "author: Balarama Bosch\n"
+        "license: MIT\n"
+        f"retrieved: {retrieved}\n"
+        f"sha256: {sha}\n"
+        "```\n"
+    )
+
+
+def make_root(body):
+    """A throwaway repository root carrying one adapted file under a scanned directory.
+
+    The local body is deliberately unlike UPSTREAM: the digest must be compared against the
+    fetched bytes, not against the adapted file, and a fixture where the two matched would
+    hide a checker that digested the wrong thing.
+    """
+    tmp = tempfile.TemporaryDirectory()
+    root = Path(tmp.name)
+    skill = root / ".agents" / "skills" / "x"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_bytes(
+        ("---\nname: x\n---\n\n# X\n\nHouse-styled and retargeted, so it differs from upstream.\n\n"
+         + body).encode("utf-8")
+    )
+    return tmp, root
+
+
+def run(body, fetcher, argv=()):
+    tmp, root = make_root(body)
+    try:
+        out = io.StringIO()
+        code = cp.main(argv=list(argv), root=root, fetcher=fetcher, out=out)
+        return code, out.getvalue()
+    finally:
+        tmp.cleanup()
+
+
+def serve(content):
+    def fetcher(url, timeout=30):
+        return content
+    return fetcher
+
+
+def unreachable(exc):
+    def fetcher(url, timeout=30):
+        raise exc
+    return fetcher
+
+
+class MatchPath(unittest.TestCase):
+    """The recorded digest matches what upstream currently returns."""
+
+    def test_exits_zero_when_the_digest_matches(self):
+        code, output = run(block(), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("up to date", output)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_digest_is_taken_over_fetched_bytes_not_the_local_file(self):
+        # The local file's own digest must never satisfy the record.
+        tmp, root = make_root(block())
+        try:
+            local = (root / ".agents" / "skills" / "x" / "SKILL.md").read_bytes()
+            self.assertNotEqual(hashlib.sha256(local).hexdigest(), UPSTREAM_SHA)
+        finally:
+            tmp.cleanup()
+        code, _ = run(block(), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        # Serving the adapted file's bytes instead must be drift, not a pass.
+        code, _ = run(block(), serve(local))
+        self.assertEqual(code, 1)
+
+    def test_url_is_requested_verbatim(self):
+        seen = []
+
+        def fetcher(url, timeout=30):
+            seen.append(url)
+            return UPSTREAM
+
+        run(block(), fetcher)
+        self.assertEqual(seen, [URL])
+
+
+class DriftPath(unittest.TestCase):
+    """Upstream has moved since the digest was recorded."""
+
+    def test_exits_non_zero_on_drift(self):
+        code, _ = run(block(), serve(b"upstream has been rewritten\n"))
+        self.assertEqual(code, 1)
+
+    def test_names_the_drifted_source_and_both_digests(self):
+        moved = b"upstream has been rewritten\n"
+        code, output = run(block(), serve(moved))
+        self.assertEqual(code, 1)
+        self.assertIn("DRIFT", output)
+        self.assertIn(URL, output)
+        self.assertIn(UPSTREAM_SHA, output)
+        self.assertIn(hashlib.sha256(moved).hexdigest(), output)
+
+    def test_does_not_rewrite_the_adapted_file(self):
+        # Detect and report; never sync. An overwrite would destroy the adaptation.
+        tmp, root = make_root(block())
+        try:
+            target = root / ".agents" / "skills" / "x" / "SKILL.md"
+            before = target.read_bytes()
+            code = cp.main(argv=[], root=root, fetcher=serve(b"moved\n"), out=io.StringIO())
+            self.assertEqual(code, 1)
+            self.assertEqual(target.read_bytes(), before)
+        finally:
+            tmp.cleanup()
+
+
+class UnreachableSourcePath(unittest.TestCase):
+    """The network is unavailable, or the host refuses."""
+
+    def test_url_error_exits_two_with_a_clear_message(self):
+        import urllib.error
+
+        code, output = run(block(), unreachable(urllib.error.URLError("getaddrinfo failed")))
+        self.assertEqual(code, 2)
+        self.assertIn("could not fetch", output)
+        self.assertIn(URL, output)
+        self.assertIn("getaddrinfo failed", output)
+
+    def test_http_error_exits_two(self):
+        import urllib.error
+
+        exc = urllib.error.HTTPError(URL, 404, "Not Found", None, None)
+        code, output = run(block(), unreachable(exc))
+        self.assertEqual(code, 2)
+        self.assertIn("could not fetch", output)
+
+    def test_socket_failure_does_not_escape_as_a_traceback(self):
+        code, output = run(block(), unreachable(OSError("connection reset")))
+        self.assertEqual(code, 2)
+        self.assertIn("connection reset", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+
+class UnlocatablePath(unittest.TestCase):
+    """A source that genuinely cannot be found is recorded, not omitted or guessed."""
+
+    BLOCK = (
+        "## Provenance\n\n"
+        "```provenance\n"
+        "source: the vendored repoprompt-workflows-main snapshot, path unknown\n"
+        "author: Balarama Bosch\n"
+        "license: MIT\n"
+        "status: unlocatable\n"
+        "note: searched upstream's current tree at main; no file matches this content.\n"
+        "```\n"
+    )
+
+    def test_unlocatable_is_reported_and_not_an_error(self):
+        def never(url, timeout=30):
+            raise AssertionError("an unlocatable record must not be fetched")
+
+        code, output = run(self.BLOCK, never)
+        self.assertEqual(code, 0)
+        self.assertIn("source not locatable", output)
+        self.assertIn("0 up to date, 0 drifted, 1 unlocatable, 0 error(s).", output)
+
+    def test_unlocatable_without_a_note_is_malformed(self):
+        # "unlocatable" is a finding, so it owes the search that established it. Without
+        # that, the status is indistinguishable from not having looked.
+        body = self.BLOCK.replace(
+            "note: searched upstream's current tree at main; no file matches this content.\n", ""
+        )
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("unlocatable record is missing", output)
+
+
+class MalformedRecordPath(unittest.TestCase):
+    """A record that cannot be checked must fail loudly rather than pass quietly."""
+
+    def test_missing_digest_exits_two(self):
+        body = block().replace(f"sha256: {UPSTREAM_SHA}\n", "")
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("missing required field(s): sha256", output)
+
+    def test_placeholder_digest_exits_two(self):
+        code, output = run(block(sha="TODO"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("sha256 is not 64 lowercase hex", output)
+
+    def test_non_url_source_exits_two(self):
+        code, output = run(block(url="somewhere upstream"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("source is not an absolute http(s) URL", output)
+
+    def test_malformed_retrieval_date_exits_two(self):
+        code, output = run(block(retrieved="last week"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("retrieved is not an ISO date", output)
+
+
+class ParsingTest(unittest.TestCase):
+    """The block grammar reads the same in a docstring, a fenced block, and prose."""
+
+    def test_reads_a_block_from_a_python_docstring(self):
+        text = (
+            '"""A hook.\n\nProvenance\n----------\n'
+            f"source: {URL}\nauthor: Balarama Bosch\nlicense: MIT\n"
+            f'retrieved: 2026-08-06\nsha256: {UPSTREAM_SHA}\n"""\n'
+        )
+        records = cp.parse_records(text)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source"], URL)
+        self.assertEqual(records[0]["license"], "MIT")
+
+    def test_reads_two_records_from_one_file(self):
+        # A single adapted file may draw on more than one upstream file.
+        second = URL.replace("skills/x/SKILL.md", "workflows/Deep-Review.md")
+        records = cp.parse_records(block() + "\n" + block(url=second))
+        self.assertEqual([r["source"] for r in records], [URL, second])
+
+    def test_ignores_prose_that_merely_mentions_the_field_names(self):
+        text = "The block carries a `source:` line, an `author:` line, and a `sha256:` line.\n"
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_ignores_an_unrelated_template_field_named_source(self):
+        # The review-depth skill's output block has its own `source:` field meaning
+        # "detected or user". An earlier draft of the parser reported it as a fold-in with
+        # a missing digest, which would have made the checker fail on an untouched skill.
+        text = (
+            "depth: quick | standard | deep\n"
+            "source: detected | user\n"
+            "changeset: the range the signals were computed over\n"
+        )
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_run_missing_only_its_author_is_still_reported(self):
+        # Tightening the grammar must not create a hole: a real block with a typo has to
+        # surface as malformed, not vanish.
+        body = block().replace("author: Balarama Bosch\n", "")
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("missing required field(s): author", output)
+
+
+class RepositoryRecordsTest(unittest.TestCase):
+    """Every block actually recorded in this repository is well formed. No network."""
+
+    def test_all_seven_backfilled_targets_carry_a_valid_record(self):
+        found = cp.collect(REPO_ROOT)
+        self.assertTrue(found, "no provenance records found in this repository")
+        for rel, record in found:
+            with self.subTest(path=rel, line=record["line"]):
+                self.assertIsNone(cp.validate(record), f"{rel}:{record['line']}")
+
+    def test_the_backfilled_files_are_the_expected_set(self):
+        recorded = {rel for rel, _ in cp.collect(REPO_ROOT)}
+        for expected in (
+            ".agents/skills/spec-quality/SKILL.md",
+            ".agents/skills/spec-plan-readiness/SKILL.md",
+            ".agents/skills/test-quality/SKILL.md",
+            ".agents/skills/spec-conformance/SKILL.md",
+            ".agents/rules/review-quality.md",
+            ".agents/hooks/delegation-reminder.py",
+            ".agents/hooks/spec-conformance-gate.py",
+        ):
+            self.assertIn(expected, recorded)
+
+
+if __name__ == "__main__":
+    unittest.main()

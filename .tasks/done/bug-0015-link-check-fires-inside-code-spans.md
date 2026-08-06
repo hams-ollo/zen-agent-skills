@@ -2,7 +2,7 @@
 id: bug-0015
 title: The mislabelled-link check fires on markdown links written inside code spans
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-08-05
 
 ## Problem
 
-`mislabelled_links()` in [`validate.py`](validate.py) gathers links with a bare regex over the whole
+`mislabelled_links()` in [`validate.py`](../validate.py) gathers links with a bare regex over the whole
 file text, so it cannot tell a link from a **code span that contains link syntax**. A backticked
 `` `[README.md](../README.md)` `` renders as literal text and is not clickable by anyone, and the
 check reports it anyway.
@@ -54,8 +54,8 @@ and the workaround will always be to avoid writing the thing you are documenting
 ## Scope
 
 **In scope:** make `mislabelled_links()` ignore link syntax that sits inside an inline code span, in
-[`.tasks/validate.py`](validate.py) and in the
-[`init-worktracking` template copy](../.agents/skills/init-worktracking/templates/validate.py), which
+[`.tasks/validate.py`](../validate.py) and in the
+[`init-worktracking` template copy](../../.agents/skills/init-worktracking/templates/validate.py), which
 ships this defect to every scaffolded repository; tests pinning both the single-backtick and
 double-backtick forms; then `bug-0012` can be moved to `.tasks/done/` and closed.
 
@@ -71,7 +71,7 @@ exists to avoid.
 inside a backtick-delimited run is not a link. Markdown allows a code span to be opened
 by any number of backticks and closed by the same number, and `bug-0012`'s own file uses **both** the
 single form (`` `[README.md](../README.md)` ``, in the Problem table) and the double form
-(`` `` [`README.md`](../README.md) `` ``, in the Implementation notes), so handling only single
+(``` `` [`README.md`](../README.md) `` ```, in the Implementation notes), so handling only single
 backticks fixes one of the two occurrences and leaves the file still failing. Both forms are in the
 tree right now, so both are real test cases rather than hypotheticals.
 
@@ -87,6 +87,24 @@ which was verified during `bug-0012`'s reconciliation, so they should stay that 
 
 **Pin the regression with the real file, not only a fixture.** The fixture proves the rule; moving
 `bug-0012` to `done/` and running `--strict` proves the case that motivated it. Do both.
+
+## Decisions
+
+- **Rejected: pairing backtick runs across the whole file**, which is what CommonMark does and was the
+  obvious reading of "opened by any number of backticks and closed by the same number". It fails this
+  task's own worst case: one stray unmatched backtick pairs with the next stray one and every link
+  between them stops being checked, silently. `code_span_ranges()` pairs runs within a single line
+  instead, so a stray backtick costs at most its own line and an unmatched run opens nothing.
+- **Seam left open deliberately: a code span that wraps across a line break is not recognised.**
+  Markdown allows one inside a paragraph, and this checker will still report a mislabelled link there.
+  That is the safe side of the trade above, not an oversight: the outcome is the false positive this
+  task removes elsewhere, never a check that has switched itself off. Closing it needs paragraph
+  awareness, which is the full parsing the Scope section rules out.
+- **False premise: the two validator copies are not character-identical across all of
+  `mislabelled_links()`.** The Implementation notes say they are, and their code and module-level
+  regexes are, which is what the acceptance criterion turns on. Their docstrings deliberately differ:
+  this repository's names `.tasks/README.md` and its three real files, the template's is written for a
+  scaffolded repository that has neither yet. That divergence is intentional and predates this task.
 
 ## Risks and rollback
 
@@ -104,26 +122,26 @@ shipped scaffold emits.
 
     python -m unittest discover -s tests -p "test_*.py" && python .tasks/validate.py --strict
 
-- [ ] A test proving a mislabelled link inside a **single**-backtick code span is not reported,
+- [x] A test proving a mislabelled link inside a **single**-backtick code span is not reported,
       failing against the pre-fix validator.
-- [ ] A test proving the same for a **double**-backtick code span, since `bug-0012`'s file contains
+- [x] A test proving the same for a **double**-backtick code span, since `bug-0012`'s file contains
       both and fixing only one leaves it failing.
-- [ ] A test proving a genuine mislabelled link outside any code span is **still** reported, in a
+- [x] A test proving a genuine mislabelled link outside any code span is **still** reported, in a
       file that also contains code spans, so the fix cannot pass by disabling the check.
-- [ ] The same skip exists in the template validator, and the two copies remain character-identical
+- [x] The same skip exists in the template validator, and the two copies remain character-identical
       in `mislabelled_links()` and its module-level regexes.
-- [ ] `bug-0012` is moved to `.tasks/done/` with `status: done` and its relative links re-anchored,
+- [x] `bug-0012` is moved to `.tasks/done/` with `status: done` and its relative links re-anchored,
       and `python .tasks/validate.py --strict` exits 0 with the moved file in place and **no edit to
       either of its two illustrations**.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only
       a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.
-- [ ] `bug-0012` closed out in the same pass, since this task exists to unblock it.
+- [x] `bug-0012` closed out in the same pass, since this task exists to unblock it.

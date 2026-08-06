@@ -14,6 +14,14 @@ Amended 2026-07-27 (`chore-0015`) to classify the two kinds of emitted shared ma
 each is treated on a re-run, closing the gap the `feat-0026` audit recorded as "behavior found outside
 the contract". Re-approved by the author on 2026-07-27.
 
+Amended 2026-08-06 (`feat-0034`) to add a third target, `plugin`, which emits a Claude Code plugin
+tree instead of an inlined adapter: scenarios S-015 through S-017, and the Proposed Surface and
+Constraints entries that change with them. **This amendment is pending the author's re-approval.**
+The `status` field above is deliberately left reading `approved`, because it records the contract as
+re-approved on 2026-07-27 and this repository has no machine-readable way to say "approved, with an
+unapproved amendment inside"; re-approval of the paragraphs added by `feat-0034` is the author's and
+is not granted here.
+
 ## Problem
 
 Claude Code and OpenCode discover skills from a directory, so `install.py` can place a skill's own
@@ -53,7 +61,11 @@ every test still pass, because no test asserts the reason.
 
 - Standard library only.
 - Both adapter directories sit exactly two levels below the output root, so a single shared location
-  is reachable as `../../` from either, rather than one copy per target.
+  is reachable as `../../` from either, rather than one copy per target. The plugin tree sits two
+  levels below its root as well, but reaches a different shared location from there, so where the
+  shared material lands is a property of the requested target and not a single value for all of them.
+- A plugin is installed by copying its directory, so a path leaving that directory resolves to nothing
+  at the installed location. Everything a plugin tree references must therefore live inside it.
 - A skill body's relative links are written for the skill's own directory. An adapter is not there,
   so a link is correct in the emitted file only if it was rewritten for the adapter's location.
 - The rules module is swappable by design, so a copy already present in the target project is the
@@ -171,18 +183,53 @@ every test still pass, because no test asserts the reason.
 - **Then** it names the unrecognized target and the supported ones, writes no file, and exits
   non-zero.
 
+### Scenario S-015: the plugin target emits an installable plugin tree
+
+- **Given** a kit containing N skills, and the plugin target requested
+- **When** the tool runs against an output root
+- **Then** it writes each skill's `SKILL.md` to `skills/<name>/SKILL.md`, keeping the skill in its own
+  directory rather than flattening it into one, and writes `.claude-plugin/plugin.json` and
+  `.claude-plugin/marketplace.json`, whose single listed plugin names the emitted root as its source
+  and carries the same name and version as the plugin manifest beside it. It reports the emitted files
+  and its counts, and exits zero.
+
+### Scenario S-016: nothing in an emitted plugin tree points outside it
+
+- **Given** a plugin tree emitted from a kit whose skills reference the rules module
+- **When** the tree is read from the location it was installed to rather than from the kit
+- **Then** every relative link in every emitted skill resolves to a file that exists and lies inside
+  the plugin root, and the rules module is present in exactly one place, so a skill that composes a
+  lens finds that lens.
+
+  This is the scenario the target exists for, and a manifest validator cannot check it. Installing a
+  plugin copies its directory, so a reference leaving that directory resolves to nothing once
+  installed, and the failure is silent: the skill still loads and still reads correctly, and only the
+  composed lens is absent. That is how `house-review` once shipped with no rubric at all.
+
+### Scenario S-017: the plugin target is opt-in
+
+- **Given** a run that does not name a target
+- **When** it completes
+- **Then** no plugin tree and no `.claude-plugin/` manifest directory exist under the output root,
+  while the same run requested with the plugin target does write both.
+
+  `--out` defaults to the working directory, so a default run writes into whatever project invoked it.
+  A `.claude-plugin/` left there becomes a committed, hand-maintained manifest, which is the second
+  copy this tool exists to prevent.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
 | Invocation | `python scripts/build-adapters.py [--target <list>] [--out <dir>] [--dry-run]` |
-| `--target` | Comma-separated subset of the supported targets; defaults to all of them |
+| `--target` | Comma-separated subset of the supported targets `cursor`, `vscode`, `plugin`; defaults to the two inlining targets, `cursor,vscode`. `plugin` is opt-in, per S-017 |
 | `--out` | Output project root; defaults to the working directory |
 | `--dry-run` | Preview: report what would be written, write nothing |
-| Emitted per skill | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md` |
-| Emitted shared | `.agents/rules/<file>` (adopted, preserved on a re-run), `.agents/skills/<name>/<path>` (derived, refreshed on a re-run) |
+| Emitted per skill | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md`, `skills/<name>/SKILL.md` (plugin) |
+| Emitted per plugin run | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, once per run rather than per skill |
+| Emitted shared | Under `.agents/` for the inlining targets and at the plugin root for the plugin target: `<shared>/rules/<file>` (adopted, preserved on a re-run), `<shared>/skills/<name>/<path>` (derived, refreshed on a re-run). Targets sharing a location share one copy |
 | Exit code | non-zero for an unrecognized target, zero otherwise |
-| Output | one line per emitted adapter, then a summary of adapter and shared-asset counts |
+| Output | one line per emitted adapter and per emitted manifest, then a summary of adapter and shared-asset counts, naming the shared locations written, and a manifest count when the plugin target ran |
 
 ## Open Questions
 

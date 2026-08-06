@@ -282,6 +282,43 @@ class MislabelledLinkTests(TasksRootTestCase):
         code, out = self._run()
         self.assertEqual(code, 0, out)
 
+    def test_a_link_inside_a_single_backtick_code_span_is_not_reported(self):
+        # `bug-0015`: a backticked link renders as literal text and is not clickable by
+        # anyone, so there is no reader to mislead and nothing to report. This is the
+        # form `bug-0012`'s own Problem table uses to quote the wrong link, which is
+        # what a task file documenting a link bug has to be able to do.
+        self._write("`[README.md](../README.md)` renders as text, not as a link.")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a backticked link is not a link\n{out}")
+
+    def test_a_link_inside_a_double_backtick_code_span_is_not_reported(self):
+        # `bug-0015`: markdown opens a code span with a run of backticks of any length,
+        # and the double form is what an author reaches for when the quoted text itself
+        # contains a backtick. `bug-0012`'s Implementation notes use exactly this, so a
+        # fix that knows only the single form leaves that file still failing.
+        self._write("It fires on `` [`README.md`](../README.md) `` from done/.")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a double-backtick span is a code span too\n{out}")
+
+    def test_a_mislabelled_link_outside_a_code_span_is_still_reported(self):
+        # `bug-0015`'s risk section: over-skipping costs more than the false positive it
+        # removes, because a disabled check reports success. A span detector that pairs
+        # backticks across the whole file would let the unmatched backtick below swallow
+        # the genuine link that follows it, and this file would pass for the wrong
+        # reason. The link on the last line names the root README.md and opens
+        # .tasks/README.md, so it must still be reported.
+        self._write(
+            "The shape `[README.md](../README.md)` is literal text, and a lone ` "
+            "backtick opens nothing.\n\n"
+            "See [`README.md`](../README.md) for the installer.")
+        code, out = self._run()
+        self.assertNotEqual(
+            code, 0,
+            f"a real mislabelled link must survive the code-span skip\n{out}")
+        self.assertIn("feat-0099-test.md", out)
+        self.assertIn("../README.md", out)
+        self.assertIn(".tasks/README.md", out)
+
     def test_the_finding_is_a_warning_rather_than_an_error(self):
         # A deliberate, recorded decision, not an accident of implementation. The check
         # is a heuristic and it ships to every scaffolded repository, so a default run

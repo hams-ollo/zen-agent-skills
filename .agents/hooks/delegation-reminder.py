@@ -35,6 +35,15 @@ Adapted from `delegation-reminder.py` in RepoPrompt Workflows by Balarama Bosch 
 https://github.com/moonray/repoprompt-workflows. Retargeted to this kit's tool set and
 made self-contained: the reminder names no rules file, because a hook ships without this
 repository around it.
+
+Provenance
+----------
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/hooks/delegation-reminder.py
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 92ea2a78317ff59bab4b3222ebce8036d44ba39a9de94bb1b958622e58dd1a21
+note: backfilled baseline (feat-0043). The snapshot this file was adapted from is gone, so the digest pins upstream as of the retrieved date, not the exact bytes adapted.
 """
 import json
 import sys

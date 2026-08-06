@@ -117,7 +117,7 @@ The point is not the plumbing, which is one line of text. It is that GitHub's ru
 |---|---|
 | [`.agents/skills/`](.agents/skills/) | Canonical, reusable skills. One directory per skill, each with a harness-agnostic `SKILL.md` |
 | [`.agents/rules/`](.agents/rules/) | The two swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities. Installed alongside the skills, because a skill that references a lens is not self-contained without it |
-| [`scripts/`](scripts/) | [`install.py`](scripts/install.py) (cross-platform installer), [`build-adapters.py`](scripts/build-adapters.py) (Cursor and VS Code adapters), [`validate-skills.py`](scripts/validate-skills.py) (kit-level lint) |
+| [`scripts/`](scripts/) | [`install.py`](scripts/install.py) (cross-platform installer), [`build-adapters.py`](scripts/build-adapters.py) (Cursor and VS Code adapters, plus an opt-in Claude Code plugin tree), [`validate-skills.py`](scripts/validate-skills.py) (kit-level lint), [`check-provenance.py`](scripts/check-provenance.py) (re-fetches every recorded upstream source and reports drift) |
 | [`.tasks/`](.tasks/) | Atomic work items for maintaining the kit, plus their validator |
 | [`tests/`](tests/) | The kit's own test suite, derived from the specifications under `docs/spec/` |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications, plus the conformance, verification, readiness, and characterization records that sit beside them |
