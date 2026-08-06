@@ -75,37 +75,26 @@ jobs:
           python scripts/install.py --home ./.tmp/zen-home
           python scripts/install.py --uninstall --home ./.tmp/zen-home
 
+      # Calls the link rule in .tasks/validate.py rather than restating it. This step
+      # used to carry its own inline copy, which drifted: bug-0015 taught the validator
+      # that a link inside a code span is not a link, this copy never learned it, and a
+      # correctly quoted example in CHANGELOG.md passed `--strict` and failed here
+      # (chore-0029). One rule, two callers, and the two file sets stay disjoint on
+      # purpose: the validator walks .tasks/, and this walks the documents around it.
+      # Wave 2's closeout broke three links here that `--strict` passed clean over.
+      #
+      # Globbed rather than listed. The list was six hardcoded names, so every new
+      # root-level document silently fell outside the check until someone remembered to
+      # add it, which is the failure mode this step exists to catch. chore-0018 and
+      # chore-0019 each landed a document the list missed.
+      #
+      # `--links` fails on an empty match as well as on a broken link, so this step
+      # cannot pass by checking nothing at all. Note the bound: the guard fires when
+      # *every* pattern matches nothing, not when one of three does. Rename docs/ and
+      # this step still passes, having checked 9 documents of 38. Closing that needs a
+      # per-pattern assertion, filed rather than bolted on here (chore-0029).
+      #
+      # No `shell: bash`: calling a checked-in script instead of a heredoc drops this
+      # step's dependency on bash being present on the Windows runner.
       - name: Check that every relative link in the docs resolves
-        shell: bash
-        run: |
-          python - <<'PY'
-          import pathlib, re, sys
-
-          # Globbed rather than listed. The list was six hardcoded names, so every
-          # new root-level document silently fell outside the check until someone
-          # remembered to add it, which is the failure mode this step exists to
-          # catch. chore-0018 and chore-0019 each landed a document the list missed.
-          docs = [str(p) for p in sorted(pathlib.Path(".").glob("*.md"))]
-          docs += [str(p) for p in sorted(pathlib.Path(".github").rglob("*.md"))]
-          docs += [str(p) for p in sorted(pathlib.Path("docs").rglob("*.md"))]
-
-          broken = []
-          for doc in docs:
-              path = pathlib.Path(doc)
-              if not path.exists():
-                  continue
-              for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", path.read_text(encoding="utf-8")):
-                  target = match.group(1).split("#")[0].strip()
-                  # Kept in step with LINK_SKIP_PREFIXES in .tasks/validate.py. An
-                  # absolute `file:` link names a location on someone's disk, so it
-                  # is not this step's to resolve.
-                  if not target or target.startswith(("http://", "https://", "mailto:", "file://")):
-                      continue
-                  if not (path.parent / target).exists():
-                      broken.append(f"{doc} -> {target}")
-
-          for entry in broken:
-              print(f"broken link: {entry}")
-          print(f"checked {len(docs)} documents, {len(broken)} broken link(s)")
-          sys.exit(1 if broken else 0)
-          PY
+        run: python .tasks/validate.py --links "*.md" ".github/**/*.md" "docs/**/*.md"
