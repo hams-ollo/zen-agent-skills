@@ -2,7 +2,7 @@
 id: bug-0012
 title: Three links in done/ resolve to the wrong README, and existence checking cannot see them
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0011]
@@ -51,7 +51,7 @@ The reviewer's underlying point was about the repository, not the fixture, and i
 
 **In scope:** re-anchor the three links above to `../../README.md`; add a check for the class, so a
 link whose text names a path is compared against the path it actually resolves to; propagate the check
-to [`init-worktracking`'s template validator](../.agents/skills/init-worktracking/templates/validate.py),
+to [`init-worktracking`'s template validator](../../.agents/skills/init-worktracking/templates/validate.py),
 which carries the same gap and ships to every scaffolded repository; tests for both the positive case
 and the two false-positive cases below.
 
@@ -75,7 +75,7 @@ prose review and not mechanical; the three report-only findings `bug-0011` filed
   a checker. If the heuristic cannot be made quiet, report the finding as a warning rather than an
   error and say so in the usage text.
 - Mirror `bug-0011`'s structure: the check belongs beside `broken_links()` in
-  [`.tasks/validate.py`](validate.py), and the two copies of the validator must stay in step. Fixing
+  [`.tasks/validate.py`](../validate.py), and the two copies of the validator must stay in step. Fixing
   only this repository's copy while the template keeps shipping the gap is the mistake `bug-0011`
   explicitly avoided and recorded.
 - The three re-anchors are one-line edits each and change no other text in those files, matching the
@@ -122,10 +122,10 @@ and the check this task added reads link syntax by regex without knowing what a 
 task's own risk section warns against, so `bug-0015` fixes the checker instead and closes this task in
 the same pass.
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only
       a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -89,6 +89,11 @@ TEXT_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 # A trailing `:29`, as in `.tasks/README.md:29`. Text in that form cites a location
 # inside a file rather than claiming which file the link opens, so it is left alone.
 LINE_SUFFIX_RE = re.compile(r":\d+$")
+# A run of one or more backticks. Markdown opens an inline code span with a run of
+# any length and closes it with a run of the same length, so the single-backtick
+# form is half the problem: a task file documenting a link bug reaches for the
+# double form the moment the text it quotes contains a backtick of its own.
+BACKTICK_RUN_RE = re.compile(r"`+")
 
 
 def parse_frontmatter(text: str):
@@ -175,6 +180,41 @@ def broken_links(path):
     return found
 
 
+def code_span_ranges(text):
+    """Character ranges `(start, end)` of the inline code spans in `text`.
+
+    A code span opens with a run of backticks and closes with a run of the same
+    length, so both the single and the double form are spans, and a check that
+    knows only the first fixes half the occurrences it meets.
+
+    Scanned one line at a time, deliberately. Markdown does let a span wrap across
+    lines inside a paragraph, but pairing runs across the whole file means one
+    stray backtick swallows everything up to the next stray one, and a caller that
+    skips those ranges then reports success while checking nothing. Bounding the
+    search to a line caps what a stray backtick costs at that line, so the worst
+    case is the false positive this helper exists to remove, never a check that has
+    quietly switched itself off. An unmatched run is left as ordinary text for the
+    same reason: it opens nothing.
+    """
+    ranges = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        runs = [(m.start(), m.end()) for m in BACKTICK_RUN_RE.finditer(line)]
+        i = 0
+        while i < len(runs):
+            opener = runs[i]
+            width = opener[1] - opener[0]
+            closer = next((j for j in range(i + 1, len(runs))
+                           if runs[j][1] - runs[j][0] == width), None)
+            if closer is None:
+                i += 1
+                continue
+            ranges.append((offset + opener[0], offset + runs[closer][1]))
+            i = closer + 1
+        offset += len(line)
+    return ranges
+
+
 def mislabelled_links(path):
     """Links in `path` whose text names one repository path and which open another.
 
@@ -190,6 +230,9 @@ def mislabelled_links(path):
     This is a heuristic, and its false positives are the design problem, so it is
     deliberately a quiet one. It fires only when all of the following hold:
 
+      * the link's opening bracket is outside every inline code span, because a
+        backticked link renders as literal text and is clickable by nobody, so there
+        is no reader to mislead and nothing to report (bug-0015);
       * the text is path-shaped, so prose like `the readme` is never compared;
       * the text carries no `:line` suffix, which cites a location rather than naming
         the file a link opens;
@@ -204,7 +247,11 @@ def mislabelled_links(path):
     is worse than a missed link. That is also why callers report this as a warning.
     """
     found = []
-    for match in LINK_TEXT_RE.finditer(path.read_text(encoding="utf-8")):
+    content = path.read_text(encoding="utf-8")
+    spans = code_span_ranges(content)
+    for match in LINK_TEXT_RE.finditer(content):
+        if any(start <= match.start() < end for start, end in spans):
+            continue
         text = match.group(1).strip().strip("`").strip()
         target = match.group(2).split("#")[0].strip()
         if not target or target.startswith(LINK_SKIP_PREFIXES):
