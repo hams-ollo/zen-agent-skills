@@ -15,7 +15,23 @@ recognizes its own links directly and does not have this dependency).
     python scripts/install.py --mode symlink      # force symlinks
     python scripts/install.py --tools claude      # only Claude Code
     python scripts/install.py --profile all       # every skill, not just the default set
+    python scripts/install.py --check             # is an installed set still current?
     python scripts/install.py --uninstall         # remove what this installed
+
+Staleness, and why --check exists
+---------------------------------
+A copied skill is a snapshot taken at install time, so editing the skill here does
+not change the installed copy and nothing said so: the stale copy is a valid skill
+that passes every validator and reads correctly (chore-0031). So each entry in the
+manifest now records a SHA256 per placed file, and --check re-reads the targets and
+names any that no longer match their source. It reports and never rewrites, for the
+same reason check-provenance.py does: an adopter may have edited an installed file
+deliberately, and an overwrite destroys that without asking.
+
+The baseline is per entry, not per manifest, so a manifest written before this change
+degrades one entry at a time. Such an entry reports `unknown`, never `ok`: a clean
+result for a state nobody recorded is the same silent failure --check exists to
+remove, one level up. Re-install to establish a baseline.
 
 A --profile selects which skills to place, and defaults to less than all of them
 because every installed description is loaded so an agent can route to it. A profile
@@ -45,6 +61,7 @@ Standard library only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -258,6 +275,46 @@ def is_managed(target: Path, manifest) -> bool:
     return any(e.get("target") == tp for e in manifest["entries"])
 
 
+# The one placed module an adopter is invited to rewrite. Matched by the entry name this
+# tool records for it, so the classification travels in the record rather than being
+# re-derived from a path. See `_check_entry` for what the invitation costs the check.
+ADOPTED_ENTRY_NAMES = {"rules"}
+
+
+def _digestable(rel: Path, path: Path) -> bool:
+    """Whether a file beneath a placed module is part of that module.
+
+    Mirrors the ignore list `_copy` places with. Digesting a byte-cache would report a
+    file missing from every install of the hooks module, since the source grows a
+    `__pycache__` as soon as anything imports it and the copy deliberately has none.
+    """
+    return path.suffix != ".pyc" and "__pycache__" not in rel.parts
+
+
+def digest_tree(root: Path) -> dict:
+    """SHA256 per file beneath `root`, keyed by its POSIX-relative path.
+
+    Per file and not per directory (chore-0031): a skill is a directory of templates and
+    references, and a stale template is exactly as silent as a stale `SKILL.md`. Keys are
+    POSIX-relative so a record written on Windows is readable on macOS and Linux.
+
+    Bytes, never decoded text. This repository is LF by `.gitattributes`, but an installed
+    copy lives outside git, and digesting decoded text would make the answer depend on how
+    the reader normalises line endings rather than on what is actually on disk.
+    """
+    digests = {}
+    if not root.is_dir():
+        return digests
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if not _digestable(rel, path):
+            continue
+        digests[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
 # Where each tool expects the hooks module, as a sibling of its skills directory. Absent
 # from this map means the tool has no hook mechanism this installer knows how to place.
 HOOK_SUBPATHS = {
@@ -382,6 +439,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
                 entries[str(target)] = {
                     "tool": tool, "name": src.name,
                     "target": str(target), "mode": mode, "source": str(src),
+                    "digests": digest_tree(src),
                 }
             print(f"{tag}{status:9} {tool:8} {src.name}  -> {target}")
 
@@ -396,6 +454,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
                 entries[str(rules_target)] = {
                     "tool": tool, "name": "rules",
                     "target": str(rules_target), "mode": mode, "source": str(RULES_DIR),
+                    "digests": digest_tree(RULES_DIR),
                 }
             print(f"{tag}{status:9} {tool:8} rules  -> {rules_target}")
 
@@ -410,6 +469,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
                 entries[str(hooks_target)] = {
                     "tool": tool, "name": "hooks",
                     "target": str(hooks_target), "mode": mode, "source": str(HOOKS_DIR),
+                    "digests": digest_tree(HOOKS_DIR),
                 }
             print(f"{tag}{status:9} {tool:8} hooks  -> {hooks_target}")
 
@@ -437,6 +497,11 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
     # is shared with skills this tool cannot see, so a proportion here would be invented.
     print(f"{tag}Description budget: {budgets[profile]} characters for this profile "
           f"(" + ", ".join(f"{n}={budgets[n]}" for n in PROFILE_SEEDS) + ").")
+    # Printed on every run, because the whole point of the check is that nothing else
+    # tells you the copy has gone stale: a reader who never learns the flag exists is in
+    # the state chore-0031 was filed on.
+    print(f"{tag}Run `install.py --check` (with the same --home) to see whether an "
+          f"installed set still matches this kit.")
     return 1 if conflicts else 0
 
 
@@ -572,11 +637,135 @@ def uninstall(home: Path, dry: bool) -> int:
     return 0
 
 
+def _compare(installed: dict, source: dict) -> list:
+    """Every per-file disagreement between an installed target and its current source."""
+    problems = []
+    for rel, digest in source.items():
+        found = installed.get(rel)
+        if found is None:
+            problems.append(f"{rel}: in the source, absent from the install")
+        elif found != digest:
+            problems.append(f"{rel}: installed {found[:12]}, source {digest[:12]}")
+    for rel in installed:
+        if rel not in source:
+            problems.append(f"{rel}: in the install, absent from the source")
+    return problems
+
+
+def _check_entry(entry) -> tuple:
+    """Classify one recorded target. Returns (status, message).
+
+    status is one of `ok`, `linked`, `revised`, `diverged`, `unknown`, `error`, borrowing
+    check-provenance.py's vocabulary rather than inventing a second one for the same idea.
+
+    Three classifications are decisions rather than mechanics:
+
+    - **`unknown`** for an entry carrying no recorded digests. The derived half of such an
+      entry could be compared anyway, and deliberately is not: the adopted half cannot be
+      answered without a baseline, and a per-entry verdict that reads `ok` while half of it
+      is unanswerable is the clean-looking-but-partial result this check exists to remove.
+    - **`linked`** for a target that is a symlink to its own source. It cannot be stale,
+      because it *is* the source. Read from the filesystem rather than from the recorded
+      `mode`, since a copy can replace a link between runs.
+    - **`revised`** for the adopted rules module, where the question is not the derived
+      one. A lens is the one file an adopter is invited to rewrite (`build-adapters.md`
+      S-010 and S-014), so comparing their copy against the kit's is noise on every run for
+      anyone who accepted the invitation. What is worth telling them is the other
+      comparison: the kit's own copy has moved since they installed. That is
+      check-provenance.py's question exactly, has the thing we copied *from* changed since
+      we looked, and it is answerable only from the recorded baseline.
+    """
+    target = Path(entry.get("target", ""))
+    source = Path(entry.get("source", ""))
+    recorded = entry.get("digests")
+    if recorded is None:
+        return "unknown", ("installed before digests were recorded, so whether it is "
+                           "current is unknown. Re-install to establish a baseline.")
+    if not (target.exists() or target.is_symlink()):
+        return "diverged", f"the installed target is gone: {target}"
+    if not source.is_dir():
+        return "error", (f"the kit no longer has a source at {source}, so the installed "
+                         f"copy cannot be compared against anything.")
+    if target.is_symlink():
+        try:
+            same = target.resolve() == source.resolve()
+        except OSError:
+            same = False
+        if same:
+            return "linked", "links to its source, so it cannot be stale"
+
+    current = digest_tree(source)
+    if entry.get("name") in ADOPTED_ENTRY_NAMES:
+        moved = _compare(recorded, current)
+        if not moved:
+            return "ok", f"the kit's copy is unchanged since this install "\
+                         f"({len(recorded)} file(s))"
+        return "revised", ("the kit's copy has changed since this install; yours is yours "
+                           "to keep:\n" + "\n".join(f"      {p}" for p in moved))
+
+    problems = _compare(digest_tree(target), current)
+    if not problems:
+        return "ok", f"{len(current)} file(s) match the source"
+    return "diverged", ("DIVERGED from the source:\n"
+                        + "\n".join(f"      {p}" for p in problems))
+
+
+def check(home: Path) -> int:
+    """Report every installed target beneath `home` that no longer matches its source.
+
+    Detect and report, never rewrite. Re-installing is a person's decision, because an
+    adopter may have edited an installed file on purpose and an overwrite destroys that
+    without asking, which is the same call `feat-0043` made for adapted upstream material.
+
+    Exit codes mirror check-provenance.py, including its precedence: an unanswerable run
+    outranks a diverged one, since the first says the report itself cannot be trusted.
+
+    0   every entry beneath this home matches its source, or cannot be stale
+    1   at least one installed target has diverged from its source
+    2   at least one entry has no baseline, or could not be compared at all
+    """
+    manifest = load_manifest()
+    scoped = [e for e in manifest["entries"] if _beneath(e["target"], home)]
+    if not scoped:
+        # Deliberately not zero. Nothing recorded is indistinguishable from a record that
+        # was deleted (S-005), and reporting "current" for an install this tool cannot see
+        # is exactly the silence chore-0031 removes.
+        print(f"Nothing recorded as installed beneath {home}, so nothing can be checked.")
+        print("If skills are installed there, the record is gone: re-install to "
+              "establish a baseline.")
+        return 2
+
+    counts = {"ok": 0, "linked": 0, "revised": 0, "diverged": 0, "unknown": 0, "error": 0}
+    for entry in sorted(scoped, key=lambda e: (e.get("tool", ""), e.get("name", ""))):
+        status, message = _check_entry(entry)
+        counts[status] += 1
+        print(f"{status:9} {entry.get('tool', ''):8} {entry.get('name', '')}  {message}")
+
+    print(f"\n{counts['ok']} current, {counts['diverged']} diverged, "
+          f"{counts['linked']} linked, {counts['revised']} revised upstream, "
+          f"{counts['unknown']} unknown, {counts['error']} error(s).")
+    if counts["diverged"]:
+        print("An installed copy no longer matches this kit. Re-install to refresh it, or "
+              "keep your version: this check never rewrites anything.")
+    if counts["revised"]:
+        print("An adopted file's source has moved since you installed. Your copy is left "
+              "alone; merge the kit's change only if you want it.")
+    if counts["unknown"]:
+        print("An entry predates the digest baseline, so its state is unknown rather than "
+              "current. Re-install to establish one.")
+    if counts["error"] or counts["unknown"]:
+        return 2
+    return 1 if counts["diverged"] else 0
+
+
 def main(argv=None) -> int:
     """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test."""
     ap = argparse.ArgumentParser(description="Install the Zen Agent Skills library.")
     ap.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     ap.add_argument("--uninstall", action="store_true", help="remove what was installed")
+    ap.add_argument("--check", action="store_true",
+                    help="report installed targets beneath --home that no longer match "
+                         "their source; writes nothing")
     ap.add_argument("--mode", choices=["symlink", "copy"],
                     default="copy" if os.name == "nt" else "symlink",
                     help="link mode (default: copy on Windows, symlink elsewhere)")
@@ -594,6 +783,13 @@ def main(argv=None) -> int:
 
     home = Path(args.home).expanduser().resolve() if args.home else Path.home()
 
+    if args.check and args.uninstall:
+        # Refused rather than ordered. Either precedence silently drops half of what was
+        # asked for, and one of the two halves removes files.
+        print("--check and --uninstall ask for different things; run them separately.")
+        return 2
+    if args.check:
+        return check(home)
     if args.uninstall:
         return uninstall(home, args.dry_run)
 

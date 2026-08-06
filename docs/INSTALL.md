@@ -48,7 +48,32 @@ python scripts/install.py --tools claude
 python scripts/install.py --tools opencode
 ```
 
-The installer writes its copy-mode manifest to `scripts/.install-manifest.json` so it can recognize and update files it previously created. It reports a conflict instead of overwriting an unmanaged file.
+The installer writes its copy-mode manifest to `scripts/.install-manifest.json` so it can recognize and update files it previously created. It reports a conflict instead of overwriting an unmanaged file. The manifest also records a SHA256 for every file it places, which is what makes the staleness check below possible.
+
+## Check whether an installed set is still current
+
+An installed skill is a snapshot. In copy mode (the Windows default, and available everywhere) editing a skill in this repository does not change your installed copy, and nothing about the stale copy looks wrong: it is a valid skill that passes both validators and reads correctly. This check is the only thing that will tell you:
+
+```bash
+python scripts/install.py --check
+python scripts/install.py --check --home ./.tmp/zen-home
+```
+
+Pass the same `--home` you installed with. The check reads the manifest, re-reads each installed target, and reports one line per installed module. It writes nothing, ever: an installed file you edited on purpose is yours, and this command will not overwrite it.
+
+| Report | Meaning |
+|---|---|
+| `ok` | Every placed file still matches the kit |
+| `diverged` | At least one file no longer matches, named individually, with the installed and source digests |
+| `linked` | The target is a symlink to its source, so it cannot go stale |
+| `revised` | The kit's copy of an adopter-owned file (the rules module) changed since you installed. Your copy is left alone |
+| `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one |
+
+Exit codes are `0` when everything current, `1` when something diverged, and `2` when the check could not answer (an entry with no baseline, or a source the kit no longer has). Nothing recorded beneath the given home is also a `2`, not a clean result: a check that never saw your install has learned nothing about it.
+
+Run it when a skill behaves like an older version of itself, after pulling changes into this repository, and before trusting an installed skill for anything consequential. The fix for a diverged entry is to re-install: this command deliberately does not do it for you.
+
+The rules module is handled differently on purpose. [`.agents/rules/`](../.agents/rules/) is swappable, and rewriting a lens is something the kit invites you to do, so your edits there are never reported as divergence. What you are told instead is when the kit's own copy of that lens has moved since you installed, which is news you can act on rather than a warning that fires forever.
 
 ## Choose how many skills to install
 

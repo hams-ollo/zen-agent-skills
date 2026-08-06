@@ -27,10 +27,12 @@ One testability constraint remains worked around rather than fixed:
 Recorded as a finding in docs/spec/install.characterization.md.
 """
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -811,6 +813,275 @@ class DraftMarkerTests(unittest.TestCase):
         _, out, _ = self._install("all")
         self.assertIn(f"all={budgets['all']}", out)
         self.assertNotIn(str(len(long_draft) + budgets["all"]), out)
+
+
+class StalenessCheckTests(unittest.TestCase):
+    """chore-0031: whether an installed set still matches the kit it came from.
+
+    The defect is measured, not hypothetical. The globally installed `fix-batch` on the
+    author's machine on 2026-08-06 was a wave-2-era snapshot missing two Step 3 items and
+    the entire delegate report contract, and an agent invoking the skill by name got the
+    older procedure. Nothing could have said so: a stale copy is a valid skill that passes
+    `validate-skills.py`, passes Anthropic's validator, and reads correctly.
+
+    So every oracle here is an exact one: an exit code, the offending skill and file named
+    in the output, or the persisted digest map itself. A "the check ran" assertion would
+    reproduce the silence rather than protect against it.
+
+    Run against a fixture skills tree and a fixture rules module, deliberately, because
+    both directions of divergence have to be reachable: an installed file edited after
+    placement, and a *source* file edited after placement. The second is the actual bug and
+    it cannot be staged against `.agents/`, which the suite must not mutate.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.rules = self.root / "rules"
+        self.skills.mkdir()
+        self.rules.mkdir()
+        self.home = self.root / "home"
+
+        self._real = (inst.SKILLS_DIR, inst.RULES_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.RULES_DIR = self.rules
+        inst.MANIFEST = self.root / "manifest.json"
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "spine": ["alpha"], "all": None}
+
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked")
+        (self.skills / "alpha" / "templates").mkdir()
+        (self.skills / "alpha" / "templates" / "report.md").write_text(
+            "# report\n\nthe supporting file a stale install leaves behind\n",
+            encoding="utf-8")
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes.\n", encoding="utf-8")
+
+    def tearDown(self):
+        (inst.SKILLS_DIR, inst.RULES_DIR,
+         inst.PROFILE_SEEDS, inst.MANIFEST) = self._real
+        self._tmp.cleanup()
+
+    def _install(self, mode="copy", home=None):
+        home = self.home if home is None else home
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = inst.install(["claude"], mode, home, False, "all")
+        self.assertEqual(code, 0, "precondition: the install itself must succeed")
+        return home
+
+    def _check(self, home=None):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home if home is None else home)
+        return code, buf.getvalue()
+
+    def _entries(self):
+        return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+    def _entry(self, name):
+        return next(e for e in self._entries() if e["name"] == name)
+
+    def _installed(self, *parts):
+        return self.home.joinpath(".claude", "skills", *parts)
+
+    @staticmethod
+    def _status(out, name):
+        """The status word the check reported for one entry, or None if it reported none.
+
+        The report is one line per entry, `<status> <tool> <name>  <message>`, so this
+        reads the verdict for a named entry rather than searching the whole output for a
+        word. A substring assertion over the report would pass on a message that merely
+        mentions the word, which is how a check that reports nothing useful still looks
+        green.
+        """
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == name:
+                return parts[0]
+        return None
+
+    def test_an_install_records_a_digest_for_every_file_it_places(self):
+        # The baseline, at the lowest layer, and the reason it is per file rather than per
+        # skill: a skill is a directory, and a stale `templates/report.md` is exactly as
+        # silent as a stale `SKILL.md`. A per-skill digest would satisfy "records
+        # something" and miss half the bug population.
+        self._install()
+        digests = self._entry("alpha")["digests"]
+        self.assertEqual(sorted(digests), ["SKILL.md", "templates/report.md"])
+        expected = hashlib.sha256(
+            (self.skills / "alpha" / "templates" / "report.md").read_bytes()).hexdigest()
+        self.assertEqual(digests["templates/report.md"], expected)
+
+    def test_a_freshly_installed_tree_reports_current_and_exits_zero(self):
+        # The check has to be quiet when nothing is wrong, or nobody will run it twice.
+        self._install()
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual([self._status(out, n) for n in ("alpha", "beta", "rules")],
+                         ["ok", "ok", "ok"])
+        self.assertIn("0 diverged", out)
+        self.assertIn("0 unknown", out)
+
+    def test_a_skill_revised_in_the_kit_after_the_install_is_named_and_exits_non_zero(self):
+        # The measured defect itself: the source moves on, the installed snapshot does not,
+        # and today nothing says so. The oracle names the skill and the file, because a
+        # non-zero exit that does not say what went stale costs the reader the whole
+        # investigation (the same reason check-provenance.py names the drifted source).
+        self._install()
+        source = self.skills / "alpha" / "SKILL.md"
+        source.write_text(source.read_text(encoding="utf-8")
+                          + "\nA step added after the install.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("SKILL.md:", out, "the report must name the file, not only the skill")
+        self.assertEqual(self._status(out, "beta"), "ok",
+                         "an untouched skill must not be swept up in the report")
+
+    def test_a_stale_supporting_file_is_reported_when_the_skill_md_still_matches(self):
+        # The half of the bug population a per-skill or SKILL.md-only digest would miss.
+        self._install()
+        source = self.skills / "alpha" / "templates" / "report.md"
+        source.write_text("# report\n\nrewritten after the install\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("templates/report.md", out)
+
+    def test_a_manifest_written_before_this_change_reports_unknown_not_current(self):
+        # The persisted-format risk. An older manifest carries no digests, and reporting
+        # those entries as current would be a clean result for an unknown state, which is
+        # the failure this check exists to remove one level up. Staged by stripping the key
+        # from a real manifest, so the fixture is the actual older format rather than a
+        # hand-written guess at it.
+        self._install()
+        older = {"entries": [{k: v for k, v in e.items() if k != "digests"}
+                             for e in self._entries()]}
+        inst.MANIFEST.write_bytes(json.dumps(older, indent=2).encode("utf-8"))
+
+        code, out = self._check()
+        self.assertEqual(code, 2, "an unanswerable check must not exit zero")
+        self.assertEqual({self._status(out, n) for n in ("alpha", "beta", "rules")},
+                         {"unknown"},
+                         "no entry may read as current without a recorded baseline")
+        self.assertIn("re-install to establish a baseline", out.lower())
+
+    def test_an_adopter_edited_rules_file_is_not_reported_as_divergence(self):
+        # The noise case, and the reason it is decided rather than mechanical. A lens is the
+        # one file an adopter is invited to rewrite (build-adapters.md S-010 and S-014), so
+        # an unconditional "differs from source" here fires on every run forever for anyone
+        # who accepted the invitation, and a check that cries wolf is a check nobody runs.
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "rules"), "ok")
+        self.assertIn("0 diverged", out)
+
+    def test_a_rules_file_the_kit_revised_since_the_install_is_reported_as_revised(self):
+        # The other half of the same decision. The adopter's copy is theirs, so what is
+        # worth telling them is that the copy they were handed has moved, which is
+        # check-provenance.py's question and is answerable only from the recorded baseline.
+        # Exit-neutral on purpose: it is news, not a fault.
+        self._install()
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "news about an adopted file is not a failure")
+        self.assertEqual(self._status(out, "rules"), "revised")
+        self.assertIn("house-style.md", out)
+
+    def test_an_installed_target_removed_by_hand_is_reported_rather_than_passing(self):
+        # Absence is divergence too. A check that only compares files it can open would
+        # report a clean run for a home the skill is simply gone from.
+        self._install()
+        shutil.rmtree(self._installed("alpha"))
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("gone", out)
+
+    def test_the_check_never_rewrites_the_install_or_the_record(self):
+        # The decision this shares with feat-0043: detect and report, never overwrite. An
+        # adopter may have edited an installed file deliberately, and a check that "fixed"
+        # it would destroy that without asking. Asserted over bytes on both sides, since a
+        # silent repair is exactly what would otherwise make the divergence test go green.
+        self._install()
+        target = self._installed("alpha", "SKILL.md")
+        target.write_bytes(b"---\nname: alpha\ndescription: mine now\n---\n")
+        before_target = target.read_bytes()
+        before_manifest = inst.MANIFEST.read_bytes()
+
+        code, _ = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(target.read_bytes(), before_target)
+        self.assertEqual(inst.MANIFEST.read_bytes(), before_manifest)
+
+    def test_the_check_is_scoped_to_the_home_it_is_given(self):
+        # One manifest serves every home installed to from this checkout (S-012). Without
+        # scoping, a diverged throwaway home would fail a check of the real one, which is
+        # the same class of defect bug-0003 fixed for --uninstall.
+        other = self.root / "other-home"
+        self._install()
+        self._install(home=other)
+        shutil.rmtree(other / ".claude" / "skills" / "alpha")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "another home's divergence must not fail this one")
+        self.assertNotIn(str(other), out)
+
+    @unittest.skipUnless(SYMLINKS_WORK, "this platform or account cannot create symlinks")
+    def test_a_symlinked_target_cannot_be_stale_and_is_not_reported(self):
+        # The POSIX default. A link *is* its source, so digesting it against the source
+        # would always agree, but a source edited after the install would still leave the
+        # recorded digest behind. Reporting that as divergence would fire on every POSIX
+        # install of a kit under development: noise, and wrong.
+        self._install(mode="symlink")
+        source = self.skills / "alpha" / "SKILL.md"
+        source.write_text(source.read_text(encoding="utf-8") + "\nrevised.\n",
+                          encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "alpha"), "linked")
+        self.assertNotIn("DIVERGED", out)
+
+    def test_the_check_is_reachable_from_the_command_line(self):
+        # The entrypoint layer: the flag has to be wired to the function, and `--home` has
+        # to reach it, or every instruction in INSTALL.md is wrong.
+        self._install()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--check", "--home", str(self.home)])
+        self.assertEqual(code, 0)
+        self.assertIn("current", buf.getvalue())
+
+    def test_asking_to_check_and_uninstall_at_once_is_refused_and_removes_nothing(self):
+        # Either precedence silently drops half the request, and one of those halves
+        # deletes files.
+        self._install()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--check", "--uninstall", "--home", str(self.home)])
+        self.assertEqual(code, 2)
+        self.assertTrue(self._installed("alpha").is_dir(),
+                        "a refused invocation must not remove anything")
+
+    def test_checking_a_home_with_nothing_recorded_does_not_report_it_as_current(self):
+        # S-005's shape, one level up: a deleted record makes previous copies unmanaged, so
+        # a check that found no entries has learned nothing about what is on disk. Exiting
+        # zero there would answer "current" for a home it never looked at.
+        code, out = self._check(self.root / "never-installed")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing can be checked", out)
 
 
 class HookRegistrationTests(unittest.TestCase):
