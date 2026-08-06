@@ -27,7 +27,7 @@ A skills library, not an application. The deliverables are the skills under [`.a
 | [`.agents/skills/`](.agents/skills/) | The skills. One directory per skill, each with a `SKILL.md` harness-agnostic body. |
 | [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities. Adopters may replace either. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
 | [`.agents/hooks/`](.agents/hooks/) | Optional runtime guardrails (Python on stdin), each a *reminder* (injects context, never blocks) or a *gate* (blocks, only when the condition is decidable from the payload). The only thing the kit ships that runs inside an adopter's session, so installation is opt-in and activation is theirs: `install.py --with-hooks` places the files and prints the registration rather than editing anyone's settings. Contract in [`.agents/hooks/README.md`](.agents/hooks/README.md). |
-| [`scripts/`](scripts/) | `install.py`, `build-adapters.py`, `validate-skills.py`. |
+| [`scripts/`](scripts/) | `install.py`, `build-adapters.py`, `validate-skills.py`, `check-provenance.py`. |
 | [`.tasks/`](.tasks/) | Atomic, agent-assignable work items for building this kit, plus `validate.py`. |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications (the contracts), plus the reports that sit beside them, one file kind per question asked: `<spec>.conformance.md` audits code against the contract, `<spec>.verification.md` records a verdict with evidence, `<spec>.readiness.md` records a go/no-go gate over a spec plus its task decomposition, `<spec>.characterization.md` records behavior pinned before a contract existed. |
 | [`tests/`](tests/) | The kit's own tests, derived from the specifications under `docs/spec/`. |
@@ -104,6 +104,38 @@ Follow [`.agents/rules/house-style.md`](.agents/rules/house-style.md) for writin
 
 - **Python** (tooling under `scripts/` and `.tasks/validate.py`): standard library only where possible, so it runs anywhere with a bare Python 3. PEP 8. No third-party dependency unless truly load-bearing and documented.
 - **Cross-platform**: target Windows, macOS, and Linux. Prefer `pathlib`; never assume POSIX symlinks are available.
+
+### Provenance for material folded in from elsewhere
+
+A meaningful share of this kit was adapted from somewhere else, and prose credit alone decays into folklore. `ROADMAP.md` once credited `doc-sync` to an upstream `document` workflow that was never vendored here, and the only surviving trace of the real contract was one line inside a gitignored folder that no longer exists. The attribution went wrong in under two weeks, and nothing could check it.
+
+So any file or region adapted from an external source carries a **provenance block**, and [`scripts/check-provenance.py`](scripts/check-provenance.py) re-fetches every recorded source and reports drift.
+
+| Field | Required | Content |
+|---|---|---|
+| `source` | yes | Absolute raw URL of the exact upstream file, not the repository's landing page. This is what gets re-fetched. |
+| `author` | yes | The upstream author, named. |
+| `license` | yes | The upstream license. |
+| `retrieved` | yes | ISO date the fetch actually ran. |
+| `sha256` | yes | SHA256 of the retrieved upstream bytes. |
+| `origin` | no | A further hop, when the immediate source is itself carrying the material from somewhere else. Prose only, never fetched. |
+| `note` | no | One line of context. |
+| `status` | no | `unlocatable`, when the upstream source genuinely cannot be found. It replaces `retrieved` and `sha256`, and makes `note` required, where the note says what was searched. |
+
+Placement follows the file type, and there is no sidecar file: a Python hook carries the block in a `Provenance` section of its module docstring, a skill in a `## Provenance` body footer inside a fenced code block tagged `provenance`, and a rules lens the same way. One adapted file may carry more than one block when it draws on more than one upstream file. A `source:` line alone does not make a block: the parser requires at least one other field, because `source:` is an ordinary word that other templates use.
+
+A skill's block never becomes a new frontmatter key. `ALLOWED_FRONTMATTER_KEYS` in `validate-skills.py` deliberately mirrors Anthropic's own six-key schema, so a seventh key would be rejected by Anthropic's validator even after ours was widened to accept it. Use the body footer, or the existing `license` or `metadata` key.
+
+Four rules the convention only works if you follow:
+
+- **Digest the retrieved upstream content, never the adapted local file.** The local file is expected to differ, because adaptation is the point. The digest answers whether the thing we adapted *from* has changed since we looked, which is the only question a drift check can honestly answer for adapted material.
+- **Fetch with `urllib` and digest with `hashlib`.** Never use an agent's web-fetching tool. Those return a model-summarized markdown conversion of a page rather than its bytes, so the digest would be a digest of a summary: stable-looking, meaningless, and impossible for anyone to reproduce.
+- **The block records the immediate source, not the origin.** You can only drift-check what you actually retrieved, so the digest belongs to the file you fetched. When the chain has a further hop, name it in `origin` and leave tracking its drift to whoever fetched it.
+- **An unlocatable source is recorded, not guessed.** A confident-looking digest for content nobody re-fetched is worse than no provenance at all, because a wrong digest reads as verified and passes every automated check.
+
+A block backfilled after the fact pins upstream as of its `retrieved` date, not the exact bytes originally adapted, whenever the snapshot that was adapted from is gone. Say so in `note` rather than letting the date imply more than it proves.
+
+The check stays out of required CI: it needs network, and a check that fails when GitHub is slow gets disabled within a week. Run it on demand. It reports drift and never syncs. Upstream's own `sync-maintainability-review.mjs` rewrites its vendored region in place, which is correct for verbatim vendoring and wrong here, because every fold-in in this kit was house-styled and retargeted and an overwrite would destroy the adaptation.
 
 ## 7. Contribution bar
 

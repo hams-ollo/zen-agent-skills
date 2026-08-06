@@ -48,7 +48,11 @@ A `--profile` selects how many skills to place (`core`, `spine`, or `all`), and 
 - `.github/prompts/<skill-name>.prompt.md` for VS Code or Copilot.
 - `.agents/rules/` and `.agents/skills/<skill-name>/`, the shared material both adapter sets link to.
 
+A third target, `plugin`, emits a Claude Code plugin tree instead: `skills/<name>/SKILL.md` plus `rules/`, under a `.claude-plugin/` manifest pair. It is opt-in rather than part of the default target set, because a plugin is a distribution channel rather than a project-local adapter. It is also the one target that rewrites nothing: its layout mirrors the source geometry with the `.agents/` segment dropped, so all three link classes below already resolve, and each skill is copied verbatim.
+
 An adapter does not sit where the skill sits, so inlining a body verbatim would break every relative link in it. Three classes are rewritten as the body is inlined: a sibling skill becomes the adapter generated beside it, the rules module becomes `../../.agents/rules/<file>`, and a skill-local template becomes `../../.agents/skills/<name>/<path>`. Both adapter directories are two levels below the project root, so the shared material has one location rather than one per target. An existing `.agents/rules/` file is never overwritten, since that module is swappable and a project's own copy outranks the kit's.
+
+**A plugin whose manifest validates can still be broken, and the failure is silent.** Installing a plugin copies its directory to a cache location, so a skill that references a file outside that directory loses it. `claude plugin validate --strict` returns "Validation passed" against a tree whose rules module has been deleted, measured 2026-08-06, so the schema validator cannot answer this question. What answers it is resolving every emitted link on disk, which is what the `plugin` target's tests assert.
 
 These adapters are derived artifacts. Change the source skill, then regenerate them. Do not maintain a second, hand-edited copy of the instructions.
 
