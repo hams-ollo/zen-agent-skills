@@ -14,7 +14,22 @@ Both exist because this file does not travel with a packaged skill. The
 distribution unit is the skill directory, so anything at the repository root is
 left behind by the installers, by `npx skills`, and by a `.skill` archive. The
 body note is what a person reads; the frontmatter field is what a registry or a
-packaging tool can inspect. Keep all three in agreement.
+packaging tool can inspect. Keep all of them in agreement.
+
+Since 2026-08-06 (feat-0043) each adapted file also carries a machine-readable
+provenance block naming the exact upstream file, its author, its license, the
+date it was retrieved, and the SHA256 of the retrieved bytes. The block travels
+with the file, so it survives packaging the way this NOTICE does not, and
+`scripts/check-provenance.py` re-fetches every recorded source and reports drift.
+The convention, including where the block lives in each file type and why the
+digest is of the upstream bytes rather than of the adapted file, is in the
+conventions section of AGENTS.md.
+
+The blocks listed below were backfilled on 2026-08-06, well after the fold-ins
+themselves. The vendored snapshot they were adapted from was gitignored and is
+gone, so each digest pins upstream as of the backfill date rather than proving
+the exact bytes originally adapted. That is the honest limit of a backfill, and
+it is recorded in each block's note rather than left for a reader to infer.
 
 - repoprompt-workflows (RepoPrompt Workflows)
   - author: Balarama Bosch
@@ -28,10 +43,18 @@ packaging tool can inspect. Keep all three in agreement.
       - .agents/skills/test-quality/SKILL.md
       - .agents/skills/spec-conformance/SKILL.md
 
-  - also adapted into the hooks module (feat-0038). Same upstream, same license.
-    These are Python rather than skill bodies, so the provenance note lives in each
-    file's docstring instead of in frontmatter:
+  - also adapted into the review lens. The composable quality-lens pattern comes
+    from upstream's review-quality skill; the evidence gate and the stable finding
+    signature come from upstream's Deep Review workflow, taken as two mechanisms
+    rather than as the workflow around them. Two upstream files, so this one
+    records two provenance blocks:
+      - .agents/rules/review-quality.md
+
+  - also adapted into the hooks module (feat-0038, feat-0039). Same upstream, same
+    license. These are Python rather than skill bodies, so the provenance note and
+    block live in each file's docstring instead of in frontmatter:
       - .agents/hooks/delegation-reminder.py
+      - .agents/hooks/spec-conformance-gate.py
     The harness wiring in .codex/hooks.json and .opencode/plugins/zen-hooks.mjs
     follows the shape of upstream's equivalents and is credited the same way.
 

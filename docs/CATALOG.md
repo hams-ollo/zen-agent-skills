@@ -26,7 +26,7 @@ A skill is only listed as **shipped** once it lives under [`.agents/skills/`](..
 
 ## The contract-driven delivery spine (Epic B, in progress)
 
-These skills make the roadmap's contract-driven delivery spine real. All nine were dogfooded on real in-kit work before being blessed: seven on 2026-07-24, `doc-sync` on 2026-07-25, and `review-depth` on 2026-08-05. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE). Four (`spec-author`, `test-author`, `verifier-agent`, `doc-sync`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
+These skills make the roadmap's contract-driven delivery spine real. All nine were dogfooded on real in-kit work before being blessed: seven on 2026-07-24, `doc-sync` on 2026-07-25, and `review-depth` on 2026-08-05. Four of them (`spec-quality`, `spec-plan-readiness`, `test-quality`, `spec-conformance`) were folded in from `repoprompt-workflows` (Balarama Bosch, MIT) and house-styled; provenance is recorded in [`NOTICE`](../NOTICE) and, since `feat-0043`, in a checkable provenance block inside each adapted file (see "What the kit borrows, and how you can check it" below). Four (`spec-author`, `test-author`, `verifier-agent`, `doc-sync`) were authored in the kit by extracting the discipline from the upstream workflows into portable skills. This is where the kit dogfoods its own spine, with specifications living under [`docs/spec/`](spec/) and the resulting tests under [`tests/`](../tests/).
 
 With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an idea becomes a specification, the specification is gated, decomposed, implemented, tested, audited, and independently verified before anything lands. `doc-sync` closes the documentation half of that loop and `review-depth` decides how hard the review half looks. Where the spine goes next is no longer a single skill: it is about making its rules hold mechanically rather than by an agent remembering them. Two of those landed on 2026-08-05, an evidence gate so a finding must prove its citation (`feat-0040`) and a required evidence contract from every delegated agent (`feat-0041`). Repeat detection, so a review-fix loop cannot spin, is still open and waits on the finding signature the evidence gate now defines. Alongside them sits `user-testing`, which stays held until there is real user-facing work to author it against. The enforcement half of that shift already ships as the [hooks module](../.agents/hooks/README.md).
 
@@ -67,6 +67,14 @@ The [hooks module](../.agents/hooks/README.md) is the answer to the second kind.
 | `spec-conformance-gate` | gate | work a contract governs is closed with no audit of whether the implementation matches it |
 
 These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
+
+## What the kit borrows, and how you can check it
+
+Some of what is above came from somewhere else, chiefly Balarama Bosch's [repoprompt-workflows](https://github.com/moonray/repoprompt-workflows) (MIT): four of the Epic B lenses, the review lens, and both hooks. Attribution for all of it is in [`NOTICE`](../NOTICE).
+
+Prose credit on its own decays, though. This kit's own roadmap once credited a skill to an upstream workflow that had never been vendored here, and by the time anyone noticed, the folder that would have settled it was gone. So since `feat-0043` every adapted file also carries a **provenance block**: the exact upstream file it came from, the author, the license, the date it was retrieved, and the SHA256 of the bytes that were retrieved. Running `scripts/check-provenance.py` re-fetches each recorded source and tells you whether upstream has moved since.
+
+Two properties are worth knowing if you adopt this. The digest is of the *upstream* file, never of the adapted local one, which differs on purpose, so what the check answers is "has the thing we adapted from changed", not "has anyone edited our copy". And the check only ever reports: it never rewrites an adapted file, because overwriting a house-styled adaptation with upstream's current text would silently undo the adaptation. A source that genuinely cannot be located is recorded as unlocatable rather than given a plausible-looking guess, since a wrong digest reads as verified.
 
 ## The two building blocks the whole kit reuses
 

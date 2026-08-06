@@ -203,3 +203,16 @@ When drafting from a source request rather than reviewing an existing draft:
 ## Conventions
 
 Wording added or edited under this lens should follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter may replace it without touching this skill.
+
+## Provenance
+
+Adapted from RepoPrompt Workflows by Balarama Bosch (MIT). The digest below is of the retrieved upstream file, not of this adapted one, which differs by design. Re-check it by running `scripts/check-provenance.py` in the Zen Agent Skills repository.
+
+```provenance
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/spec-quality/SKILL.md
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 16ed2f2066cab2403a1e2726c85424601944accce7ab673866202699c2aeca2e
+note: backfilled baseline (feat-0043). The snapshot this skill was adapted from is gone, so the digest pins upstream as of the retrieved date, not the exact bytes adapted.
+```

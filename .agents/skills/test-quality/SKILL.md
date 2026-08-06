@@ -165,3 +165,18 @@ When summarizing test work, state:
 - any raw or generated fixture strategy;
 - validation commands run;
 - coverage intentionally omitted, consolidated, moved to smoke/diagnostics, or deferred.
+
+## Provenance
+
+Adapted from RepoPrompt Workflows by Balarama Bosch (MIT). The digest below is of the retrieved
+upstream file, not of this adapted one, which differs by design. Re-check it by running
+`scripts/check-provenance.py` in the Zen Agent Skills repository.
+
+```provenance
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/test-quality/SKILL.md
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: dc621e95b73dd0faf757536d03a23e985465507e4714eef66bc2944bc290a781
+note: backfilled baseline (feat-0043). The snapshot this skill was adapted from is gone, so the digest pins upstream as of the retrieved date, not the exact bytes adapted.
+```

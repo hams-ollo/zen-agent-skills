@@ -2,7 +2,7 @@
 id: feat-0043
 title: Establish a reproducible provenance convention for material folded in from upstream sources
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: []
@@ -55,9 +55,9 @@ come from, what exactly did we take, and has it changed.
 - Backfill provenance for the material already folded in, which is the seven files listed below.
 - Extend `NOTICE` where the backfill turns up attribution that is currently thinner than it should
   be. One gap is already known: `NOTICE` lists
-  [`delegation-reminder.py`](../.agents/hooks/delegation-reminder.py) under the hooks module and
-  does not list [`spec-conformance-gate.py`](../.agents/hooks/spec-conformance-gate.py).
-- Update [`docs/CATALOG.md`](../docs/CATALOG.md) where it describes what the kit borrows, so a reader
+  [`delegation-reminder.py`](../../.agents/hooks/delegation-reminder.py) under the hooks module and
+  does not list [`spec-conformance-gate.py`](../../.agents/hooks/spec-conformance-gate.py).
+- Update [`docs/CATALOG.md`](../../docs/CATALOG.md) where it describes what the kit borrows, so a reader
   browsing the catalog learns the convention exists.
 
 **New files**, named here rather than in `touched_files` because `validate.py --strict` requires
@@ -131,6 +131,30 @@ path for each has to be found in upstream's current repository or recorded as un
 "unlocatable" honestly is required by the acceptance criteria; guessing a plausible URL and digesting
 whatever it returns is the specific failure this task exists to prevent.
 
+## Decisions
+
+- **Rejected: recording the origin rather than the immediate source.** The block records the file
+  actually fetched and adapted from, because a digest can only honestly drift-check content that was
+  really retrieved. A further hop is recorded in an optional `origin:` field that is prose and is
+  never fetched, leaving its drift to whoever fetched it. None of the seven needed one: upstream's
+  `NOTICE` shows only `maintainability-review` is doubly vendored, and this kit has not folded that in.
+- **Rejected: a manifest or sidecar registry listing every provenance record.** The blocks live in
+  the adapted files and `check-provenance.py` discovers them by scanning `.agents/` and `scripts/`,
+  so a new fold-in cannot be forgotten in a registry nobody remembered to edit. The cost is that the
+  scan needs a scope, and `AGENTS.md`, `docs/`, and `tests/` are deliberately outside it because they
+  contain illustrative blocks rather than records of a real fold-in.
+- **Premise that turned out false: that some of the seven sources would be unlocatable.** The task
+  anticipated recording "unlocatable" for skills whose vendored snapshot is gone. All seven were
+  located in upstream's current tree at the same relative paths, confirmed by listing that tree and
+  checking each file's own `name:` or docstring against the local adaptation, so every backfilled
+  record carries a real digest and none is unlocatable. The `status: unlocatable` state is still
+  defined, implemented, and tested, because the next fold-in may need it.
+- **Seam left open deliberately: the recorded digest is a backfill baseline, not proof of the bytes
+  originally adapted.** The snapshot the fold-ins were adapted from was gitignored and is gone, so a
+  digest taken today pins upstream as of 2026-08-06 and cannot certify what was taken in July. Each
+  backfilled block says so in its `note:`. Closing this seam is not possible without the lost
+  snapshot, and it should not be papered over by a date that implies more than it proves.
+
 ## Risks and rollback
 
 Touches more than one module (`scripts/`, `AGENTS.md`, `NOTICE`, `docs/CATALOG.md`, plus the seven
@@ -152,30 +176,30 @@ Rollback is a revert; nothing depends on the block being present.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] The provenance convention is stated in the conventions section of `AGENTS.md`.
-- [ ] `scripts/check-provenance.py` exits 0 when every recorded digest matches and non-zero on
+- [x] The provenance convention is stated in the conventions section of `AGENTS.md`.
+- [x] `scripts/check-provenance.py` exits 0 when every recorded digest matches and non-zero on
       drift, with the drifted source named in its output.
-- [ ] It is standard library only and degrades cleanly (non-zero with a clear message, not a
+- [x] It is standard library only and degrades cleanly (non-zero with a clear message, not a
       traceback) when the network is unavailable.
-- [ ] Tests cover the match, drift, and unreachable-source paths with a stubbed fetch rather than
+- [x] Tests cover the match, drift, and unreachable-source paths with a stubbed fetch rather than
       live network.
-- [ ] All seven backfill targets in the Scope table carry a provenance block, or are recorded as
+- [x] All seven backfill targets in the Scope table carry a provenance block, or are recorded as
       unlocatable with that stated in the block.
-- [ ] Every backfilled entry carries a retrieval date from the day the backfill ran, and every digest
+- [x] Every backfilled entry carries a retrieval date from the day the backfill ran, and every digest
       was produced by an actual `urllib` fetch on that day.
-- [ ] Any source that could not be located is recorded as unlocatable rather than omitted.
-- [ ] `NOTICE` lists `spec-conformance-gate.py`, closing the known gap.
-- [ ] `scripts/validate-skills.py` exits 0 with no new errors or warnings, **and its
+- [x] Any source that could not be located is recorded as unlocatable rather than omitted.
+- [x] `NOTICE` lists `spec-conformance-gate.py`, closing the known gap.
+- [x] `scripts/validate-skills.py` exits 0 with no new errors or warnings, **and its
       `ALLOWED_FRONTMATTER_KEYS` is byte-identical to its current value**.
-- [ ] `docs/CATALOG.md` tells a reader the convention exists.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] `docs/CATALOG.md` tells a reader the convention exists.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only
       a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.

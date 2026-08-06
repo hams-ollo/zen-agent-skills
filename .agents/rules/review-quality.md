@@ -178,3 +178,30 @@ gate into "report it with a note" gets back the failure mode it was written for,
 confident citations that point at nothing. The point of
 pulling it into its own file is that the override is a one-file edit, and no adopter inherits a
 review bar they did not choose.
+
+## Provenance
+
+This lens draws on two upstream files rather than one, so it records two blocks. The composable
+quality-lens pattern comes from the `review-quality` skill in Balarama Bosch's RepoPrompt Workflows
+(MIT); the evidence gate and the stable finding signature come from the Deep Review workflow in the
+same repository, taken as two mechanisms rather than as the workflow around them. Neither digest is
+of this file, which differs from both by design. Re-check them by running
+`scripts/check-provenance.py` in the Zen Agent Skills repository.
+
+```provenance
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/review-quality/SKILL.md
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 5cf5a6e599f13e13b9b4ad8e93115d76c39310ff8d48b92c016a7a39c77be19b
+note: source of the composable quality-lens pattern. Backfilled baseline (feat-0043); the snapshot adapted from is gone, so this pins upstream as of the retrieved date.
+```
+
+```provenance
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/workflows/Deep-Review.md
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 77437e6e78fd10bde508be37aed1d4339c4572b9d58a9f0bb745a6f95f637795
+note: source of the evidence gate and the stable finding signature. Backfilled baseline (feat-0043); the snapshot adapted from is gone, so this pins upstream as of the retrieved date.
+```

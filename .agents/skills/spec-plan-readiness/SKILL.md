@@ -170,3 +170,18 @@ sentence-case headings, clickable relative links, named sources, no em-dashes. T
 swappable default; a downstream adopter may replace it without touching this skill. This governs the
 readiness report's wording. It does not govern the spec or the task files being gated, which belong
 to their own repository and are read-only here.
+
+## Provenance
+
+Adapted from RepoPrompt Workflows by Balarama Bosch (MIT). The digest below is of the retrieved
+upstream file, not of this adapted one, which differs by design. Re-check it by running
+`scripts/check-provenance.py` in the Zen Agent Skills repository.
+
+```provenance
+source: https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/spec-plan-readiness/SKILL.md
+author: Balarama Bosch
+license: MIT
+retrieved: 2026-08-06
+sha256: 7ca4c4d81814c82ac22ba8770635a498fa91991ff945237dc27d491cf738d2c9
+note: backfilled baseline (feat-0043). The snapshot this skill was adapted from is gone, so the digest pins upstream as of the retrieved date, not the exact bytes adapted.
+```
