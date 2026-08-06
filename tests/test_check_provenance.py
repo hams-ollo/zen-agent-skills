@@ -23,6 +23,8 @@ The defect each group protects against:
                   would pressure the next author into guessing a URL instead of recording
                   the truth: the exact failure the convention exists to prevent
   malformed     - a record missing its digest, or carrying a placeholder one, passes silently
+  blank line    - one blank line inside a block deletes the record from the run entirely,
+                  and the checker reports a clean count nobody has reason to doubt
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
@@ -46,11 +48,13 @@ UPSTREAM_SHA = hashlib.sha256(UPSTREAM).hexdigest()
 URL = "https://raw.githubusercontent.com/moonray/repoprompt-workflows/main/.agents/skills/x/SKILL.md"
 
 
-def block(sha=UPSTREAM_SHA, url=URL, retrieved="2026-08-06"):
+def block(sha=UPSTREAM_SHA, url=URL, retrieved="2026-08-06", gap=""):
+    """One provenance block. `gap="\\n"` puts a blank line after `source:` (bug-0016)."""
     return (
         "## Provenance\n\n"
         "```provenance\n"
         f"source: {url}\n"
+        f"{gap}"
         "author: Balarama Bosch\n"
         "license: MIT\n"
         f"retrieved: {retrieved}\n"
@@ -292,6 +296,77 @@ class ParsingTest(unittest.TestCase):
         self.assertIn("missing required field(s): author", output)
 
 
+class BlankLineInsideABlockTest(unittest.TestCase):
+    """bug-0016: one blank line inside a block deleted the record, silently, at exit 0.
+
+    The blank line is the bug population, so every oracle here runs against a block that
+    carries one. Before the fix these produced zero records, and the run printed "No
+    provenance records found." and exited 0: the same output a repository with nothing
+    folded in produces. So asserting "does not crash" or "exits 0" would have passed
+    against the bug. The oracle has to assert the record was actually collected and
+    checked.
+    """
+
+    def test_parser_keeps_a_block_whose_source_is_separated_by_a_blank_line(self):
+        records = cp.parse_records(block(gap="\n"))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source"], URL)
+        self.assertEqual(records[0]["author"], "Balarama Bosch")
+        self.assertEqual(records[0]["sha256"], UPSTREAM_SHA)
+
+    def test_the_block_is_reported_in_the_counts_not_silently_absent(self):
+        code, output = run(block(gap="\n"), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_drift_is_still_detected_across_the_blank_line(self):
+        # The record has to be genuinely fetched and compared, not merely counted.
+        moved = b"upstream has been rewritten\n"
+        code, output = run(block(gap="\n"), serve(moved))
+        self.assertEqual(code, 1)
+        self.assertIn("DRIFT", output)
+        self.assertIn(URL, output)
+        self.assertIn(hashlib.sha256(moved).hexdigest(), output)
+
+    def test_a_blank_line_block_missing_a_required_field_is_still_reported(self):
+        # The opposite failure: a grammar tightened until nothing malformed is ever
+        # reported would be a hole, not a fix. A typo must still surface.
+        body = block(gap="\n").replace("author: Balarama Bosch\n", "")
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("missing required field(s): author", output)
+
+    def test_a_blank_line_does_not_read_across_intervening_prose(self):
+        # Bounds the widening. Blank lines are transparent; prose is not. Without this, a
+        # stray `source:` line would collect recognised keys from anywhere below it.
+        text = (
+            f"source: {URL}\n"
+            "author: Balarama Bosch\n"
+            "\n"
+            "## An unrelated heading\n"
+            "\n"
+            "license: MIT\n"
+        )
+        records = cp.parse_records(text)
+        self.assertEqual(len(records), 1)
+        self.assertNotIn("license", records[0])
+
+    def test_an_unrelated_source_field_followed_by_blank_lines_is_still_ignored(self):
+        # The review-depth collision, retested against the new terminator: whitespace
+        # after a template's own `source:` field must not let it reach a later key line.
+        text = (
+            "depth: quick | standard | deep\n"
+            "source: detected | user\n"
+            "\n"
+            "\n"
+            "Rules:\n"
+            "\n"
+            "license: MIT\n"
+        )
+        self.assertEqual(cp.parse_records(text), [])
+
+
 class RepositoryRecordsTest(unittest.TestCase):
     """Every block actually recorded in this repository is well formed. No network."""
 
@@ -314,6 +389,23 @@ class RepositoryRecordsTest(unittest.TestCase):
             ".agents/hooks/spec-conformance-gate.py",
         ):
             self.assertIn(expected, recorded)
+
+    def test_the_recorded_set_is_eight_records_across_seven_files(self):
+        # Pins the count in both directions. A grammar widened until it collects unrelated
+        # `source:` lines raises it; one narrowed until a real block drops out lowers it,
+        # and the second failure is the silent one.
+        found = cp.collect(REPO_ROOT)
+        self.assertEqual(len(found), 8)
+        self.assertEqual(len({rel for rel, _ in found}), 7)
+
+    def test_the_review_depth_output_template_contributes_no_records(self):
+        # The real file, not a fixture. `source: detected | user` in review-depth's output
+        # block is the collision the grammar was tightened for: if a later change widens
+        # it, the checker starts failing on a skill nobody touched.
+        path = REPO_ROOT / ".agents" / "skills" / "review-depth" / "SKILL.md"
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("source: detected | user", text, "fixture is stale; the field moved")
+        self.assertEqual(cp.parse_records(text), [])
 
 
 if __name__ == "__main__":
