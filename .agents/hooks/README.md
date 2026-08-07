@@ -47,6 +47,11 @@ A block with no stated escape is a trap. Whoever hits it has to read the source 
 |---|---|---|---|
 | [`delegation-reminder.py`](delegation-reminder.py) | reminder | `PostToolUse` | a delegated agent's report returns |
 | [`spec-conformance-gate.py`](spec-conformance-gate.py) | **gate** | `PostToolUse` | work a contract governs is closed with no conformance matrix |
+| [`skill-reachability-reminder.py`](skill-reachability-reminder.py) | reminder | `SessionStart` | a new session starts with no skill reachable at either scope |
+
+The reachability reminder is the first hook here on a lifecycle event rather than a tool call, and adding it exposed a defect worth recording. `HOOK_REGISTRATIONS` in `install.py` carried `(script, matcher)` pairs while the registration builder emitted them under a hardcoded `PostToolUse`, so a hook on any other event would have been placed by `--with-hooks` and never registered: installed, correct-looking, and doing nothing, which is the same failure this module was bitten by twice while it was being built. The table carries the event now.
+
+It is also the only hook whose Claude Code registration is **committed** rather than printed. See the conventions section of `AGENTS.md` for why, and for the opt-in rule that decision bends.
 
 The gate recognises two closing shapes for one rule. A spec file reaching a terminal status is the portable shape, for repositories whose specs carry a closing status. A task file carrying a `spec:` reference being set to `status: done` is the shape this kit uses, and without it the gate would be inert here: this repository's spec lifecycle is `draft` then `approved` and stops. **A guardrail that cannot fire in the repository that ships it is one nobody has ever seen work.**
 

@@ -11,8 +11,13 @@
 // papered over. A gate, when one is added, maps cleanly: throwing errors the tool result,
 // and the model sees the reason.
 //
-//   delegation-reminder   -> tool.execute.after (task):        warn log. [best-effort]
-//   spec-conformance-gate -> tool.execute.after (write/edit):  throw.    [enforced]
+//   delegation-reminder        -> tool.execute.after (task):       warn log. [best-effort]
+//   spec-conformance-gate      -> tool.execute.after (write/edit): throw.    [enforced]
+//   skill-reachability-reminder -> event (session start):          warn log. [best-effort]
+//
+// The reachability reminder inherits the same weakness as the delegation one: it surfaces
+// as a warn log rather than as context the model reads. That is worth stating twice,
+// because a reminder nobody reads is the failure it was written to prevent.
 //
 // The gate maps cleanly where the reminder does not: throwing errors the tool result, so
 // the model sees the reason and must reconcile before closing. That asymmetry is the whole
@@ -72,7 +77,24 @@ async function note(client, result) {
 
 export const ZenHooks = async ({ worktree, directory, client }) => {
   const root = () => worktree || directory || process.cwd();
+  let reachabilityReported = false;
   return {
+    // Fired once per plugin load, which is the closest thing opencode offers to a
+    // session start. Guarded rather than trusted: if the event fires more than once, a
+    // repeated reminder is exactly the noise the Claude Code path avoids by matching
+    // only `startup`.
+    event: async ({ event }) => {
+      if (reachabilityReported) return;
+      if (event?.type !== "session.created" && event?.type !== "session.start") return;
+      reachabilityReported = true;
+      const rootDir = root();
+      await note(client, runHook("skill-reachability-reminder.py", {
+        hook_event_name: "SessionStart",
+        source: "startup",
+        cwd: rootDir,
+      }, rootDir));
+    },
+
     "tool.execute.after": async (input, output) => {
       const tool = input?.tool;
       const rootDir = root();

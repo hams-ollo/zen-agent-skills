@@ -1131,6 +1131,58 @@ class HookRegistrationTests(unittest.TestCase):
         # wirings: see WiringConsistencyTests in tests/test_hooks.py.
 
 
+class RegistrationCarriesTheEventTests(unittest.TestCase):
+    """feat-0046: the registration builder must not hardcode one lifecycle event.
+
+    HOOK_REGISTRATIONS carried (script, matcher) while claude_registration() emitted the
+    entries under a hardcoded PostToolUse. Every hook in the module was PostToolUse, so
+    nothing surfaced it. A hook on any other event would have been placed by --with-hooks
+    and never registered: installed, correct-looking, and doing nothing, which is the
+    failure this module was already bitten by twice while it was being built.
+
+    These tests exist so the event dimension cannot quietly collapse back.
+    """
+
+    def test_every_registration_entry_carries_an_event(self):
+        for entry in inst.HOOK_REGISTRATIONS:
+            with self.subTest(entry=entry[0]):
+                self.assertEqual(3, len(entry),
+                                 "expected (script, event, matcher)")
+                self.assertTrue(entry[1], "the event must not be empty")
+
+    def test_a_session_start_hook_is_registered_under_session_start(self):
+        parsed = json.loads(inst.claude_registration(Path("/tmp/home")))
+        self.assertIn("SessionStart", parsed["hooks"],
+                      "a SessionStart hook must not be filed under PostToolUse")
+        entry = parsed["hooks"]["SessionStart"][0]
+        self.assertEqual("startup", entry["matcher"])
+        self.assertIn("skill-reachability-reminder.py", entry["hooks"][0]["command"])
+
+    def test_the_existing_post_tool_use_hooks_are_unchanged(self):
+        # The widening must not disturb what already worked. Both hooks stay under
+        # PostToolUse, in order.
+        parsed = json.loads(inst.claude_registration(Path("/tmp/home")))
+        commands = [e["hooks"][0]["command"] for e in parsed["hooks"]["PostToolUse"]]
+        self.assertEqual(2, len(commands))
+        self.assertIn("delegation-reminder.py", commands[0])
+        self.assertIn("spec-conformance-gate.py", commands[1])
+
+    def test_every_registered_script_exists_in_the_module(self):
+        # A registration naming a script that is not there produces an entry that can
+        # never fire, which is the same silence from the other direction.
+        for script, _event, _matcher in inst.HOOK_REGISTRATIONS:
+            with self.subTest(script=script):
+                self.assertTrue((inst.HOOKS_DIR / script).is_file())
+
+    def test_every_hook_in_the_module_is_registered(self):
+        # The docstring's stated property: a hook added without an entry here shows up as
+        # a missing entry rather than as a hook that was placed and never fires.
+        registered = {script for script, _e, _m in inst.HOOK_REGISTRATIONS}
+        present = {p.name for p in inst.discover_hooks()}
+        self.assertEqual(present, registered,
+                         "every hook in .agents/hooks/ needs a registration entry")
+
+
 class CheckReportsWhatItComparedTests(unittest.TestCase):
     """The three defects the automated reviewer found on chore-0031's pull request.
 

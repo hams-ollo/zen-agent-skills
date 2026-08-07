@@ -326,9 +326,18 @@ HOOK_SUBPATHS = {
 # broader than the hook's own condition, since every hook re-checks; it may never be
 # narrower, or the hook is placed and silently never fires. `tests/test_hooks.py`
 # asserts the delegation matcher against the hook's own tool set for exactly that reason.
+# (script, event, matcher). The event was added by feat-0046 and is not cosmetic: this
+# table carried only (script, matcher) while claude_registration() hardcoded PostToolUse,
+# so a hook on any other event was placed by --with-hooks and never registered. That is
+# the "installed, correct-looking, and doing nothing" failure feat-0038 hit twice, and it
+# would have been silent here too.
 HOOK_REGISTRATIONS = [
-    ("delegation-reminder.py", "^Task$|^Agent$|^TaskOutput$|agent_run"),
-    ("spec-conformance-gate.py", "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
+    ("delegation-reminder.py", "PostToolUse",
+     "^Task$|^Agent$|^TaskOutput$|agent_run"),
+    ("spec-conformance-gate.py", "PostToolUse",
+     "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
+    # `startup` only. The other sources continue a session already told.
+    ("skill-reachability-reminder.py", "SessionStart", "startup"),
 ]
 
 
@@ -359,18 +368,22 @@ def claude_registration(home: Path) -> str:
     Built from HOOK_REGISTRATIONS rather than written out, so a hook added to the module
     without a matcher here is a mistake that shows up as a missing entry instead of a hook
     that was placed and never fires.
+
+    Grouped by event rather than emitted under a hardcoded one. The event lives in the
+    table now, so adding a hook on a new lifecycle event needs no change here at all,
+    which is what the previous shape got wrong.
     """
     hooks_home = home / HOOK_SUBPATHS["claude"]
-    entries = []
-    for script_name, matcher in HOOK_REGISTRATIONS:
+    by_event = {}
+    for script_name, event, matcher in HOOK_REGISTRATIONS:
         if not (HOOKS_DIR / script_name).is_file():
             continue
         command = f"{hook_interpreter()} \"{hooks_home / script_name}\""
-        entries.append({
+        by_event.setdefault(event, []).append({
             "matcher": matcher,
             "hooks": [{"type": "command", "command": command}],
         })
-    return json.dumps({"hooks": {"PostToolUse": entries}}, indent=2)
+    return json.dumps({"hooks": by_event}, indent=2)
 
 
 def discover_hooks():

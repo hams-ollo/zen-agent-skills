@@ -115,6 +115,19 @@ python scripts/run-checks.py
 [`.github/workflows/checks.yml`](.github/workflows/checks.yml) calls this same script rather than restating the gates. One rule, two callers, per `chore-0029`.
 
 **Passing it is necessary but not sufficient.** CI runs three operating systems by two Python versions, so any single run of this command covers one of those six cells. A change that passes locally can still fail on a platform you did not run. The command says so in its own summary on every run, and it is repeated here because this is where an agent reads the rules before it starts working, rather than after a run has already happened.
+
+### The one committed hook registration, and why it is an exception
+
+The layout table above states that hook installation is opt-in and activation is the adopter's: `install.py --with-hooks` places the files and prints a registration rather than editing anyone's settings. That rule holds everywhere except one place in this repository, and the exception is written here rather than left to be discovered.
+
+[`.claude/settings.json`](.claude/settings.json) is committed, and it registers [`skill-reachability-reminder.py`](.agents/hooks/skill-reachability-reminder.py) on `SessionStart`. A project-scope settings file applies to every collaborator who opens this repository, so nobody opts in.
+
+The reason is mechanical rather than a preference. A user-level `~/.claude/settings.json` does not reach a cloud session, and a cloud session is the exact case this hook exists for: it clones the repository, gets none of the user-scope skills this kit installs, and would otherwise work without them and never say so. Verified against Anthropic's Claude Code documentation on 2026-08-07, which states the same thing from the other side by telling readers to commit settings files to change a cloud session's settings. A printed registration cannot be pasted by a machine that nobody is watching.
+
+The exception is kept as small as it can be: one hook, in the reminder shape, which never blocks and never writes, firing only on a genuinely new session. Its worst case is one injected paragraph. **Adding a second hook to that file, or any hook that blocks, is a new decision and not covered by this one.**
+
+### Other conventions
+
 - **Cross-platform**: target Windows, macOS, and Linux. Prefer `pathlib`; never assume POSIX symlinks are available.
 
 ### Provenance for material folded in from elsewhere
