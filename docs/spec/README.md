@@ -119,7 +119,7 @@ something else today.
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
 | [`build-adapters`](build-adapters.md) | approved | 17 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
-| [`cloud-executable`](cloud-executable.md) | **draft** | 18 | none yet |
+| [`cloud-executable`](cloud-executable.md) | **draft** | 19 | none yet |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 15 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
@@ -129,7 +129,7 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Ten specs, 136 scenarios. The nine approved ones carry 118 of those and every one has a conformance
+Ten specs, 137 scenarios. The nine approved ones carry 118 of those and every one has a conformance
 matrix as of 2026-08-06. [`cloud-executable`](cloud-executable.md) is the tenth and the only draft:
 written 2026-08-07 for Epic E item 2, none of it built, so it has no sibling report and nothing to
 audit yet. It is the first **forward** spec here, written before an implementation rather than

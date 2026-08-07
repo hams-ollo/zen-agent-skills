@@ -41,8 +41,8 @@ have caught, and then has no command to catch it with either.
 4. A session that starts without the kit's skills reachable is told so, at the start, unprompted.
 5. The bootstrap changes nothing, and stays silent when it has nothing to report.
 6. The bootstrap behaves the same wherever it runs, with no detection of where that is.
-7. Real backlog work lands through a cloud session under the autonomy ceiling, as evidence rather
-   than as a claim.
+7. Real backlog work lands through a cloud session under the autonomy ceiling, proved by an outcome
+   the session could not have produced by claiming it.
 
 ## Non-Goals
 
@@ -73,12 +73,21 @@ have caught, and then has no command to catch it with either.
   on stdout, never import from this repository, and expose an injectable `main(stdin, stdout)`.
 - A hook registered in a repository-committed `.claude/settings.json` runs in a cloud session; one
   registered in a user-level `~/.claude/settings.json` does not. So the registration has to be
-  committed for the hook to exist at all in the case it is written for.
+  committed for the hook to exist at all in the case it is written for. Anthropic's cloud-session
+  documentation states the same thing from the other direction: to change settings for a cloud
+  session, commit settings files to the repository.
 - `SessionStart` carries a `source` field whose values are `startup`, `resume`, `clear`, `compact`,
   and `fork`, and those are the available matcher values.
-- An account-level environment setup script is not an available mechanism. Its output is
-  filesystem-snapshotted for roughly seven days, so an edited skill can be served stale with nothing
-  reporting it, which is the failure class this contract exists to remove.
+- An account-level environment setup script is not an available mechanism. Anthropic snapshots the
+  filesystem after the setup script completes and reuses that snapshot for later sessions, rebuilding
+  it only on a change to the script or its allowed hosts, or when the cache expires after roughly
+  seven days. So an edited skill can be served stale with nothing reporting it, which is the failure
+  class this contract exists to remove.
+- The three constraints above were verified against Anthropic's Claude Code documentation on
+  2026-08-07, at `code.claude.com/docs/en/hooks`, `/settings`, and `/cloud-environments`. They are
+  recorded with their date because a contract resting on another product's behaviour is exactly the
+  kind of claim that decays into folklore, which is the reasoning behind the provenance convention in
+  `AGENTS.md`.
 - `install.py --check` already exits 2 for a home with nothing recorded beneath it, naming the state
   as unrecorded rather than clean (`chore-0031`). Presence therefore needs no second probe, and a
   second one would duplicate that tool's knowledge of where skills live.
@@ -225,15 +234,26 @@ have caught, and then has no command to catch it with either.
 
 ### Scenario S-017: the proof run lands as a draft pull request carrying its evidence
 
-- **Given** [`feat-0042`](../../.tasks/feat-0042-repeat-and-futility-classification.md) dispatched to
-  a cloud session under the autonomy rules module
+- **Given** [`bug-0018`](../../.tasks/bug-0018-reinstall-destroys-an-adopter-edited-lens.md)
+  dispatched to a cloud session under the autonomy rules module
 - **When** the session completes its work
 - **Then** the work is on a branch whose name carries the `claude/` prefix, a pull request exists in
   **draft** state, its body carries a report meeting the nine-field evidence contract from
   [`feat-0041`](../../.tasks/done/feat-0041-delegate-evidence-contract-for-fix-batch.md) including
   the acceptance command's verbatim output, and nothing has been merged.
 
-### Scenario S-018: a proof run whose gates fail still reports
+### Scenario S-018: the proof's evidence is a test that failed before the change
+
+- **Given** the same dispatched task, whose acceptance requires a regression test that fails against
+  the unfixed `install.py` and passes against the fixed one
+- **When** the session reports
+- **Then** the report shows that test failing before the change and passing after, so the proof rests
+  on an outcome the session could not have produced by writing plausible text.
+- **And** this is why the proof task is a defect in code rather than a change to a skill body: the
+  acceptance command for a prose task passes whatever the prose says, so it could not distinguish a
+  session that did the work from one that only appeared to.
+
+### Scenario S-019: a proof run whose gates fail still reports
 
 - **Given** the same dispatched session, where the acceptance command exits non-zero
 - **When** the session completes
