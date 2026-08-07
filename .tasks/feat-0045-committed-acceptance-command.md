@@ -100,8 +100,13 @@ Required: this touches more than one module (a new script, the CI workflow, and 
 - [ ] A failing gate is named with its output and the remaining gates still run; exit 1 (`S-002`).
 - [ ] A gate that cannot execute is reported as unable to run rather than as passed or failed, and
       exits 2 regardless of the other gates (`S-003`).
-- [ ] A test asserts the gate set matches the steps in `checks.yml`, so a gate dropped from the script
-      fails a test instead of silently narrowing what is checked.
+- [ ] A test pins the seven gate names and their commands, so dropping one fails a test rather than
+      silently narrowing what is checked. (Corrected 2026-08-07, before implementation began: this
+      criterion first said the test should assert the gate set matches the steps in `checks.yml`,
+      which cannot hold, because `S-005` removes those steps in the same change. The guard has to be
+      a pinned list in the test, deliberately a second source of truth.)
+- [ ] A test asserts `checks.yml` invokes the command and does not separately restate any gate, so a
+      divergent copy cannot be reintroduced later (`S-005`).
 - [ ] No installation outside `./.tmp/zen-home` is created, modified, or removed by a run (`S-004`).
 - [ ] `checks.yml` invokes the command instead of listing the seven gates (`S-005`).
 - [ ] The summary names the operating system and Python version the run used (`S-006`).

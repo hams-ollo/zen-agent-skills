@@ -103,6 +103,18 @@ A skill that does both says so, and says which applies where.
 Follow [`.agents/rules/house-style.md`](.agents/rules/house-style.md) for writing and formatting: no em-dashes, sentence-case headings, named sources, relative markdown links, Mermaid for diagrams. That file is swappable; this reference to it is not.
 
 - **Python** (tooling under `scripts/` and `.tasks/validate.py`): standard library only where possible, so it runs anywhere with a bare Python 3. PEP 8. No third-party dependency unless truly load-bearing and documented.
+
+### The acceptance command
+
+```bash
+python scripts/run-checks.py
+```
+
+[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, and the documentation link check. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
+
+[`.github/workflows/checks.yml`](.github/workflows/checks.yml) calls this same script rather than restating the gates. One rule, two callers, per `chore-0029`.
+
+**Passing it is necessary but not sufficient.** CI runs three operating systems by two Python versions, so any single run of this command covers one of those six cells. A change that passes locally can still fail on a platform you did not run. The command says so in its own summary on every run, and it is repeated here because this is where an agent reads the rules before it starts working, rather than after a run has already happened.
 - **Cross-platform**: target Windows, macOS, and Linux. Prefer `pathlib`; never assume POSIX symlinks are available.
 
 ### Provenance for material folded in from elsewhere
