@@ -16,6 +16,7 @@ recognizes its own links directly and does not have this dependency).
     python scripts/install.py --tools claude      # only Claude Code
     python scripts/install.py --profile all       # every skill, not just the default set
     python scripts/install.py --check             # is an installed set still current?
+    python scripts/install.py --replace-adopted   # take the kit's rules module, lose yours
     python scripts/install.py --uninstall         # remove what this installed
 
 Staleness, and why --check exists
@@ -52,6 +53,14 @@ the sibling <base>/../rules. That location is not arbitrary: a skill body
 references its lens as ../../rules/<file>.md, which resolves from
 <base>/<skill-name>/SKILL.md to exactly this directory. Without it, house-review
 loses its whole rubric and twelve other skills lose their house-style module.
+
+That module is adopted, not derived, and a re-install treats it accordingly
+(bug-0018). A skill directory is regenerated wholesale, because it is the kit's;
+a rules file you edited is kept, reported, and never merged into, because the
+kit invites you to make it your own and an overwrite would destroy that work
+with nothing anywhere to say so. The recorded digests draw the line: a file
+matching its baseline is untouched and is refreshed, a file that does not is
+yours. `--replace-adopted` takes the kit's copies when you want them.
 
 Cursor and Copilot read repo-level pointer files, not a global skills dir, so
 they are handled by build-adapters.py per project, not here.
@@ -277,7 +286,8 @@ def is_managed(target: Path, manifest) -> bool:
 
 # The one placed module an adopter is invited to rewrite. Matched by the entry name this
 # tool records for it, so the classification travels in the record rather than being
-# re-derived from a path. See `_check_entry` for what the invitation costs the check.
+# re-derived from a path. See `_check_entry` for what the invitation costs the check, and
+# `_place_adopted` for what it costs placement.
 ADOPTED_ENTRY_NAMES = {"rules"}
 
 
@@ -393,7 +403,7 @@ def discover_hooks():
 
 
 def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
-            with_hooks: bool = False) -> int:
+            with_hooks: bool = False, replace_adopted: bool = False) -> int:
     # Resolved here and not only in `main()` (bug-0010), because every target below is
     # built from `home` and written verbatim into a persisted record. A relative spelling
     # records a string whose meaning depends on the reader's current directory, which
@@ -434,6 +444,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
     manifest = load_manifest()
     entries = {e["target"]: e for e in manifest["entries"]}
     conflicts = 0
+    preserved_adopted = False
     tag = "[dry-run] " if dry else ""
     hooks = discover_hooks() if with_hooks else []
     if with_hooks and not hooks:
@@ -458,18 +469,33 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
 
         # The rules module, as the sibling <base>/../rules, so each skill's
         # ../../rules/<file>.md reference resolves in the installed layout too.
+        #
+        # Placed through `_place_adopted` and not `_place` (bug-0018): this is the one
+        # module an adopter is invited to rewrite, so a re-run refreshes what they never
+        # touched and leaves what they did. The previously recorded digests are the baseline
+        # that separates the two, which is why they are read out of the existing entry
+        # before it is overwritten.
         if RULES_DIR.is_dir():
             rules_target = base.parent / "rules"
-            status = _place(RULES_DIR, rules_target, mode, dry, manifest)
+            recorded = (entries.get(str(rules_target)) or {}).get("digests")
+            status, digests, notes = _place_adopted(
+                RULES_DIR, rules_target, mode, dry, manifest, recorded, replace_adopted)
             if status == "CONFLICT":
                 conflicts += 1
             else:
                 entries[str(rules_target)] = {
                     "tool": tool, "name": "rules",
                     "target": str(rules_target), "mode": mode, "source": str(RULES_DIR),
-                    "digests": digest_tree(RULES_DIR),
+                    "digests": digests,
                 }
+            if status == "preserved":
+                preserved_adopted = True
             print(f"{tag}{status:9} {tool:8} rules  -> {rules_target}")
+            for note in notes:
+                # Named per file, not counted. A run that says it kept "1 file" leaves the
+                # reader to go and find out which, which is the investigation the whole
+                # report exists to save them.
+                print(f"{tag}          {note}")
 
         # The hooks module, opt-in. Placed as the sibling <base>/../hooks, which for
         # Claude Code is the directory it already reads hooks from.
@@ -487,6 +513,12 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
             print(f"{tag}{status:9} {tool:8} hooks  -> {hooks_target}")
 
     save_manifest(list(entries.values()), dry)
+    if preserved_adopted:
+        # Exit-neutral on purpose, matching how `--check` treats `revised`: an adopted file
+        # this run left alone is news about the install, not a fault in it.
+        print(f"\n{tag}The rules module is yours to edit, so files you changed were kept "
+              f"rather than replaced. Nothing was merged: compare with `--check`, or pass "
+              f"`--replace-adopted` to take the kit's copies and lose yours.")
     if conflicts:
         print(f"\n{conflicts} CONFLICT(s): a real file exists at those targets. "
               f"Move or remove them, then re-run.")
@@ -562,6 +594,117 @@ def _place(src: Path, target: Path, mode: str, dry: bool, manifest) -> str:
     return "linked" if mode == "symlink" else "copied"
 
 
+def _place_adopted(src: Path, target: Path, mode: str, dry: bool, manifest,
+                   recorded, replace: bool) -> tuple:
+    """Place the adopted rules module without destroying what its adopter made theirs.
+
+    Returns `(status, digests, notes)`: the status word to print, the digest map to record
+    for this entry, and zero or more lines naming what the run declined to do.
+
+    Why this exists at all (bug-0018). `_place` handles a managed target by removing it and
+    copying the source back, which is right for a **derived** module and wrong for an
+    **adopted** one. `.agents/rules/` is the module `AGENTS.md` calls swappable and
+    `house-style.md` opens by inviting the reader to rewrite, so re-installing destroyed the
+    one thing the kit specifically asks an adopter to own, silently and at exit 0. For a
+    directory `_rm` took the whole tree, so a lens they *added* beside the kit's went too.
+    `build-adapters.py` already got this right from a `dest.exists()` guard, and its
+    contract states the reason as the contrast this function implements: supporting files
+    are derived and are refreshed, a rules file is adopted and is preserved
+    (`build-adapters.md` S-010 and S-014).
+
+    Per file rather than per directory, for two reasons that pull the same way. A whole-tree
+    verdict would refuse to deliver a lens the kit newly ships to anyone who edited any file
+    in the module, and it cannot express the case the bug report singles out: a file the
+    adopter added, which is neither the kit's to refresh nor the kit's to delete.
+
+    The distinction is drawn against the **recorded baseline**, never against the source,
+    and that is the whole design. A file differing from the recorded digest is the adopter's
+    and is left alone; a file matching it differs only because the kit moved on, so it is
+    ours to refresh. Deciding by "differs from the source" instead would preserve everything
+    forever and pin every adopter to whatever shipped on the day they first installed, which
+    is the inverse bug and just as silent. It is the same line `--check` already draws
+    between `diverged` and `revised`.
+
+    A preserved file keeps the digest previously recorded for it rather than taking the
+    bytes now on disk. Recording what the adopter wrote would make the next run read their
+    file as untouched and refresh over it, which is this same data loss delayed by one
+    install. Keeping the baseline also lets `--check` keep answering the question it is for:
+    the kit's copy has moved since you installed, and yours is yours.
+
+    Only the copy path reaches here. In symlink mode the installed module *is* the kit's
+    file, so there is no second copy to preserve and nothing to compare.
+    """
+    if (replace or mode != "copy" or target.is_symlink() or not target.exists()
+            or not is_managed(target, manifest)):
+        # Not a managed copy on disk, or the adopter has explicitly asked for the kit's.
+        # `_place` keeps owning the CONFLICT rule (S-004), the fresh placement, and both
+        # symlink branches: an unmanaged target is still refused rather than merged into.
+        status = _place(src, target, mode, dry, manifest)
+        return status, (None if status == "CONFLICT" else digest_tree(src)), []
+
+    source = digest_tree(src)
+    if not recorded:
+        # The pre-digest case, exactly as in chore-0031: an install predating that change
+        # recorded no baseline, so an edited file is indistinguishable from an untouched
+        # one. The failure directions are not symmetric, so this preserves and says the
+        # baseline is unknown. Falsiness rather than `is None`, matching `_check_entry`: a
+        # `digests` map that is present but empty is no more of a baseline than a missing
+        # one. Nothing is recorded either, because recording the source for files this run
+        # did not place would claim a baseline that never existed.
+        return "preserved", {}, [
+            "no digest baseline was recorded for this install, so an edited file cannot be "
+            "told from an untouched one: every file is left exactly as it is, and the "
+            "baseline stays unknown.",
+            "Run with --replace-adopted to take the kit's copy and record a baseline.",
+        ]
+
+    installed = digest_tree(target)
+    digests = dict(recorded)
+    placed, preserved, removed = [], [], []
+
+    for rel in sorted(source):
+        want, have, base = source[rel], installed.get(rel), recorded.get(rel)
+        if have == want:
+            digests[rel] = want                      # already exactly the kit's copy
+        elif have is None and base is None:
+            _copy_file(src / rel, target / rel, dry)  # new in the kit; nothing is at risk
+            digests[rel] = want
+            placed.append(rel)
+        elif have == base:
+            _copy_file(src / rel, target / rel, dry)  # untouched since we placed it
+            digests[rel] = want
+            placed.append(rel)
+        elif have is None:
+            preserved.append((rel, "you removed it, so it is not restored"))
+        elif base is None:
+            preserved.append((rel, "yours, and the kit now ships a file of that name"))
+        else:
+            preserved.append((rel, "you edited it"))
+
+    for rel in sorted(set(recorded) - set(source)):
+        # The kit no longer ships this file. Removing it is only safe where the copy on
+        # disk is provably the one this tool placed and nobody has touched it since.
+        if installed.get(rel) == recorded[rel]:
+            if not dry:
+                (target / rel).unlink()
+            removed.append(rel)
+        elif rel in installed:
+            preserved.append((rel, "you kept it after the kit dropped it"))
+        digests.pop(rel, None)
+
+    notes = [f"preserved {rel}: {why}" for rel, why in preserved]
+    if placed:
+        notes.append(f"refreshed {len(placed)} unmodified file(s): {', '.join(placed)}")
+    if removed:
+        notes.append(f"removed {len(removed)} unmodified file(s) the kit no longer ships: "
+                     f"{', '.join(removed)}")
+    if preserved:
+        notes.append("Your copies are kept and the kit's are not merged in; that is a "
+                     "person's call. Run with --replace-adopted to take the kit's instead.")
+        return "preserved", digests, notes
+    return ("updated" if placed or removed else "ok"), digests, notes
+
+
 def _link(src: Path, target: Path):
     try:
         os.symlink(src, target, target_is_directory=True)
@@ -577,6 +720,19 @@ def _copy(src: Path, target: Path):
     # into an adopter's home for a source file that is about to be a symlink or a
     # different version.
     shutil.copytree(src, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+
+def _copy_file(src: Path, target: Path, dry: bool):
+    """Place one file, creating the directories above it. The per-file half of `_copy`.
+
+    Needed because the adopted module is placed file by file (see `_place_adopted`), so
+    `copytree` is the wrong granularity there: it would overwrite a whole directory to
+    deliver one file.
+    """
+    if dry:
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target)
 
 
 def _rm(target: Path):
@@ -812,6 +968,13 @@ def main(argv=None) -> int:
     ap.add_argument("--with-hooks", action="store_true",
                     help="also place .agents/hooks/ (opt-in: hooks run inside your "
                          "session, and stay inactive until you register them)")
+    # Deliberately its own flag rather than a --mode value (bug-0018). --mode says how
+    # files are placed; this says what happens to work an adopter did, which is a different
+    # question and the destructive one.
+    ap.add_argument("--replace-adopted", action="store_true",
+                    help="overwrite the installed rules module with the kit's copy, "
+                         "discarding your edits to it (by default an edited rules file is "
+                         "preserved and reported)")
     ap.add_argument("--home", default=None,
                     help="override the base home dir (for testing/unusual setups)")
     args = ap.parse_args(argv)
@@ -836,7 +999,8 @@ def main(argv=None) -> int:
     if args.profile not in PROFILE_SEEDS:
         print(f"Unknown profile: {args.profile!r}. Choose from {list(PROFILE_SEEDS)}.")
         return 2
-    return install(tools, args.mode, home, args.dry_run, args.profile, args.with_hooks)
+    return install(tools, args.mode, home, args.dry_run, args.profile, args.with_hooks,
+                   args.replace_adopted)
 
 
 if __name__ == "__main__":

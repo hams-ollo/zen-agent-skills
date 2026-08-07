@@ -241,7 +241,7 @@ have caught, and then has no command to catch it with either.
 
 ### Scenario S-017: the proof run lands as a draft pull request carrying its evidence
 
-- **Given** [`bug-0018`](../../.tasks/bug-0018-reinstall-destroys-an-adopter-edited-lens.md)
+- **Given** [`bug-0018`](../../.tasks/done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md)
   dispatched to a cloud session under the autonomy rules module
 - **When** the session completes its work
 - **Then** the work is on a branch whose name carries the `claude/` prefix, a pull request exists in
