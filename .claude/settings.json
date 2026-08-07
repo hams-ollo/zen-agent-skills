@@ -18,6 +18,21 @@
     "at the hook in the checkout, so a fresh clone runs it with nothing installed at all,",
     "which is the state it reports on.",
     "",
+    "The interpreter is python3, not python, and the choice is load-bearing rather than",
+    "stylistic. This file exists to reach CLOUD sessions, which run on Linux, where many",
+    "distributions ship no `python` at all; macOS has not shipped one since 12.3. The first",
+    "draft said `python` and would have failed to launch in the exact environment the",
+    "exception was granted for, emitting nothing while the session proceeded, which is",
+    "indistinguishable from skills being reachable. That is the same registered-and-inert",
+    "failure feat-0038 hit from the other direction, where `python3` on Windows resolved to",
+    "the Store alias. Found by independent verification before any cloud run, not after.",
+    "",
+    "A static JSON file cannot probe, so this cannot be right on both platforms at once.",
+    "The trade is deliberate: cloud sessions are the reason the file is committed at all,",
+    "and a Windows developer who wants the hook locally adds the same block with `python`",
+    "to .claude/settings.local.json, which Claude Code does not check in. That is the",
+    "platform's own mechanism for a personal override.",
+    "",
     "Contract for the module: .agents/hooks/README.md"
   ],
   "hooks": {
@@ -27,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .agents/hooks/skill-reachability-reminder.py"
+            "command": "python3 .agents/hooks/skill-reachability-reminder.py"
           }
         ]
       }

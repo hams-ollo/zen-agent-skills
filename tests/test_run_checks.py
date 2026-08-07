@@ -74,21 +74,59 @@ class GateSetTests(unittest.TestCase):
     the situation this command was written to fix.
     """
 
+    # The full shape of every gate, with the interpreter dropped because sys.executable
+    # varies by host. Names alone are not enough: the first version of this pinned
+    # (name, commands[0][-1]), and independent verification showed that swapping a gate's
+    # script for a different one with the same trailing token survived, as did deleting
+    # the install cycle's SECOND run, which is the entire idempotence proof. Both are
+    # exactly the "silently narrowing what is checked" the criterion names, so the pin
+    # now covers every command and the cleanup.
     EXPECTED = [
-        ("lint skills", "scripts/validate-skills.py"),
-        ("test suite", "test_*.py"),
-        ("backlog", "--strict"),
-        ("adapters dry run", "--dry-run"),
-        ("install dry run", "./.tmp/zen-home"),
-        ("install cycle", "./.tmp/zen-home"),
-        ("doc links", "docs/**/*.md"),
+        ("lint skills",
+         [["scripts/validate-skills.py"]],
+         None),
+        ("test suite",
+         [["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]],
+         None),
+        ("backlog",
+         [[".tasks/validate.py", "--strict"]],
+         None),
+        ("adapters dry run",
+         [["scripts/build-adapters.py", "--dry-run"]],
+         None),
+        ("install dry run",
+         [["scripts/install.py", "--dry-run", "--home", "./.tmp/zen-home"]],
+         None),
+        ("install cycle",
+         [["scripts/install.py", "--home", "./.tmp/zen-home"],
+          ["scripts/install.py", "--home", "./.tmp/zen-home"]],
+         ["scripts/install.py", "--uninstall", "--home", "./.tmp/zen-home"]),
+        ("doc links",
+         [[".tasks/validate.py", "--links", "*.md", ".github/**/*.md", "docs/**/*.md"]],
+         None),
     ]
 
-    def test_the_seven_gates_are_present_and_ordered(self):
-        actual = [(g.name, g.commands[0][-1]) for g in rc.gates()]
+    @staticmethod
+    def _shape(gate_):
+        return (gate_.name,
+                [command[1:] for command in gate_.commands],
+                gate_.cleanup[1:] if gate_.cleanup else None)
+
+    def test_the_seven_gates_are_present_ordered_and_complete(self):
+        actual = [self._shape(g) for g in rc.gates()]
         self.assertEqual(self.EXPECTED, actual,
                          "the gate set changed; if that was deliberate, update this list "
                          "and checks.yml's expectations together")
+
+    def test_the_install_cycle_runs_twice_to_prove_idempotence(self):
+        # Called out separately from the pin above because it is the one duplicate in the
+        # table and reads like a copy-paste mistake to anyone tidying up. Re-running the
+        # install is what proves a second run recognises its own targets rather than
+        # reporting a conflict against its own work (install.md S-003).
+        cycle = next(g for g in rc.gates() if g.name == "install cycle")
+        self.assertEqual(2, len(cycle.commands),
+                         "the second install run is the idempotence proof, not a typo")
+        self.assertEqual(cycle.commands[0], cycle.commands[1])
 
     def test_only_the_install_cycle_cleans_up_after_itself(self):
         # The cleanup is what makes S-004 hold when a gate fails midway. If another gate
@@ -249,16 +287,67 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_ci_invokes_the_acceptance_command(self):
         self.assertIn("scripts/run-checks.py", self.workflow)
 
+    def _run_lines(self):
+        """Every `run:` value in the workflow, which is where a gate could be restated.
+
+        Scanning `run:` values rather than the whole file on purpose. The workflow's
+        comments legitimately name scripts and task ids while explaining why the gates are
+        no longer listed, and a whole-file scan would either fail on those or force the
+        comments to be written around the test.
+        """
+        lines = []
+        for raw in self.workflow.splitlines():
+            stripped = raw.strip()
+            if stripped.startswith("run:"):
+                lines.append(stripped[len("run:"):].strip())
+        return lines
+
     def test_ci_does_not_separately_restate_any_gate(self):
         # One rule, two callers. An inline copy of the link rule drifted once already and
         # let a correctly quoted changelog entry pass --strict and fail CI (chore-0029).
-        # This is that lesson made mechanical for all seven.
-        restated = [g.commands[0][-1] for g in rc.gates()]
-        for tail in restated:
-            with self.subTest(tail=tail):
-                self.assertNotIn(f"run: python {tail}", self.workflow)
-        self.assertNotIn("validate-skills.py", self.workflow)
-        self.assertNotIn("unittest discover", self.workflow)
+        #
+        # This assertion was rewritten after independent verification found the first
+        # version vacuous for five of the seven gates. It built `assertNotIn("run: python
+        # " + tail)` where `tail` was the command's LAST token, so for the backlog gate it
+        # asserted the absence of "run: python --strict", a string that can never appear:
+        # a real restatement reads "run: python .tasks/validate.py --strict". Four genuine
+        # restatements were reinserted into checks.yml and the suite stayed green. Only the
+        # two hardcoded lines below did any work, while the comment claimed the chore-0029
+        # lesson was mechanical for all seven.
+        #
+        # The fix is to match on each gate's identifying script or module, derived from the
+        # gate table rather than hand-listed, so a gate added later is covered without
+        # anyone remembering to come back here.
+        markers = set()
+        for gate_ in rc.gates():
+            for command in gate_.commands + ([gate_.cleanup] if gate_.cleanup else []):
+                script = rc._script_of(command)
+                if script:
+                    markers.add(script)
+                elif "-m" in command:
+                    markers.add(command[command.index("-m") + 1])
+
+        self.assertIn("scripts/run-checks.py", " ".join(self._run_lines()),
+                      "CI must call the acceptance command")
+        for marker in sorted(markers):
+            for line in self._run_lines():
+                if "run-checks.py" in line:
+                    continue
+                with self.subTest(marker=marker, line=line):
+                    self.assertNotIn(marker, line,
+                                     f"checks.yml restates the {marker} gate; the gate set "
+                                     f"must live only in run-checks.py")
+
+    def test_the_marker_set_actually_covers_every_gate(self):
+        # Guards the guard. The rewritten test above is only as strong as the markers it
+        # derives, and a gate whose command names neither a script nor a `-m` module would
+        # contribute no marker and be silently unprotected.
+        for gate_ in rc.gates():
+            command = gate_.commands[0]
+            with self.subTest(gate=gate_.name):
+                self.assertTrue(rc._script_of(command) or "-m" in command,
+                                f"{gate_.name} contributes no marker, so restating it in "
+                                f"checks.yml would not be caught")
 
 
 class ArgumentTests(unittest.TestCase):

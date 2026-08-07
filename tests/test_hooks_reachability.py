@@ -16,10 +16,12 @@ The defect each group protects against:
   robustness   - a malformed payload takes down the session (S-015)
   no detection - it grows an environment check and answers differently by host (S-016)
 """
+import ast
 import importlib.util
 import io
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +32,39 @@ MODULE_PATH = REPO_ROOT / ".agents" / "hooks" / "skill-reachability-reminder.py"
 _spec = importlib.util.spec_from_file_location("skill_reachability_reminder", MODULE_PATH)
 srr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(srr)
+
+
+def _analyse(path: Path):
+    """Imported top-level modules, called names, and accessed attributes in a source file.
+
+    Structural guards below assert on this rather than on raw text. Scanning text was
+    tried first and fired on the word "subprocess" inside a docstring, which is prose
+    describing why the hook does NOT spawn one. A guard that fails on its own
+    documentation gets loosened until it catches nothing, so it is parsed instead.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    modules, calls, attributes = set(), [], set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Call):
+            target = node.func
+            if isinstance(target, ast.Attribute):
+                calls.append(target.attr)
+            elif isinstance(target, ast.Name):
+                calls.append(target.id)
+        elif isinstance(node, ast.Attribute):
+            attributes.add(node.attr)
+    return modules, calls, attributes
+
+
+def _attribute_chains(path: Path):
+    """Every `name.attr` pair in a source file, for catching reads like `sys.platform`."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {f"{n.value.id}.{n.attr}" for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
 
 
 def place_skill(root: Path, subpath: Path, name="alpha"):
@@ -68,7 +103,17 @@ class ReachabilityTests(unittest.TestCase):
         context = out["hookSpecificOutput"]["additionalContext"]
         self.assertEqual("SessionStart", out["hookSpecificOutput"]["hookEventName"])
         self.assertIn("NO SKILLS REACHABLE", context)
-        self.assertIn("install.py", context, "the report must name the way out")
+
+        # The placing command, specifically, and not merely the string "install.py".
+        # Independent verification defeated the original assertion by replacing the
+        # placing command with "(ask your administrator)": the test still passed, because
+        # REPORT separately mentions `install.py --check` in its currency caveat, so the
+        # substring survived while the actionable instruction did not. Blanking the
+        # currency mention first is what makes this assert the thing it claims to.
+        without_currency_note = context.replace("python scripts/install.py --check", "")
+        self.assertIn("python scripts/install.py", without_currency_note,
+                      "the report must name the command that PLACES skills, not only the "
+                      "one that checks whether existing ones are current")
 
     def test_project_scope_skills_count_as_reachable(self):
         # S-009. The case a cloud session would be fixed by.
@@ -175,6 +220,53 @@ class SideEffectTests(unittest.TestCase):
             srr.evaluate(payload(cwd=root), home=home)
             self.assertEqual(before, self._tree(root))
 
+    def test_main_writes_nothing_including_into_the_home_it_resolves(self):
+        # The two snapshot tests above cover evaluate() and only the tree they created.
+        # Independent verification defeated them three ways: a marker written into
+        # Path.home(), a log written from main() rather than evaluate(), and a write into
+        # the system temp directory. This covers the first two by steering Path.home() at
+        # a snapshotted directory and going through main().
+        saved = dict(os.environ)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                os.environ["HOME"] = str(root)
+                os.environ["USERPROFILE"] = str(root)
+                before = self._tree(root)
+                out = io.StringIO()
+                srr.main(stdin=io.StringIO(json.dumps(payload(cwd=root))), stdout=out)
+                self.assertEqual(before, self._tree(root),
+                                 "main() must not write into the home it resolves")
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
+
+    def test_the_source_performs_no_write_of_any_kind(self):
+        # A structural guard for the third mutation, a write into the system temp
+        # directory, which no snapshot of a directory the test controls can ever catch.
+        # The honest way to keep "writes nothing anywhere" true is not to have a write
+        # call in the file. The one permitted write is to the injected stdout.
+        #
+        # Parsed rather than substring-matched. The first version of the sibling guard
+        # below scanned raw text and failed on the word "subprocess" appearing inside a
+        # docstring, which is prose, not behaviour. A guard that fires on documentation
+        # gets loosened until it fires on nothing.
+        modules, calls, attributes = _analyse(MODULE_PATH)
+
+        for forbidden in ("tempfile", "shutil"):
+            with self.subTest(module=forbidden):
+                self.assertNotIn(forbidden, modules)
+
+        for forbidden in ("open", "write_text", "write_bytes", "mkdir", "touch",
+                          "unlink", "rmdir", "remove"):
+            with self.subTest(call=forbidden):
+                self.assertNotIn(forbidden, calls,
+                                 f"{forbidden}() writes; this hook must not")
+
+        self.assertIn("write", attributes, "stdout.write is expected")
+        self.assertEqual(1, calls.count("write"),
+                         "exactly one write call, and it is to the injected stdout")
+
 
 class RobustnessTests(unittest.TestCase):
     """S-015: an unreadable payload leaves the session unchanged."""
@@ -227,6 +319,76 @@ class RobustnessTests(unittest.TestCase):
         self.assertEqual("SessionStart", parsed["hookSpecificOutput"]["hookEventName"])
 
 
+class CommittedRegistrationTests(unittest.TestCase):
+    """The one registration this kit commits rather than prints.
+
+    It had no test at all, which independent verification found by noticing that the
+    interpreter was wrong for the only environment the file exists to serve. `.claude/
+    settings.json` said `python`, while `install.py`'s hook_interpreter() returns `python3`
+    off Windows, `.codex/hooks.json` uses `python3`, and the opencode adapter probes both
+    and says in a comment that most platforms ship `python3`. Cloud sessions run on Linux,
+    where many distributions ship no `python`, and macOS has not since 12.3.
+
+    The failure would have been silent in the worst available way: the interpreter does not
+    resolve, the hook never launches, nothing is emitted, and the session proceeds looking
+    exactly as it would if skills were reachable. That is the registered-and-inert failure
+    feat-0038 hit from the opposite direction, in the exact environment the committed-
+    settings exception was granted for.
+    """
+
+    SETTINGS = REPO_ROOT / ".claude" / "settings.json"
+
+    def setUp(self):
+        self.parsed = json.loads(self.SETTINGS.read_text(encoding="utf-8"))
+        entries = self.parsed["hooks"]["SessionStart"]
+        self.assertEqual(1, len(entries), "one matcher block")
+        self.entry = entries[0]
+        self.command = self.entry["hooks"][0]["command"]
+
+    def test_it_is_committed(self):
+        # The whole point. A user-level registration does not reach a cloud session, so an
+        # untracked file here would leave the hook unregistered where it is needed.
+        tracked = subprocess.run(["git", "ls-files", ".claude/settings.json"],
+                                 cwd=str(REPO_ROOT), capture_output=True, text=True)
+        self.assertIn("settings.json", tracked.stdout)
+
+    def test_the_interpreter_is_the_one_that_resolves_where_this_file_is_needed(self):
+        # Not `python`. See the class docstring; this is the assertion that would have
+        # caught the original defect.
+        self.assertTrue(self.command.startswith("python3 "),
+                        "cloud sessions are Linux, where `python` frequently does not "
+                        "exist; a Windows developer overrides this in the untracked "
+                        ".claude/settings.local.json")
+
+    def test_it_registers_the_reachability_hook_on_a_new_session_only(self):
+        self.assertEqual("startup", self.entry["matcher"])
+        self.assertIn("skill-reachability-reminder.py", self.command)
+
+    def test_the_registered_script_exists_at_the_path_named(self):
+        # A repository-relative path, so a fresh clone runs the hook in the checkout with
+        # nothing installed, which is the state it reports on. If the path is wrong the
+        # hook is inert and silent, the same failure by another route.
+        rel = self.command.split(" ", 1)[1].strip()
+        self.assertTrue((REPO_ROOT / rel).is_file(), f"{rel} does not exist")
+
+    def test_the_exception_is_documented_where_the_rule_it_bends_lives(self):
+        # AGENTS.md states hook installation is opt-in. This file breaks that for every
+        # collaborator, so the carve-out has to be written beside the rule rather than
+        # discovered by whoever notices the file.
+        agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn(".claude/settings.json", agents)
+        self.assertIn("skill-reachability-reminder.py", agents)
+
+    def test_the_committed_file_registers_exactly_one_hook(self):
+        # AGENTS.md bounds the exception to one non-blocking hook and says a second is a
+        # new decision. This is that sentence made mechanical.
+        all_hooks = [h for entries in self.parsed["hooks"].values()
+                     for e in entries for h in e["hooks"]]
+        self.assertEqual(1, len(all_hooks),
+                         "AGENTS.md bounds this exception to one hook; adding another is "
+                         "a new decision, not a change to make quietly")
+
+
 class NoEnvironmentDetectionTests(unittest.TestCase):
     """S-016: the answer does not depend on where it runs."""
 
@@ -256,10 +418,44 @@ class NoEnvironmentDetectionTests(unittest.TestCase):
     def test_the_source_reads_no_environment(self):
         # A structural guard: the honest way to keep S-016 true is not to look. If this
         # ever needs relaxing, that is a contract change, not a test to loosen.
-        source = MODULE_PATH.read_text(encoding="utf-8")
-        for forbidden in ("os.environ", "getenv", "platform."):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, source)
+        #
+        # The list was three entries and independent verification walked through it twice:
+        # host detection via socket.gethostname() survived, and so would `sys.platform ==`
+        # since it contains no "platform." substring. Both are exactly the environment
+        # sniffing S-016 forbids. Widened, and the byte-identical test below is the weaker
+        # of the two guards because it can only catch detection through variables it
+        # happens to set.
+        modules, calls, _attributes = _analyse(MODULE_PATH)
+
+        # You cannot read the environment without importing one of these. `sys` is
+        # legitimately imported for stdin and stdout, so it is handled separately below.
+        for forbidden in ("os", "platform", "socket", "subprocess"):
+            with self.subTest(module=forbidden):
+                self.assertNotIn(forbidden, modules,
+                                 f"importing {forbidden} is how environment detection "
+                                 f"gets in; S-016 says the hook does not look")
+
+        for forbidden in ("getenv", "gethostname", "uname", "system"):
+            with self.subTest(call=forbidden):
+                self.assertNotIn(forbidden, calls)
+
+        # sys.platform reads the environment without importing anything new, and contains
+        # no "platform." substring, so the previous text-scanning version missed it.
+        chains = _attribute_chains(MODULE_PATH)
+        for forbidden in ("sys.platform", "os.name", "os.environ", "os.sep"):
+            with self.subTest(chain=forbidden):
+                self.assertNotIn(forbidden, chains)
+
+    def test_only_the_listed_sources_fire(self):
+        # FIRING_SOURCES is an allowlist and must stay one. Inverting it to a denylist of
+        # the four continuing sources survived every existing test, because every source
+        # anyone thought to test was named in it. An unknown source is the case that
+        # separates the two shapes, and an allowlist is the safer default: a source added
+        # by the harness later stays silent until someone decides it should not.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(
+                srr.evaluate(payload("some-future-source", cwd=tmp), home=Path(tmp)),
+                "an unrecognised source must not fire; FIRING_SOURCES is an allowlist")
 
 
 if __name__ == "__main__":
