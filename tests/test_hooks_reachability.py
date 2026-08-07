@@ -21,6 +21,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -125,11 +126,21 @@ class ReachabilityTests(unittest.TestCase):
         place_skill(self.home, Path(".claude") / "skills")
         self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
 
-    def test_the_opencode_scope_counts_too(self):
-        # Both discovery directories are checked at both scopes. A session with only the
-        # opencode tree installed is not an unreachable session.
+    def test_the_opencode_user_scope_counts_too(self):
+        # `.agents/skills` is opencode's USER-scope directory and install.py targets it.
+        # A session with only the opencode tree installed is not an unreachable session.
         place_skill(self.home, Path(".agents") / "skills")
         self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_the_opencode_path_does_NOT_count_at_project_scope(self):
+        # The defect this hook shipped with, pinned from the unit side. No harness
+        # discovers project-scope skills at `.agents/skills`; it is where a kit keeps its
+        # sources. Counting it there is what made the hook silent in its own repository.
+        place_skill(self.project, Path(".agents") / "skills")
+        self.assertIsNotNone(
+            srr.evaluate(payload(cwd=self.project), home=self.home),
+            "a project-local .agents/skills tree is a source directory, not a discovery "
+            "directory; treating it as reachable is the bug the cloud run exposed")
 
     def test_an_empty_discovery_directory_is_not_reachable(self):
         # --uninstall leaves the parent directory behind, so treating its existence as
@@ -161,6 +172,58 @@ class ReachabilityTests(unittest.TestCase):
         place_skill(self.home, Path(".claude") / "skills")
         self.assertFalse((self.home / "scripts").exists(), "no manifest anywhere")
         self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+
+class ThisRepositoryTests(unittest.TestCase):
+    """The hook, run against this repository itself.
+
+    Every other test here builds a synthetic tree, and that is why all of them passed
+    while the hook was inert in the one repository that ships it. The first live cloud run
+    reported no message at startup; the cause was `.agents/skills` being counted at project
+    scope, where this kit keeps its own twenty skill sources.
+
+    A synthetic tree can never catch that, because the thing that broke it is a real
+    property of this repository. So this class uses REPO_ROOT and nothing else.
+    """
+
+    def test_the_kits_own_source_tree_is_not_mistaken_for_installed_skills(self):
+        # The exact cloud-clone case: this repository checked out, nothing installed.
+        with tempfile.TemporaryDirectory() as empty_home:
+            out = srr.evaluate(payload(cwd=REPO_ROOT), home=Path(empty_home))
+        self.assertIsNotNone(
+            out,
+            "a fresh clone of this repository with nothing installed MUST be told. "
+            "`.agents/skills/` here is the kit's source tree, not a discovery directory, "
+            "and counting it silenced the hook in the environment it exists for")
+
+    def test_the_sources_it_must_not_count_are_actually_there(self):
+        # Guards the guard: if this repository ever stopped committing its skills to
+        # `.agents/skills/`, the test above would pass for the wrong reason and quietly
+        # stop testing anything.
+        sources = REPO_ROOT / ".agents" / "skills"
+        self.assertTrue(sources.is_dir())
+        self.assertTrue(any((d / "SKILL.md").is_file() for d in sources.iterdir()),
+                        "the premise of the test above is that these exist")
+
+    def test_a_real_project_scope_install_here_is_reachable(self):
+        # The other direction, so the fix cannot be "always report". Placing a skill where
+        # Claude Code actually discovers project skills must silence it, even though the
+        # home is empty.
+        target = REPO_ROOT / ".claude" / "skills"
+        created = not target.exists()
+        skill = target / "_reachability_probe"
+        try:
+            skill.mkdir(parents=True, exist_ok=True)
+            (skill / "SKILL.md").write_text("---\nname: probe\n---\n", encoding="utf-8")
+            with tempfile.TemporaryDirectory() as empty_home:
+                self.assertIsNone(srr.evaluate(payload(cwd=REPO_ROOT),
+                                               home=Path(empty_home)))
+        finally:
+            # Leave the repository exactly as found. This is the one test here that
+            # writes, and it writes into a gitignored-by-absence path it creates itself.
+            shutil.rmtree(skill, ignore_errors=True)
+            if created:
+                shutil.rmtree(target, ignore_errors=True)
 
 
 class SourceTests(unittest.TestCase):

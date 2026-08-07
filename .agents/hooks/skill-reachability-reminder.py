@@ -64,10 +64,35 @@ from pathlib import Path
 # per the module's two-stage filtering rule.
 FIRING_SOURCES = {"startup"}
 
-# The discovery directories skills are placed in, relative to a scope root. Both are
-# checked at both scopes, because which one a harness reads is the harness's business and
-# the question here is only whether anything is reachable at all.
-SKILL_SUBPATHS = (
+# A discovery directory is one a harness actually LOADS skills from. That is not the same
+# as a directory containing skills, and conflating the two made this hook inert in the one
+# repository that ships it.
+#
+# The first version checked both subpaths at both scopes, reasoning that which directory a
+# harness reads is the harness's business. It is not: `.agents/skills` is opencode's
+# USER-scope directory, and no harness discovers project-scope skills there. This kit
+# commits its own sources to `.agents/skills/`, so at project scope that check found
+# twenty SKILL.md files, called them reachable, and stayed silent, in a fresh clone with
+# nothing installed. Exactly the case the hook exists for.
+#
+# Found by the first live cloud run (2026-08-07), which reported no message at startup.
+# Every unit test had missed it because all of them build synthetic trees; none had ever
+# run the hook against this repository's own root. `.agents/hooks/README.md` warns about
+# precisely this: a guardrail that cannot fire in the repository that ships it is one
+# nobody has ever seen work.
+#
+# The contract was right and the code was wrong. `cloud-executable.md`'s Proposed Surface
+# says "the repository's project-scope discovery directory", singular, "or at any
+# user-scope discovery directory install.py targets". This now implements that sentence.
+
+# Claude Code's project-scope directory, and the only one. Deliberately not a tuple of
+# convenience: adding `.agents/skills` back here reintroduces the defect above.
+PROJECT_SKILL_SUBPATHS = (
+    Path(".claude") / "skills",
+)
+
+# The two directories install.py places into, both relative to the user's home.
+USER_SKILL_SUBPATHS = (
     Path(".claude") / "skills",
     Path(".agents") / "skills",
 )
@@ -105,11 +130,17 @@ def _has_skill(directory: Path) -> bool:
 
 
 def reachable(project_root: Path, home: Path) -> bool:
-    """Whether any skill is reachable from either scope."""
-    for root in (project_root, home):
-        for sub in SKILL_SUBPATHS:
-            if _has_skill(root / sub):
-                return True
+    """Whether any skill is reachable from either scope.
+
+    The two scopes are checked against different directory sets on purpose; see the
+    constants above for why collapsing them is the defect this hook shipped with.
+    """
+    for sub in PROJECT_SKILL_SUBPATHS:
+        if _has_skill(project_root / sub):
+            return True
+    for sub in USER_SKILL_SUBPATHS:
+        if _has_skill(home / sub):
+            return True
     return False
 
 
