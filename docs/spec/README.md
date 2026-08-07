@@ -119,7 +119,7 @@ something else today.
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
 | [`build-adapters`](build-adapters.md) | approved | 17 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
-| [`cloud-executable`](cloud-executable.md) | approved | 19 | none yet |
+| [`cloud-executable`](cloud-executable.md) | approved | 19 | [readiness](cloud-executable.readiness.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 15 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
