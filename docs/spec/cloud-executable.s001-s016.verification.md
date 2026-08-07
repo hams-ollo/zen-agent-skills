@@ -110,8 +110,22 @@ Recorded because a verification that only lists faults is not a verification.
 ## Not verified
 
 - **macOS and Linux.** The standard-library claim was confirmed by reading imports and the run was
-  confirmed on Windows only. No such host was available.
+  confirmed on Windows only. No such host was available. **Closed 2026-08-07, see below.**
 - **`S-017` to `S-019`.** Out of scope, and separately blocked.
+
+### Cross-platform limitation closed, 2026-08-07
+
+All six CI matrix cells passed on
+[run 31213244638](https://github.com/hams-ollo/zen-agent-skills/actions/runs/31213244638):
+`ubuntu-latest` and `macos-latest` and `windows-latest`, each on Python 3.11 and 3.14. Since
+`checks.yml` now calls `run-checks.py` and nothing else, every one of those cells is a full run of
+the acceptance command, so the `partial` criterion "standard library only; passes Windows, macOS, and
+Linux" is now met rather than partially met.
+
+The same run is the evidence `S-007` was waiting for. That scenario was recorded in the readiness
+report as having no in-repo test layer by design, because a local test asserting that the matrix
+catches what one local run cannot would be asserting its own premise. Six green cells against one
+green local run is the observation itself.
 
 ## Disposition, applied the same day
 
