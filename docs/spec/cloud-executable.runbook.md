@@ -94,6 +94,72 @@ What happens next, in order:
 that the infrastructure worked. Verification of `bug-0018`'s own fix is fine from any session that
 did not write it; verification of Epic E item 2 itself wants a session with no stake in its design.
 
+## Re-running just the reachability check (`S-008`)
+
+A second, much smaller session. It exists because the first proof run reported nothing at startup, and
+the cause turned out to be a defect in the hook rather than in the run: `.agents/skills` was counted
+at project scope, where this kit keeps its own sources, so the hook was silent in the one repository
+that ships it. Fixed on `feat/epic-e-delegated-execution` at `7703632`.
+
+**Run it on `feat/epic-e-delegated-execution` or later.** On any earlier commit, or on the
+`claude/bug-0018-...` branch, the hook is still the broken version and its silence would say nothing
+about the fix.
+
+This session asks for **four** observations rather than one, because last time a single yes-or-no
+could not distinguish two failures that look identical from outside: a hook whose logic is wrong, and
+a hook whose registration never launched it. Observations 1 and 2 separate them. If 2 reports and 1
+does not, the logic is right and the registration is broken, which is the `feat-0038` failure again
+and would point straight at the interpreter or the path in `.claude/settings.json`.
+
+Observation 3 matters because the interpreter in that file was chosen by reasoning, not evidence. It
+says `python3` on the argument that cloud sessions are Linux and many distributions ship no `python`.
+That has never been checked on the actual platform.
+
+```text
+This is an observation-only run. Do not fix anything, and do not change any behaviour.
+
+Report these four things, verbatim, and nothing else:
+
+1. Did a message beginning "NO SKILLS REACHABLE" appear in your context at the very start of this
+   session, before you did anything? Answer yes or no explicitly. If yes, paste it. If no, say so
+   plainly; "no" is a real and useful answer here.
+
+2. Run this and paste the exact output, including empty output:
+   printf '{"hook_event_name":"SessionStart","source":"startup","cwd":"%s"}' "$PWD" | python3 .agents/hooks/skill-reachability-reminder.py
+
+3. Run these and paste the exact output:
+   command -v python3 ; command -v python ; python3 --version ; uname -s
+
+4. Run this and paste the exact output:
+   git rev-parse HEAD ; git log --oneline -1
+
+Then append one line to the "Runs performed" table at the end of
+docs/spec/cloud-executable.runbook.md recording the date, the commit, and whether observation 1 was
+yes or no. Change nothing else in that file and nothing else in the repository.
+
+Operate under .agents/rules/autonomy.md. Push to a branch beginning 'claude/', open a DRAFT pull
+request against feat/epic-e-delegated-execution, and never merge it. Put all four observations in
+the pull request body, verbatim, so they can be read without opening the session.
+
+Report honestly even if the answer to 1 is no. A "no" here is evidence about the fix, not a failure
+on your part, and reporting it accurately is the entire job.
+```
+
+### Reading the result
+
+| Obs 1 (in context) | Obs 2 (run by hand) | What it means |
+|---|---|---|
+| yes | reports | `S-008` confirmed live. The bootstrap works end to end. |
+| no | reports | Logic is right, **registration is broken**. Look at the interpreter and path in `.claude/settings.json`, and at whether the harness honours a committed project settings file at all. |
+| no | silent | The logic is still wrong in that environment. The fix did not hold; check what observation 3 says about the interpreter, and whether the clone has something at `.claude/skills`. |
+| yes | silent | Contradictory. Something other than this hook produced the message; treat the whole result as unreliable and say so. |
+
+## Runs performed
+
+| Date | Commit | Purpose | Startup message seen? |
+|---|---|---|---|
+| 2026-08-07 | `08b0a6d` | The `bug-0018` proof run (`S-017` to `S-019`) | **No.** Cause found afterwards: the hook counted this kit's own `.agents/skills/` sources at project scope, so it was silent in a fresh clone. Fixed at `7703632`. |
+
 ## If it fails
 
 Two failure classes, and they call for opposite responses.
