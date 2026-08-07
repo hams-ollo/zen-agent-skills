@@ -10,6 +10,7 @@ touched_files:
   - scripts/install.py
   - tests/test_install.py
   - docs/spec/install.md
+  - docs/spec/README.md
 created: 2026-08-06
 ---
 
@@ -56,6 +57,25 @@ report; this destroys work.
 copy differs from the kit's and leave it alone, reporting the divergence rather than resolving it.
 The digest recorded by `chore-0031` makes this answerable: a file matching its recorded digest is
 untouched and may be refreshed, a file that does not is the adopter's.
+
+**Also in scope: amend [`install.md`](../docs/spec/install.md) for the new behaviour. This task
+carries the author's explicit instruction to amend, given 2026-08-07.** That instruction is recorded
+here because every amendment in that file records one (lines 13, 19, 27), and `chore-0031` correctly
+declined to amend without it. Without this paragraph the same thing would happen again, and the
+contract would fall further behind the code it describes.
+
+Follow the convention in [`docs/spec/README.md`](../docs/spec/README.md): **leave `status: approved`
+exactly as it is**, add a dated amendment note in the form the existing amendments use, state the
+pending state in the words *pending the author's re-approval*, and add the row to that file's
+re-approval queue. Flipping the field to `draft` makes `verifier-agent` return `blocked` on the run
+verifying this very task.
+
+**Coordinate with `chore-0033`, which is open against the same spec file.** It amends the Proposed
+Surface table for `--check` and `--with-hooks`; this task amends the placement behaviour. They do not
+conflict in substance and they do collide in mechanics, in two places. **Scenario ids**: the highest
+in `install.md` today is `S-015`, so whichever task lands first takes `S-016` and the second must
+read the file rather than assume. **The re-approval queue row**: if a row for `install.md` is already
+present, extend it rather than adding a second.
 
 **Out of scope:**
 
@@ -107,6 +127,18 @@ does to existing files on disk.
 - [ ] The run reports what it preserved rather than passing silently.
 - [ ] A rules file the adopter **added** alongside the kit's is not deleted.
 - [ ] Existing tests still pass, unchanged in intent.
+- [ ] `docs/spec/install.md` carries a scenario for the preserved-lens behaviour, covering both
+      directions: an edited file is preserved, and an unedited one is still refreshed. The id
+      continues from the highest already in the file, checked rather than assumed.
+- [ ] The scenario states the adopted-versus-derived distinction at contract level and does not
+      contradict `build-adapters.md` `S-010` and `S-014`, which already draw it the same way.
+- [ ] If a force-overwrite flag is added, the Proposed Surface table lists it and a scenario covers
+      it. A new user-visible flag that reaches no scenario is the divergence `chore-0033` exists to
+      drain.
+- [ ] A dated amendment note is added in the form the existing three use, marked pending the
+      author's re-approval, and `status:` still reads `approved`.
+- [ ] `docs/spec/README.md`'s re-approval queue carries the `install.md` row, extended rather than
+      duplicated if one is already there.
 
 ## Definition of done
 

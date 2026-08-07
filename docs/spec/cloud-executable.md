@@ -1,13 +1,20 @@
 ---
 title: cloud-executable
-status: draft
+status: approved
 ---
 
 # cloud-executable
 
 Behavioral contract for making this repository workable from a cloud agent session, written
-2026-08-07 for item 2 of Epic E in [`ROADMAP.md`](../../ROADMAP.md). A **forward** spec: none of it
-is built, unlike [`install.md`](install.md), which pinned behavior that already existed.
+2026-08-07 for item 2 of Epic E in [`ROADMAP.md`](../../ROADMAP.md). **Approved by the author on
+2026-08-07.**
+
+A **forward** spec, and the first here: every other spec in this directory was written against code
+that already existed, so it described a contract that already held. This one does not, which moves
+where the risk sits. A retrospective spec can be wrong about what the code does, and an audit finds
+that. A forward spec can specify something unbuildable, and nothing finds that until someone tries.
+`spec-plan-readiness` over this spec plus its task decomposition is the gate for that, and it runs
+before any implementation begins rather than after.
 
 ## Problem
 
