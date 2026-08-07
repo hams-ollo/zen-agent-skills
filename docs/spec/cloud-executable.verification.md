@@ -88,7 +88,11 @@ run against a synthetic empty home. Real-environment evidence for it is owed alo
 
 ## To run it
 
-From an interactive terminal, on this branch, after `claude auth login`:
+The step-by-step version, for the browser route, is in
+[`cloud-executable.runbook.md`](cloud-executable.runbook.md), including the prerequisites that would
+otherwise surface as a second failure at session creation.
+
+The terminal route, from an interactive terminal on this branch, after `claude auth login`:
 
 ```bash
 claude --cloud "Read AGENTS.md in full, then .tasks/bug-0018-reinstall-destroys-an-adopter-edited-lens.md, then the files that task names in touched_files. Implement that task. Operate under .agents/rules/autonomy.md; rule A8 is the ceiling and is not negotiable: push to a branch whose name begins with 'claude/', open a DRAFT pull request against feat/epic-e-delegated-execution, and never merge it. Acceptance: 'python scripts/run-checks.py' must exit 0, and its verbatim output goes in the pull request body. That body must meet the nine-field delegate evidence contract in .agents/skills/fix-batch/SKILL.md, all nine fields, not a transcript. Load-bearing evidence: bug-0018 requires a regression test that FAILS against the current install.py and passes after the fix, so run it before the fix and paste the failure verbatim, then after and paste the pass. Finally, report whether a 'NO SKILLS REACHABLE' message appeared at the start of your session; it comes from a SessionStart hook in .claude/settings.json and this is its first live test, so report honestly either way, including if nothing appeared."

@@ -98,6 +98,15 @@ spec may have one, several, or none. This is the same list carried in the layout
 | `<spec>.verification.md` | Was this run's work acceptable? | [`verifier-agent`](../../.agents/skills/verifier-agent/SKILL.md) |
 | `<spec>.readiness.md` | May implementation begin at all? | [`spec-plan-readiness`](../../.agents/skills/spec-plan-readiness/SKILL.md) |
 | `<spec>.characterization.md` | What did this behave like before a contract existed? | [`test-author`](../../.agents/skills/test-author/SKILL.md) |
+| `<spec>.runbook.md` | How does a person perform a step no agent here can? | a human, or an agent writing for one |
+
+The runbook is the newest kind, added 2026-08-07, and only one spec has one. It exists because
+[`cloud-executable`](cloud-executable.md) is the first contract here whose verification depends on an
+action nothing in this repository can take: `claude --cloud` refuses a non-interactive invocation, so
+the proof session has to be started by a person from a terminal or a browser. Putting those
+instructions in the verification record was the obvious alternative and is wrong, because that record
+is a ledger of one attempt on one date while the instructions are current-state and will be edited.
+A kind is worth adding when two documents would otherwise have to drift apart to stay correct.
 
 The distinction between the first two reports is the one most easily lost. **Conformance** is a
 matrix over the whole contract: every scenario and surface element classified `Conformed`,
@@ -119,7 +128,7 @@ something else today.
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
 | [`build-adapters`](build-adapters.md) | approved | 17 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
-| [`cloud-executable`](cloud-executable.md) | approved | 19 | [readiness](cloud-executable.readiness.md), [verification](cloud-executable.verification.md) (**blocked**) |
+| [`cloud-executable`](cloud-executable.md) | approved | 19 | [readiness](cloud-executable.readiness.md), [verification](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 15 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
