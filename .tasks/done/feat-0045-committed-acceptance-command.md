@@ -2,7 +2,7 @@
 id: feat-0045
 title: Give the repository one committed command that answers whether a change is acceptable
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-08-07
 ## Problem
 
 Nothing in this repository answers "is this change acceptable" in one step. The seven gates live only
-as seven separate steps in [`checks.yml`](../.github/workflows/checks.yml), so the only ways to get
+as seven separate steps in [`checks.yml`](../../.github/workflows/checks.yml), so the only ways to get
 the answer are to push and read CI, or to run seven commands by hand and remember all seven.
 
 Measured on 2026-08-07: the 97 acceptance chains across `.tasks/` and `.tasks/done/` run one, two,
@@ -28,7 +28,7 @@ For a person that is friction. For an agent working unattended it is disqualifyi
 push and wait for a human to read the result, and it has no way to know the three commands its task
 named are not the seven that gate the merge.
 
-Contract: [`cloud-executable.md`](../docs/spec/cloud-executable.md), `S-001` to `S-007`.
+Contract: [`cloud-executable.md`](../../docs/spec/cloud-executable.md), `S-001` to `S-007`.
 
 ## Scope
 
@@ -57,7 +57,7 @@ Files this creates, which are deliberately absent from `touched_files` (see Impl
 **`touched_files` lists only files that already exist**, because `.tasks/validate.py --strict`
 promotes a missing path to an error (`validate.py:456`) and CI runs `--strict`. This contradicts the
 `new-task` skill, which says to list a test file at the path it should be created at.
-[`feat-0038`](done/feat-0038-hooks-module-and-delegation-reminder.md) hit the same thing and resolved
+[`feat-0038`](feat-0038-hooks-module-and-delegation-reminder.md) hit the same thing and resolved
 it the same way, listing only pre-existing files while creating the whole hooks module. The
 contradiction is real and is worth its own task; do not try to fix it here.
 

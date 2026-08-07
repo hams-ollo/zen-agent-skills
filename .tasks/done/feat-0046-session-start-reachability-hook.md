@@ -2,7 +2,7 @@
 id: feat-0046
 title: Tell a session at startup when the kit's skills are not reachable
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -23,7 +23,7 @@ created: 2026-08-07
 
 A session can start in this repository with none of the kit's skills loaded, do a full piece of work,
 and never say so. Verified 2026-08-07: `git ls-files .claude` returns nothing, and
-[`install.py`](../scripts/install.py) places skills at user scope (`~/.claude/skills`,
+[`install.py`](../../scripts/install.py) places skills at user scope (`~/.claude/skills`,
 `~/.agents/skills`), which a fresh clone does not have. The repository that builds this kit is the
 one place the kit is reliably absent.
 
@@ -31,7 +31,7 @@ The output of such a session looks exactly like output produced with the skills.
 them, which is the same silent-wrong-result shape as a stale installed skill (`chore-0031`) and an
 inert hook (`feat-0038`).
 
-Contract: [`cloud-executable.md`](../docs/spec/cloud-executable.md), `S-008` to `S-016`.
+Contract: [`cloud-executable.md`](../../docs/spec/cloud-executable.md), `S-008` to `S-016`.
 
 ## Scope
 
@@ -47,7 +47,7 @@ Files this creates, deliberately absent from `touched_files` (see Implementation
 **Out of scope:**
 
 - **Installing, copying, or repairing anything.** The hook reports. This is rule `A3` and the whole
-  principle of [`autonomy.md`](../.agents/rules/autonomy.md).
+  principle of [`autonomy.md`](../../.agents/rules/autonomy.md).
 - **Answering whether a reachable skill is current.** That is `install.py --check`. `S-011` states
   that the hook's silence means reachable and never means current, and the reason it is not consulted
   is that walking a digest of every installed file would sit in front of every session start.
@@ -86,7 +86,7 @@ the rule it bends.** An unstated exception is how a contract quietly stops meani
 those are valid matcher values; and `additionalContext` inside `hookSpecificOutput` is the context
 injection field.
 
-**The hook module contract is in [`.agents/hooks/README.md`](../.agents/hooks/README.md)** and is not optional:
+**The hook module contract is in [`.agents/hooks/README.md`](../../.agents/hooks/README.md)** and is not optional:
 always exit 0, at most one JSON object on stdout, never import from this repository, expose an
 injectable `main(stdin, stdout)`, and use two-stage filtering because the harness matcher is the
 coarse filter. Mirror `delegation-reminder.py`, which is the reminder-shape prior art.

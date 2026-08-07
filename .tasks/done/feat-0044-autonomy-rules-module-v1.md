@@ -2,7 +2,7 @@
 id: feat-0044
 title: Consolidate the kit's unattended-work rules into a swappable autonomy module
 type: feat
-status: in_progress
+status: done
 priority: P2
 parent: "ROADMAP Epic E #1: autonomy.md v1"
 depends_on: []
@@ -20,11 +20,11 @@ governs unattended work existed as prose inside one skill, applying only to agen
 read that skill, and the thing those rules had in common was never named anywhere.
 
 That common thing is one principle, and it was already stated verbatim in the codebase without ever
-being lifted out: [`install.py`](../scripts/install.py)'s `check()` docstring reads "Detect and
+being lifted out: [`install.py`](../../scripts/install.py)'s `check()` docstring reads "Detect and
 report, never rewrite." The same rule is applied independently by
-[`doc-sync`](../.agents/skills/doc-sync/SKILL.md), by
-[`review-quality.md`](../.agents/rules/review-quality.md) protocol rule 6, and by
-[`check-provenance.py`](../scripts/check-provenance.py), which reports drift and deliberately
+[`doc-sync`](../../.agents/skills/doc-sync/SKILL.md), by
+[`review-quality.md`](../../.agents/rules/review-quality.md) protocol rule 6, and by
+[`check-provenance.py`](../../scripts/check-provenance.py), which reports drift and deliberately
 declines upstream's in-place sync.
 
 Four independent components reached the same rule. Nothing named it, so nothing could compose it,
@@ -32,7 +32,7 @@ and an agent dispatched to a cloud session inherited none of it.
 
 ## Scope
 
-**In scope:** a fourth swappable module at [`autonomy.md`](../.agents/rules/autonomy.md), beside
+**In scope:** a fourth swappable module at [`autonomy.md`](../../.agents/rules/autonomy.md), beside
 `house-style.md` and `review-quality.md`, organised around the one named principle with the rules as
 its applications. Every rule carries a citation to where it was already exercised. Register the
 module in the layout table in `AGENTS.md`, and annotate the roadmap item.
@@ -62,7 +62,7 @@ What remains is closeout, not implementation: `doc-sync`, the changelog line, an
 
 - **`A8` is the one rule whose specific form is not yet exercised**, and it says so in its own text
   rather than being presented as consolidated. The shape is cited to
-  [`pr-describe`](../.agents/skills/pr-describe/SKILL.md), which drafts and never touches GitHub, but
+  [`pr-describe`](../../.agents/skills/pr-describe/SKILL.md), which drafts and never touches GitHub, but
   the ceiling itself (a `claude/` branch and a draft pull request that is never merged) is a decision
   recorded in `ROADMAP.md` Epic E. Confirming or amending it against a real run is Epic E item 3's
   first job.

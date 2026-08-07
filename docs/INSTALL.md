@@ -104,8 +104,9 @@ python scripts/install.py --with-hooks
 
 That places the module and then prints a registration block. **Nothing fires until you paste that block into `~/.claude/settings.json` yourself.** The installer does not edit your settings, for two reasons: a settings file is the one thing here the uninstall manifest cannot cleanly reverse, and a guardrail you did not knowingly switch on is indistinguishable from a bug when it fires.
 
-Today the module ships two hooks, one of each shape:
+Today the module ships three hooks, two reminders and one gate:
 
+- **`skill-reachability-reminder`** says so, once, when a session starts with no skill reachable at either project or user scope. It stays completely silent when skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
 - **`delegation-reminder`** notes, after a delegated agent reports back, that its summary is a claim rather than evidence. It never blocks.
 - **`spec-conformance-gate`** blocks when work a contract governs is closed and nothing records whether the implementation actually matches that contract. Every block names its escape: run `spec-conformance`, or add a `conformance:` key to the frontmatter declaring the audit lives elsewhere.
 

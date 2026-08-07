@@ -10,9 +10,9 @@ A ledger: it records what was true on the date it ran and is not rewritten when 
 | Input | Value |
 |---|---|
 | Spec | [`cloud-executable.md`](cloud-executable.md), approved 2026-08-07, `S-001` to `S-019` |
-| Decomposition | [`feat-0045`](../../.tasks/feat-0045-committed-acceptance-command.md), [`feat-0046`](../../.tasks/feat-0046-session-start-reachability-hook.md) |
+| Decomposition | [`feat-0045`](../../.tasks/done/feat-0045-committed-acceptance-command.md), [`feat-0046`](../../.tasks/done/feat-0046-session-start-reachability-hook.md) |
 
-[`feat-0044`](../../.tasks/feat-0044-autonomy-rules-module-v1.md) was deliberately **excluded**. It
+[`feat-0044`](../../.tasks/done/feat-0044-autonomy-rules-module-v1.md) was deliberately **excluded**. It
 serves Epic E item 1, carries no `spec` field, and is not decomposed from this contract. Including it
 would have produced a task traceable to no scenario, which this gate blocks on, and forcing a mapping
 to make the gate pass would have been the gate failing at its own job.
