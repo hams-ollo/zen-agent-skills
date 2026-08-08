@@ -75,6 +75,27 @@ Run it when a skill behaves like an older version of itself, after pulling chang
 
 The rules module is handled differently on purpose. [`.agents/rules/`](../.agents/rules/) is swappable, and rewriting a lens is something the kit invites you to do, so your edits there are never reported as divergence. What you are told instead is when the kit's own copy of that lens has moved since you installed, which is news you can act on rather than a warning that fires forever.
 
+## Your edits to the rules module survive a re-install
+
+The same invitation binds the installer, not just the check. Re-running the install refreshes a rules file you have not touched, and keeps one you have, naming it:
+
+```
+preserved claude   rules  -> C:\Users\you\.claude\rules
+          preserved house-style.md: you edited it
+```
+
+The two cases are told apart by the digest recorded when the file was placed. A file that still matches its baseline is one nobody edited, so the kit refreshes it and you stay current. A file that does not is yours, so it is kept and the kit's version is never merged into it: reconciling the two is your call, not the installer's. A rules file you *added* beside the kit's is left alone in both directions, since it is not the kit's to refresh or to remove.
+
+When you want the kit's copy back, ask for it:
+
+```bash
+python scripts/install.py --replace-adopted
+```
+
+That discards your edits to the rules module and re-establishes the baseline. It is its own flag rather than a mode, because it decides what happens to your work.
+
+One case cannot be answered: an install predating the digest baseline recorded nothing, so an edited file is indistinguishable from an untouched one. There the installer preserves everything and says the baseline is unknown, because a stale lens is visible and recoverable while overwritten work is neither. Use `--replace-adopted` to take the kit's copies and start recording a baseline again.
+
 ## Choose how many skills to install
 
 Every installed skill's `description` is loaded so your agent can route to it, and that budget is shared with every other skill you have installed. So `--profile` selects how many skills to place, and the run reports what each profile costs in description characters:
@@ -104,8 +125,9 @@ python scripts/install.py --with-hooks
 
 That places the module and then prints a registration block. **Nothing fires until you paste that block into `~/.claude/settings.json` yourself.** The installer does not edit your settings, for two reasons: a settings file is the one thing here the uninstall manifest cannot cleanly reverse, and a guardrail you did not knowingly switch on is indistinguishable from a bug when it fires.
 
-Today the module ships two hooks, one of each shape:
+Today the module ships three hooks, two reminders and one gate:
 
+- **`skill-reachability-reminder`** says so, once, when a session starts with no skill reachable at either project or user scope. It stays completely silent when skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
 - **`delegation-reminder`** notes, after a delegated agent reports back, that its summary is a claim rather than evidence. It never blocks.
 - **`spec-conformance-gate`** blocks when work a contract governs is closed and nothing records whether the implementation actually matches that contract. Every block names its escape: run `spec-conformance`, or add a `conformance:` key to the frontmatter declaring the audit lives elsewhere.
 

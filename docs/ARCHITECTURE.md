@@ -120,10 +120,23 @@ python .tasks/validate.py --links "*.md" ".github/**/*.md" "docs/**/*.md"
 ```
 
 The last two are the same rule with two callers over deliberately disjoint file sets: `--strict`
-walks `.tasks/`, and `--links` walks the documents around it. CI runs the second over the repository
-root, `.github/`, and `docs/`. It used to restate the rule inline in the workflow instead, which
-drifted: the validator learned that a link inside a code span is not a link and the CI copy never
-did, so a correctly quoted example passed `--strict` and failed CI.
+walks `.tasks/`, and `--links` walks the documents around it over the repository root, `.github/`,
+and `docs/`. The workflow used to restate that rule inline, which drifted: the validator learned that
+a link inside a code span is not a link and the CI copy never did, so a correctly quoted example
+passed `--strict` and failed CI.
+
+That lesson is now applied to the whole gate set. [`run-checks.py`](../scripts/run-checks.py) runs
+all seven gates in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
+than listing them, so there is one gate set with two callers instead of one per caller:
+
+```bash
+python scripts/run-checks.py
+```
+
+It exits 0, 1, or 2, where 2 means a gate could not run at all and outranks a gate that ran and
+failed, matching `install.py --check` and `check-provenance.py`. Every gate runs even after one
+fails, because an agent working unattended gets one round trip. Any single run covers one of CI's six
+matrix cells, so passing it is necessary but not sufficient, and it says so in its own summary.
 
 The test suite is not optional here. [`tests/`](../tests/) covers the distribution tooling itself, so a change to `install.py` or `build-adapters.py` is exactly the case the suite exists to catch.
 
