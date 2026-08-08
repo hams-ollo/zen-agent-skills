@@ -69,14 +69,15 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-06, five specs are approved and carry an amendment the author has not re-read:
+As of 2026-08-07, five specs are approved and carry an amendment the author has not re-read. One of
+them, `install`, carries two:
 
 | Spec | Amendment | Amended |
 |---|---|---|
 | [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`) | 2026-08-06 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
-| [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`) | 2026-08-05 |
+| [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
 
 The fifth row was missed when this table was first written, and how it was missed is the argument
@@ -131,15 +132,17 @@ something else today.
 | [`cloud-executable`](cloud-executable.md) | approved | 19 | [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
-| [`install`](install.md) | approved | 15 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
+| [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
 | [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Ten specs, 137 scenarios, all approved. Nine carry 118 of those scenarios and every one has a
-conformance matrix as of 2026-08-06. [`cloud-executable`](cloud-executable.md) is the tenth, approved
+Ten specs, 140 scenarios, all approved. Nine carry 121 of those scenarios and every one has a
+conformance matrix as of 2026-08-06, though `install`'s covers 15 of its 18 scenarios: `bug-0018`
+added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout.
+[`cloud-executable`](cloud-executable.md) is the tenth, approved
 2026-08-07, and it is the one exception to the matrix claim: it is the first **forward** spec here,
 written before an implementation rather than pinning one that already existed, so there is nothing
 built to audit and it has no sibling report yet. Its conformance matrix is owed at closeout, not now.
