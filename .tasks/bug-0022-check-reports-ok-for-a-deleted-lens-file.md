@@ -89,6 +89,32 @@ say why.
 [`bug-0018`](done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md) pinned with a test, which is
 about **edited** files and not removed ones.
 
+## Decisions
+
+- **`diverged` rather than a new status word, as the task invited a choice on.** A missing adopted
+  file is the same claim the derived path already makes for a file it cannot find, so it takes the
+  same word and the same exit code. A new word would need a new counter, a new summary line, and a
+  new row in `INSTALL.md`, all to say what one existing word already says. What is genuinely local to
+  the adopted module is the *remedy*, since re-installing does not restore the file, so that lives in
+  the per-entry message instead of in the vocabulary.
+- **Seam left open: dropping the digest makes a deliberate deletion non-sticky.** The task asked for
+  the removal branch to drop `digests[rel]`, and it does. The consequence the task did not trace is
+  that the next ordinary install then sees the file absent from both the install and the record,
+  which is the `have is None and base is None` branch, so it places the lens back as though it were
+  new. The run in between also reports the file under `revised`, because with no baseline a lens the
+  adopter deleted is indistinguishable from one the kit has newly started shipping. Both are pinned
+  by tests rather than left latent. The alternative that fixes them is a tombstone in the manifest
+  entry, so a removal is remembered without a digest asserting the file is present; that is a
+  persistence-format decision for a person, not for an unattended run, and it is recommended as a
+  follow-up rather than taken here.
+- **Rejected: keeping the digest and reporting the absence anyway.** That is the failure direction
+  this task's own risks section names. A lens an adopter deliberately deleted would be `diverged` at
+  exit 1 on every check forever, with no route to a clean report except restoring a file they chose
+  not to have.
+- **Rejected: reporting an installed lens whose digest differs.** Out of scope by the task, and the
+  code now says so at the point of comparison: the adopted branch asks about absence only, never
+  about content, so the invitation to rewrite a lens survives unchanged.
+
 ## Risks and rollback
 
 Touches the installer and a reader-facing document. The failure direction to design against is a

@@ -1010,6 +1010,97 @@ class StalenessCheckTests(unittest.TestCase):
         self.assertEqual(self._status(out, "alpha"), "diverged")
         self.assertIn("gone", out)
 
+    def test_a_rules_file_deleted_from_the_install_is_named_and_exits_non_zero(self):
+        # bug-0022, the reproduction itself. The adopted comparison runs the recorded
+        # baseline against the source and never opens the installed tree, so a lens that is
+        # simply *gone* was reported `ok` at exit 0. Whole-directory absence is caught a
+        # branch earlier; per-file absence was caught by nothing. The file deleted here is
+        # house-review's entire rubric, which is the incident this kit cites more than any
+        # other, and the installer's very next run already says the file is missing.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+
+        code, out = self._check()
+        self.assertEqual(code, 1, "a lens missing from the install must not exit zero")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("review-quality.md", out,
+                      "the report must name the file, not only the module")
+
+    def test_only_the_missing_lens_is_named_and_an_edited_one_is_not(self):
+        # The failure direction bug-0022's risk section names: a check that swept an edited
+        # lens into the same report would be noise on every run for exactly the people the
+        # adopted exemption was written for. Absence and edit are different claims, and only
+        # the first is being added.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+
+        _, out = self._check()
+        named = [l for l in out.splitlines() if "gone from the installed module" in l]
+        self.assertEqual(len(named), 1, f"exactly one file is missing, got {named}")
+        self.assertIn("review-quality.md", named[0])
+
+    def test_a_rules_file_the_adopter_added_is_ignored_by_the_check(self):
+        # Ignored in both directions. The install side is pinned by
+        # `test_a_lens_the_adopter_added_beside_the_kits_is_not_deleted`: it is neither
+        # refreshed nor removed nor recorded. This is the check side of the same rule: a
+        # file absent from the recorded baseline was placed by nobody, so it is neither
+        # divergence nor news, and the new absence question must not read it backwards as
+        # "in the install, absent from the record".
+        self._install()
+        (self.home / ".claude" / "rules" / "my-own-lens.md").write_text(
+            "# my own lens\n\nrules the kit never shipped.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "rules"), "ok")
+        self.assertNotIn("my-own-lens.md", out)
+
+    def test_a_missing_lens_and_a_moved_source_are_reported_in_one_entry(self):
+        # The two questions are independent and the entry carries one status word, so the
+        # actionable one wins and the other is not dropped on the floor. Reporting only the
+        # status would silently lose whichever answer lost the tie, which is the partial
+        # result A6 forbids.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1, "the fault outranks the news")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("review-quality.md", out)
+        self.assertIn("house-style.md", out, "the upstream move must still be reported")
+
+    def test_an_unanswerable_entry_still_outranks_a_missing_lens(self):
+        # The documented precedence, unchanged: "could not answer" outranks "diverged",
+        # because the first says the report itself cannot be trusted. Staged by stripping
+        # one skill entry's digests while a rules file is missing, so both verdicts are live
+        # in the same run.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+        entries = self._entries()
+        for e in entries:
+            if e["name"] == "alpha":
+                e.pop("digests")
+        inst.MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                                 encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 2, "an unanswerable entry outranks a diverged one")
+        self.assertEqual(self._status(out, "alpha"), "unknown")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+
     def test_the_check_never_rewrites_the_install_or_the_record(self):
         # The decision this shares with feat-0043: detect and report, never overwrite. An
         # adopter may have edited an installed file deliberately, and a check that "fixed"
@@ -1342,6 +1433,63 @@ class AdoptedModulePreservationTests(unittest.TestCase):
         self._install()
         self.assertEqual(self._lens().read_text(encoding="utf-8"), mine,
                          "the edit survived one re-install and not the next")
+
+    def test_a_lens_the_adopter_removed_is_no_longer_recorded_as_placed(self):
+        # The other half of bug-0022. The removal branch named the file in plain words and
+        # left `digests[rel]` standing from the recorded baseline, so the record went on
+        # asserting a file the run had just said was gone. Nothing reconciled the two, which
+        # is what let `--check` keep reading a baseline for a file nobody has.
+        self._install()
+        self._lens("review-quality.md").unlink()
+
+        _, out = self._install()
+        self.assertIn("you removed it", out, "precondition: the run must notice the removal")
+        self.assertNotIn("review-quality.md", self._entry("rules")["digests"],
+                         "the record must not claim a file the run reported as gone")
+        self.assertIn("house-style.md", self._entry("rules")["digests"],
+                      "the rest of the baseline must survive")
+
+    def test_a_removal_recorded_by_one_run_is_no_longer_a_fault_at_the_next_check(self):
+        # Why the record has to be reconciled and not merely be tidy. Without the drop, a
+        # deliberate deletion is `diverged` at exit 1 on every check forever, which is
+        # precisely the noise the adopted exemption exists to avoid: the adopter would have
+        # no route back to a clean report except restoring a file they chose not to have.
+        #
+        # What the drop buys is bounded, and the bound is asserted rather than glossed. The
+        # absence claim goes away and the run is no longer a fault, but the file is still
+        # named, now under `revised`: with no baseline, a lens the adopter deleted is
+        # indistinguishable from one the kit has newly started shipping, and the second is
+        # worth telling them about. It resolves on the next install, which places the file
+        # (see `test_the_run_after_a_recorded_removal_ships_the_lens_again`).
+        self._install()
+        self._lens("review-quality.md").unlink()
+        self._install()
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home)
+        out = buf.getvalue()
+        self.assertEqual(code, 0, "a removal the record has accepted is not a fault")
+        self.assertNotIn("gone from the installed module", out,
+                         "the absence claim must not survive the record accepting it")
+
+    def test_the_run_after_a_recorded_removal_ships_the_lens_again(self):
+        # The seam this trade leaves open, pinned so it is visible rather than discovered.
+        # Once the removal is dropped from the record, a later run cannot tell a lens the
+        # adopter deleted from one they have never been sent, so it places it. Remembering
+        # the removal instead would need the manifest to carry a tombstone, which is a
+        # format change bug-0022 explicitly rules out ("no manifest migration"), and the
+        # alternative it rules in is permanent false divergence. Nothing of the adopter's is
+        # destroyed either way: the file they deleted is not there to lose.
+        self._install()
+        self._lens("review-quality.md").unlink()
+        self._install()
+        self.assertFalse(self._lens("review-quality.md").exists(),
+                         "the run that records the removal must not restore it")
+
+        self._install()
+        self.assertTrue(self._lens("review-quality.md").is_file(),
+                        "with no record of the removal, the kit's lens is placed as new")
 
     def test_a_manifest_predating_the_digests_preserves_the_lens_and_says_so(self):
         # chore-0031's baseline is per entry, so an install predating it records nothing and

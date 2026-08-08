@@ -675,7 +675,22 @@ def _place_adopted(src: Path, target: Path, mode: str, dry: bool, manifest,
             digests[rel] = want
             placed.append(rel)
         elif have is None:
-            preserved.append((rel, "you removed it, so it is not restored"))
+            # The digest goes with the file (bug-0022). Keeping it left the record asserting
+            # a baseline for a file this very run has just said is gone, and nothing ever
+            # reconciled the two, which is what let `--check` read that baseline forever. It
+            # is not the "preserved file keeps its old baseline" property bug-0018 pinned:
+            # that one is about a file the adopter *edited*, which is still on disk and
+            # still has a baseline worth keeping.
+            #
+            # The seam this leaves open is stated rather than hidden: with no record of the
+            # removal, a later run cannot tell this lens from one the adopter has never been
+            # sent, so it places it. Remembering instead would need a tombstone in the
+            # manifest, and the alternative is a deliberate deletion reported as divergence
+            # on every check forever, which is noise aimed at exactly the people this
+            # exemption was written for. Nothing of theirs is destroyed either way.
+            preserved.append((rel, "you removed it, so this run does not restore it, and "
+                                   "the record no longer claims it"))
+            digests.pop(rel, None)
         elif base is None:
             preserved.append((rel, "yours, and the kit now ships a file of that name"))
         else:
@@ -881,12 +896,52 @@ def _check_entry(entry) -> tuple:
         return "error", (f"the kit's source could not be read, so nothing can be compared "
                          f"against it: {exc}")
     if entry.get("name") in ADOPTED_ENTRY_NAMES:
+        # Two independent questions, kept separable (bug-0022). The first is "has the kit's
+        # copy moved since you installed", answerable only from the baseline. The second is
+        # "is every file we placed still there", which needs the installed tree and which
+        # nothing asked before: the comparison below ran the record against the source and
+        # never opened the install, so whole-directory absence was caught a branch earlier
+        # and per-file absence was caught by nothing at all. `_place_adopted` already names
+        # a removed lens in plain words on the very next run, which is what makes the
+        # silence here a defect rather than the exemption working as designed.
+        #
         # The baseline, not the installed tree: naming it "installed" printed a digest
         # matching no file on disk (reported on this pull request).
         moved = _compare(recorded, current, "recorded", "source now")
+        try:
+            installed = digest_tree(target)
+        except OSError as exc:
+            return "error", (f"the installed copy could not be read, so whether every "
+                             f"file this install placed is still there is unanswerable: "
+                             f"{exc}")
+        # Absence only, never a digest mismatch. Reporting a changed file here would undo
+        # the whole reason this branch exists: an adopter is invited to rewrite a lens, and
+        # a file they edited is theirs. A missing file is a different claim, and it is the
+        # only one being added. A file they *added* is absent from the baseline and so is
+        # ignored in both directions, exactly as `_place_adopted` ignores it.
+        missing = [rel for rel in sorted(recorded) if rel not in installed]
+        if missing:
+            # `diverged` rather than a new word, so the vocabulary stays one vocabulary:
+            # this is the same claim the derived path already makes for a file it cannot
+            # find, and it carries the exit code that claim already means. What is local to
+            # the adopted module is the remedy, because re-installing does not bring the
+            # file back, so the message says so rather than leaving the summary's generic
+            # advice to mislead the one reader it is aimed at.
+            lines = [f"      {rel}: this install placed it, and it is gone from the "
+                     f"installed module" for rel in missing]
+            if moved:
+                lines.append("      and, separately, the kit's copy has moved since this "
+                             "install:")
+                lines.extend(f"      {p}" for p in moved)
+            return "diverged", (
+                "a file this install placed is missing from the adopted module:\n"
+                + "\n".join(lines)
+                + "\n      Deleting a lens is yours to do and nothing here restores it. "
+                  "Re-install to have the removal recorded, after which this stops being "
+                  "reported, or `--replace-adopted` to take the kit's copy back.")
         if not moved:
-            return "ok", f"the kit's copy is unchanged since this install "\
-                         f"({len(recorded)} file(s))"
+            return "ok", f"every file this install placed is still there, and the kit's "\
+                         f"copy is unchanged since this install ({len(recorded)} file(s))"
         return "revised", ("the kit's copy has changed since this install; yours is yours "
                            "to keep:\n" + "\n".join(f"      {p}" for p in moved))
 
