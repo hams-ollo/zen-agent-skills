@@ -15,7 +15,7 @@ that is the record.
 | Check | How | If it is missing |
 |---|---|---|
 | GitHub is connected to your Claude account | Open [claude.ai/code](https://claude.ai/code) and see whether `hams-ollo/zen-agent-skills` is selectable | Authorize the Claude GitHub App, or run `/web-setup` in a terminal to sync your `gh` token |
-| The branch is on the remote | `git log --oneline -1 origin/feat/epic-e-delegated-execution` | `git push` |
+| The branch is on the remote and carries the hook fix | `git log --oneline -1 origin/developer` and `git merge-base --is-ancestor 7703632 origin/developer` | `git push`, or pick a branch that does contain `7703632` |
 | Your local work is committed | `git status` | Commit it. The cloud VM clones from GitHub, not from your disk, so uncommitted work is invisible to it |
 
 Nothing else is needed. The kit is standard-library Python, so the default cloud environment already
@@ -27,9 +27,11 @@ mechanism over.
 
 1. Go to [claude.ai/code](https://claude.ai/code).
 2. New session, repository `hams-ollo/zen-agent-skills`.
-3. **Branch: `feat/epic-e-delegated-execution`.** Not `main` and not `developer`. It is the only
-   branch carrying [`run-checks.py`](../../scripts/run-checks.py), and the acceptance in `S-017`
-   requires that command's verbatim output.
+3. **Branch: `developer`.** Not `main`. Epic E merged into `developer` on 2026-08-08 at `74e2661`,
+   and `feat/epic-e-delegated-execution` was deleted by the repository's automatic head-branch
+   deletion, so the branch this step named until then no longer exists. `developer` carries
+   [`run-checks.py`](../../scripts/run-checks.py), whose verbatim output the acceptance in `S-017`
+   requires, and `main` does not yet.
 4. Paste the prompt below as the first message.
 
 ## The prompt
@@ -40,7 +42,7 @@ files that task names in touched_files. Implement that task.
 
 Operate under .agents/rules/autonomy.md. Rule A8 is the ceiling and is not negotiable: push to a
 branch whose name begins with 'claude/', open a DRAFT pull request against
-feat/epic-e-delegated-execution, and never merge it.
+developer, and never merge it.
 
 Acceptance: 'python scripts/run-checks.py' must exit 0, and its verbatim output goes in the pull
 request body.
@@ -99,11 +101,15 @@ did not write it; verification of Epic E item 2 itself wants a session with no s
 A second, much smaller session. It exists because the first proof run reported nothing at startup, and
 the cause turned out to be a defect in the hook rather than in the run: `.agents/skills` was counted
 at project scope, where this kit keeps its own sources, so the hook was silent in the one repository
-that ships it. Fixed on `feat/epic-e-delegated-execution` at `7703632`.
+that ships it. Fixed at `7703632`, which reached `developer` on 2026-08-08 in the Epic E merge
+`74e2661`.
 
-**Run it on `feat/epic-e-delegated-execution` or later.** On any earlier commit, or on the
-`claude/bug-0018-...` branch, the hook is still the broken version and its silence would say nothing
-about the fix.
+**Run it on any commit containing `7703632`, which today means `developer`.** The condition is the
+commit and not a branch, deliberately: this section first named
+`feat/epic-e-delegated-execution`, and that branch was deleted when Epic E merged, which would have
+sent a session to check out something that no longer exists. On any commit without `7703632` the hook
+is still the broken version and its silence would say nothing about the fix. Check with
+`git merge-base --is-ancestor 7703632 HEAD` rather than by reading the branch name.
 
 This session asks for **four** observations rather than one, because last time a single yes-or-no
 could not distinguish two failures that look identical from outside: a hook whose logic is wrong, and
@@ -138,7 +144,7 @@ docs/spec/cloud-executable.runbook.md recording the date, the commit, and whethe
 yes or no. Change nothing else in that file and nothing else in the repository.
 
 Operate under .agents/rules/autonomy.md. Push to a branch beginning 'claude/', open a DRAFT pull
-request against feat/epic-e-delegated-execution, and never merge it. Put all four observations in
+request against developer, and never merge it. Put all four observations in
 the pull request body, verbatim, so they can be read without opening the session.
 
 Report honestly even if the answer to 1 is no. A "no" here is evidence about the fix, not a failure
