@@ -2,21 +2,22 @@
 id: feat-0047
 title: The threat model names prompt injection as reportable and no skill or lens says anything about it
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #3: harden autonomy.md from what item 2's run revealed"
 depends_on: []
 touched_files:
   - .agents/rules/autonomy.md
+  - SECURITY.md
 created: 2026-08-08
 ---
 
 ## Problem
 
-[`SECURITY.md`](../SECURITY.md) asks for private reports of "prompt-injection paths, where content a
+[`SECURITY.md`](../../SECURITY.md) asks for private reports of "prompt-injection paths, where content a
 skill is designed to read (a diff, an issue body, a fetched page, a file in the target repo) can
 redirect the agent's behavior". Grepping the whole of `.agents/` for that class on 2026-08-08 returns
-one file, [`test-quality`](../.agents/skills/test-quality/SKILL.md), and it is discussing adversarial
+one file, [`test-quality`](../../.agents/skills/test-quality/SKILL.md), and it is discussing adversarial
 **test inputs** rather than this.
 
 So the kit invites reports of a class it has written nothing about, in a library whose entire premise
@@ -27,10 +28,10 @@ The skills that face it are the ones that read text somebody else can influence 
 
 | Skill | What it reads |
 |---|---|
-| [`pr-describe`](../.agents/skills/pr-describe/SKILL.md) | issue bodies and titles from a tracker |
-| [`house-review`](../.agents/skills/house-review/SKILL.md), [`review-depth`](../.agents/skills/review-depth/SKILL.md) | a diff, which is whatever somebody wrote |
-| [`doc-sync`](../.agents/skills/doc-sync/SKILL.md) | every reader-facing document in a target repository |
-| [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md), [`fix-batch`](../.agents/skills/fix-batch/SKILL.md) | the output and diffs of other agents |
+| [`pr-describe`](../../.agents/skills/pr-describe/SKILL.md) | issue bodies and titles from a tracker |
+| [`house-review`](../../.agents/skills/house-review/SKILL.md), [`review-depth`](../../.agents/skills/review-depth/SKILL.md) | a diff, which is whatever somebody wrote |
+| [`doc-sync`](../../.agents/skills/doc-sync/SKILL.md) | every reader-facing document in a target repository |
+| [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md), [`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) | the output and diffs of other agents |
 
 `fix-batch`'s "a delegated agent's report is a claim, not evidence" doctrine is adjacent and genuinely
 strong, and it is not this: it guards against an optimistic report, not against instructions embedded
@@ -38,7 +39,7 @@ in the material an agent was asked to read.
 
 ## Scope
 
-**In scope:** decide whether [`autonomy.md`](../.agents/rules/autonomy.md) gains a rule drawing the
+**In scope:** decide whether [`autonomy.md`](../../.agents/rules/autonomy.md) gains a rule drawing the
 line between text an agent acts on and text an agent reads, and either write it with its citation or
 record it in that module's held section with a trigger. Then reconcile `SECURITY.md` with whichever
 answer is taken.
