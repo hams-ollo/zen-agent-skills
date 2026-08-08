@@ -63,6 +63,19 @@ Add the assertion to `WiringConsistencyTests` rather than a new class, and exten
 docstring to say there are four wirings and why only three carry the every-hook rule. A test whose
 name claims a property it does not check is the defect `feat-0046` found in this very class.
 
+## Decisions
+
+- **Rejected alternative:** matching the command on the hook filename alone, as the implementation
+  notes suggested (`self.HOOK in cmd`, the shape `matcher_sources()` uses). It would pass on a
+  command naming `.agents/hookz/skill-reachability-reminder.py`, so it asserts the filename is
+  mentioned rather than that the path resolves, and the path not resolving is the failure this task
+  exists for. The test splits the command on whitespace and keeps the `.py` token instead, which is
+  no more fragile and reads both spellings the wirings use, bare-relative and quoted-absolute.
+- **Seam left open deliberately:** the test asserts nothing about the interpreter, so `python3` on a
+  machine that has only `python` still passes. That trade is stated inside `.claude/settings.json`
+  and the task puts it out of scope; a static test cannot probe the platform any more than the static
+  JSON can.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
