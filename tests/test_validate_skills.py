@@ -426,6 +426,125 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
 
+class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
+    """Scenario S-009 refined: a link that renders as literal text is not a link.
+
+    The bug population is a skill body that *shows* an example markdown link, which the
+    documentation skills are the likeliest to want. `check_links()` matched every link
+    with a bare regex and resolved each one on disk, so the example failed the lint and
+    the error message never named a fence as the cause (bug-0027).
+
+    The negative cases carry the weight here, because the cheap way to remove a false
+    positive is to switch the check off: a genuine broken link outside any span, and one
+    below an unterminated fence, must both still be reported.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_link_inside_a_fenced_block_is_not_reported(self):
+        # Scenario S-009: the exact reproduction recorded in bug-0027, a `markdown`
+        # fenced block holding one ordinary link to a target that does not exist.
+        body = (
+            "Write the reference like this:\n\n"
+            "```markdown\n"
+            "See [the notes](references/does-not-exist.md) for details.\n"
+            "```\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, f"a fenced link is not a link\n{out}")
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_link_inside_an_inline_code_span_is_not_reported(self):
+        # Scenario S-009: markdown opens a span with a backtick run of any length and
+        # closes it with a run of the same length, so knowing only the single form fixes
+        # half the occurrences. The double form is what an author reaches for the moment
+        # the text being quoted contains a backtick of its own.
+        forms = {
+            "single backtick": "Write `[the notes](references/does-not-exist.md)` in the body.\n",
+            "double backtick": "Write ``[`notes`](references/does-not-exist.md)`` in the body.\n",
+        }
+        for label, body in forms.items():
+            with self.subTest(form=label):
+                _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                             body=body)
+                code, out = _run(self.root)
+                self.assertEqual(code, 0, f"{label}: a quoted link is not a link\n{out}")
+                self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_real_broken_link_beside_a_fence_is_still_reported(self):
+        # Scenario S-009 (negative): the exclusion must not switch the check off. The
+        # fence here is closed and the genuine link sits after it, so a scanner that ran
+        # the fence past its closing delimiter would pass this file for the wrong reason.
+        body = (
+            "```markdown\n"
+            "See [an example](references/does-not-exist.md).\n"
+            "```\n\n"
+            "See [the real target](really-missing.md) for details.\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("link target does not exist: really-missing.md", out)
+        self.assertNotIn("does-not-exist.md", out)
+
+    def test_an_unterminated_fence_does_not_swallow_the_body_below_it(self):
+        # Scenario S-009 (negative): an opening fence that is never closed yields no
+        # range at all. A detector that ran it to end of file would disable the link
+        # check for everything below and still exit clean, which is the one failure
+        # indistinguishable from success (the trade bug-0015 and bug-0017 chose).
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "See [the real target](really-missing.md) for details.\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, f"an unterminated fence must not suppress what follows it\n{out}")
+        self.assertIn("link target does not exist: really-missing.md", out)
+
+    def test_a_link_escaping_the_shipped_tree_is_not_reported_inside_a_fence(self):
+        # Scenario S-011 against the same exclusion, and a recorded decision rather than
+        # an accident: a fenced link is skipped by every branch of check_links(), the
+        # escape branch included. The portability rule protects a reader who clicks a
+        # link that dangles once the skill is installed, and a link rendered as literal
+        # text is clicked by nobody. Splitting the rule so existence is skipped inside a
+        # fence while the escape check still fires would leave an author unable to show
+        # the very example the escape rule exists to teach. Outside a fence the rule is
+        # unchanged: test_link_escaping_the_shipped_tree_errors above still holds.
+        agents = self.root / "agents"
+        skills = agents / "skills"
+        (self.root / "AGENTS.md").write_text("real file\n", encoding="utf-8")
+        body = (
+            "Never write a link like this one:\n\n"
+            "```markdown\n"
+            "Read [`AGENTS.md`](../../../AGENTS.md) before dispatching.\n"
+            "```\n"
+        )
+        _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("escapes the shipped skill tree", out)
+
+    def test_every_shipped_skill_still_passes_the_link_check(self):
+        # Scenario S-009 against the real tree: the assertion that the exclusion did not
+        # change what the kit's own skills report. Every real skill still lints clean.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        skills = sorted(p for p in skills_dir.iterdir() if p.is_dir())
+        names = {d.name for d in skills}
+        errors = []
+        for d in skills:
+            skill_md = d / "SKILL.md"
+            vs.check_links(skill_md, skill_md.read_text(encoding="utf-8"), names, d.name,
+                           errors, skills_dir.parent.resolve())
+        self.assertEqual(errors, [])
+
+
 class TestStatusContradictionCheck(unittest.TestCase):
     """Scenario S-014: a skill asserting both draft and shipped warns but does not fail.
 

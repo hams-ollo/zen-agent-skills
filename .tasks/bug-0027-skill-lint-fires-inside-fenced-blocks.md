@@ -83,6 +83,27 @@ re-approval, and every amendment in this repository so far records the author's 
 This task carries none, so record the divergence in the closeout and let the author decide, following
 what `chore-0031` did in the same position.
 
+## Decisions
+
+- **Rejected alternative: skipping only the existence check inside a fence, and letting the escape
+  rule keep firing there.** It would satisfy the fourth acceptance criterion the other way, and it
+  splits one rule into two with different notions of what a link is. The escape rule protects a
+  reader who follows a link that dangles once the skill is installed, and an example rendered as
+  literal text has no such reader; keeping it armed inside a fence would also stop an author showing
+  the very construct the rule exists to teach. So a link inside a span or a fence is skipped by all
+  three branches of `check_links()`, and outside one the escape rule is untouched: an absolute or
+  `file://` link is still an error here even though the backlog validator tolerates one.
+- **Divergence from `S-009`, left for the author.** The approved contract says a link whose target
+  does not exist is reported, with no exception for one that renders as literal text. This change
+  adds that exception. Per the implementation notes above the spec is not amended here, because
+  every amendment in this repository so far records the author's explicit instruction and this task
+  carries none.
+- **Seam left open: `rewrite_links()` in `scripts/build-adapters.py` has the same gap.** It rewrites
+  every relative link in a body with a bare regex, fenced ones included, so the first skill to ship a
+  fenced example link will have that example silently repointed in each generated adapter. It was
+  unreachable before this change, because the lint refused the body outright. Out of scope here: it
+  is a different file, a different rule, and the honest place for it is its own task.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
