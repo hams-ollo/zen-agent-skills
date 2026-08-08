@@ -47,7 +47,7 @@ A block with no stated escape is a trap. Whoever hits it has to read the source 
 |---|---|---|---|
 | [`delegation-reminder.py`](delegation-reminder.py) | reminder | `PostToolUse` | a delegated agent's report returns |
 | [`spec-conformance-gate.py`](spec-conformance-gate.py) | **gate** | `PostToolUse` | work a contract governs is closed with no conformance matrix |
-| [`skill-reachability-reminder.py`](skill-reachability-reminder.py) | reminder | `SessionStart` | a new session starts with no skill reachable at either scope |
+| [`skill-reachability-reminder.py`](skill-reachability-reminder.py) | reminder | `SessionStart` | a new session starts with none of this kit's skills reachable at either scope |
 
 The reachability reminder is the first hook here on a lifecycle event rather than a tool call, and adding it exposed a defect worth recording. `HOOK_REGISTRATIONS` in `install.py` carried `(script, matcher)` pairs while the registration builder emitted them under a hardcoded `PostToolUse`, so a hook on any other event would have been placed by `--with-hooks` and never registered: installed, correct-looking, and doing nothing, which is the same failure this module was bitten by twice while it was being built. The table carries the event now.
 

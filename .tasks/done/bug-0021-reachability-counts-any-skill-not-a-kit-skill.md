@@ -2,7 +2,7 @@
 id: bug-0021
 title: The reachability bootstrap counts a foreign skill library as reachable, so it is silent in the cloud session it exists for
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -17,9 +17,9 @@ created: 2026-08-08
 
 ## Problem
 
-`_has_skill()` in [`skill-reachability-reminder.py`](../.agents/hooks/skill-reachability-reminder.py)
+`_has_skill()` in [`skill-reachability-reminder.py`](../../.agents/hooks/skill-reachability-reminder.py)
 returns true for **any** directory containing a `SKILL.md`. The contract asks a narrower question.
-The Proposed Surface row in [`cloud-executable.md`](../docs/spec/cloud-executable.md) reads "at least
+The Proposed Surface row in [`cloud-executable.md`](../../docs/spec/cloud-executable.md) reads "at least
 one **kit skill** directory present at the repository's project-scope discovery directory, or at any
 user-scope discovery directory `install.py` targets", and `S-008`'s **Given** is "a clone where no
 **kit skill** is present at project scope or at any user-scope discovery directory".
@@ -48,7 +48,7 @@ None of those 24 directories belongs to this kit. `doc-sync`, `fix-batch`, `hous
 report suppressed.
 
 **This falsifies a recorded prediction.**
-[`cloud-executable.verification.md`](../docs/spec/cloud-executable.verification.md) writes seven
+[`cloud-executable.verification.md`](../../docs/spec/cloud-executable.verification.md) writes seven
 falsifiable predictions before the Phase 4 proof run. Prediction 1 is *"The session reports `NO
 SKILLS REACHABLE` at startup (`S-008`), falsified if nothing appears, or it appears when skills were
 reachable."* Nothing appeared. The proof run is still owed, and running it against the current code
@@ -65,7 +65,7 @@ string that never prints when the hook is silent.
 
 **In scope:** make `reachable()` answer the contract's question. Decide and implement how a kit skill
 is recognised at a discovery directory, extend
-[`test_hooks_reachability.py`](../tests/test_hooks_reachability.py) with a case that fails against the
+[`test_hooks_reachability.py`](../../tests/test_hooks_reachability.py) with a case that fails against the
 current hook, and reconcile `cloud-executable.md` with whatever is built.
 
 **Out of scope:**
@@ -74,7 +74,7 @@ current hook, and reconcile `cloud-executable.md` with whatever is built.
 - Currency. `S-011` is unchanged: the hook answers reachability and never claims the skills are
   current. Do not call `install.py --check` from the hook, for the reason its own docstring gives.
 - Widening `.claude/settings.json` beyond the one reminder registered there. That exception is
-  written up in the conventions section of [`AGENTS.md`](../AGENTS.md) and is not this task's to
+  written up in the conventions section of [`AGENTS.md`](../../AGENTS.md) and is not this task's to
   bend.
 - The Phase 4 proof run itself. This task makes its result readable; it does not run it.
 
@@ -86,7 +86,7 @@ in the module docstring, since the next reader will ask.
 1. **Name the kit's own skills.** A directory whose name matches one this repository ships. Exact and
    self-contained, and it goes stale the moment the catalog changes unless it is derived at runtime,
    which a hook cannot do without importing from this repository, forbidden by
-   [the hooks module contract](../.agents/hooks/README.md).
+   [the hooks module contract](../../.agents/hooks/README.md).
 2. **Read the install manifest.** Authoritative, and it makes a portable hook depend on one
    repository's script layout, which the docstring already rejects for the currency question.
 3. **Narrow the claim instead of the check.** Keep counting any skill, and report when none of *this
@@ -97,7 +97,7 @@ reachable receives nothing. Do not trade the noise property for the correctness 
 
 **The spec may need an amendment rather than the code moving to it.** If the honest answer is that a
 hook cannot tell whose skills it found, then the contract is wrong and `S-008` needs rewriting, not
-the hook. Per the convention recorded in [`docs/spec/README.md`](../docs/spec/README.md), an
+the hook. Per the convention recorded in [`docs/spec/README.md`](../../docs/spec/README.md), an
 amendment to an approved spec keeps `status: approved`, carries a dated note, and is marked pending
 the author's re-approval. Do not silently rewrite the scenario to match the code.
 
@@ -125,7 +125,7 @@ the author's re-approval. Do not silently rewrite the scenario to match the code
   their trust in the hook.
 - **Rejected wording: a `NO KIT SKILLS REACHABLE` banner.** The report now reads `NO SKILLS REACHABLE
   FROM THIS KIT`, keeping the original phrase at the head, because
-  [`cloud-executable.runbook.md`](../docs/spec/cloud-executable.runbook.md) tells a person to look for
+  [`cloud-executable.runbook.md`](../../docs/spec/cloud-executable.runbook.md) tells a person to look for
   a message beginning with those exact words and the proof run it governs has not happened yet.
   Retargeting that string silently would have broken the runbook from a file it does not name.
 - **Premise qualified: `cloud-executable.md` needed no amendment, so it was left untouched.** The

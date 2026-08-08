@@ -127,7 +127,7 @@ That places the module and then prints a registration block. **Nothing fires unt
 
 Today the module ships three hooks, two reminders and one gate:
 
-- **`skill-reachability-reminder`** says so, once, when a session starts with no skill reachable at either project or user scope. It stays completely silent when skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
+- **`skill-reachability-reminder`** says so, once, when a session starts with none of this kit's skills reachable at either project or user scope. It recognises them by directory name, so a library of somebody else's skills is not counted as this kit installed. It stays completely silent when the kit's skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
 - **`delegation-reminder`** notes, after a delegated agent reports back, that its summary is a claim rather than evidence. It never blocks.
 - **`spec-conformance-gate`** blocks when work a contract governs is closed and nothing records whether the implementation actually matches that contract. Every block names its escape: run `spec-conformance`, or add a `conformance:` key to the frontmatter declaring the audit lives elsewhere.
 

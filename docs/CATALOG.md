@@ -65,7 +65,7 @@ The [hooks module](../.agents/hooks/README.md) is the answer to the second kind.
 |---|---|---|
 | `delegation-reminder` | reminder | a delegated agent reports back, to note that its summary is a claim and not evidence |
 | `spec-conformance-gate` | gate | work a contract governs is closed with no audit of whether the implementation matches it |
-| `skill-reachability-reminder` | reminder | a session starts with no skill reachable at either scope, so work that assumes one would proceed without it and nothing else would say so |
+| `skill-reachability-reminder` | reminder | a session starts with none of this kit's skills reachable at either scope, so work that assumes one would proceed without it and nothing else would say so. A library of somebody else's skills does not count, which is what `bug-0021` fixed after a cloud container's own 24 skills silenced it |
 
 These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
 

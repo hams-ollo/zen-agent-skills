@@ -71,7 +71,7 @@ formality:
 - `S-017` to `S-019` are **unbuilt**, not conformed. The proof run did not happen, and
   [`cloud-executable.verification.md`](../docs/spec/cloud-executable.verification.md) records why with
   a `blocked` verdict.
-- `S-008` and `S-010` are what [`bug-0021`](bug-0021-reachability-counts-any-skill-not-a-kit-skill.md)
+- `S-008` and `S-010` are what [`bug-0021`](done/bug-0021-reachability-counts-any-skill-not-a-kit-skill.md)
   is fixing. `depends_on` is set to that task deliberately: auditing before the fix would record a
   divergence that is already understood and queued, and the matrix would be stale on the day it
   landed.
