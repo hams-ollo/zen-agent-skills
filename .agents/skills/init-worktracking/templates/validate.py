@@ -49,6 +49,12 @@ SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 # A complete markdown link: bracketed text followed immediately by a parenthesised
 # target. A bare closing fragment is not matched, which is how prose that merely
 # describes a link escapes being treated as one.
+#
+# Both functions that consume a link pattern honour the code-span and fenced-block
+# exclusion: broken_links() skips a match whose opening bracket falls inside an inline
+# code span or a fenced code block, and mislabelled_links() skips one on the same test
+# over LINK_TEXT_RE below. The rule reached the second first and the first only later
+# (bug-0015, bug-0017, bug-0023), so it is stated per function rather than per file.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # `file://` belongs here for a different reason than the other three. Those are
 # network schemes this checker has no business fetching. This one is an absolute
@@ -174,9 +180,22 @@ def broken_links(path):
     correct, and the lifecycle moves it to .tasks/done/ at closeout, where `../`
     now means .tasks/ and every such link dangles. Checking a link where the file
     currently lives is what makes that move fail loudly instead of silently.
+
+    A link inside an inline code span or a fenced code block is skipped, the same rule
+    mislabelled_links() follows and for the same reason: such a link renders as literal
+    text, so there is no target to resolve and no reader to send anywhere (bug-0015,
+    bug-0017). It reached this function last (bug-0023), which cost two task files a
+    rewording apiece to quote a broken link as the example of the bug they documented.
+
+    The ranges are computed once for the file rather than once per link, because this
+    runs over every markdown file under .tasks/ and every globbed document.
     """
     found = []
-    for match in LINK_RE.finditer(path.read_text(encoding="utf-8")):
+    content = path.read_text(encoding="utf-8")
+    spans = code_span_ranges(content) + fenced_block_ranges(content)
+    for match in LINK_RE.finditer(content):
+        if any(start <= match.start() < end for start, end in spans):
+            continue
         target = match.group(1).split("#")[0].strip()
         if not target or target.startswith(LINK_SKIP_PREFIXES):
             continue

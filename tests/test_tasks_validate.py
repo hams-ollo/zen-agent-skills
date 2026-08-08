@@ -11,6 +11,7 @@ Scope is still deliberately narrow. `.tasks/validate.py` had no test file before
 `feat-0030`, and backfilling coverage for the whole validator remains separate work; the
 file does not pretend to be a full suite.
 """
+import ast
 import contextlib
 import importlib.util
 import io
@@ -20,6 +21,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULE_PATH = REPO_ROOT / ".tasks" / "validate.py"
+TEMPLATE_PATH = (REPO_ROOT / ".agents" / "skills" / "init-worktracking"
+                 / "templates" / "validate.py")
 
 _spec = importlib.util.spec_from_file_location("zen_tasks_validate", MODULE_PATH)
 tv = importlib.util.module_from_spec(_spec)
@@ -195,6 +198,69 @@ class RelativeLinkTests(TasksRootTestCase):
         self._write("The skills all end their links with `](../nope/missing.md)`.")
         code, out = self._run()
         self.assertEqual(code, 0, out)
+
+    def test_a_broken_link_inside_a_fenced_code_block_is_not_reported(self):
+        # `bug-0023`: `bug-0017` taught mislabelled_links() that a fenced link renders
+        # as literal text, and broken_links() never learned it, even though it is what
+        # both callers actually run. A task file quoting a broken link as the example of
+        # the bug it documents is the case this exists for.
+        self._write(
+            "The docs link step printed:\n\n"
+            "```text\n"
+            "[the readme](../does-not-exist.md)\n"
+            "```\n")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a fenced link is not a link\n{out}")
+
+    def test_a_broken_link_inside_a_single_backtick_code_span_is_not_reported(self):
+        # `bug-0023`, the inline half, from `bug-0015`. A backticked link is not
+        # clickable by anybody, so there is nothing to resolve and nothing to report.
+        self._write("Write it as `[the readme](./nope.md)` to quote it literally.")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a backticked link is not a link\n{out}")
+
+    def test_a_broken_link_inside_a_double_backtick_code_span_is_not_reported(self):
+        # `bug-0015` again: a span opens with a run of any length, and the double form
+        # is what an author reaches for the moment the quoted text carries a backtick of
+        # its own. A fix that knows only the single form fixes half the occurrences.
+        self._write("It printed `` [`the readme`](./nope.md) `` and failed.")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a double-backtick span is a code span too\n{out}")
+
+    def test_a_broken_link_outside_any_span_or_fence_is_still_reported(self):
+        # The guard the exclusion cannot be allowed to defeat. `bug-0023`'s risk section
+        # names the direction that costs most: a check that quietly stops finding real
+        # broken links reports success while doing nothing. The closed fence and the lone
+        # backtick above are both decoys; the link on the last line is genuinely dangling.
+        self._write(
+            "The shape `[x](./nope.md)` is literal text, and a lone ` backtick opens "
+            "nothing.\n\n"
+            "```md\n"
+            "[x](./nope.md)\n"
+            "```\n\n"
+            "See [the readme](../nowhere/missing.md) for the installer.")
+        code, out = self._run()
+        self.assertNotEqual(
+            code, 0, f"a real broken link must survive the exclusion\n{out}")
+        self.assertIn("feat-0099-test.md", out)
+        self.assertIn("../nowhere/missing.md", out)
+
+    def test_an_unterminated_fence_does_not_suppress_a_broken_link_after_it(self):
+        # `bug-0017`'s trade, inherited here: an opening fence with no closer opens
+        # nothing, exactly as an unmatched backtick run opens nothing. Running an
+        # unclosed fence to end of file would switch the link check off for everything
+        # below it and still exit clean, which is the one failure indistinguishable from
+        # success.
+        self._write(
+            "```md\n"
+            "a fence that is never closed\n"
+            "\n"
+            "See [the readme](../nowhere/missing.md) for the installer.")
+        code, out = self._run()
+        self.assertNotEqual(
+            code, 0,
+            f"an unterminated fence must not suppress what follows it\n{out}")
+        self.assertIn("../nowhere/missing.md", out)
 
     def test_a_non_task_document_under_tasks_is_checked_too(self):
         # The link scan is deliberately wider than the task-file scan: a broken link in
@@ -428,6 +494,76 @@ class DocsLinkModeTests(TasksRootTestCase):
             code, 0, f"a check over zero documents must not pass\n{out}")
         self.assertIn("checked 0 documents", out)
         self.assertIn("no-such-directory/**/*.md", out)
+
+
+class ValidatorCopiesAgreeTests(unittest.TestCase):
+    """`bug-0023`: the two copies of the link rule move together or not at all.
+
+    `.tasks/validate.py` and the `init-worktracking` template are deliberate near
+    duplicates, because a scaffolded repository has no way to import from this one. The
+    duplication is tolerated; the drift is not, and it has already happened once. A third
+    copy inline in CI learned nothing from `bug-0015` and disagreed with this file about
+    what counts as a link while a comment said the two could not (`chore-0029`).
+
+    Docstrings are compared by nobody here on purpose: they are retargeted at a
+    scaffolded repository rather than at this one, so they are expected to differ. The
+    executable code and the shared link regexes are not.
+    """
+
+    LINK_FUNCTIONS = ("broken_links", "code_span_ranges", "fenced_block_ranges",
+                      "mislabelled_links", "check_links")
+    # The regexes both copies use to decide what a link is and where it may not count.
+    # Not every module-level name: `EXTERNAL_RE` exists only here, because the tracker
+    # links spec it comes from is this repository's contract rather than a scaffold's.
+    LINK_NAMES = ("LINK_RE", "LINK_SKIP_PREFIXES", "LINK_TEXT_RE", "TEXT_PATH_RE",
+                  "LINE_SUFFIX_RE", "BACKTICK_RUN_RE", "FENCE_RE")
+
+    @staticmethod
+    def _body_without_docstring(path, name):
+        """The AST of one top-level function in `path`, minus its docstring.
+
+        Compared as an AST rather than as text so that a comment, a line wrap, or the
+        blank line between two statements never fails this test. The only difference it
+        can see is a difference in what the code does.
+        """
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                body = node.body
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    body = body[1:]
+                return [ast.dump(stmt) for stmt in body]
+        raise AssertionError(f"{path} defines no function named {name!r}")
+
+    @staticmethod
+    def _assignment(path, name):
+        """The AST of one top-level `NAME = ...` assignment in `path`."""
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                    isinstance(t, ast.Name) and t.id == name for t in node.targets):
+                return ast.dump(node.value)
+        raise AssertionError(f"{path} assigns no name {name!r}")
+
+    def test_the_link_functions_are_identical_in_both_copies(self):
+        for name in self.LINK_FUNCTIONS:
+            with self.subTest(function=name):
+                self.assertEqual(
+                    self._body_without_docstring(MODULE_PATH, name),
+                    self._body_without_docstring(TEMPLATE_PATH, name),
+                    f"{name}() differs between .tasks/validate.py and the "
+                    f"init-worktracking template; both copies move together")
+
+    def test_the_link_regexes_are_identical_in_both_copies(self):
+        for name in self.LINK_NAMES:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    self._assignment(MODULE_PATH, name),
+                    self._assignment(TEMPLATE_PATH, name),
+                    f"{name} differs between .tasks/validate.py and the "
+                    f"init-worktracking template; both copies move together")
 
 
 if __name__ == "__main__":

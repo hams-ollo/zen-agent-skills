@@ -61,6 +61,13 @@ SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 # disagreed about what counts as a link while a comment said they could not. That step
 # now calls check_links() below instead of restating the rule (chore-0029), which is
 # why the guarantee is structural rather than a promise in a comment.
+#
+# Which functions honour the code-span and fenced-block exclusion, stated here because
+# the paragraph above once implied "this file" and meant one of its two functions:
+# BOTH do. broken_links() skips a match whose opening bracket falls inside an inline
+# code span or a fenced code block, and mislabelled_links() skips one on the same test
+# over LINK_TEXT_RE below. bug-0015 and bug-0017 gave the rule to the second only;
+# bug-0023 gave it to the first, which is the one both callers actually run.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # `file://` belongs here for a different reason than the other three. Those are
 # network schemes this checker has no business fetching. This one is an absolute
@@ -186,9 +193,22 @@ def broken_links(path):
     correct, and the lifecycle moves it to .tasks/done/ at closeout, where `../`
     now means .tasks/ and every such link dangles. Checking a link where the file
     currently lives is what makes that move fail loudly instead of silently.
+
+    A link inside an inline code span or a fenced code block is skipped, the same rule
+    mislabelled_links() follows and for the same reason: such a link renders as literal
+    text, so there is no target to resolve and no reader to send anywhere (bug-0015,
+    bug-0017). It reached this function last (bug-0023), which cost two task files a
+    rewording apiece to quote a broken link as the example of the bug they documented.
+
+    The ranges are computed once for the file rather than once per link, because this
+    runs over every markdown file under .tasks/ and every globbed document.
     """
     found = []
-    for match in LINK_RE.finditer(path.read_text(encoding="utf-8")):
+    content = path.read_text(encoding="utf-8")
+    spans = code_span_ranges(content) + fenced_block_ranges(content)
+    for match in LINK_RE.finditer(content):
+        if any(start <= match.start() < end for start, end in spans):
+            continue
         target = match.group(1).split("#")[0].strip()
         if not target or target.startswith(LINK_SKIP_PREFIXES):
             continue
