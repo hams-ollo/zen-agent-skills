@@ -82,6 +82,53 @@ Either way `SECURITY.md` should end up consistent with the answer. If the rule l
 is held, the reporting invitation can stay and the reader should be able to see that the kit knows the
 class is open, rather than inferring silence means coverage.
 
+## Decisions
+
+**Outcome: held, with a trigger, as a fourth entry in `autonomy.md`'s held section.** No rule was
+written, because the search below found nothing in this repository to cite.
+
+- **The search that produced no citation**, run on 2026-08-08 from the repository root and recorded so
+  the next author does not repeat it. Four passes, all empty of an instance:
+  - *Every skill and lens.* A case-insensitive grep over every `*.md` and `*.py` outside `.git`, for
+    the alternation `prompt.?inject`, `injection`, `untrusted`, `adversarial input`, `malicious`,
+    `attacker`, `hostile`, `poison`.
+    This reconfirms the task's premise rather than falsifying it: inside `.agents/` the only hits are
+    `test-quality`, which means adversarial *test inputs*, and `review-quality.md`, which means SQL,
+    shell, and template injection in code under review. Neither is this class.
+  - *All 94 completed task files.* Every `inject` hit is dependency injection or argv injection
+    (`chore-0003`, `chore-0017`, `feat-0027`, `feat-0029`, `bug-0003`, `bug-0009`, `bug-0011`,
+    `chore-0023`, `chore-0029`, `feat-0038`). No task record describes content an agent read changing
+    what it did.
+  - *The whole 102-commit history.* `git log -i --grep` for `inject`, `untrusted`, `steer`, `redirect`,
+    and `hostile`, plus `git log -S` for `prompt injection`, `untrusted`, `treat it as data`, and
+    `instructions in the`. The only commit whose diff introduces the phrase `prompt-injection` outside
+    `SECURITY.md`'s original authoring (`c0d3ce3`) is `f2c511a`, which files this task. Two hits that
+    looked promising are not instances: `3a21d8b` is `test-quality`'s trust-boundary list, and
+    `a3466ec` is the runbook explaining why session instructions do not belong in a verification
+    record.
+  - *The specification documents.* Every `inject` hit under `docs/spec/` is either an injectable entry
+    point or the reachability hook injecting its own context, which is the kit injecting into an agent
+    by design rather than anything being injected into the kit.
+- **Rejected: writing the rule anyway, in `A8`'s shape.** `A8` is admitted with an honest
+  qualification because its specific ceiling is a decision recorded in `ROADMAP.md` Epic E, even
+  though the kit has not yet run under it. There is no equivalent recorded decision for this class.
+  `SECURITY.md` records that the maintainer treats it as a vulnerability worth a private report, which
+  is a position on what to report rather than a decision about what an agent may do with what it
+  reads, so borrowing `A8`'s form would have dressed an invented rule as a consolidated one. That is
+  the exact substitution the module's gate exists to prevent.
+- **Rejected: citing `fix-batch`'s "a delegated agent's report is a claim, not evidence".** It is the
+  closest doctrine in the kit and it is a different failure. All three incidents behind it (a
+  fabricated test method that never existed in the history, an undisclosed opportunistic bug fix, and
+  two of three agents working from a task premise that was factually wrong) are accuracy failures in a
+  report. None is an instruction embedded in material an agent was asked to read. The task file says
+  the same about the premise incident and it holds up.
+- **Seam left open deliberately: `check-provenance.py` is not a citation either, and the next author
+  should not mistake it for one.** It is the one place this kit deliberately reads content from
+  outside itself, and the `AGENTS.md` provenance convention keeps that content out of the agent's
+  context by requiring `urllib` and `hashlib` rather than an agent's web-fetching tool. That is the
+  right shape for this class by accident: the recorded reason is digest fidelity, since a digest of a
+  model-written summary is meaningless, not exposure to what the page says.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/validate-skills.py && python scripts/run-checks.py
