@@ -4,9 +4,20 @@
 
 Zen Agent Skills distributes **instructions that an AI coding agent executes**. A skill is not a library your code calls in a sandbox. It is prose that an agent reads and acts on, in your repository, usually with permission to read files, write files, and run commands.
 
-That changes what a vulnerability looks like here. There is no memory safety surface and almost no attack surface in the usual sense: the tooling is standard-library Python with no network calls, no deserialization of untrusted input, and no dependencies to be compromised. The real risk is that **a skill body causes an agent to do something the person running it did not intend**.
+That changes what a vulnerability looks like here. There is no memory safety surface and almost no attack surface in the usual sense: the tooling is standard-library Python with no deserialization of untrusted input and no dependencies to be compromised. The real risk is that **a skill body causes an agent to do something the person running it did not intend**.
 
 Treat a skill the way you would treat a script you are about to run, not the way you would treat a document you are about to read.
+
+### The one network call, and what it fetches
+
+One script does make network calls, and it is named here rather than left to be discovered. [`check-provenance.py`](scripts/check-provenance.py) re-fetches the upstream sources this kit adapted material from, so it can compare a SHA256 digest and tell you whether upstream has moved. Its properties, all of them checkable in the script:
+
+- **It runs only when you run it.** It is on-demand, deliberately kept out of the required CI gates, and no other script, skill, or hook invokes it.
+- **It fetches to digest, never to execute.** The response is hashed and discarded. Nothing fetched is run, stored, or written to disk.
+- **The destinations come from the repository's own files**, specifically the `source:` line of each provenance block under `.agents/` and `scripts/`. `python scripts/check-provenance.py --list` prints every URL a run would contact and fetches nothing, so the set is reviewable before any connection is made.
+- **`https://` only, under a read bound.** A record pinning an `http://` source is reported as malformed rather than fetched, and a response over 10 MiB is reported as an error rather than read into memory whole.
+
+The shape worth naming for a reporter: a pull request can add a provenance block, and its `source:` URL is a destination a maintainer's later run will contact from their machine. That is a review question about what a pull request adds, not a defect in the script, but it is the reason the URLs are recorded in plain text and `--list` exists.
 
 ## Supported versions
 
@@ -20,6 +31,7 @@ Please report any of the following privately:
 - **A skill whose stated boundary does not hold.** Several skills promise to be report-only or draft-only: `house-review`, `spec-conformance`, `spec-quality`, `test-quality`, `pr-describe`, and `verifier-agent` among them. A path where one of those edits, commits, or publishes anything is a real finding, because users rely on that promise to run them unsupervised.
 - **Prompt-injection paths**, where content a skill is designed to read (a diff, an issue body, a fetched page, a file in the target repo) can redirect the agent's behavior.
 - **Tooling that writes outside its declared scope**, for example `install.py` or `build-adapters.py` touching a path they never announced, or overwriting a file they promised to preserve.
+- **Tooling that contacts a destination the person running it would not expect.** `check-provenance.py`'s fetch of recorded provenance sources, described above, is the only network call in the kit, and it is the baseline: a script that fetches when nothing said it would, a provenance `source:` URL that points somewhere unrelated to the material it claims to credit, or a path that sends any repository content outward rather than only receiving.
 - **Anything that silently does nothing while reporting success.** This has already happened once in this project's history, and a step that appears to work while losing the user's work is a safety problem, not merely a bug.
 
 ## What is not a vulnerability here
@@ -27,6 +39,7 @@ Please report any of the following privately:
 - The fact that skills instruct an agent to modify files. That is the entire purpose, and it is why installation is an explicit, reviewable step.
 - Your agent doing something you did not want after you approved it. Keep a human in the loop for anything destructive.
 - A skill giving low-quality advice, or a review missing a defect. That is a normal issue, not a security report.
+- `check-provenance.py` contacting the sources recorded in this repository when you run it. That is what the script is for, and `--list` shows you every URL first.
 
 ## How to report
 
