@@ -63,8 +63,8 @@ Pass the same `--home` you installed with. The check reads the manifest, re-read
 
 | Report | Meaning |
 |---|---|
-| `ok` | Every placed file still matches the kit |
-| `diverged` | At least one file no longer matches, named individually, with the installed and source digests |
+| `ok` | For a skill, every placed file still matches the kit. For the rules module the claim is narrower, because that module is yours: every file the install placed is still there, and the kit's own copy of it has not moved since. A lens you edited is not checked against anything and is never counted against this |
+| `diverged` | At least one file no longer matches, named individually, with the installed and source digests. For the rules module this is absence only: a file the install placed is gone. Editing a lens there is never divergence |
 | `linked` | The target is a symlink to its source, so it cannot go stale |
 | `revised` | The kit's copy of an adopter-owned file (the rules module) changed since you installed. Your copy is left alone |
 | `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one |
@@ -74,6 +74,8 @@ Exit codes are `0` when everything current, `1` when something diverged, and `2`
 Run it when a skill behaves like an older version of itself, after pulling changes into this repository, and before trusting an installed skill for anything consequential. The fix for a diverged entry is to re-install: this command deliberately does not do it for you.
 
 The rules module is handled differently on purpose. [`.agents/rules/`](../.agents/rules/) is swappable, and rewriting a lens is something the kit invites you to do, so your edits there are never reported as divergence. What you are told instead is when the kit's own copy of that lens has moved since you installed, which is news you can act on rather than a warning that fires forever.
+
+Deleting a lens is the one thing there the check does report. A file the installer placed and that is no longer on disk is named individually and exits `1`, because a missing lens is a different claim from an edited one: `house-review` reads its entire rubric and severity scheme out of that module, and an install missing it behaves like a skill that never had one. The check still writes nothing, so the file is not restored. Re-install to have the removal recorded, after which the check stops reporting it, or run `--replace-adopted` to take the kit's copy back.
 
 ## Your edits to the rules module survive a re-install
 

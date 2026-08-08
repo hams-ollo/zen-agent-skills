@@ -25,6 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOKS_DIR = REPO_ROOT / ".agents" / "hooks"
 MODULE_PATH = HOOKS_DIR / "delegation-reminder.py"
+CLAUDE_SETTINGS = REPO_ROOT / ".claude" / "settings.json"
 
 # Hyphenated filename, so it is not importable by a normal import statement.
 _spec = importlib.util.spec_from_file_location("delegation_reminder", MODULE_PATH)
@@ -182,6 +183,17 @@ class WiringConsistencyTests(unittest.TestCase):
     and the installer, and left a test pinning the old string. These tests assert the
     relationship rather than any one spelling, so the next tool added is covered without
     anyone remembering to come back here.
+
+    There are four wirings here, under two different rules, and the split is deliberate
+    rather than an omission. Three carry the every-hook rule: `.codex/hooks.json`, the block
+    `install.py` prints for Claude Code, and the opencode adapter each distribute the whole
+    module, so each must register every hook in it. The fourth is the committed
+    `.claude/settings.json`, and it is exempt: it is the narrow exception the conventions
+    section of AGENTS.md records, registering one hook on purpose, so the every-hook rule
+    would start failing there the moment that file is correct. It carries the opposite rule
+    instead, added by chore-0037: whatever it names must exist. That is the direction a
+    rename breaks, and it breaks it in the one wiring that actually runs in a Claude Code
+    session in this repository.
     """
 
     HOOK = "delegation-reminder.py"
@@ -244,6 +256,49 @@ class WiringConsistencyTests(unittest.TestCase):
         for hook in sorted(shipped):
             with self.subTest(source=".opencode adapter", hook=hook):
                 self.assertIn(hook, adapter, f"{hook} is not invoked by the opencode adapter")
+
+    @staticmethod
+    def _script_paths(command):
+        """Every script path a hook command names, quotes stripped.
+
+        The wirings spell a path two ways: `.claude/settings.json` bare and
+        repository-relative, the printed Claude registration quoted and absolute. Splitting
+        on whitespace and keeping the `.py` tokens reads both without parsing a shell.
+        """
+        tokens = (t.strip("'\"") for t in command.split())
+        return [t for t in tokens if t.endswith(".py")]
+
+    def test_the_committed_claude_settings_names_a_hook_that_exists(self):
+        """Every command in the committed wiring must point at a hook that is really there.
+
+        This is the one wiring a Claude Code session in this repository reads, and it names
+        its hook by a repository-relative path. A rename or a move would be caught by the
+        three every-hook wirings above and would silently break this one, leaving the hook
+        placed, correct-looking, and never run. There is no signal when that happens: a
+        reminder that never fires produces exactly the output of a reminder that fired and
+        found nothing to say.
+
+        Note the direction. This asserts nothing about which hooks are absent from the file,
+        because it registers one on purpose per the AGENTS.md exception, and requiring more
+        would fail while the file is correct.
+        """
+        settings = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+        entries = self._flatten(settings)
+        self.assertTrue(entries, f"{CLAUDE_SETTINGS} registers no hook at all")
+        shipped = {p.resolve() for p in HOOKS_DIR.glob("*.py")}
+        for command, _ in entries:
+            with self.subTest(command=command):
+                named = self._script_paths(command)
+                self.assertEqual(
+                    len(named), 1, f"{command!r} should name exactly one hook script")
+                target = (REPO_ROOT / named[0]).resolve()
+                self.assertTrue(
+                    target.is_file(),
+                    f".claude/settings.json runs {named[0]}, which does not exist")
+                self.assertIn(
+                    target, shipped,
+                    f".claude/settings.json runs {named[0]}, which is not a hook this "
+                    f"module ships from {HOOKS_DIR}")
 
     def test_every_matcher_covers_every_delegation_tool(self):
         for name, matcher in self.matcher_sources():

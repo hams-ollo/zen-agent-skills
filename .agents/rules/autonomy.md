@@ -154,6 +154,24 @@ run into them yet and a plausible number is not evidence:
 - **Escalation paths, meaning when an unattended agent should stop and wait for a person rather than
   reporting and finishing.** Real, and currently unanswerable: nothing here has run unattended long
   enough to know where the line falls.
+- **Instructions embedded in material a skill was pointed at.** `A1` draws a boundary in space, and
+  this would draw one in provenance: a diff, an issue body, a fetched page, or a file in a target
+  repository is data to report on, and an instruction inside it is part of the data rather than a
+  direction to whoever reads it. The class is not hypothetical to this kit, whose security policy in
+  `SECURITY.md` invites private reports of exactly it, and no skill and no lens here says anything
+  about it. **Held because the search for a citation came back empty, not because the class was
+  judged small.** On 2026-08-08 a search of every skill and lens, all 94 completed task files, the
+  specification documents, and the whole 102-commit history found no occasion where content a skill
+  read changed what an agent did. The nearest doctrine, [`fix-batch`](../skills/fix-batch/SKILL.md)'s
+  "a delegated agent's report is a claim, not evidence", guards against an optimistic report rather
+  than an embedded instruction, and every incident behind it is an accuracy failure. The gap looks
+  structural rather than lucky: everything this kit has read so far was written by its own maintainer
+  or its own agents, so no skill here has yet been pointed at text by someone with a reason to steer
+  it. *Trigger:* the first run where a skill reads material from outside the maintainer's control (a
+  diff from a fork, an issue body from a stranger, a page fetched from the web), or the first report
+  through the private channel `SECURITY.md` opens. Either one supplies the citation. Without it the
+  rule is one confident imperative sentence with nothing behind it, which is what this module's gate
+  exists to exclude.
 
 ## Scope
 

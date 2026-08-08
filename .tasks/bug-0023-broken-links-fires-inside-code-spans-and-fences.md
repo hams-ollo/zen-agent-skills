@@ -82,6 +82,27 @@ Cost check before choosing the shape: `broken_links()` runs over every markdown 
 and every globbed document, so the range computation happens per file rather than per link. Compute
 it once per file.
 
+## Decisions
+
+- **Rejected: moving `broken_links()` below the two helpers it now calls.** It is defined
+  above them and Python resolves the names at call time, so the code works where it
+  stands. Reordering would have moved a function across the file for readability alone,
+  and a diff that large hides the four added lines that are the actual fix.
+- **Rejected: pinning the two copies by comparing the files as text.** Their docstrings
+  are deliberately retargeted, the `LINK_SKIP_PREFIXES` comment differs, `main()` differs
+  (`main(argv=None)` here, `main()` in the template), and `EXTERNAL_RE` exists only here,
+  so a whole-file comparison fails on the differences the design intends. The test
+  compares the ASTs of the five link functions and the seven shared link regexes instead,
+  which is blind to comments and formatting and sees only a difference in behaviour.
+- **Seam left open deliberately: what the copies-agree test does not cover.** It pins the
+  link rule, not the whole module. `main()`, `parse_frontmatter()`, and the frontmatter
+  regexes are outside it on purpose, because those two copies genuinely diverge and a test
+  that demanded they match would have to be weakened the first time either one moved.
+- **The task's measurement held.** Nine markdown links across the checked document set sit
+  inside a code span or a fence, exactly the count the Problem section states, and all
+  nine resolve, so the exclusion hid no real broken link. Verified by listing them before
+  and after rather than inferring it from a green run.
+
 ## Risks and rollback
 
 Touches two copies of one module. The failure direction is a check that quietly stops finding real
@@ -95,17 +116,17 @@ Reversible by reverting one commit.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test with an unresolvable link inside a fenced block, asserting `broken_links()` returns
+- [x] A test with an unresolvable link inside a fenced block, asserting `broken_links()` returns
       nothing. It must fail against the current validator.
-- [ ] A test with an unresolvable link inside an inline code span, same assertion, both the single
+- [x] A test with an unresolvable link inside an inline code span, same assertion, both the single
       and the multi-backtick form.
-- [ ] A test that a genuinely broken link **outside** any span or fence is still reported, so the
+- [x] A test that a genuinely broken link **outside** any span or fence is still reported, so the
       exclusion cannot have switched the check off.
-- [ ] A test that an unterminated fence does not swallow the rest of the file.
-- [ ] Both validator copies carry the same executable change, and a test or an assertion pins that
+- [x] A test that an unterminated fence does not swallow the rest of the file.
+- [x] Both validator copies carry the same executable change, and a test or an assertion pins that
       they agree.
-- [ ] The `LINK_RE` comment states which functions honour the exclusion.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The `LINK_RE` comment states which functions honour the exclusion.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 

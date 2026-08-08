@@ -90,6 +90,29 @@ under `.tmp/` matches what the install gates already do and is already gitignore
 - [ ] The adapters gate exercises a configuration where the asset count is non-zero.
 - [ ] Existing tests still pass, unchanged in intent.
 
+## Decisions
+
+- **Rejected: adding a non-root `--out` to the adapters gate in `run-checks.py`.** The task offered
+  that or a test as alternatives, and `scripts/run-checks.py` is not in `touched_files`; seven sibling
+  agents were working the same base branch, so editing a file every task in the batch touches buys a
+  conflict for no coverage. The test route reaches the same gate anyway: `TestSharedAssetAccounting`
+  runs under the `test suite` gate, which `run-checks.py` already invokes. The `adapters dry run` gate
+  itself therefore still runs with `--out .` and still reports 0 assets, by choice rather than
+  oversight.
+- **Rejected: tracking dry-run writes in a set and consulting it alongside `dest.exists()`.** It
+  compensates for the divergence rather than removing it, and leaves `emit_shared_assets()` doing
+  twenty redundant passes over the rules module on a real run to produce a number a caller then has
+  to deduplicate. The hoist the task recommended makes the count correct by construction; nothing in
+  the layout loop made it wrong.
+- **Premise that turned out false: "check both call sites".** `emit_shared_assets()` had exactly one
+  call site, in `main()`. Splitting it into `emit_rules_module()` and `emit_skill_assets()` therefore
+  changed one call site into two, rather than requiring two existing ones to be reconciled.
+- **Seam left open: `docs/spec/build-adapters.conformance.md` still names `emit_shared_assets()`** as
+  the implementation site for S-009, S-010, S-011, S-012, S-014 and the Proposed Surface row. The
+  behaviour those rows audit is unchanged, but the function name is now stale for the rules half.
+  That file is outside `touched_files` and was left alone; re-running `spec-conformance` over the spec
+  is the correct fix, not a find-and-replace here.
+
 ## Definition of done
 
 - [ ] Acceptance command(s) pass locally.

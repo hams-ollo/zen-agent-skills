@@ -29,6 +29,16 @@ Exit codes
 1   at least one recorded source has drifted
 2   an error: a source could not be fetched, or a record is malformed
 
+What it contacts, and under what limits
+---------------------------------------
+This is the only script in the kit that opens a network connection, so SECURITY.md names
+it and the limits are stated here rather than left to be read out of the code. It contacts
+exactly the URLs recorded in the repository's own provenance blocks, over `https://` only,
+with a plain GET, and it digests what comes back. Nothing fetched is executed, stored, or
+written anywhere. `--list` prints every URL a run would contact and fetches nothing, so the
+set is reviewable before any connection is made. A response is read under MAX_FETCH_BYTES
+and exceeding it is an error rather than a truncated digest.
+
 Drift and errors both name the offending source and the file that records it, because a
 non-zero exit whose output does not say what moved costs the reader the whole investigation.
 
@@ -62,6 +72,22 @@ _SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 _DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
 
 USER_AGENT = "zen-agent-skills-check-provenance"
+
+# The most a single source may return. Every recorded source is one upstream text file, the
+# largest in the tree today being a few tens of kilobytes, so 10 MiB could not plausibly
+# refuse a real one. It exists so a hostile or merely enormous URL cannot be read into
+# memory whole, and exceeding it is an error rather than a truncated digest, because a
+# truncated digest would compare unequal and be reported as drift: the wrong word for the
+# wrong reason, and an invitation to update a record that never moved.
+MAX_FETCH_BYTES = 10 * 1024 * 1024
+
+
+class ResponseTooLarge(ValueError):
+    """A source returned more than MAX_FETCH_BYTES.
+
+    A ValueError, because check_record() already treats that as an unfetchable source, which
+    is what this is: the bytes exist but were never read, so there is nothing to digest.
+    """
 
 
 def parse_records(text):
@@ -155,8 +181,16 @@ def validate(record):
     missing = [k for k in REQUIRED_KEYS if not record.get(k)]
     if missing:
         return f"missing required field(s): {', '.join(missing)}"
-    if not record["source"].lower().startswith(("http://", "https://")):
-        return f"source is not an absolute http(s) URL: {record['source']}"
+    source = record["source"]
+    if source.lower().startswith("http://"):
+        # Rejected rather than silently upgraded: an upgrade would make the recorded
+        # `source:` differ from what was fetched, and the record is meant to be
+        # reproducible by hand. Over plaintext the digest authenticates nothing, so the
+        # record would read as verified provenance for bytes anyone on the path could
+        # have written.
+        return f"source must be an https:// URL, not http://: {source}"
+    if not source.lower().startswith("https://"):
+        return f"source is not an absolute https:// URL: {source}"
     if not _SHA256_RE.match(record["sha256"]):
         return f"sha256 is not 64 lowercase hex characters: {record['sha256']}"
     if not _DATE_RE.match(record["retrieved"]):
@@ -164,11 +198,19 @@ def validate(record):
     return None
 
 
-def fetch(url, timeout=30):
-    """The exact bytes a plain HTTP GET returns. Raises on any failure."""
+def fetch(url, timeout=30, max_bytes=MAX_FETCH_BYTES):
+    """The exact bytes a plain GET returns, up to `max_bytes`. Raises on any failure.
+
+    Reads one byte past the bound rather than the whole body, so an enormous response is
+    refused instead of held in memory, and raises ResponseTooLarge rather than returning
+    what it managed to read.
+    """
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+        content = response.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise ResponseTooLarge(f"response exceeds the {max_bytes} byte read bound")
+    return content
 
 
 def check_record(record, fetcher):
@@ -190,6 +232,13 @@ def check_record(record, fetcher):
         return "error", f"could not fetch {url}: {exc}"
     if not isinstance(content, (bytes, bytearray)):
         return "error", f"fetch of {url} returned {type(content).__name__}, expected bytes"
+    if len(content) > MAX_FETCH_BYTES:
+        # The bound is enforced again here rather than only in fetch(), because the fetcher
+        # is an injected seam and the comparison is what must never see an unbounded body.
+        return "error", (
+            f"fetch of {url} returned {len(content)} bytes, over the "
+            f"{MAX_FETCH_BYTES} byte read bound"
+        )
     digest = hashlib.sha256(content).hexdigest()
     if digest == record["sha256"]:
         return "ok", f"up to date ({digest[:12]}) {url}"

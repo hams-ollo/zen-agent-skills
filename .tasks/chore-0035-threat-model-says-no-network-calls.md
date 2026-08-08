@@ -65,6 +65,24 @@ On the read bound: pick a limit that could not plausibly refuse a real source fi
 and make exceeding it an `error` with a message rather than a truncated digest. A truncated digest
 would compare unequal and report drift, which is the wrong word for the wrong reason.
 
+## Decisions
+
+- **Rejected: enforcing the read bound only inside `fetch()`.** The bound is enforced twice, in
+  `fetch()` where the body is read and again in `check_record()` on whatever the fetcher returned.
+  `fetcher` is an injected seam, so a bound living only in the default implementation is a bound the
+  comparison does not actually have; the second check is what makes "the digest is never taken over
+  an unbounded body" true of the function that takes the digest.
+- **Rejected: a `Content-Length` pre-check.** It is a claim by the far end rather than a measurement,
+  and it is absent on a chunked response, so it would refuse nothing that matters while looking like
+  a limit. Reading one byte past the bound measures the thing itself.
+- **Seam left open: `fetch()`'s new `max_bytes` parameter is for tests, not for callers.** It exists
+  so the bound can be exercised against a stand-in response without a socket and without a 10 MiB
+  fixture. Nothing in the kit passes it, and it is not an invitation to make the limit configurable
+  per record: a per-record limit would be a field in the block, which is a convention change.
+- **The task's premises held, and were checked rather than assumed.** All eight records in the tree
+  are `https://`, so the tightening rewrote none of them, and that is now pinned by a test reading
+  the real records rather than by this sentence.
+
 ## Risks and rollback
 
 Touches a policy document and a script. Reversible by reverting one commit. The one behaviour change
