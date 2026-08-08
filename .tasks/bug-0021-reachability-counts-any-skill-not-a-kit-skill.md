@@ -101,6 +101,39 @@ the hook. Per the convention recorded in [`docs/spec/README.md`](../docs/spec/RE
 amendment to an approved spec keeps `status: approved`, carries a dated note, and is marked pending
 the author's re-approval. Do not silently rewrite the scenario to match the code.
 
+## Decisions
+
+- **Candidate 1 was taken: a kit skill is recognised by directory name.** `KIT_SKILL_NAMES` in the
+  hook lists the twenty skills this kit ships, and one match at any discovery directory is
+  reachability.
+- **Rejected, candidate 2, reading the install manifest.** It is authoritative and unusable here:
+  `scripts/.install-manifest.json` lives in the checkout that ran the installer, so a cloud clone has
+  none, which is the exact case being answered, and consulting it would tie a portable hook to one
+  repository's script layout.
+- **Rejected, candidate 3, a marker placed at install time.** Retroactively wrong: every install that
+  already exists carries no marker, so the hook would cry wolf at all of them until re-run, which is
+  the failure the Risks section names. It also needs `install.py`, outside this task's
+  `touched_files`.
+- **The staleness objection to candidate 1 is answered at test time, not runtime.** A hook may not
+  import from this repository, so it cannot derive the catalog; the repository can check the constant
+  against what it ships, and `test_the_recognised_names_are_exactly_the_skills_this_kit_ships`
+  asserts set equality in both directions. Adding, renaming, or removing a skill now means editing
+  that constant in the same commit.
+- **Seam left open: the hook matches a name, not a provenance.** A foreign library shipping a
+  directory called `doc-sync` would silence it. Deliberate, and it is the cheap direction to be wrong
+  in for a reminder: the cost is one missing paragraph, against a false alarm that costs the adopter
+  their trust in the hook.
+- **Rejected wording: a `NO KIT SKILLS REACHABLE` banner.** The report now reads `NO SKILLS REACHABLE
+  FROM THIS KIT`, keeping the original phrase at the head, because
+  [`cloud-executable.runbook.md`](../docs/spec/cloud-executable.runbook.md) tells a person to look for
+  a message beginning with those exact words and the proof run it governs has not happened yet.
+  Retargeting that string silently would have broken the runbook from a file it does not name.
+- **Premise qualified: `cloud-executable.md` needed no amendment, so it was left untouched.** The
+  task lists it in `touched_files` and offers an amendment branch, but the contract already asks the
+  narrower question in both places that matter (`S-008`'s Given and the Proposed Surface `Reachable`
+  row read "kit skill"). The code moved to the contract, so `status: approved` stands with no dated
+  note and the `docs/spec/README.md` re-approval queue is not extended.
+
 ## Risks and rollback
 
 Touches the hooks module and an approved contract. The risk is a false positive in the other
