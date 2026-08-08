@@ -18,6 +18,14 @@ pass/fail.
 Produced by `feat-0029`, completing the kit's contract coverage: every distribution script now has an
 approved contract and a matrix.
 
+**Not re-audited after `bug-0018` amended the contract on 2026-08-07 with S-016 through S-018, Goal
+10, and the `--replace-adopted` flag.** That amendment is **pending the author's re-approval**, which
+is stated in the spec's header and repeated here for the reason
+[`build-adapters.conformance.md`](build-adapters.conformance.md) states it: so this matrix is not
+read as auditing the contract in full. The rows below cover S-001 through S-015 and the surface as it
+stood before that amendment. Three scenarios and one flag are unaudited here, and the coverage
+arithmetic is 15 of 18 scenarios; the matrix for the remainder is owed at that task's closeout.
+
 ## Matrix
 
 | Section | Item | Status | Evidence | Note |

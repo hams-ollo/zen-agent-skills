@@ -67,10 +67,19 @@ USER_AGENT = "zen-agent-skills-check-provenance"
 def parse_records(text):
     """Every provenance record in `text`, as dicts carrying a 1-based `line`.
 
-    A record starts at a `source:` line and runs through the contiguous recognised
-    `key: value` lines that follow it. That is the whole grammar: it needs no delimiters,
-    so the same block is readable inside a Python docstring, a Markdown fenced block, and
-    plain prose without three parsers.
+    A record starts at a `source:` line and runs through the recognised `key: value` lines
+    that follow it. A blank line inside the run is transparent: it carries no field, so it
+    ends nothing. The run ends at the first line that is neither blank nor a recognised
+    `key: value` line (a closing fence, a docstring terminator, a heading, prose, code), or
+    at a repeated key, which means the next record has started. That is the whole grammar:
+    one rule for every placement, so the same block is readable inside a Python docstring,
+    a Markdown fenced block, and plain prose without three parsers.
+
+    A blank line used to end the run, which meant one blank line after `source:` was enough
+    to drop an otherwise valid block from the record set entirely, silently, at exit 0
+    (bug-0016). Treating the blank as transparent guesses at nothing: every field collected
+    is a field that was literally written, and any prose between two halves of a would-be
+    block still ends the run rather than being read across.
 
     A bare `source:` line is not enough to qualify, because `source:` is an ordinary word
     that other templates use: the `review-depth` skill's output block has a `source:` field
@@ -89,15 +98,23 @@ def parse_records(text):
             index += 1
             continue
         record = {"line": index + 1}
-        while index < len(lines):
-            match = _KEY_RE.match(lines[index])
+        cursor = index
+        while cursor < len(lines):
+            line = lines[cursor]
+            if not line.strip():
+                cursor += 1
+                continue  # a blank line carries no field, so it terminates nothing
+            match = _KEY_RE.match(line)
             if not match or match.group(1) not in RECORD_KEYS:
                 break
             key, value = match.group(1), match.group(2)
             if key in record:
                 break  # a repeated key means the next record has started
             record[key] = value
-            index += 1
+            cursor += 1
+        # The source line itself is always consumed, so cursor > index and the outer scan
+        # always advances. It resumes on the terminator, which may itself start a record.
+        index = cursor
         if set(record) - {"line", "source"}:
             records.append(record)
     return records

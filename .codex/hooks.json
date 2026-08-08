@@ -8,6 +8,19 @@
     "See .agents/hooks/README.md for the module contract."
   ],
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\"",
+            "statusMessage": "Skill reachability",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "^Task$|^Agent$|^TaskOutput$|agent_run",

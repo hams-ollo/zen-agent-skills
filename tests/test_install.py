@@ -27,13 +27,16 @@ One testability constraint remains worked around rather than fixed:
 Recorded as a finding in docs/spec/install.characterization.md.
 """
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULE_PATH = REPO_ROOT / "scripts" / "install.py"
@@ -813,6 +816,275 @@ class DraftMarkerTests(unittest.TestCase):
         self.assertNotIn(str(len(long_draft) + budgets["all"]), out)
 
 
+class StalenessCheckTests(unittest.TestCase):
+    """chore-0031: whether an installed set still matches the kit it came from.
+
+    The defect is measured, not hypothetical. The globally installed `fix-batch` on the
+    author's machine on 2026-08-06 was a wave-2-era snapshot missing two Step 3 items and
+    the entire delegate report contract, and an agent invoking the skill by name got the
+    older procedure. Nothing could have said so: a stale copy is a valid skill that passes
+    `validate-skills.py`, passes Anthropic's validator, and reads correctly.
+
+    So every oracle here is an exact one: an exit code, the offending skill and file named
+    in the output, or the persisted digest map itself. A "the check ran" assertion would
+    reproduce the silence rather than protect against it.
+
+    Run against a fixture skills tree and a fixture rules module, deliberately, because
+    both directions of divergence have to be reachable: an installed file edited after
+    placement, and a *source* file edited after placement. The second is the actual bug and
+    it cannot be staged against `.agents/`, which the suite must not mutate.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.rules = self.root / "rules"
+        self.skills.mkdir()
+        self.rules.mkdir()
+        self.home = self.root / "home"
+
+        self._real = (inst.SKILLS_DIR, inst.RULES_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.RULES_DIR = self.rules
+        inst.MANIFEST = self.root / "manifest.json"
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "spine": ["alpha"], "all": None}
+
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked")
+        (self.skills / "alpha" / "templates").mkdir()
+        (self.skills / "alpha" / "templates" / "report.md").write_text(
+            "# report\n\nthe supporting file a stale install leaves behind\n",
+            encoding="utf-8")
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes.\n", encoding="utf-8")
+
+    def tearDown(self):
+        (inst.SKILLS_DIR, inst.RULES_DIR,
+         inst.PROFILE_SEEDS, inst.MANIFEST) = self._real
+        self._tmp.cleanup()
+
+    def _install(self, mode="copy", home=None):
+        home = self.home if home is None else home
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = inst.install(["claude"], mode, home, False, "all")
+        self.assertEqual(code, 0, "precondition: the install itself must succeed")
+        return home
+
+    def _check(self, home=None):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home if home is None else home)
+        return code, buf.getvalue()
+
+    def _entries(self):
+        return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+    def _entry(self, name):
+        return next(e for e in self._entries() if e["name"] == name)
+
+    def _installed(self, *parts):
+        return self.home.joinpath(".claude", "skills", *parts)
+
+    @staticmethod
+    def _status(out, name):
+        """The status word the check reported for one entry, or None if it reported none.
+
+        The report is one line per entry, `<status> <tool> <name>  <message>`, so this
+        reads the verdict for a named entry rather than searching the whole output for a
+        word. A substring assertion over the report would pass on a message that merely
+        mentions the word, which is how a check that reports nothing useful still looks
+        green.
+        """
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == name:
+                return parts[0]
+        return None
+
+    def test_an_install_records_a_digest_for_every_file_it_places(self):
+        # The baseline, at the lowest layer, and the reason it is per file rather than per
+        # skill: a skill is a directory, and a stale `templates/report.md` is exactly as
+        # silent as a stale `SKILL.md`. A per-skill digest would satisfy "records
+        # something" and miss half the bug population.
+        self._install()
+        digests = self._entry("alpha")["digests"]
+        self.assertEqual(sorted(digests), ["SKILL.md", "templates/report.md"])
+        expected = hashlib.sha256(
+            (self.skills / "alpha" / "templates" / "report.md").read_bytes()).hexdigest()
+        self.assertEqual(digests["templates/report.md"], expected)
+
+    def test_a_freshly_installed_tree_reports_current_and_exits_zero(self):
+        # The check has to be quiet when nothing is wrong, or nobody will run it twice.
+        self._install()
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual([self._status(out, n) for n in ("alpha", "beta", "rules")],
+                         ["ok", "ok", "ok"])
+        self.assertIn("0 diverged", out)
+        self.assertIn("0 unknown", out)
+
+    def test_a_skill_revised_in_the_kit_after_the_install_is_named_and_exits_non_zero(self):
+        # The measured defect itself: the source moves on, the installed snapshot does not,
+        # and today nothing says so. The oracle names the skill and the file, because a
+        # non-zero exit that does not say what went stale costs the reader the whole
+        # investigation (the same reason check-provenance.py names the drifted source).
+        self._install()
+        source = self.skills / "alpha" / "SKILL.md"
+        source.write_text(source.read_text(encoding="utf-8")
+                          + "\nA step added after the install.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("SKILL.md:", out, "the report must name the file, not only the skill")
+        self.assertEqual(self._status(out, "beta"), "ok",
+                         "an untouched skill must not be swept up in the report")
+
+    def test_a_stale_supporting_file_is_reported_when_the_skill_md_still_matches(self):
+        # The half of the bug population a per-skill or SKILL.md-only digest would miss.
+        self._install()
+        source = self.skills / "alpha" / "templates" / "report.md"
+        source.write_text("# report\n\nrewritten after the install\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("templates/report.md", out)
+
+    def test_a_manifest_written_before_this_change_reports_unknown_not_current(self):
+        # The persisted-format risk. An older manifest carries no digests, and reporting
+        # those entries as current would be a clean result for an unknown state, which is
+        # the failure this check exists to remove one level up. Staged by stripping the key
+        # from a real manifest, so the fixture is the actual older format rather than a
+        # hand-written guess at it.
+        self._install()
+        older = {"entries": [{k: v for k, v in e.items() if k != "digests"}
+                             for e in self._entries()]}
+        inst.MANIFEST.write_bytes(json.dumps(older, indent=2).encode("utf-8"))
+
+        code, out = self._check()
+        self.assertEqual(code, 2, "an unanswerable check must not exit zero")
+        self.assertEqual({self._status(out, n) for n in ("alpha", "beta", "rules")},
+                         {"unknown"},
+                         "no entry may read as current without a recorded baseline")
+        self.assertIn("re-install to establish a baseline", out.lower())
+
+    def test_an_adopter_edited_rules_file_is_not_reported_as_divergence(self):
+        # The noise case, and the reason it is decided rather than mechanical. A lens is the
+        # one file an adopter is invited to rewrite (build-adapters.md S-010 and S-014), so
+        # an unconditional "differs from source" here fires on every run forever for anyone
+        # who accepted the invitation, and a check that cries wolf is a check nobody runs.
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "rules"), "ok")
+        self.assertIn("0 diverged", out)
+
+    def test_a_rules_file_the_kit_revised_since_the_install_is_reported_as_revised(self):
+        # The other half of the same decision. The adopter's copy is theirs, so what is
+        # worth telling them is that the copy they were handed has moved, which is
+        # check-provenance.py's question and is answerable only from the recorded baseline.
+        # Exit-neutral on purpose: it is news, not a fault.
+        self._install()
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "news about an adopted file is not a failure")
+        self.assertEqual(self._status(out, "rules"), "revised")
+        self.assertIn("house-style.md", out)
+
+    def test_an_installed_target_removed_by_hand_is_reported_rather_than_passing(self):
+        # Absence is divergence too. A check that only compares files it can open would
+        # report a clean run for a home the skill is simply gone from.
+        self._install()
+        shutil.rmtree(self._installed("alpha"))
+
+        code, out = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(self._status(out, "alpha"), "diverged")
+        self.assertIn("gone", out)
+
+    def test_the_check_never_rewrites_the_install_or_the_record(self):
+        # The decision this shares with feat-0043: detect and report, never overwrite. An
+        # adopter may have edited an installed file deliberately, and a check that "fixed"
+        # it would destroy that without asking. Asserted over bytes on both sides, since a
+        # silent repair is exactly what would otherwise make the divergence test go green.
+        self._install()
+        target = self._installed("alpha", "SKILL.md")
+        target.write_bytes(b"---\nname: alpha\ndescription: mine now\n---\n")
+        before_target = target.read_bytes()
+        before_manifest = inst.MANIFEST.read_bytes()
+
+        code, _ = self._check()
+        self.assertEqual(code, 1)
+        self.assertEqual(target.read_bytes(), before_target)
+        self.assertEqual(inst.MANIFEST.read_bytes(), before_manifest)
+
+    def test_the_check_is_scoped_to_the_home_it_is_given(self):
+        # One manifest serves every home installed to from this checkout (S-012). Without
+        # scoping, a diverged throwaway home would fail a check of the real one, which is
+        # the same class of defect bug-0003 fixed for --uninstall.
+        other = self.root / "other-home"
+        self._install()
+        self._install(home=other)
+        shutil.rmtree(other / ".claude" / "skills" / "alpha")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "another home's divergence must not fail this one")
+        self.assertNotIn(str(other), out)
+
+    @unittest.skipUnless(SYMLINKS_WORK, "this platform or account cannot create symlinks")
+    def test_a_symlinked_target_cannot_be_stale_and_is_not_reported(self):
+        # The POSIX default. A link *is* its source, so digesting it against the source
+        # would always agree, but a source edited after the install would still leave the
+        # recorded digest behind. Reporting that as divergence would fire on every POSIX
+        # install of a kit under development: noise, and wrong.
+        self._install(mode="symlink")
+        source = self.skills / "alpha" / "SKILL.md"
+        source.write_text(source.read_text(encoding="utf-8") + "\nrevised.\n",
+                          encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "alpha"), "linked")
+        self.assertNotIn("DIVERGED", out)
+
+    def test_the_check_is_reachable_from_the_command_line(self):
+        # The entrypoint layer: the flag has to be wired to the function, and `--home` has
+        # to reach it, or every instruction in INSTALL.md is wrong.
+        self._install()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--check", "--home", str(self.home)])
+        self.assertEqual(code, 0)
+        self.assertIn("current", buf.getvalue())
+
+    def test_asking_to_check_and_uninstall_at_once_is_refused_and_removes_nothing(self):
+        # Either precedence silently drops half the request, and one of those halves
+        # deletes files.
+        self._install()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--check", "--uninstall", "--home", str(self.home)])
+        self.assertEqual(code, 2)
+        self.assertTrue(self._installed("alpha").is_dir(),
+                        "a refused invocation must not remove anything")
+
+    def test_checking_a_home_with_nothing_recorded_does_not_report_it_as_current(self):
+        # S-005's shape, one level up: a deleted record makes previous copies unmanaged, so
+        # a check that found no entries has learned nothing about what is on disk. Exiting
+        # zero there would answer "current" for a home it never looked at.
+        code, out = self._check(self.root / "never-installed")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing can be checked", out)
+
+
 class HookRegistrationTests(unittest.TestCase):
     """feat-0038: the settings block a user pastes to activate the hooks.
 
@@ -857,6 +1129,360 @@ class HookRegistrationTests(unittest.TestCase):
         # change that was correct. What the matcher must actually satisfy is that it
         # covers the hook's own tool set, and that belongs in one place across all the
         # wirings: see WiringConsistencyTests in tests/test_hooks.py.
+
+
+class RegistrationCarriesTheEventTests(unittest.TestCase):
+    """feat-0046: the registration builder must not hardcode one lifecycle event.
+
+    HOOK_REGISTRATIONS carried (script, matcher) while claude_registration() emitted the
+    entries under a hardcoded PostToolUse. Every hook in the module was PostToolUse, so
+    nothing surfaced it. A hook on any other event would have been placed by --with-hooks
+    and never registered: installed, correct-looking, and doing nothing, which is the
+    failure this module was already bitten by twice while it was being built.
+
+    These tests exist so the event dimension cannot quietly collapse back.
+    """
+
+    def test_every_registration_entry_carries_an_event(self):
+        for entry in inst.HOOK_REGISTRATIONS:
+            with self.subTest(entry=entry[0]):
+                self.assertEqual(3, len(entry),
+                                 "expected (script, event, matcher)")
+                self.assertTrue(entry[1], "the event must not be empty")
+
+    def test_a_session_start_hook_is_registered_under_session_start(self):
+        parsed = json.loads(inst.claude_registration(Path("/tmp/home")))
+        self.assertIn("SessionStart", parsed["hooks"],
+                      "a SessionStart hook must not be filed under PostToolUse")
+        entry = parsed["hooks"]["SessionStart"][0]
+        self.assertEqual("startup", entry["matcher"])
+        self.assertIn("skill-reachability-reminder.py", entry["hooks"][0]["command"])
+
+    def test_the_existing_post_tool_use_hooks_are_unchanged(self):
+        # The widening must not disturb what already worked. Both hooks stay under
+        # PostToolUse, in order.
+        parsed = json.loads(inst.claude_registration(Path("/tmp/home")))
+        commands = [e["hooks"][0]["command"] for e in parsed["hooks"]["PostToolUse"]]
+        self.assertEqual(2, len(commands))
+        self.assertIn("delegation-reminder.py", commands[0])
+        self.assertIn("spec-conformance-gate.py", commands[1])
+
+    def test_every_registered_script_exists_in_the_module(self):
+        # A registration naming a script that is not there produces an entry that can
+        # never fire, which is the same silence from the other direction.
+        for script, _event, _matcher in inst.HOOK_REGISTRATIONS:
+            with self.subTest(script=script):
+                self.assertTrue((inst.HOOKS_DIR / script).is_file())
+
+    def test_every_hook_in_the_module_is_registered(self):
+        # The docstring's stated property: a hook added without an entry here shows up as
+        # a missing entry rather than as a hook that was placed and never fires.
+        registered = {script for script, _e, _m in inst.HOOK_REGISTRATIONS}
+        present = {p.name for p in inst.discover_hooks()}
+        self.assertEqual(present, registered,
+                         "every hook in .agents/hooks/ needs a registration entry")
+
+
+class AdoptedModulePreservationTests(unittest.TestCase):
+    """bug-0018 and Scenario S-016: a re-install must not destroy an adopter's edited lens.
+
+    The defect this class exists for was reproduced on 2026-08-06 against a throwaway home:
+    install, append a line to the installed `house-style.md`, install again, and the line is
+    gone at exit 0 with nothing printed about it. `_place` saw a managed target, called
+    `_rm` on it, and copied the kit's tree back over the hole. For a directory that took the
+    whole tree, so a lens the adopter *added* beside the kit's went with it.
+
+    The two failure directions are not symmetric, and both are asserted here. Wrongly
+    preserving costs a stale lens the adopter can see with `--check`; wrongly overwriting
+    costs work nobody can recover. So the preservation tests assert byte-for-byte survival,
+    and the refresh tests assert an untouched file still moves, because a guard broad enough
+    to pin every adopter to whatever shipped first is the inverse bug and is just as silent.
+
+    Run against a fixture skills tree and a fixture rules module, as `StalenessCheckTests`
+    is and for the same reason: the source side has to be editable, and the suite must not
+    mutate `.agents/`.
+    """
+
+    KIT_LENS = "# house style\n\nno em-dashes.\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.rules = self.root / "rules"
+        self.skills.mkdir()
+        self.rules.mkdir()
+        self.home = self.root / "home"
+
+        self._real = (inst.SKILLS_DIR, inst.RULES_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.RULES_DIR = self.rules
+        inst.MANIFEST = self.root / "manifest.json"
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "spine": ["alpha"], "all": None}
+
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked")
+        (self.rules / "house-style.md").write_text(self.KIT_LENS, encoding="utf-8")
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+
+    def tearDown(self):
+        (inst.SKILLS_DIR, inst.RULES_DIR,
+         inst.PROFILE_SEEDS, inst.MANIFEST) = self._real
+        self._tmp.cleanup()
+
+    def _install(self, mode="copy", home=None, replace_adopted=False):
+        # The flag is passed only when it is being exercised, so a test about preservation
+        # fails on what was preserved rather than on the signature. That distinction is not
+        # cosmetic: against the pre-fix `install.py` every test here would otherwise error
+        # with a TypeError, which proves the parameter is absent and says nothing at all
+        # about the data loss the class exists for.
+        home = self.home if home is None else home
+        extra = {"replace_adopted": True} if replace_adopted else {}
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.install(["claude"], mode, home, False, "all", **extra)
+        return code, buf.getvalue()
+
+    def _lens(self, name="house-style.md"):
+        return self.home / ".claude" / "rules" / name
+
+    def _entries(self):
+        return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+    def _entry(self, name):
+        return next(e for e in self._entries() if e["name"] == name)
+
+    def test_an_adopter_edited_lens_survives_a_reinstall_byte_for_byte(self):
+        # bug-0018, the reproduction itself. `.agents/rules/` is the module AGENTS.md
+        # describes as swappable and `house-style.md` opens by inviting the reader to
+        # rewrite, so this is the one file the kit specifically asks an adopter to own.
+        # Bytes, not a substring: a fix that re-copied the kit's file and appended the
+        # adopter's line would satisfy "the edit survives" while still having overwritten
+        # everything else they wrote.
+        code, _ = self._install()
+        self.assertEqual(code, 0, "precondition: the first install must succeed")
+        mine = self.KIT_LENS + "\nMY OWN HOUSE RULE: sentence-case headings, always.\n"
+        self._lens().write_text(mine, encoding="utf-8")
+
+        code, out = self._install()
+        self.assertEqual(code, 0, "preserving an adopter's file is news, not a failure")
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), mine,
+                         "the adopter's lens was overwritten by the re-install")
+        self.assertNotIn("CONFLICT", out)
+
+    def test_the_run_reports_what_it_preserved_rather_than_passing_silently(self):
+        # A guard that works and says nothing is half a fix: the adopter cannot tell a run
+        # that refreshed their lens from one that declined to, and the difference is the
+        # whole point. The file is named, not just counted.
+        self._install()
+        self._lens().write_text(self.KIT_LENS + "\nmine.\n", encoding="utf-8")
+        (self.rules / "house-style.md").write_text(
+            self.KIT_LENS + "\nand sentence-case headings.\n", encoding="utf-8")
+
+        _, out = self._install()
+        self.assertIn("preserved", out)
+        self.assertIn("house-style.md", out)
+
+    def test_an_unedited_lens_is_still_refreshed_when_the_kit_revises_it(self):
+        # The inverse failure, and the one that costs most if the guard is written too
+        # broadly: a lens nobody touched must still move with the kit, or every adopter is
+        # pinned to whatever shipped on the day they first installed and no tool anywhere
+        # says so. This is the same distinction `--check` already draws between a file that
+        # differs from its recorded baseline and one that differs only from the source.
+        self._install()
+        revised = self.KIT_LENS + "\nand sentence-case headings.\n"
+        (self.rules / "house-style.md").write_text(revised, encoding="utf-8")
+
+        code, _ = self._install()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), revised,
+                         "an untouched lens must not be pinned to the first install")
+
+    def test_a_skill_directory_is_still_replaced_because_it_is_derived(self):
+        # The carve-out's boundary. `build-adapters.md` S-014 states the contrast the whole
+        # design rests on: a skill's supporting files are derived and are refreshed, the
+        # rules module is adopted and is preserved. Extending the guard to skills would
+        # strand every adopter on a stale copy of the thing the kit exists to distribute.
+        self._install()
+        installed = self.home / ".claude" / "skills" / "alpha" / "SKILL.md"
+        installed.write_text("---\nname: alpha\ndescription: mine now\n---\n",
+                             encoding="utf-8")
+
+        code, _ = self._install()
+        self.assertEqual(code, 0)
+        self.assertEqual(installed.read_text(encoding="utf-8"),
+                         (self.skills / "alpha" / "SKILL.md").read_text(encoding="utf-8"),
+                         "a derived skill file must still be replaced")
+
+    def test_a_lens_the_adopter_added_beside_the_kits_is_not_deleted(self):
+        # `_rm(target)` on a directory takes the whole tree, so this file disappeared even
+        # though nothing the kit ships is named like it. It is not the kit's to manage: it
+        # is neither refreshed nor removed nor recorded.
+        self._install()
+        theirs = self._lens("my-own-lens.md")
+        theirs.write_text("# my own lens\n\nrules the kit never shipped.\n", encoding="utf-8")
+
+        code, _ = self._install()
+        self.assertEqual(code, 0)
+        self.assertTrue(theirs.is_file(), "a file the adopter added must survive")
+        self.assertIn("rules the kit never shipped", theirs.read_text(encoding="utf-8"))
+        self.assertNotIn("my-own-lens.md", self._entry("rules")["digests"],
+                         "the kit must not record a file it did not place")
+
+    def test_a_preserved_lens_is_still_preserved_by_the_run_after_it(self):
+        # The delayed version of the same data loss, and the reason the recorded baseline
+        # for a preserved file must stay at what the kit last placed rather than being
+        # rewritten to what is on disk. Record the adopter's own bytes as the baseline and
+        # the next run finds them "untouched", refreshes over them, and destroys the edit
+        # one install later than before.
+        self._install()
+        mine = self.KIT_LENS + "\nMY OWN HOUSE RULE.\n"
+        self._lens().write_text(mine, encoding="utf-8")
+        self._install()
+        self._install()
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), mine,
+                         "the edit survived one re-install and not the next")
+
+    def test_a_manifest_predating_the_digests_preserves_the_lens_and_says_so(self):
+        # chore-0031's baseline is per entry, so an install predating it records nothing and
+        # an edited lens is indistinguishable from an untouched one. The failure directions
+        # are not symmetric, so the unanswerable case preserves and states that the baseline
+        # is unknown rather than resolving it silently in either direction.
+        self._install()
+        older = {"entries": [{k: v for k, v in e.items() if k != "digests"}
+                             for e in self._entries()]}
+        inst.MANIFEST.write_bytes(json.dumps(older, indent=2).encode("utf-8"))
+        mine = self.KIT_LENS + "\nedited under the older format.\n"
+        self._lens().write_text(mine, encoding="utf-8")
+
+        code, out = self._install()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), mine)
+        self.assertIn("unknown", out.lower())
+
+    def test_the_replace_flag_takes_the_kits_copy_over_an_edited_lens(self):
+        # "My lens is stale and I do want the kit's" is a real case, and without a flag the
+        # only route is deleting the file by hand. Named explicitly rather than folded into
+        # `--mode`, since it decides what happens to an adopter's work and not how files are
+        # placed. It re-establishes a baseline too: the entry records what was just placed.
+        self._install()
+        self._lens().write_text(self.KIT_LENS + "\nstale, and I know it.\n", encoding="utf-8")
+
+        code, _ = self._install(replace_adopted=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), self.KIT_LENS,
+                         "--replace-adopted must take the kit's copy")
+        self.assertEqual(self._entry("rules")["digests"], inst.digest_tree(self.rules))
+
+    def test_the_replace_flag_is_reachable_from_the_command_line(self):
+        # The entrypoint layer: a flag wired to nothing is the registered-and-inert failure
+        # this repository has now hit three times.
+        self._install()
+        self._lens().write_text(self.KIT_LENS + "\nstale.\n", encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--home", str(self.home), "--profile", "all",
+                              "--mode", "copy", "--replace-adopted"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), self.KIT_LENS)
+
+    def test_a_lens_file_new_in_the_kit_is_placed_beside_an_edited_one(self):
+        # Preserving what the adopter owns must not stop the kit delivering what it has
+        # never sent. A file absent from the recorded baseline was placed by nobody, so
+        # nothing of theirs is at risk in placing it now.
+        self._install()
+        self._lens().write_text(self.KIT_LENS + "\nmine.\n", encoding="utf-8")
+        (self.rules / "autonomy.md").write_text(
+            "# autonomy\n\ndetect and report, never rewrite.\n", encoding="utf-8")
+
+        code, _ = self._install()
+        self.assertEqual(code, 0)
+        self.assertTrue(self._lens("autonomy.md").is_file(),
+                        "a lens the kit newly ships must still arrive")
+        self.assertIn("mine.", self._lens().read_text(encoding="utf-8"))
+
+    def test_a_first_install_into_an_empty_home_is_unaffected(self):
+        # The guard only has an opinion about a target this tool already placed. A clean
+        # home has nothing to preserve, and must not report as though it did.
+        code, out = self._install()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._lens().read_text(encoding="utf-8"), self.KIT_LENS)
+        self.assertNotIn("preserved", out)
+
+    def test_an_unmanaged_rules_directory_is_still_refused(self):
+        # Scenario S-004 is unchanged by this: a rules directory this tool did not place is
+        # still a CONFLICT, not something to merge into. The preservation path is for
+        # targets the tool created; this one is not the tool's at all.
+        target = self.home / ".claude" / "rules"
+        target.mkdir(parents=True)
+        (target / "house-style.md").write_text("someone else's\n", encoding="utf-8")
+
+        code, out = self._install()
+        self.assertEqual(code, 1)
+        self.assertIn("CONFLICT", out)
+        self.assertEqual((target / "house-style.md").read_text(encoding="utf-8"),
+                         "someone else's\n")
+
+    @unittest.skipUnless(SYMLINKS_WORK, "this platform or account cannot create symlinks")
+    def test_symlink_mode_is_untouched_by_the_guard(self):
+        # In symlink mode the installed lens *is* the kit's file, so there is no adopter
+        # copy to preserve and nothing to compare. The guard must not turn the POSIX
+        # default's relink into a preserve.
+        self._install(mode="symlink")
+        self.assertTrue((self.home / ".claude" / "rules").is_symlink(),
+                        "precondition: symlink mode placed a link")
+        code, out = self._install(mode="symlink")
+        self.assertEqual(code, 0)
+        self.assertNotIn("preserved", out)
+        self.assertTrue((self.home / ".claude" / "rules").is_symlink())
+
+
+class CheckReportsWhatItComparedTests(unittest.TestCase):
+    """The three defects the automated reviewer found on chore-0031's pull request.
+
+    All three are the same underlying question in different clothes: what does `--check`
+    say about something it did not, or could not, actually compare? A digest labelled with
+    the wrong artifact, a crash where the mode promises an exit code, and an empty baseline
+    treated as a real one all leave the reader believing the check answered a question it
+    never asked.
+    """
+
+    def test_the_adopted_path_names_the_record_not_the_install(self):
+        # `revised` compares the recorded baseline against the source, so calling the left
+        # side "installed" printed a digest matching no file on disk. An adopter running a
+        # checksum on their own lens got a third number and no way to reconcile it.
+        moved = inst._compare({"a.md": "aa" * 32}, {"a.md": "bb" * 32},
+                              "recorded", "source now")
+        joined = "\n".join(moved)
+        self.assertIn("recorded aaaaaaaaaaaa", joined)
+        self.assertIn("source now bbbbbbbbbbbb", joined)
+        self.assertNotIn("installed", joined)
+
+    def test_the_derived_path_still_says_installed(self):
+        # The default labels were correct for the divergence path and must not regress.
+        moved = inst._compare({"a.md": "aa" * 32}, {"a.md": "bb" * 32})
+        self.assertIn("installed aaaaaaaaaaaa, source bbbbbbbbbbbb", "\n".join(moved))
+
+    def test_an_absence_is_reported_against_the_side_it_is_absent_from(self):
+        self.assertIn("in the source now, absent from the recorded",
+                      "\n".join(inst._compare({}, {"a.md": "aa" * 32},
+                                              "recorded", "source now")))
+
+    def test_an_unreadable_file_is_an_error_verdict_not_a_traceback(self):
+        # digest_tree() reads bytes, and --check promises 0/1/2 rather than a stack trace.
+        entry = {"target": str(Path(__file__)), "source": str(Path(__file__).parent),
+                 "digests": {"x": "aa" * 32}, "name": "alpha"}
+        with mock.patch.object(inst, "digest_tree", side_effect=PermissionError("locked")):
+            status, message = inst._check_entry(entry)
+        self.assertEqual(status, "error")
+        self.assertIn("locked", message)
+
+    def test_an_empty_digest_map_is_no_baseline_at_all(self):
+        # Falsiness, not `is None`: an entry recording {} is exactly as unanswerable as one
+        # recording nothing, and reporting it as comparable was a clean-looking partial.
+        status, message = inst._check_entry({"target": ".", "source": ".", "digests": {}})
+        self.assertEqual(status, "unknown")
+        self.assertIn("Re-install", message)
 
 
 if __name__ == "__main__":

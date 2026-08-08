@@ -99,6 +99,24 @@ Unresolved decisions, numbered, each with a recommendation. If none remain, writ
 `status` is `draft` or `approved`. **This skill only ever writes `status: draft`.** `approved` is a
 state a human sets after reading the spec; `spec-author` never sets it and never assumes it.
 
+### Amending a spec that is already approved
+
+There is no third status for "approved, then amended, with the amendment not yet re-approved", and
+the amendment does not go back to `draft`. **Leave `status: approved` exactly as it is**, add a dated
+note in the spec's header naming the amendment's date, the amending task's id, and what changed, and
+say in as many words that the amendment is pending the author's re-approval. Re-approval is the
+human's, precisely as approval is.
+
+`draft` is unavailable for a mechanical reason worth knowing, because the alternative looks tidier.
+[`verifier-agent`](../verifier-agent/SKILL.md) returns `blocked` on a spec that is not `approved`, so
+flipping the status of a contract you just amended makes the verification run for that very change
+unanswerable, and [`new-task`](../new-task/SKILL.md) refuses to decompose it, which stalls every
+other task waiting on the same contract.
+
+Where the repository keeps a spec index, that is where the convention and its reasoning belong; in
+this kit they are recorded in `docs/spec/README.md`, named in prose because it sits outside this
+skill's own tree.
+
 ## Procedure
 
 ### 1. Understand the intent, and ask at most one question
@@ -148,6 +166,10 @@ Summarize the spec: scenario count, surface elements, and any Open Questions tha
 decision. State plainly that the spec is `status: draft` and that a human must set `status: approved`
 before [`new-task`](../new-task/SKILL.md) decomposes it into tasks. Do not decompose it yourself, and
 do not treat your own draft as approved.
+
+When the run amended an already-approved spec rather than drafting a new one, say instead that
+`status` was deliberately left `approved` and that the dated note records the amendment as pending
+the author's re-approval, per the amendment rule above.
 
 ## Notes
 

@@ -25,11 +25,11 @@ A skills library, not an application. The deliverables are the skills under [`.a
 | Path | Holds |
 |---|---|
 | [`.agents/skills/`](.agents/skills/) | The skills. One directory per skill, each with a `SKILL.md` harness-agnostic body. |
-| [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities. Adopters may replace either. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
+| [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities, [`autonomy.md`](.agents/rules/autonomy.md) for what an agent may do when nobody is watching. Adopters may replace any of them. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
 | [`.agents/hooks/`](.agents/hooks/) | Optional runtime guardrails (Python on stdin), each a *reminder* (injects context, never blocks) or a *gate* (blocks, only when the condition is decidable from the payload). The only thing the kit ships that runs inside an adopter's session, so installation is opt-in and activation is theirs: `install.py --with-hooks` places the files and prints the registration rather than editing anyone's settings. Contract in [`.agents/hooks/README.md`](.agents/hooks/README.md). |
 | [`scripts/`](scripts/) | `install.py`, `build-adapters.py`, `validate-skills.py`, `check-provenance.py`. |
 | [`.tasks/`](.tasks/) | Atomic, agent-assignable work items for building this kit, plus `validate.py`. |
-| [`docs/spec/`](docs/spec/) | Behavioral specifications (the contracts), plus the reports that sit beside them, one file kind per question asked: `<spec>.conformance.md` audits code against the contract, `<spec>.verification.md` records a verdict with evidence, `<spec>.readiness.md` records a go/no-go gate over a spec plus its task decomposition, `<spec>.characterization.md` records behavior pinned before a contract existed. |
+| [`docs/spec/`](docs/spec/) | Behavioral specifications (the contracts), plus the reports that sit beside them, one file kind per question asked: `<spec>.conformance.md` audits code against the contract, `<spec>.verification.md` records a verdict with evidence, `<spec>.readiness.md` records a go/no-go gate over a spec plus its task decomposition, `<spec>.characterization.md` records behavior pinned before a contract existed, `<spec>.runbook.md` tells a person how to perform a step no agent here can perform. |
 | [`tests/`](tests/) | The kit's own tests, derived from the specifications under `docs/spec/`. |
 | [`ROADMAP.md`](ROADMAP.md) | The strategic plan: which skills get built, in what order (builder-facing). |
 | [`CHANGELOG.md`](CHANGELOG.md) | Append-only ledger of finished work. |
@@ -103,6 +103,31 @@ A skill that does both says so, and says which applies where.
 Follow [`.agents/rules/house-style.md`](.agents/rules/house-style.md) for writing and formatting: no em-dashes, sentence-case headings, named sources, relative markdown links, Mermaid for diagrams. That file is swappable; this reference to it is not.
 
 - **Python** (tooling under `scripts/` and `.tasks/validate.py`): standard library only where possible, so it runs anywhere with a bare Python 3. PEP 8. No third-party dependency unless truly load-bearing and documented.
+
+### The acceptance command
+
+```bash
+python scripts/run-checks.py
+```
+
+[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, and the documentation link check. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
+
+[`.github/workflows/checks.yml`](.github/workflows/checks.yml) calls this same script rather than restating the gates. One rule, two callers, per `chore-0029`.
+
+**Passing it is necessary but not sufficient.** CI runs three operating systems by two Python versions, so any single run of this command covers one of those six cells. A change that passes locally can still fail on a platform you did not run. The command says so in its own summary on every run, and it is repeated here because this is where an agent reads the rules before it starts working, rather than after a run has already happened.
+
+### The one committed hook registration, and why it is an exception
+
+The layout table above states that hook installation is opt-in and activation is the adopter's: `install.py --with-hooks` places the files and prints a registration rather than editing anyone's settings. That rule holds everywhere except one place in this repository, and the exception is written here rather than left to be discovered.
+
+[`.claude/settings.json`](.claude/settings.json) is committed, and it registers [`skill-reachability-reminder.py`](.agents/hooks/skill-reachability-reminder.py) on `SessionStart`. A project-scope settings file applies to every collaborator who opens this repository, so nobody opts in.
+
+The reason is mechanical rather than a preference. A user-level `~/.claude/settings.json` does not reach a cloud session, and a cloud session is the exact case this hook exists for: it clones the repository, gets none of the user-scope skills this kit installs, and would otherwise work without them and never say so. Verified against Anthropic's Claude Code documentation on 2026-08-07, which states the same thing from the other side by telling readers to commit settings files to change a cloud session's settings. A printed registration cannot be pasted by a machine that nobody is watching.
+
+The exception is kept as small as it can be: one hook, in the reminder shape, which never blocks and never writes, firing only on a genuinely new session. Its worst case is one injected paragraph. **Adding a second hook to that file, or any hook that blocks, is a new decision and not covered by this one.**
+
+### Other conventions
+
 - **Cross-platform**: target Windows, macOS, and Linux. Prefer `pathlib`; never assume POSIX symlinks are available.
 
 ### Provenance for material folded in from elsewhere

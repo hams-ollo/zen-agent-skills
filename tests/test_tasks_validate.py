@@ -300,16 +300,37 @@ class MislabelledLinkTests(TasksRootTestCase):
         code, out = self._run()
         self.assertEqual(code, 0, f"a double-backtick span is a code span too\n{out}")
 
+    def test_a_link_inside_a_fenced_code_block_is_not_reported(self):
+        # `bug-0017`: a fence's delimiters sit alone on lines of their own, so the
+        # within-a-line pairing in code_span_ranges() never matches them and a link that
+        # renders as literal text inside a fence went on being reported after the inline
+        # form was fixed. Quoting a whole broken link in a fenced block is what a task
+        # file documenting a link bug has to be able to do: `chore-0029`'s own Problem
+        # section quotes a CI failure this way.
+        self._write(
+            "The docs link step printed:\n\n"
+            "```\n"
+            "[README.md](../README.md)\n"
+            "```\n")
+        code, out = self._run()
+        self.assertEqual(code, 0, f"a fenced link is not a link\n{out}")
+
     def test_a_mislabelled_link_outside_a_code_span_is_still_reported(self):
-        # `bug-0015`'s risk section: over-skipping costs more than the false positive it
-        # removes, because a disabled check reports success. A span detector that pairs
-        # backticks across the whole file would let the unmatched backtick below swallow
-        # the genuine link that follows it, and this file would pass for the wrong
-        # reason. The link on the last line names the root README.md and opens
-        # .tasks/README.md, so it must still be reported.
+        # `bug-0015`'s risk section, extended by `bug-0017`: over-skipping costs more
+        # than the false positive it removes, because a disabled check reports success.
+        # This is the guard against both skips failing open at once. A span detector
+        # that paired backticks across the whole file would let the unmatched backtick
+        # below swallow the genuine link, and a fence detector that ran an unclosed
+        # fence to end of file would swallow it too; either way this file would pass for
+        # the wrong reason. The fence here is closed and the link on the last line sits
+        # outside it, names the root README.md, opens .tasks/README.md, and must still
+        # be reported.
         self._write(
             "The shape `[README.md](../README.md)` is literal text, and a lone ` "
             "backtick opens nothing.\n\n"
+            "```md\n"
+            "[README.md](../README.md)\n"
+            "```\n\n"
             "See [`README.md`](../README.md) for the installer.")
         code, out = self._run()
         self.assertNotEqual(
@@ -317,6 +338,25 @@ class MislabelledLinkTests(TasksRootTestCase):
             f"a real mislabelled link must survive the code-span skip\n{out}")
         self.assertIn("feat-0099-test.md", out)
         self.assertIn("../README.md", out)
+        self.assertIn(".tasks/README.md", out)
+
+    def test_an_unterminated_fence_does_not_suppress_the_findings_after_it(self):
+        # `bug-0017`: the costly failure named in its risk section. An opening fence with
+        # no closer must open nothing, exactly as an unmatched backtick run opens
+        # nothing, because the alternative switches the check off for the whole rest of
+        # the file and still exits clean. The link below the dangling fence is genuinely
+        # mislabelled and is the only thing standing between that failure and a green
+        # build, so it must be reported.
+        self._write(
+            "```md\n"
+            "a fence that is never closed\n"
+            "\n"
+            "See [`README.md`](../README.md) for the installer.")
+        code, out = self._run()
+        self.assertNotEqual(
+            code, 0,
+            f"an unterminated fence must not suppress what follows it\n{out}")
+        self.assertIn("feat-0099-test.md", out)
         self.assertIn(".tasks/README.md", out)
 
     def test_the_finding_is_a_warning_rather_than_an_error(self):
@@ -330,6 +370,64 @@ class MislabelledLinkTests(TasksRootTestCase):
         self.assertEqual(code, 0, f"a default run must not fail on a heuristic\n{out}")
         self.assertIn("WARN", out)
         self.assertIn("../README.md", out)
+
+
+class DocsLinkModeTests(TasksRootTestCase):
+    """`chore-0029`: the docs link gate calls this rule instead of restating it.
+
+    The rule for what counts as a relative link and whether it resolves was authored
+    three times: in `.tasks/validate.py`, in the `init-worktracking` template, and inline
+    in a heredoc inside `.github/workflows/checks.yml`. The first two were kept in step
+    deliberately; the third was not, and it drifted. A `CHANGELOG.md` entry that quoted a
+    malformed link inside a code span passed `--strict` and failed CI, and the entry was
+    reworded to satisfy a checker rather than to say what it meant.
+
+    The two file sets stay disjoint on purpose, so these tests pin the caller, not the
+    coverage. The failure worth designing against is not a missed broken link: it is a
+    check that runs over nothing, because a wrong glob makes the gate pass instantly,
+    report zero broken links over zero documents, and turn a broken tree green.
+    """
+
+    def _run_links(self, *patterns):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = tv.main(["--links", *patterns])
+        return code, buf.getvalue()
+
+    def test_a_broken_relative_link_in_a_matched_document_fails(self):
+        # The gate's whole job, over a file set validate.py's backlog walk never sees.
+        # Wave 2's closeout broke three links in exactly this position, in CHANGELOG.md
+        # and ROADMAP.md, which `--strict` passed clean over.
+        (self.root / "CHANGELOG.md").write_text(
+            "See [the plan](ROADMAP.md).\n", encoding="utf-8")
+        code, out = self._run_links("*.md")
+        self.assertNotEqual(code, 0, f"a dangling link must exit non-zero\n{out}")
+        self.assertIn("broken link: CHANGELOG.md -> ROADMAP.md", out)
+
+    def test_a_resolving_link_passes_and_the_document_count_is_reported(self):
+        # The count is load-bearing, not decoration: it is the only thing in the output
+        # that distinguishes a clean run from a run over an empty file set, and both
+        # print zero broken links. `docs/guide.md` also pins that a target resolves from
+        # the document's own directory rather than from the repository root, which is
+        # what makes `../README.md` correct here and wrong one directory down.
+        (self.root / "CHANGELOG.md").write_text(
+            "See [the readme](README.md).\n", encoding="utf-8")
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "guide.md").write_text(
+            "See [the readme](../README.md).\n", encoding="utf-8")
+        code, out = self._run_links("*.md", "docs/**/*.md")
+        self.assertEqual(code, 0, out)
+        self.assertIn("checked 3 documents, 0 broken link(s)", out)
+
+    def test_patterns_that_match_no_document_fail_rather_than_pass_silently(self):
+        # The failure this mode is designed against. A glob that stops matching (a
+        # renamed directory, a moved docs tree) would otherwise report success while
+        # checking nothing, which is worse than a broken link because it is invisible.
+        code, out = self._run_links("no-such-directory/**/*.md")
+        self.assertNotEqual(
+            code, 0, f"a check over zero documents must not pass\n{out}")
+        self.assertIn("checked 0 documents", out)
+        self.assertIn("no-such-directory/**/*.md", out)
 
 
 if __name__ == "__main__":

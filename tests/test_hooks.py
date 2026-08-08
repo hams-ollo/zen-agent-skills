@@ -186,22 +186,32 @@ class WiringConsistencyTests(unittest.TestCase):
 
     HOOK = "delegation-reminder.py"
 
+    @staticmethod
+    def _flatten(wiring):
+        """Every (command, matcher) in a wiring, across every lifecycle event.
+
+        Deliberately not scoped to `PostToolUse`. It was, until feat-0046 added the first
+        hook on another event and this class reported it missing from two wirings that had
+        in fact been updated correctly. A consistency test that only reads one event
+        cannot support the claim in its own name, and the failure direction is the bad
+        one: it would have passed for a hook wired nowhere on any event but PostToolUse.
+        """
+        return [(h["command"], e["matcher"])
+                for entries in wiring["hooks"].values()
+                for e in entries for h in e["hooks"]]
+
     def _entries(self):
-        """PostToolUse entries from each wiring, as (source name, [(command, matcher)])."""
+        """Entries from each wiring, as (source name, [(command, matcher)])."""
         codex = json.loads(
             (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-        yield ".codex/hooks.json", [
-            (h["command"], e["matcher"])
-            for e in codex["hooks"]["PostToolUse"] for h in e["hooks"]]
+        yield ".codex/hooks.json", self._flatten(codex)
 
         spec = importlib.util.spec_from_file_location(
             "install_mod", REPO_ROOT / "scripts" / "install.py")
         install_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(install_mod)
         block = json.loads(install_mod.claude_registration(Path("/tmp/home")))
-        yield "install.py claude_registration", [
-            (h["command"], e["matcher"])
-            for e in block["hooks"]["PostToolUse"] for h in e["hooks"]]
+        yield "install.py claude_registration", self._flatten(block)
 
     def matcher_sources(self):
         """Each wiring's matcher for the delegation hook, found by script name not index.

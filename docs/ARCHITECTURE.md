@@ -40,6 +40,8 @@ It also enforces the rest of the skill schema, which is external and not the kit
 
 [`scripts/install.py`](../scripts/install.py) places the canonical skill directories into the global discovery locations used by Claude Code and OpenCode. It is idempotent, defaults to copies on Windows and symlinks on POSIX systems, and avoids overwriting unmanaged targets. It also places [`.agents/rules/`](../.agents/rules/) as the sibling of the installed skills directory, which is where every skill's `../../rules/<file>.md` reference resolves to. Without it a composed lens dangles, and `house-review` in particular arrives with no rubric, since its severities and categories live entirely in the lens.
 
+Because a copy is a snapshot, an installed skill silently ages against its source: it stays a valid skill, passes every validator, reads correctly, and is out of date. The real `fix-batch` on the author's machine was a three-week-old copy missing an entire required section, and nothing said so. So the manifest now records a SHA256 per placed file and `--check` names every installed file that no longer matches the kit. A manifest written before that change reports `unknown` rather than `current`, because reporting a clean result for an unknown state is the failure the check exists to remove. The rules module is exempt from being called stale, since it is the one file an adopter is invited to rewrite; when the kit's copy moves underneath an edited lens the check says so without faulting it.
+
 A `--profile` selects how many skills to place (`core`, `spine`, or `all`), and the run reports the total description characters for each, since every installed description is loaded so an agent can route to it. The profile is expanded over sibling references before anything is placed, so a subset can never ship a skill whose composed sibling is absent. That constraint, rather than editorial judgment, is what fixes the profile sizes: the reference graph has one strongly connected component of fifteen skills, so a profile touching any of them is at least eighteen, and only `agent-handoff` with `human-handoff`, plus the three skills that reference no sibling, are separable. The default is `spine`, which is smaller than `all` and drops the handoff pair.
 
 [`scripts/build-adapters.py`](../scripts/build-adapters.py) handles tools that use project-level configuration. It reads each canonical `SKILL.md` and generates:
@@ -114,7 +116,27 @@ python -m unittest discover -s tests -p "test_*.py"
 python scripts/build-adapters.py --dry-run
 python scripts/install.py --dry-run --home ./.tmp/zen-home
 python .tasks/validate.py --strict
+python .tasks/validate.py --links "*.md" ".github/**/*.md" "docs/**/*.md"
 ```
+
+The last two are the same rule with two callers over deliberately disjoint file sets: `--strict`
+walks `.tasks/`, and `--links` walks the documents around it over the repository root, `.github/`,
+and `docs/`. The workflow used to restate that rule inline, which drifted: the validator learned that
+a link inside a code span is not a link and the CI copy never did, so a correctly quoted example
+passed `--strict` and failed CI.
+
+That lesson is now applied to the whole gate set. [`run-checks.py`](../scripts/run-checks.py) runs
+all seven gates in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
+than listing them, so there is one gate set with two callers instead of one per caller:
+
+```bash
+python scripts/run-checks.py
+```
+
+It exits 0, 1, or 2, where 2 means a gate could not run at all and outranks a gate that ran and
+failed, matching `install.py --check` and `check-provenance.py`. Every gate runs even after one
+fails, because an agent working unattended gets one round trip. Any single run covers one of CI's six
+matrix cells, so passing it is necessary but not sufficient, and it says so in its own summary.
 
 The test suite is not optional here. [`tests/`](../tests/) covers the distribution tooling itself, so a change to `install.py` or `build-adapters.py` is exactly the case the suite exists to catch.
 

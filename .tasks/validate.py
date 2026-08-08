@@ -12,11 +12,16 @@ class underneath a dangling link. That one is a heuristic rather than a fact, so
 it is reported as a warning on purpose: see mislabelled_links() for why a false
 positive there is more expensive than a miss.
 
+A second mode link-checks an arbitrary set of documents instead of the backlog,
+so a CI docs link gate can call the link rule here rather than author its own
+copy of it. See check_links() for why that matters.
+
 Standard library only, so it runs anywhere a bare Python 3 does. Exits non-zero
 on any error, so it drops cleanly into CI or a pre-commit hook.
 
     python .tasks/validate.py            # errors fail, missing files warn
     python .tasks/validate.py --strict   # warnings become errors too
+    python .tasks/validate.py --links '*.md' 'docs/**/*.md'   # link-check documents
 """
 from __future__ import annotations
 
@@ -46,10 +51,16 @@ EXTERNAL_RE = re.compile(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#\d+$")
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 
 # A complete markdown link: bracketed text followed immediately by a parenthesised
-# target. Deliberately identical to the regex the docs link step in
-# .github/workflows/checks.yml applies, so the two checks cannot disagree about
-# what counts as a link. It ignores a bare closing fragment, which is how prose
-# that describes a link escapes being treated as one.
+# target. It ignores a bare closing fragment, which is how prose that describes a
+# link escapes being treated as one.
+#
+# This comment used to claim the regex was "deliberately identical" to a copy of it
+# inside the docs link step in .github/workflows/checks.yml. The claim was true when
+# written and false by the time anyone relied on it: bug-0015 taught this copy that a
+# link inside a code span is not a link, and the CI copy learned nothing, so the two
+# disagreed about what counts as a link while a comment said they could not. That step
+# now calls check_links() below instead of restating the rule (chore-0029), which is
+# why the guarantee is structural rather than a promise in a comment.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # `file://` belongs here for a different reason than the other three. Those are
 # network schemes this checker has no business fetching. This one is an absolute
@@ -66,10 +77,11 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # writes in Markdown, and is short enough that matching it risks swallowing a
 # genuinely broken relative link that happens to start the same way.
 #
-# THREE copies of this rule exist and must stay in step: here, the
-# `init-worktracking` template that ships into an adopter's tree, and the inline
-# check in `.github/workflows/checks.yml`. The template cannot import from this
-# repository, which is why the duplication is tolerated rather than fixed.
+# TWO copies of this rule exist and must stay in step: here, and the
+# `init-worktracking` template that ships into an adopter's tree. The template cannot
+# import from this repository, which is why that one duplication is tolerated rather
+# than fixed. A third copy used to live inline in `.github/workflows/checks.yml`; it
+# drifted, and chore-0029 replaced it with a call to check_links() below.
 #
 # Deliberately NOT a fourth and fifth copy: `scripts/validate-skills.py` and
 # `scripts/build-adapters.py` carry a similar-looking tuple guarding a different
@@ -80,7 +92,7 @@ LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "file://")
 
 # The same links LINK_RE matches, with the text captured as well. A second pattern
 # rather than a second group on LINK_RE so that pattern stays character-for-character
-# comparable with the copy in .github/workflows/checks.yml.
+# comparable with the copy it is kept in step with.
 LINK_TEXT_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 # Link text that is path-shaped: no whitespace, and made only of the characters a
 # repository path uses. Prose fails this on the first space, which is the cheapest
@@ -94,6 +106,11 @@ LINE_SUFFIX_RE = re.compile(r":\d+$")
 # form is half the problem: a task file documenting a link bug reaches for the
 # double form the moment the text it quotes contains a backtick of its own.
 BACKTICK_RUN_RE = re.compile(r"`+")
+# A fenced code block delimiter: a whole line whose content is a run of three or more
+# backticks, optionally followed by an info string. Up to three spaces of indentation,
+# per CommonMark. The info string may not contain a backtick, because a run followed by
+# a backtick is simply a longer run rather than a fence with a label.
+FENCE_RE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
 
 
 def parse_frontmatter(text: str):
@@ -215,6 +232,43 @@ def code_span_ranges(text):
     return ranges
 
 
+def fenced_block_ranges(text):
+    """Character ranges `(start, end)` of the fenced code blocks in `text`.
+
+    A fence is a line-level construct where an inline code span is a character-level
+    one. Its delimiters sit alone on lines of their own, so code_span_ranges() pairs
+    them with nothing and a link inside a fence went on being reported after the
+    inline form was fixed (bug-0017). The two rules compose by union rather than by
+    replacement, which is why this is a separate pass and not a change to the pairing
+    above.
+
+    A line whose whole content is a run of three or more backticks opens a block, and
+    a later line whose own run is at least as long and carries nothing after it closes
+    one.
+
+    An unterminated opening fence yields no range at all. That is the same trade
+    code_span_ranges() makes for an unmatched backtick run, for the same reason: a
+    detector that ran an unclosed fence to end of file would switch the caller's check
+    off for everything below it and report success while doing so. Preferring the
+    false positive this helper exists to remove over a check that has quietly disabled
+    itself is the direction of failure this validator chose (bug-0015).
+    """
+    ranges = []
+    offset = 0
+    start = None
+    width = 0
+    for line in text.splitlines(keepends=True):
+        match = FENCE_RE.match(line.rstrip("\r\n"))
+        if match:
+            if start is None:
+                start, width = offset, len(match.group(1))
+            elif len(match.group(1)) >= width and not match.group(2).strip():
+                ranges.append((start, offset + len(line)))
+                start = None
+        offset += len(line)
+    return ranges
+
+
 def mislabelled_links(path):
     """Links in `path` whose text names one repository path and which open another.
 
@@ -230,9 +284,9 @@ def mislabelled_links(path):
     This is a heuristic, and its false positives are the design problem, so it is
     deliberately a quiet one. It fires only when all of the following hold:
 
-      * the link's opening bracket is outside every inline code span, because a
-        backticked link renders as literal text and is clickable by nobody, so there
-        is no reader to mislead and nothing to report (bug-0015);
+      * the link's opening bracket is outside every inline code span and every fenced
+        code block, because a link that renders as literal text is clickable by nobody,
+        so there is no reader to mislead and nothing to report (bug-0015, bug-0017);
       * the text is path-shaped, so prose like `the readme` is never compared;
       * the text carries no `:line` suffix, which cites a location rather than naming
         the file a link opens;
@@ -248,7 +302,7 @@ def mislabelled_links(path):
     """
     found = []
     content = path.read_text(encoding="utf-8")
-    spans = code_span_ranges(content)
+    spans = code_span_ranges(content) + fenced_block_ranges(content)
     for match in LINK_TEXT_RE.finditer(content):
         if any(start <= match.start() < end for start, end in spans):
             continue
@@ -272,11 +326,58 @@ def mislabelled_links(path):
     return found
 
 
+def check_links(patterns) -> int:
+    """Report relative links that do not resolve, across an arbitrary set of globs.
+
+    The second caller of the one link rule in this file, and the only entry point here
+    that does not read the backlog at all. A CI docs link gate needs the same rule over
+    a different file set: this validator walks the tracker directory, and the gate walks
+    the documents around it. Those sets are disjoint on purpose and each has caught
+    breakage the other passed clean over, so the answer was never to delete one check.
+
+    It was to give the rule a second caller instead of a second author. The gate used to
+    restate the rule inline, and the restatement drifted the moment bug-0015 taught this
+    file that a link inside a code span is not a link: a correctly quoted example in a
+    changelog passed here and failed there, and the entry had to be reworded to satisfy
+    a checker (chore-0029).
+
+    Patterns are globbed from the repository root, so `**` means what pathlib means by
+    it everywhere else in this file. Matching nothing is an error rather than a pass:
+    a link check over an empty file set reports zero broken links over zero documents
+    and exits clean, which is the one failure indistinguishable from success.
+    """
+    docs = set()
+    for pattern in patterns:
+        docs.update(p for p in REPO_ROOT.glob(pattern) if p.is_file())
+
+    broken = []
+    for path in sorted(docs):
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        for target in broken_links(path):
+            broken.append(f"{rel} -> {target}")
+
+    for entry in broken:
+        print(f"broken link: {entry}")
+    print(f"checked {len(docs)} documents, {len(broken)} broken link(s)")
+    if not docs:
+        print("no document matched: " + (" ".join(patterns) or "(no pattern given)"))
+        return 1
+    return 1 if broken else 0
+
+
 def main(argv=None) -> int:
     # `argv` is injectable so the CLI layer is reachable from a test, matching
     # validate-skills.py, build-adapters.py, and install.py (chore-0017). Calling
     # main() with no argument behaves exactly as before.
     args = sys.argv[1:] if argv is None else list(argv)
+    # A second mode, and the only one that does not read .tasks/ at all: link-check an
+    # arbitrary set of documents, so the docs link gate in CI calls this rule rather
+    # than restate it (chore-0029). Everything after --links is a glob, resolved from
+    # the repository root:
+    #
+    #     python .tasks/validate.py --links '*.md' 'docs/**/*.md'
+    if "--links" in args:
+        return check_links(args[args.index("--links") + 1:])
     strict = "--strict" in args
     files = task_files()
 

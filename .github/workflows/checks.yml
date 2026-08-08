@@ -41,71 +41,27 @@ jobs:
       # If this workflow ever needs one, that is a signal to reconsider the change
       # rather than to add the step.
 
-      - name: Lint skills
-        shell: bash
-        run: python scripts/validate-skills.py
-
-      - name: Run the test suite
-        shell: bash
-        run: python -m unittest discover -s tests -p "test_*.py" -v
-
-      - name: Validate the work-tracking backlog
-        shell: bash
-        run: python .tasks/validate.py --strict
-
-      - name: Preview adapter generation
-        shell: bash
-        run: python scripts/build-adapters.py --dry-run
-
-      - name: Preview installation
-        shell: bash
-        run: python scripts/install.py --dry-run --home ./.tmp/zen-home
-
-      # Exercises the real install path, including POSIX symlink mode, which the
-      # dry run does not cover. Re-running proves idempotence, and the uninstall
-      # proves the manifest can find what it created.
+      # One step, seven gates. This used to be seven steps, each naming its own
+      # command, which meant the gate set existed only here and nothing outside CI
+      # could run it. An agent working unattended cannot push and wait for someone to
+      # read this page, so the gates moved into a committed script and this step calls
+      # it (feat-0045, docs/spec/cloud-executable.md S-005).
       #
-      # Safe on a development machine too, since bug-0003: `--uninstall` is scoped
-      # to `--home`, so reversing a throwaway home leaves a real installation alone
-      # (S-012). Before that fix this sequence destroyed it.
-      - name: Install, re-install, and uninstall against a throwaway home
-        shell: bash
-        run: |
-          python scripts/install.py --home ./.tmp/zen-home
-          python scripts/install.py --home ./.tmp/zen-home
-          python scripts/install.py --uninstall --home ./.tmp/zen-home
-
-      - name: Check that every relative link in the docs resolves
-        shell: bash
-        run: |
-          python - <<'PY'
-          import pathlib, re, sys
-
-          # Globbed rather than listed. The list was six hardcoded names, so every
-          # new root-level document silently fell outside the check until someone
-          # remembered to add it, which is the failure mode this step exists to
-          # catch. chore-0018 and chore-0019 each landed a document the list missed.
-          docs = [str(p) for p in sorted(pathlib.Path(".").glob("*.md"))]
-          docs += [str(p) for p in sorted(pathlib.Path(".github").rglob("*.md"))]
-          docs += [str(p) for p in sorted(pathlib.Path("docs").rglob("*.md"))]
-
-          broken = []
-          for doc in docs:
-              path = pathlib.Path(doc)
-              if not path.exists():
-                  continue
-              for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", path.read_text(encoding="utf-8")):
-                  target = match.group(1).split("#")[0].strip()
-                  # Kept in step with LINK_SKIP_PREFIXES in .tasks/validate.py. An
-                  # absolute `file:` link names a location on someone's disk, so it
-                  # is not this step's to resolve.
-                  if not target or target.startswith(("http://", "https://", "mailto:", "file://")):
-                      continue
-                  if not (path.parent / target).exists():
-                      broken.append(f"{doc} -> {target}")
-
-          for entry in broken:
-              print(f"broken link: {entry}")
-          print(f"checked {len(docs)} documents, {len(broken)} broken link(s)")
-          sys.exit(1 if broken else 0)
-          PY
+      # One rule, two callers. That is the same shape chore-0029 established for the
+      # link rule after an inline copy of it drifted, taught nothing by bug-0015, and
+      # let a correctly quoted CHANGELOG.md entry pass `--strict` and fail here.
+      # Restating any gate below would recreate exactly that divergence, and
+      # tests/test_run_checks.py asserts that none is restated.
+      #
+      # What the script covers, and why each is here, is documented at its own gate
+      # table rather than duplicated in this comment.
+      #
+      # Still safe on a development machine, since bug-0003: `--uninstall` is scoped to
+      # `--home`, so reversing the throwaway home leaves a real installation alone
+      # (install.md S-012). The script also reverses that home even when the gate fails
+      # partway, which the seven-step version could not do.
+      #
+      # No `shell: bash`: calling a checked-in script instead of a heredoc drops this
+      # step's dependency on bash being present on the Windows runner.
+      - name: Run every acceptance gate
+        run: python scripts/run-checks.py

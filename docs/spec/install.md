@@ -24,6 +24,16 @@ distinction lived only in prose (`ROADMAP.md`, `docs/CATALOG.md`), so no tool co
 this one placed every skill it found. The amendment also states what happens where the draft axis
 and the closure of S-013 disagree, because both silent resolutions are defects.
 
+**Amended 2026-08-07 (`bug-0018`) on the author's explicit instruction, given 2026-08-07 and
+recorded in that task. Pending the author's re-approval: the amendment is written, the approval is
+not this task's to grant.** `S-016` to `S-018` and Goal 10 add the adopted-versus-derived axis to
+placement, and the Proposed Surface gains `--replace-adopted`. The contract said what happens to a
+target the tool did not place (`S-004`) and nothing about a target it *did* place and the adopter
+then edited, so the implementation removed and replaced the rules module on every re-run, destroying
+an adopter's own lens silently at exit 0. `build-adapters.md` `S-010` and `S-014` already draw this
+line for the other half of the distribution story; these scenarios draw the same line here rather
+than a second one.
+
 **Amended 2026-07-28 (`bug-0003`) and re-approved by the author on 2026-07-28.** S-007 was scoped to
 the home it was given and S-012 was added. The original wording, "remove the recorded targets and empty the record",
 was satisfied by an implementation that removed every recorded target from every home ever installed
@@ -64,6 +74,9 @@ overwritten exists only as a branch.
    shared with skills this tool cannot see.
 9. Distribute only the skills the kit considers shipped, so a draft in the tree is never handed to an
    adopter as though it were blessed.
+10. Keep what an adopter made their own, while still refreshing what they did not touch. Goal 4
+    covers a target the tool never placed; this covers one it placed and the adopter then edited,
+    which is a different question and the one the swappable rules module makes unavoidable.
 
 ## Non-Goals
 
@@ -227,22 +240,63 @@ overwritten exists only as a branch.
   dropping it ships the dangling sibling S-013 exists to prevent. Which side is wrong, the marker or
   the reference, is a person's call and not this tool's.
 
+### Scenario S-016: an adopted file the user edited is preserved, a derived one is refreshed
+
+- **Given** a previously installed home in which the adopter has edited a file of the rules module,
+  and a skill whose installed copy also differs from the kit's
+- **When** the tool runs again
+- **Then** the edited rules file is left byte-for-byte unchanged and the run reports having kept it,
+  naming the file, while the skill's copy is replaced as before and the run exits zero.
+- **And** a rules file the adopter **added** beside the kit's is neither removed nor recorded as the
+  tool's, because it is not the tool's to manage in either direction.
+- **And** a rules file the adopter has **not** touched is still refreshed when the kit's copy has
+  changed, so accepting the invitation to edit one file does not pin the whole module to whatever
+  shipped first. The two cases are told apart by whether the installed file still matches the digest
+  recorded when it was placed, which is the same line `--check` draws between `diverged` and
+  `revised`; comparing against the current source instead would preserve everything forever.
+- **And** the distinction is a property of the material, not of the file's location: the rules module
+  is **adopted**, which the kit invites and therefore may not overwrite, and a skill's contents are
+  **derived**, which the kit owns and must keep current. `build-adapters.md` `S-010` and `S-014`
+  state the same contrast for the other distribution path, and this scenario does not restate it
+  differently.
+
+### Scenario S-017: an install with no recorded baseline preserves rather than guesses
+
+- **Given** an installed home whose record predates the per-file digests, so nothing says what the
+  adopted module looked like when it was placed
+- **When** the tool runs again
+- **Then** every file of that module is left as it is, the run states that the baseline is unknown
+  rather than reporting the module as current or as edited, and no baseline is invented for it.
+- **And** the reason is that the two errors do not cost the same: preserving a file that was never
+  edited costs a stale lens the adopter can see, while overwriting one that was costs work that
+  cannot be recovered.
+
+### Scenario S-018: an adopter can ask for the kit's copy explicitly
+
+- **Given** an installed rules module the adopter has edited and now wants replaced by the kit's
+- **When** the tool runs with the option that requests exactly that
+- **Then** the kit's copies are placed over theirs, the record carries the newly placed digests as
+  the baseline, and the option is its own named flag rather than a value of the placement mode,
+  since it decides what happens to the adopter's work rather than how files are placed.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
-| Invocation | `python scripts/install.py [--tools <list>] [--profile <name>] [--mode <symlink\|copy>] [--home <dir>] [--dry-run] [--uninstall]` |
+| Invocation | `python scripts/install.py [--tools <list>] [--profile <name>] [--mode <symlink\|copy>] [--home <dir>] [--dry-run] [--replace-adopted] [--uninstall]` |
 | `--tools` | Comma-separated subset of the supported tools; defaults to all of them |
 | `--profile` | Which skills to place: `core` (the separable front door), `spine` (the delivery loop), or `all`. Defaults to `spine`, which is smaller than `all`. Each is expanded to its closure over sibling references before anything is placed |
 | `--mode` | `symlink` or `copy`; defaults to copy on Windows and symlink elsewhere |
 | `--home` | Base directory to install beneath; defaults to the user's home |
 | `--dry-run` | Preview: report what would be placed, write nothing |
+| `--replace-adopted` | Overwrite the installed rules module with the kit's copy, discarding the adopter's edits to it. Its own flag and not a `--mode` value, per S-018. Without it, an edited file is preserved and reported |
 | `--uninstall` | Remove the recorded targets beneath `--home` and drop those entries from the record, leaving entries for other homes |
 | Placed per tool | Each skill's directory under that tool's discovery path, plus the rules module as their sibling |
+| Adopted material | The rules module only. Placed file by file so an untouched file can be refreshed while an edited one beside it is kept, and so a file the adopter added is left alone. Skill directories are derived and are replaced wholesale |
 | Draft marker | Carried by the skill itself, in the `metadata` frontmatter property the skill schema permits: `metadata.status: draft`. No marker, or any other value, means shipped |
 | Record | A manifest of the targets this tool created, enabling re-run recognition in copy mode |
 | Exit code | non-zero on an unrecognised tool or profile, a profile colliding with a draft marker, or any unmanaged-target conflict, zero otherwise |
-| Output | one line per target with its outcome, then a summary carrying the placed count and the description-character total per profile; conflicts, any closure expansion, and any skills held back as drafts additionally summarised |
+| Output | one line per target with its outcome, then a summary carrying the placed count and the description-character total per profile; conflicts, any closure expansion, any skills held back as drafts, and any adopted file preserved rather than replaced additionally summarised, the last named per file |
 
 A note on what the default change does **not** do, because the quiet version of it would be a defect.
 Defaulting to `spine` means `agent-handoff` and `human-handoff` stop being refreshed by a default run.

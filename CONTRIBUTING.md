@@ -44,7 +44,13 @@ python .tasks/validate.py --strict
 python scripts/build-adapters.py --dry-run
 ```
 
-CI runs the same commands on Linux, macOS, and Windows across the supported Python range. Running them locally first just saves you a round trip.
+Or run all of them, plus the three CI also runs, in one command:
+
+```bash
+python scripts/run-checks.py
+```
+
+That is the same script CI calls, so the gate set cannot drift between the two. It exits 0 when everything passed, 1 when a gate failed, and 2 when a gate could not run at all. CI runs it on Linux, macOS, and Windows across the supported Python range, so passing locally is necessary but not sufficient: a change can still fail on a platform you did not run.
 
 The pull request template asks which of the four you ran, and reminds you where a closing reference has to go if the change closes an issue. See [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) if you want to read it before you get there, and [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) for the linking rules themselves.
 

@@ -2,7 +2,7 @@
 id: chore-0031
 title: An installed skill goes stale against its source and nothing says so
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -14,7 +14,7 @@ created: 2026-08-06
 
 ## Problem
 
-On Windows, [`install.py`](../scripts/install.py) defaults to **copies** rather than symlinks, so an
+On Windows, [`install.py`](../../scripts/install.py) defaults to **copies** rather than symlinks, so an
 installed skill is a snapshot taken at install time. Editing the skill in this repository does not
 change the installed copy, and nothing reports the divergence. On POSIX the symlink default hides
 the problem rather than solving it, since a copy-mode install there has the same property.
@@ -22,7 +22,7 @@ the problem rather than solving it, since a copy-mode install there has the same
 **Measured on this machine, 2026-08-06.** The globally installed `fix-batch` at
 `C:\Users\hamsa\.claude\skills\fix-batch\SKILL.md` was missing Step 3 items 7 and 8 and the entire
 **delegate report contract** section, all of which are present in this repository's
-[`fix-batch`](../.agents/skills/fix-batch/SKILL.md). The installed copy was a wave-2-era snapshot; the
+[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md). The installed copy was a wave-2-era snapshot; the
 report contract shipped in `feat-0041` and the decision-log item in `feat-0037`, both merged in
 [PR #19](https://github.com/hams-ollo/zen-agent-skills/pull/19). An agent invoking the skill by name
 got the older procedure and would have dispatched a batch with no report contract at all.
@@ -80,6 +80,34 @@ every run for anyone who accepted that invitation. That is the same adopted-vers
 distinction `build-adapters.md` already draws in its `S-014` and `S-010` scenarios, and this task
 should follow it rather than re-litigate it.
 
+## Decisions
+
+- **The adopted rules module is asked a different question, not exempted from the check.** Comparing
+  an adopter's lens against the kit's copy was rejected: a lens is the one file they are invited to
+  rewrite (`build-adapters.md` S-010 and S-014), so that comparison is noise on every run forever for
+  anyone who accepted the invitation. `--check` instead compares the *recorded* source digest against
+  the source now, which reports that the copy they were handed has moved and never faults their
+  edits. That is [`check-provenance.py`](../../scripts/check-provenance.py)'s question, and it is
+  answerable only from the baseline. It is exit-neutral, because it is news rather than a fault.
+- **An entry with no recorded digests reports `unknown` for the whole entry, and the run exits 2.**
+  Comparing the derived half best-effort and reporting the entry `ok` was rejected: the adopted half
+  is unanswerable without a baseline, so that verdict would be a clean-looking partial result, which
+  is the failure this task removes one level up. The baseline is per entry rather than per manifest,
+  so an older manifest degrades one entry at a time instead of invalidating the file.
+- **A target that is a symlink to its own source is reported `linked` and never compared.** Reporting
+  drift there was rejected: the target *is* the source, so it cannot be stale, and the recorded digest
+  would go out of date on every POSIX install of a kit under development. Read from the filesystem
+  rather than from the recorded `mode`, since a copy can replace a link between runs.
+- **Seam left open: the manifest can now tell stale from locally edited, and deliberately does not.**
+  A target matching its recorded digest while the source has moved is stale; one that does not was
+  edited locally. Both are divergence and both are reported the same way, per this task's scope. The
+  data is there if a later task wants the distinction.
+- **Seam left open: [`docs/spec/install.md`](../../docs/spec/install.md) is not amended.** `--check` is a
+  new surface element on an approved contract, and amending it is the author's call, following the
+  `feat-0033` and `feat-0036` precedent of an explicit instruction. `feat-0038` shipped `--with-hooks`
+  the same way, and `tests/test_install.py` tags those tests by task id rather than scenario id, which
+  is what the new tests do here.
+
 ## Risks and rollback
 
 Required: this changes a persisted format, the install manifest, which older installs will not have.
@@ -94,23 +122,23 @@ Required: this changes a persisted format, the install manifest, which older ins
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] An install records enough per placed file to detect later divergence from its source.
-- [ ] A check reports every installed file that no longer matches its source, naming each, and exits
+- [x] An install records enough per placed file to detect later divergence from its source.
+- [x] A check reports every installed file that no longer matches its source, naming each, and exits
       non-zero when any does.
-- [ ] It exits zero on a freshly installed tree, demonstrated against a throwaway install home rather
+- [x] It exits zero on a freshly installed tree, demonstrated against a throwaway install home rather
       than asserted.
-- [ ] A manifest written before this change reports "unknown" rather than "current".
-- [ ] An adopter-owned rules file that has been deliberately edited does not produce a divergence
+- [x] A manifest written before this change reports "unknown" rather than "current".
+- [x] An adopter-owned rules file that has been deliberately edited does not produce a divergence
       report on every run, or the decision to report it anyway is recorded with its reasoning.
-- [ ] `docs/INSTALL.md` tells a reader the check exists and when to run it.
-- [ ] Tests cover the current, diverged, and no-baseline paths.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] `docs/INSTALL.md` tells a reader the check exists and when to run it.
+- [x] Tests cover the current, diverged, and no-baseline paths.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.

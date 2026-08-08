@@ -2,7 +2,7 @@
 id: bug-0017
 title: The mislabelled-link check still fires on links inside fenced code blocks
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0015]
@@ -21,7 +21,7 @@ is still reported. Found by independent verification of `bug-0015` on 2026-08-06
 fenced block and got back one finding for a link that renders as literal text and is clickable by
 nobody.
 
-`code_span_ranges()` in [`validate.py`](validate.py) pairs backtick runs **within a single line**, so
+`code_span_ranges()` in [`validate.py`](../validate.py) pairs backtick runs **within a single line**, so
 a fence, whose delimiters sit on lines of their own with nothing else on them, never pairs with
 anything. That is not an oversight in the pairing rule, it is the pairing rule working as designed on
 a construct it was not built to see.
@@ -38,8 +38,8 @@ and the next author to meet it will re-derive the analysis from scratch.
 ## Scope
 
 **In scope:** make `mislabelled_links()` skip a link inside a fenced code block, in
-[`.tasks/validate.py`](validate.py) and in the
-[`init-worktracking` template copy](../.agents/skills/init-worktracking/templates/validate.py), which
+[`.tasks/validate.py`](../validate.py) and in the
+[`init-worktracking` template copy](../../.agents/skills/init-worktracking/templates/validate.py), which
 carries the identical gap; a test pinning the fenced case; a test proving a genuine mislabelled link
 outside any fence is still reported. If the decision instead is to leave the behaviour alone, record
 that in this file's decision log with its reasoning and close the task without a code change: the
@@ -74,6 +74,30 @@ path-shaped link text. It is filed because the analysis exists now and will be l
 because anything is broken today. Take it after `bug-0016`, `chore-0029`, `chore-0030`, and
 `chore-0031`, all of which describe live problems.
 
+## Decisions
+
+- **Rejected: teaching `code_span_ranges()` to see fences.** A fence is line-level and an inline span
+  is character-level, so folding them together would have meant one function with two scanners and a
+  docstring that no longer described either. The fix is a separate `fenced_block_ranges()` pass whose
+  ranges `mislabelled_links()` unions with the inline ones, which is the composition this file's
+  implementation notes predicted and leaves `bug-0015`'s reasoning where a reader can still find it.
+- **Seam: only backtick fences are recognised.** A tilde fence (`~~~`) and a four-space indented code
+  block are both still invisible to this check, so a mislabelled link inside either is still reported.
+  Left open deliberately rather than missed: neither form appears anywhere in this repository, and
+  each one added is another construct that can swallow the file if its terminator is mis-parsed. The
+  next author meeting one should treat it as the same union, not as a rewrite.
+- **Seam: an unterminated fence opens nothing.** It contributes no range at all, so every link below
+  a dangling fence is still checked. That is the direction of failure `bug-0015` chose for an
+  unmatched backtick run, kept here for the same reason: a detector that ran an unclosed fence to end
+  of file would disable the check for the rest of the file and report success.
+- **False premise: the two copies were never character-identical in `mislabelled_links()`.** This
+  file's acceptance criteria assume they were. At `4777a59` the docstrings of both `mislabelled_links()`
+  and `broken_links()` already diverged, deliberately, because the template is retargeted so it never
+  names this repository ("the repository this scaffold came from" rather than `.tasks/README.md`).
+  What is identical, and what this task kept identical, is the executable code of both functions plus
+  every module-level regex. Read the criterion as covering the code, not the prose, or the only way to
+  satisfy it is to import this kit's voice into every scaffolded repository.
+
 ## Risks and rollback
 
 Required: this touches more than one module (both validator copies plus tests), and it changes what a
@@ -90,22 +114,22 @@ Rollback is one revert. The change adds a skip condition and writes no persisted
 
     python -m unittest discover -s tests -p "test_*.py" && python .tasks/validate.py --strict
 
-- [ ] A test proving a mislabelled link inside a fenced code block is not reported, failing against
+- [x] A test proving a mislabelled link inside a fenced code block is not reported, failing against
       the current validator.
-- [ ] A test proving a genuine mislabelled link **outside** any fence is still reported in a file
+- [x] A test proving a genuine mislabelled link **outside** any fence is still reported in a file
       that also contains a fenced block, so the fix cannot pass by disabling the check.
-- [ ] A test covering an unterminated fence, proving it does not suppress findings after it.
-- [ ] The same skip exists in the template validator, and the two copies remain character-identical
+- [x] A test covering an unterminated fence, proving it does not suppress findings after it.
+- [x] The same skip exists in the template validator, and the two copies remain character-identical
       in `mislabelled_links()`, `code_span_ranges()`, and their module-level regexes.
-- [ ] Existing tests still pass, unchanged in intent.
-- [ ] Either the behaviour changed, or a decision not to change it is recorded in this file with its
+- [x] Existing tests still pass, unchanged in intent.
+- [x] Either the behaviour changed, or a decision not to change it is recorded in this file with its
       reasoning.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.

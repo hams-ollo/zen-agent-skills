@@ -2,7 +2,7 @@
 id: chore-0030
 title: An approved spec carrying an unapproved amendment has no machine-readable state
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -14,7 +14,7 @@ created: 2026-08-06
 
 ## Problem
 
-A spec's lifecycle is `draft -> approved`, and [`docs/spec/README.md`](../docs/spec/README.md) states
+A spec's lifecycle is `draft -> approved`, and [`docs/spec/README.md`](../../docs/spec/README.md) states
 that a spec is not decomposed into tasks until `status: approved` is set, which `spec-author` never
 sets itself. There is no state for the case that keeps occurring: **approved, then amended, with the
 amendment not yet re-approved.**
@@ -24,10 +24,10 @@ amendment note saying re-approval is pending:
 
 | Spec | Amendment |
 |---|---|
-| [`install.md`](../docs/spec/install.md) | gained `S-015` (`feat-0036`) |
-| [`spec-author.md`](../docs/spec/spec-author.md) | gained `S-006` and `S-007` (`chore-0027`) |
-| [`doc-sync.md`](../docs/spec/doc-sync.md) | field split (`chore-0027`) |
-| [`build-adapters.md`](../docs/spec/build-adapters.md) | gained `S-015` to `S-017` (`feat-0034`) |
+| [`install.md`](../../docs/spec/install.md) | gained `S-015` (`feat-0036`) |
+| [`spec-author.md`](../../docs/spec/spec-author.md) | gained `S-006` and `S-007` (`chore-0027`) |
+| [`doc-sync.md`](../../docs/spec/doc-sync.md) | field split (`chore-0027`) |
+| [`build-adapters.md`](../../docs/spec/build-adapters.md) | gained `S-015` to `S-017` (`feat-0034`) |
 
 **The convention arrived by accretion, not by design.** Each of the four was decided in its own task,
 under time pressure, and each reached the same answer independently: keep `approved`, say "pending
@@ -48,7 +48,7 @@ that no check reads. The author's re-approval queue exists only as four sentence
 
 **In scope:** decide and record the convention. Either a distinct state that `verifier-agent` treats
 as approved for conformance purposes, or an explicit statement in
-[`docs/spec/README.md`](../docs/spec/README.md) that `approved` plus a dated pending-re-approval note
+[`docs/spec/README.md`](../../docs/spec/README.md) that `approved` plus a dated pending-re-approval note
 is the convention, with the reason it is not `draft`. Whichever is chosen, make it discoverable from
 the spec lifecycle documentation and from `spec-author`, so the next author does not re-derive it.
 
@@ -77,6 +77,25 @@ pattern (a task that implements a feature also extends its contract) is the norm
 here, not an exception. Whatever is decided should assume this state is permanent and common rather
 than a backlog to be drained.
 
+## Decisions
+
+- **Rejected: a third `status` value.** Five things read a spec's `status` and each would need a
+  branch: `verifier-agent` (blocks on anything but `approved`), `new-task` (refuses to decompose),
+  `doc-sync` (classifies the document as a contract), the spec-closeout hook (terminal-status set,
+  which excludes `approved` on purpose and has a test pinning it), and the spec table in
+  `docs/spec/README.md`. The header note already carries the distinction where a reader looks.
+- **Rejected for now: a separate `docs/spec/` frontmatter key naming the amending task and date.** It
+  is the cheaper machine-readable form and stays the preferred one, and nothing governs frontmatter
+  there (`validate-skills.py`'s allow-list covers `.agents/skills/*/SKILL.md` only). It was not
+  introduced because its only payoff is a check answering "which approved specs carry an unreviewed
+  amendment", and that check is honest only once the four specs already in this state carry the key.
+  Retrofitting them means editing four approved contracts, which this task is explicitly barred from
+  doing, so the key would have shipped alongside a check reporting zero against a tree with four.
+- **Seam left open deliberately:** the retrofit, the key, and the check are one author-led pass, not
+  an oversight. To make that pass mechanical, the recorded convention fixes the note's wording as
+  "pending the author's re-approval"; the four existing notes each phrase it differently and two sit
+  at the foot of the document rather than the header, which is why no search-based check ships today.
+
 ## Risks and rollback
 
 The risk is choosing a mechanism that makes `verifier-agent` return `blocked` on an amended spec,
@@ -91,23 +110,23 @@ Rollback is one revert; nothing persisted depends on the decision.
 
     python scripts/validate-skills.py && python .tasks/validate.py --strict && python -m unittest discover -s tests -p "test_*.py"
 
-- [ ] The convention is stated in `docs/spec/README.md`, including why `draft` is not used.
-- [ ] `spec-author` points at it, so an author amending an approved contract finds the rule without
+- [x] The convention is stated in `docs/spec/README.md`, including why `draft` is not used.
+- [x] `spec-author` points at it, so an author amending an approved contract finds the rule without
       reading four existing specs to infer it.
-- [ ] If a machine-readable marker is introduced, a command can list the approved specs carrying an
+- [x] If a machine-readable marker is introduced, a command can list the approved specs carrying an
       unreviewed amendment, and it reports the four named above against the current tree.
-- [ ] If no marker is introduced, that decision is recorded with its reasoning rather than left as
+- [x] If no marker is introduced, that decision is recorded with its reasoning rather than left as
       the absence of one.
-- [ ] `verifier-agent` still returns a usable verdict against an amended spec, demonstrated by a real
+- [x] `verifier-agent` still returns a usable verdict against an amended spec, demonstrated by a real
       run rather than asserted.
-- [ ] No spec's `status:` field is changed by this task.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] No spec's `status:` field is changed by this task.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.
