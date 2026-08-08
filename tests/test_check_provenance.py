@@ -23,6 +23,11 @@ The defect each group protects against:
                   would pressure the next author into guessing a URL instead of recording
                   the truth: the exact failure the convention exists to prevent
   malformed     - a record missing its digest, or carrying a placeholder one, passes silently
+  https only    - a record pins a plaintext http:// source, so the digest is taken over bytes
+                  nobody authenticated, and the check quietly certifies them
+  read bound    - a hostile or merely enormous URL is read into memory whole, or a truncated
+                  read is compared and reported as drift, which is the wrong word for the
+                  wrong reason
   blank line    - one blank line inside a block deletes the record from the run entirely,
                   and the checker reports a clean count nobody has reason to doubt
   real records  - a backfilled block in this repository is malformed and nobody notices
@@ -33,6 +38,7 @@ import importlib.util
 import io
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +107,48 @@ def unreachable(exc):
     def fetcher(url, timeout=30):
         raise exc
     return fetcher
+
+
+class _FakeResponse:
+    """The parts of an HTTP response `fetch()` uses, counting the bytes it hands over."""
+
+    def __init__(self, payload):
+        self._buffer = io.BytesIO(payload)
+        self.bytes_read = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def read(self, amount=None):
+        chunk = self._buffer.read() if amount is None else self._buffer.read(amount)
+        self.bytes_read += len(chunk)
+        return chunk
+
+
+class _fake_urlopen:
+    """Serve `payload` to `fetch()` without a socket, and expose the response it served.
+
+    `fetch()` is the one function with no injection seam, because the seam the rest of this
+    file uses replaces it. Its read bound therefore has to be exercised against a stand-in
+    response rather than a stand-in fetcher, and still without a socket.
+    """
+
+    def __init__(self, payload):
+        self.response = _FakeResponse(payload)
+        self._patch = unittest.mock.patch.object(
+            cp.urllib.request, "urlopen", lambda request, timeout=None: self.response
+        )
+
+    def __enter__(self):
+        self._patch.start()
+        return self.response
+
+    def __exit__(self, *exc_info):
+        self._patch.stop()
+        return False
 
 
 class MatchPath(unittest.TestCase):
@@ -244,12 +292,136 @@ class MalformedRecordPath(unittest.TestCase):
     def test_non_url_source_exits_two(self):
         code, output = run(block(url="somewhere upstream"), serve(UPSTREAM))
         self.assertEqual(code, 2)
-        self.assertIn("source is not an absolute http(s) URL", output)
+        self.assertIn("source is not an absolute https:// URL", output)
 
     def test_malformed_retrieval_date_exits_two(self):
         code, output = run(block(retrieved="last week"), serve(UPSTREAM))
         self.assertEqual(code, 2)
         self.assertIn("retrieved is not an ISO date", output)
+
+
+class HttpsOnlySourceTest(unittest.TestCase):
+    """chore-0035: a source must be https://, because the digest authenticates nothing else.
+
+    A plaintext source digests bytes that anyone on the path could have written, and the
+    record then reads as verified provenance. Rejected for its own reason rather than
+    silently upgraded to https://, because a silent upgrade makes the recorded `source:`
+    differ from what was fetched, and the record is meant to be reproducible by hand.
+    """
+
+    HTTP_URL = URL.replace("https://", "http://")
+
+    def test_an_http_source_is_reported_as_malformed(self):
+        code, output = run(block(url=self.HTTP_URL), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_http_message_names_the_field_and_the_offending_url(self):
+        # A rejection that does not say which field to edit costs the reader the search.
+        code, output = run(block(url=self.HTTP_URL), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("source", output)
+        self.assertIn("http://", output)
+        self.assertIn(self.HTTP_URL, output)
+
+    def test_an_http_source_is_never_fetched(self):
+        def never(url, timeout=30):
+            raise AssertionError("a rejected record must not be fetched")
+
+        code, _ = run(block(url=self.HTTP_URL), never)
+        self.assertEqual(code, 2)
+
+    def test_an_https_source_still_validates(self):
+        code, output = run(block(), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_the_scheme_is_matched_case_insensitively(self):
+        # A scheme is case-insensitive per RFC 3986. Rejecting `HTTPS://` would be a new
+        # failure introduced by the tightening rather than the one it was aimed at.
+        self.assertIsNone(cp.validate({
+            "source": URL.replace("https://", "HTTPS://"),
+            "author": "Balarama Bosch",
+            "license": "MIT",
+            "retrieved": "2026-08-06",
+            "sha256": UPSTREAM_SHA,
+        }))
+
+    def test_every_source_recorded_in_this_repository_is_https(self):
+        # The real records, not fixtures. All eight were https:// before this tightening,
+        # so it breaks nothing; this is the test that says so rather than a claim in a
+        # commit message that nobody can re-run.
+        found = cp.collect(REPO_ROOT)
+        self.assertEqual(len(found), 8)
+        for rel, record in found:
+            with self.subTest(path=rel, line=record["line"]):
+                self.assertTrue(
+                    record["source"].lower().startswith("https://"),
+                    f"{rel}:{record['line']} pins a non-https source: {record['source']}",
+                )
+                self.assertIsNone(cp.validate(record), f"{rel}:{record['line']}")
+
+
+class ReadBoundTest(unittest.TestCase):
+    """chore-0035: the response body is read under a bound, and exceeding it is an error.
+
+    `response.read()` with no argument reads whatever the far end sends. The bound is
+    generous enough that no real source file could hit it, so hitting it means something is
+    wrong with the source rather than with the record: the run must say `error`, never
+    `drift`. Reporting drift would name a truncated digest as evidence upstream moved, which
+    is the wrong word for the wrong reason and would invite someone to update the record.
+    """
+
+    def test_the_bound_is_documented_and_generous(self):
+        # A bound nobody can name is a magic number, and one a real source could hit would
+        # turn the check into a source of false errors.
+        self.assertGreaterEqual(cp.MAX_FETCH_BYTES, 1024 * 1024)
+
+    def test_fetch_returns_a_response_at_the_bound(self):
+        payload = b"x" * 64
+        with _fake_urlopen(payload):
+            self.assertEqual(cp.fetch(URL, max_bytes=64), payload)
+
+    def test_fetch_raises_when_the_response_exceeds_the_bound(self):
+        with _fake_urlopen(b"x" * 65):
+            with self.assertRaises(ValueError) as caught:
+                cp.fetch(URL, max_bytes=64)
+        self.assertIn("64", str(caught.exception))
+
+    def test_fetch_does_not_read_the_whole_oversized_body(self):
+        # The point of the bound is memory, so a fetch that reads it all and then complains
+        # would satisfy the message and not the requirement.
+        payload = b"x" * 4096
+        with _fake_urlopen(payload) as response:
+            with self.assertRaises(ValueError):
+                cp.fetch(URL, max_bytes=64)
+        self.assertLessEqual(response.bytes_read, 65)
+
+    def test_an_oversized_fetch_is_reported_as_an_error_not_as_drift(self):
+        oversized = b"x" * (cp.MAX_FETCH_BYTES + 1)
+        code, output = run(block(), serve(oversized))
+        self.assertEqual(code, 2)
+        self.assertNotIn("DRIFT", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_oversize_message_names_the_source_and_the_bound(self):
+        oversized = b"x" * (cp.MAX_FETCH_BYTES + 1)
+        code, output = run(block(), serve(oversized))
+        self.assertEqual(code, 2)
+        self.assertIn(URL, output)
+        self.assertIn(str(cp.MAX_FETCH_BYTES), output)
+
+    def test_the_size_error_raised_by_fetch_reaches_the_report_as_an_error(self):
+        # The real fetch() signals the bound by raising, so the path a live run takes has
+        # to land in the same bucket as the one the injected fetcher exercises.
+        def oversized(url, timeout=30):
+            raise cp.ResponseTooLarge("response exceeds the 10485760 byte read bound")
+
+        code, output = run(block(), oversized)
+        self.assertEqual(code, 2)
+        self.assertNotIn("DRIFT", output)
+        self.assertIn("could not fetch", output)
+        self.assertIn(URL, output)
 
 
 class ParsingTest(unittest.TestCase):
