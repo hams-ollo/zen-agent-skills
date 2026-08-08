@@ -139,29 +139,52 @@ def rewrite_links(body: str, skill_name: str, ext: str) -> str:
     return LINK_RE.sub(repl, body)
 
 
-def emit_shared_assets(skill_dir: Path, out: Path, dry: bool,
-                       layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
-    """Place the material an emitted body points at. Returns what was written.
+def emit_rules_module(out: Path, dry: bool,
+                      layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
+    """Place the rules module every emitted body shares. Returns what was written.
 
-    `layout` says where that material lands for the requesting target. The rule
-    each kind is treated by does not vary with the layout, only its destination.
+    Once per layout, which is what the module is: one copy shared by every skill,
+    so that swapping it is one edit rather than one per skill. `layout` says where
+    it lands for the requesting target; the rule it is treated by does not vary
+    with the layout, only its destination.
+
+    Once per layout is also what a real run has always produced, but it used to
+    get there by accident. This loop ran once per skill and the second and later
+    passes short-circuited on `dest.exists()`. A preview writes nothing, so that
+    guard never became true and the preview counted the module once per skill: 74
+    shared assets reported against the 17 a real run writes (bug-0025). Emitting
+    it where it belongs removes the divergence instead of compensating for it, and
+    matches what this docstring already claimed.
+
+    A copy already in the target project is never overwritten (S-010, S-014). The
+    module is swappable by design, so the project's own copy outranks the kit's.
     """
     written = []
+    if not RULES_DIR.is_dir():
+        return written
+    for src in sorted(RULES_DIR.rglob("*")):
+        if not src.is_file():
+            continue
+        dest = out / layout.rules_dir / src.relative_to(RULES_DIR)
+        if dest.resolve() == src.resolve() or dest.exists():
+            continue  # same file, or the project already has its own
+        if not dry:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+        written.append(dest)
+    return written
 
-    # The rules module, once per run, never clobbering a project's own copy.
-    if RULES_DIR.is_dir():
-        for src in sorted(RULES_DIR.rglob("*")):
-            if not src.is_file():
-                continue
-            dest = out / layout.rules_dir / src.relative_to(RULES_DIR)
-            if dest.resolve() == src.resolve() or dest.exists():
-                continue  # same file, or the project already has its own
-            if not dry:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
-            written.append(dest)
 
-    # This skill's own supporting files (everything but the SKILL.md itself).
+def emit_skill_assets(skill_dir: Path, out: Path, dry: bool,
+                      layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
+    """Place one skill's own supporting files. Returns what was written.
+
+    Everything but the SKILL.md itself: the templates, references, and scripts an
+    emitted body points at. Per skill, unlike the rules module beside it, and
+    unconditionally: these are derived from the kit rather than adopted, so a
+    re-run refreshes them (S-014).
+    """
+    written = []
     for src in sorted(skill_dir.rglob("*")):
         if not src.is_file() or src.name == "SKILL.md":
             continue
@@ -172,7 +195,6 @@ def emit_shared_assets(skill_dir: Path, out: Path, dry: bool,
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
         written.append(dest)
-
     return written
 
 
@@ -324,7 +346,11 @@ def main(argv=None) -> int:
 
     tag = "[dry-run] " if args.dry_run else ""
     n = 0
-    assets = 0
+    # The rules module is one copy shared by every skill, so it is emitted per
+    # layout and outside the per-skill loop. Inside it, a preview counted it once
+    # per skill (bug-0025); see emit_rules_module().
+    assets = sum(len(emit_rules_module(out, args.dry_run, layout))
+                 for layout in layouts)
     for d in skills:
         fm, body = split_frontmatter((d / "SKILL.md").read_text(encoding="utf-8"))
         name = fm.get("name", d.name)
@@ -335,7 +361,7 @@ def main(argv=None) -> int:
             n += 1
         # The emitted bodies point at these; without them the links dangle.
         for layout in layouts:
-            assets += len(emit_shared_assets(d, out, args.dry_run, layout))
+            assets += len(emit_skill_assets(d, out, args.dry_run, layout))
 
     manifests = emit_plugin_manifests(out, args.dry_run) if "plugin" in targets else []
     for dest in manifests:

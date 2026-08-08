@@ -244,6 +244,90 @@ class TestInvocationContract(unittest.TestCase):
             self.assertEqual([p for p in out.rglob("*") if p.is_file()], [])
 
 
+class TestSharedAssetAccounting(unittest.TestCase):
+    """Scenario S-012's second half: a preview's counts must describe the real run.
+
+    test-quality notes: the defect (bug-0025) is a number, not a file, so no oracle
+    over the emitted tree can see it. `TestEmittedTreeResolves` passes against the
+    bug and always would, because the tree a real run leaves behind is correct; it
+    is the preview's report of that tree that was wrong, by a factor of the skill
+    count. The oracle therefore has to be the reported count itself, and it has to
+    be differential: an absolute number would be a restatement of today's kit
+    inventory that a new rules file breaks, whereas dry-run-equals-real-run is the
+    property S-012 actually states and holds for any inventory.
+
+    The counts are read back out of stdout rather than off a return value, because
+    stdout is where a reader gets them and a preview nobody can read has no use.
+    """
+
+    ASSETS_RE = re.compile(r"plus (\d+) shared asset file\(s\)")
+
+    def _assets(self, printed):
+        m = self.ASSETS_RE.search(printed)
+        self.assertIsNotNone(m, f"no shared asset count in output:\n{printed}")
+        return int(m.group(1))
+
+    def _rules_sources(self):
+        return sorted(p.relative_to(ba.RULES_DIR).as_posix()
+                      for p in ba.RULES_DIR.rglob("*") if p.is_file())
+
+    def test_a_preview_reports_the_asset_count_a_real_run_writes(self):
+        # The bug: the rules module was re-emitted once per skill, and only a real
+        # run's `dest.exists()` collapsed the duplicates, so the preview counted
+        # them all. Both target sets are exercised because the single-layout case
+        # (cursor and vscode share one) and the two-layout case (cursor and plugin
+        # each get their own copy) have different correct answers, and a fix that
+        # hoists the emission has to keep emitting it once *per layout*.
+        for target in ("cursor,vscode", "cursor,plugin"):
+            with self.subTest(target=target):
+                with tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp)
+                    _, preview = _run(["--target", target, "--out", str(out), "--dry-run"])
+                    _, real = _run(["--target", target, "--out", str(out)])
+                    self.assertEqual(self._assets(preview), self._assets(real),
+                                     "the preview must report what the real run writes")
+
+    def test_a_real_run_counts_exactly_the_files_it_left_on_disk(self):
+        # The other half of the same property, and the reason the equality above is
+        # not satisfiable by making both numbers equally wrong: this pins the real
+        # run's count to the tree it produced. The rules half is asserted by name
+        # as well, since "each rules file exactly once" is invisible in a total.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            _, printed = _run(["--out", str(out)])
+            on_disk = [p for root in (".agents/rules", ".agents/skills")
+                       for p in (out / root).rglob("*") if p.is_file()]
+            self.assertEqual(self._assets(printed), len(on_disk))
+            self.assertEqual(
+                sorted(p.relative_to(out / ".agents" / "rules").as_posix()
+                       for p in (out / ".agents" / "rules").rglob("*") if p.is_file()),
+                self._rules_sources())
+
+    def test_an_adopted_rules_file_is_left_alone_and_counted_in_neither_run(self):
+        # S-010 in the reporting dimension. The file surviving is already covered;
+        # what is not is that a preview must not promise to write it either, which
+        # is the same divergence as the bug from the other side.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, fresh = _run(["--out", tmp, "--dry-run"])
+            baseline = self._assets(fresh)
+
+        mine = "# my own house style\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            adopted = out / ".agents" / "rules" / "house-style.md"
+            adopted.parent.mkdir(parents=True)
+            adopted.write_text(mine, encoding="utf-8")
+
+            _, preview = _run(["--out", str(out), "--dry-run"])
+            self.assertEqual(self._assets(preview), baseline - 1,
+                             "a preview must not offer to write a file it would skip")
+            self.assertEqual(adopted.read_text(encoding="utf-8"), mine)
+
+            _, real = _run(["--out", str(out)])
+            self.assertEqual(self._assets(real), baseline - 1)
+            self.assertEqual(adopted.read_text(encoding="utf-8"), mine)
+
+
 class TestPluginTarget(unittest.TestCase):
     """Scenarios S-015, S-016, S-017: the Claude Code plugin distribution tree.
 
