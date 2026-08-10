@@ -2,7 +2,7 @@
 id: bug-0022
 title: --check reports ok for a rules module whose lens file was deleted from the install
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-08-08
 
 ## Problem
 
-`_check_entry()` in [`install.py`](../scripts/install.py) handles the adopted rules module by
+`_check_entry()` in [`install.py`](../../scripts/install.py) handles the adopted rules module by
 comparing the **recorded baseline** against the **current source**, and never reads the installed
 tree at all. A missing installed file therefore has no check anywhere: whole-directory absence is
 caught one branch earlier, and per-file absence is not caught by anything.
@@ -44,10 +44,10 @@ asserting the file too: the removal branch in `_place_adopted()` keeps the delet
 **Why this one is P1 rather than cosmetic.** The file deleted above is `house-review`'s entire
 rubric. An install missing it reproduces the incident this repository cites more than any other, that
 `house-review` once shipped with no rubric, and `--check` is the tool
-[`chore-0031`](done/chore-0031-installed-skills-go-stale-with-no-signal.md) added specifically to
+[`chore-0031`](chore-0031-installed-skills-go-stale-with-no-signal.md) added specifically to
 answer whether an install can still be trusted. Two written claims are wider than the code:
 
-- [`INSTALL.md`](../docs/INSTALL.md)'s report table reads `ok` = "Every placed file still matches the
+- [`INSTALL.md`](../../docs/INSTALL.md)'s report table reads `ok` = "Every placed file still matches the
   kit".
 - `chore-0031`'s changelog entry reads "a deleted lens is still divergence". True of the directory,
   false of a file inside it.
@@ -64,10 +64,10 @@ and stop the manifest carrying a digest for a file the run knows is gone. Correc
   whole reason the adopted branch exists; a missing file is a different claim from a changed one and
   only the missing one is being added.
 - Restoring the file. `--check` detects and reports and never rewrites, per rule `A3` in
-  [`autonomy.md`](../.agents/rules/autonomy.md). `--replace-adopted` is the existing route back.
-- The `unknown` remedy wording, which is [`bug-0020`](bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md).
+  [`autonomy.md`](../../.agents/rules/autonomy.md). `--replace-adopted` is the existing route back.
+- The `unknown` remedy wording, which is [`bug-0020`](../bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md).
 - Amending `docs/spec/install.md`. Its Proposed Surface does not list `--check` at all, which is
-  [`chore-0033`](chore-0033-amend-install-spec-for-check-and-with-hooks.md)'s scope. Note the
+  [`chore-0033`](../chore-0033-amend-install-spec-for-check-and-with-hooks.md)'s scope. Note the
   divergence in the closeout rather than amending unasked, following the precedent `chore-0031` set.
 
 ## Implementation notes
@@ -86,7 +86,7 @@ say why.
 `preserved.append((rel, "you removed it, so it is not restored"))` and leaves `digests[rel]` set from
 `dict(recorded)`. Dropping the key there makes the record honest; check that it does not break the
 "preserved file keeps its old baseline" property that
-[`bug-0018`](done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md) pinned with a test, which is
+[`bug-0018`](bug-0018-reinstall-destroys-an-adopter-edited-lens.md) pinned with a test, which is
 about **edited** files and not removed ones.
 
 ## Decisions

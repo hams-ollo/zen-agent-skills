@@ -72,7 +72,7 @@ nil. Bounding the join costs one line and removes the question.
 
 ## Implementation notes
 
-Item 3 interacts with [`chore-0037`](chore-0037-committed-hook-registration-is-untested.md), which is
+Item 3 interacts with [`chore-0037`](done/chore-0037-committed-hook-registration-is-untested.md), which is
 why this task depends on it. That task adds a test asserting the settings file names a hook that
 exists; this one changes how the name is written. Do them in that order so the test exists first and
 the change has to keep it passing, and make the test tolerant of a `$CLAUDE_PROJECT_DIR` prefix rather

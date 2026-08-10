@@ -2,7 +2,7 @@
 id: chore-0035
 title: The threat model says the tooling makes no network calls, and one script fetches URLs read out of repository files
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: []
@@ -15,10 +15,10 @@ created: 2026-08-08
 
 ## Problem
 
-[`SECURITY.md`](../SECURITY.md) describes the tooling as "standard-library Python with no network
+[`SECURITY.md`](../../SECURITY.md) describes the tooling as "standard-library Python with no network
 calls, no deserialization of untrusted input, and no dependencies to be compromised". That sentence
-was true when it was written. [`check-provenance.py`](../scripts/check-provenance.py) arrived with
-[`feat-0043`](done/feat-0043-vendored-sync-provenance-convention.md) and calls
+was true when it was written. [`check-provenance.py`](../../scripts/check-provenance.py) arrived with
+[`feat-0043`](feat-0043-vendored-sync-provenance-convention.md) and calls
 `urllib.request.urlopen` on every `source:` URL it finds under `.agents/` and `scripts/`.
 
 Nothing here is exploitable in an interesting way. The script is opt-in, deliberately kept out of
@@ -47,7 +47,7 @@ in the terms a reporter would need. Require `https://` for a new record, and bou
 - Any allow-list of hosts. Nobody has been bitten, and a list that has to be maintained is a worse
   answer than a stated property.
 - The parser's silent-skip behaviour on an unreadable file, which is
-  [`bug-0019`](bug-0019-provenance-check-drops-unreadable-files-silently.md).
+  [`bug-0019`](../bug-0019-provenance-check-drops-unreadable-files-silently.md).
 
 ## Implementation notes
 

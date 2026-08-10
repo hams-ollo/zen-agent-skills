@@ -2,7 +2,7 @@
 id: bug-0025
 title: build-adapters --dry-run overstates the shared assets a real run writes, by a factor of the skill count
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: []
@@ -16,7 +16,7 @@ created: 2026-08-08
 
 ## Problem
 
-`emit_shared_assets()` in [`build-adapters.py`](../scripts/build-adapters.py) is called once per
+`emit_shared_assets()` in [`build-adapters.py`](../../scripts/build-adapters.py) is called once per
 skill, and it re-emits the rules module every time. On a real run the second and later calls
 short-circuit on `dest.exists()`. Under `--dry-run` nothing is written, so that guard never becomes
 true and the rules files are counted once per skill.
@@ -35,14 +35,14 @@ The arithmetic is exact: 3 rules files x 20 skills + 14 skill-local supporting f
 + 14 = 17. The function's own docstring says "The rules module, once per run", which is what a real
 run does and not what the preview reports.
 
-**The acceptance gate cannot catch it.** [`run-checks.py`](../scripts/run-checks.py) runs the adapter
+**The acceptance gate cannot catch it.** [`run-checks.py`](../../scripts/run-checks.py) runs the adapter
 dry run with the default `--out .`, where every destination equals its source, both branches skip on
 `dest.resolve() == src.resolve()`, and the count is 0 whether the bug is present or not. So the one
 gate covering this path exercises the reporting code only in the configuration where it carries no
 information.
 
 A preview whose numbers do not describe the run it previews is the class this repository is least
-willing to tolerate, and [`SECURITY.md`](../SECURITY.md) names it directly under "tooling that writes
+willing to tolerate, and [`SECURITY.md`](../../SECURITY.md) names it directly under "tooling that writes
 outside its declared scope".
 
 ## Scope

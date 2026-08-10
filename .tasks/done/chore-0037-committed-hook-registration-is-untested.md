@@ -2,7 +2,7 @@
 id: chore-0037
 title: The one committed hook registration sits outside every wiring test, so a rename would break it silently
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -13,11 +13,11 @@ created: 2026-08-08
 
 ## Problem
 
-`WiringConsistencyTests` in [`test_hooks.py`](../tests/test_hooks.py) asserts that every hook in the
+`WiringConsistencyTests` in [`test_hooks.py`](../../tests/test_hooks.py) asserts that every hook in the
 module is registered in three wirings: `.codex/hooks.json`, the block `claude_registration()` prints,
 and the opencode adapter. There is a fourth, and it is the only one that runs in a Claude Code session
-in this repository: [`.claude/settings.json`](../.claude/settings.json), committed as the deliberate
-exception recorded in the conventions section of [`AGENTS.md`](../AGENTS.md).
+in this repository: [`.claude/settings.json`](../../.claude/settings.json), committed as the deliberate
+exception recorded in the conventions section of [`AGENTS.md`](../../AGENTS.md).
 
 Nothing asserts anything about it. Its command names the hook by a repository-relative path,
 `python3 .agents/hooks/skill-reachability-reminder.py`, and no test confirms that path resolves.
@@ -26,7 +26,7 @@ that matters for the case the exception was granted for. The hook would then not
 hook that does not run produces exactly the same output as a hook that ran and found skills reachable.
 
 That is the failure this module has already been bitten by twice while being built, recorded in
-[the hooks module contract](../.agents/hooks/README.md): "installed, correct-looking, and doing
+[the hooks module contract](../../.agents/hooks/README.md): "installed, correct-looking, and doing
 nothing".
 
 ## Scope
@@ -41,7 +41,7 @@ ships.
   extending the "every hook, everywhere" assertion to it would fail the moment it is correct. The new
   assertion runs the other way: whatever it names must exist.
 - Registering a second hook there. That is a decision `AGENTS.md` reserves, and
-  [`chore-0034`](chore-0034-cloud-executable-conformance-matrix.md) records it as an open question for
+  [`chore-0034`](../chore-0034-cloud-executable-conformance-matrix.md) records it as an open question for
   the author.
 - The interpreter name. `python3` versus `python` is a stated platform trade documented inside the
   settings file itself, and it is not this task's to reopen.
