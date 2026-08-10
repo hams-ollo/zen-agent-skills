@@ -2,7 +2,7 @@
 id: bug-0023
 title: broken_links() reports a link inside a code span or a fenced block, the rule mislabelled_links() already follows
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit hardening (2026-07-25 review pass)"
 depends_on: []
@@ -15,12 +15,12 @@ created: 2026-08-08
 
 ## Problem
 
-[`bug-0015`](done/bug-0015-link-check-fires-inside-code-spans.md) taught this validator that a link
+[`bug-0015`](bug-0015-link-check-fires-inside-code-spans.md) taught this validator that a link
 inside an inline code span is not a link, and
-[`bug-0017`](done/bug-0017-mislabelled-link-check-fires-inside-fenced-blocks.md) extended that to
+[`bug-0017`](bug-0017-mislabelled-link-check-fires-inside-fenced-blocks.md) extended that to
 fenced blocks. Both landed in `mislabelled_links()`. `broken_links()` never learned either, and
 `broken_links()` is what **both** callers actually run: `--strict` over the backlog, and the `--links`
-gate that [`checks.yml`](../.github/workflows/checks.yml) calls.
+gate that [`checks.yml`](../../.github/workflows/checks.yml) calls.
 
 Measured 2026-08-08 against a document whose only two links are a fenced example and an inline code
 span, neither of which resolves:
@@ -33,13 +33,13 @@ mislabelled    -> []
 **The tree is quiet on a coincidence, not on the rule.** Nine markdown links currently sit inside
 code spans or fences across the checked document set, and every one of them resolves, because
 `../README.md` written from `.tasks/done/` lands on `.tasks/README.md`. That is precisely the
-wrong-file resolution [`bug-0012`](done/bug-0012-links-that-resolve-to-the-wrong-file.md) was filed
+wrong-file resolution [`bug-0012`](bug-0012-links-that-resolve-to-the-wrong-file.md) was filed
 about, quoted inside `bug-0012`'s own record, keeping the check silent. Rename or remove
 `.tasks/README.md` and six illustrations of a link bug become reported link bugs.
 
-**A comment claims otherwise.** The block above `LINK_RE` in [`validate.py`](validate.py) reads as
+**A comment claims otherwise.** The block above `LINK_RE` in [`validate.py`](../validate.py) reads as
 though this file's link rule is code-span aware. It is, in one of its two functions.
-[`chore-0029`](done/chore-0029-third-copy-of-the-link-rule-in-ci.md) removed the drift between the CI
+[`chore-0029`](chore-0029-third-copy-of-the-link-rule-in-ci.md) removed the drift between the CI
 copy and this one, so the two now agree, on the pre-`bug-0015` behaviour.
 
 **It fired twice while this task set was being written, which is the cost stated as a measurement
@@ -57,7 +57,7 @@ both validator copies, and correct the `LINK_RE` comment so it describes what is
 **Out of scope:**
 
 - The empty-match guard on `--links`, which is
-  [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md). Different gap, same
+  [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md). Different gap, same
   command, and folding them makes both harder to verify.
 - Tilde fences and indented code blocks. `bug-0017` left those open deliberately and neither appears
   anywhere in this repository; leave the seam where it is rather than closing it on the way past.
@@ -72,7 +72,7 @@ whose start falls inside it. Reuse the two helpers rather than writing a third s
 `bug-0017` kept them separate was that one docstring could not honestly describe both, and that
 reasoning does not change with a second caller.
 
-**Both copies move together.** [`validate.py`](validate.py) and the shipped template at
+**Both copies move together.** [`validate.py`](../validate.py) and the shipped template at
 `.agents/skills/init-worktracking/templates/validate.py` are deliberate near-duplicates, because a
 scaffolded repository has no way to import from here. `bug-0017` moved both; do the same. Their
 docstrings are deliberately retargeted and are expected to differ; the executable code and the
