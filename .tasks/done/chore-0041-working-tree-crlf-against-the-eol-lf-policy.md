@@ -133,7 +133,7 @@ and nothing else.
   that out (`touched_files` is two policy files), so closing with all seven ticked would be the
   false bookkeeping this repository has an incident on record about. The policy and documentation
   half is complete and verified; the renormalise half is now
-  [`chore-0042`](../chore-0042-renormalise-the-authors-working-tree.md).
+  [`chore-0042`](chore-0042-renormalise-the-authors-working-tree.md).
 - **2026-08-18: the successor is re-scoped, because this run falsified the original premise.** The
   problem statement said `core.autocrlf=true` is set at repository scope with no global value.
   `git config --show-origin` shows it at **system** scope,
@@ -148,7 +148,7 @@ and nothing else.
 
     python scripts/run-checks.py
 
-- [x] The four renormalise criteria that stood here were split out to [`chore-0042`](../chore-0042-renormalise-the-authors-working-tree.md) before this task closed, re-scoped from what the run measured. See the decisions section.
+- [x] The four renormalise criteria that stood here were split out to [`chore-0042`](chore-0042-renormalise-the-authors-working-tree.md) before this task closed, re-scoped from what the run measured. See the decisions section.
 - [x] `.gitattributes`'s comment describes what `eol=lf` actually does rather than deferring to
       `core.autocrlf`.
 - [x] `CONTRIBUTING.md` says not to set `core.autocrlf` here and gives the command that detects drift.
