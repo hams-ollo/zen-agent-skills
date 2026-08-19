@@ -36,6 +36,20 @@ detour through the same diagnosis, it produces four independent recoveries by tw
 commits), and it fails silently for any agent that does not notice: at the wrong base the task file
 is simply absent, which reads as a bad dispatch rather than a wrong tree.
 
+**A third occurrence, 2026-08-18, and it falsifies the obvious fix.** A six-agent wave dispatched
+from `developer` at `b950c9e` was checked by hand from the main checkout immediately after dispatch.
+The check reported five of six on the dispatch commit and one wrong. **That was wrong.** At least
+three of the six later reported in their own blockers field that they had been cut at `a07286b` and
+had fast-forwarded, including two the check had called correct. The check had raced the agents' own
+recovery: an agent whose first instruction is to verify its base repairs itself within seconds, so
+`git worktree list` a moment later reports the repaired state and says nothing about the cut.
+
+That matters for the shape of the fix. **A post-dispatch check is not sufficient**, because its
+result depends on who ran first, and its failure mode is the worst available: it reports clean while
+the batch was mis-cut. It is still worth having, since it catches the slow agents and costs one
+command, but it must be written as a lower bound rather than a verdict, and the durable answer is to
+create the worktrees at an explicit sha so there is nothing to detect.
+
 The skill already documents the mechanism that avoids it, under "Dispatch, batch against a
 *different* repository": create the worktrees yourself at an explicit sha. It is filed there as a
 cross-repository special case, so nobody reaches it for a same-repo batch, which is the common one.
@@ -44,8 +58,12 @@ cross-repository special case, so nobody reaches it for a same-repo batch, which
 
 **In scope:** a pre-dispatch verification step in Step 3, and the recovery when it fails.
 
-- After dispatching and **before trusting any agent**, compare every worktree's commit against the
-  recorded dispatch sha, and say what to do when they differ.
+- Make explicit-sha worktree creation the **primary** path for a same-repo batch, not the
+  cross-repository special case it is filed as today. It is the only answer that does not race.
+- Keep a post-dispatch comparison of every worktree's commit against the recorded sha, and write it
+  as a lower bound rather than a verdict: a clean result does not prove the batch was cut correctly,
+  because a fast agent repairs itself before the check runs. Say that in the skill, so a future
+  reader does not draw the conclusion this session drew and had to retract.
 - State the recovery for an already-running agent: `git merge --ff-only <dispatch-sha>`, valid only
   when the old base is a strict ancestor (`git merge-base --is-ancestor`) and the branch has no
   commits of its own, with `git reset --hard` named as the thing not to reach for by default because
@@ -102,8 +120,9 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] Step 3 names the post-dispatch check against the recorded sha, with the command, before any
-      agent's output is trusted.
+- [ ] Step 3 makes explicit-sha worktree creation the primary path for a same-repo batch.
+- [ ] Step 3 names the post-dispatch check against the recorded sha, with the command, and states
+      that a clean result is a lower bound rather than proof, because it races agent self-repair.
 - [ ] The recovery names `git merge --ff-only`, both of its preconditions, and why `git reset --hard`
       is not the default.
 - [ ] The staleness disclosure an affected agent owes is stated.
