@@ -19,7 +19,7 @@ created: 2026-08-18
 ## Problem
 
 The `touched_files` contract is stated three times and contradicted by the code that enforces it.
-Found 2026-08-18 while authoring [`feat-0049`](feat-0049-install-currency-reminder.md) with
+Found 2026-08-18 while authoring [`feat-0049`](done/feat-0049-install-currency-reminder.md) with
 `new-task`, which produced a task file that failed the repository's own acceptance command.
 
 What the documents say:
@@ -77,10 +77,25 @@ design question and none changes behaviour. This one carries both.
 - Adding a second frontmatter field for files to be created. That is a schema change, and this
   contradiction does not justify one.
 
+## Decisions
+
+- **2026-08-18, author: the documents are wrong and the validator is right.** `touched_files` carries
+  paths that already exist. A file the task will create is named in the Scope section instead, which
+  is what every closed task already does in practice: `feat-0046` created a hook and a test module
+  and listed neither, `feat-0045` created `run-checks.py` and listed only what it edited. The cost
+  accepted, stated so it is not rediscovered as a regression: `touched_files` stops being the field
+  that tells an agent where to put a new file, and that job moves to Scope prose. The cost declined:
+  relaxing the check would have made `--strict` unable to tell "I will create this" from "I
+  misspelled this", which is the only thing the check currently buys.
+- **Consequence for scope.** The branch this task described as "relax the validator" is closed. Only
+  the three documents change; `.tasks/validate.py` and its shipped copy are now out of scope, though
+  they stay in `touched_files` only if the implementer finds a comment there asserting the old
+  contract.
+
 ## Implementation notes
 
 Whichever way it goes, **both validator copies move together**. This is the exact drift class
-[`bug-0026`](bug-0026-scaffolded-validator-lost-the-external-check.md) is filed against, and that task
+[`bug-0026`](done/bug-0026-scaffolded-validator-lost-the-external-check.md) is filed against, and that task
 asks for an assertion keeping the two copies' executable code in step. If `bug-0026` lands first, that
 assertion should catch a one-sided change here; if this lands first, do not let it be the change that
 proves the assertion was needed.

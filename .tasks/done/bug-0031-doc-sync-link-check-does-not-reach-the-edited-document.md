@@ -2,7 +2,7 @@
 id: bug-0031
 title: doc-sync prescribes a link check that cannot see the documents doc-sync edits, so it passes having checked nothing
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: []
@@ -13,12 +13,12 @@ created: 2026-08-18
 
 ## Problem
 
-[`doc-sync`](../.agents/skills/doc-sync/SKILL.md) closes by telling the agent to "run the repository's
+[`doc-sync`](../../.agents/skills/doc-sync/SKILL.md) closes by telling the agent to "run the repository's
 own link checker over the edited document (in this kit, `python .tasks/validate.py --strict`, which
 resolves every relative ...)".
 
 That command cannot see the edited document. The default mode of
-[`validate.py`](validate.py) walks `.tasks/` and nothing else:
+[`validate.py`](../validate.py) walks `.tasks/` and nothing else:
 
 ```python
 def markdown_files():
@@ -50,7 +50,7 @@ correct the `--strict` attribution.
 **Out of scope:**
 
 - `validate.py`. Both modes work as documented; only the instruction naming them is wrong. The related
-  `--links` guard defect is [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md) and
+  `--links` guard defect is [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md) and
   is independent.
 - Any other step in `doc-sync`.
 - Making `doc-sync` run the checker itself. It reports and, with per-finding approval, edits; the
@@ -68,20 +68,32 @@ copied verbatim into a run that edited something else.
 naming the right mode is strictly better than one naming a mode that cannot work, even while that mode
 has its own bug.
 
+## Decisions
+
+- **Rejected: restating in the skill what `--strict` actually does.** Correcting the misattribution
+  could have been done by saying `--strict` adds the `touched_files` existence check rather than the
+  link check. That imports one repository's validator semantics into a portable skill body, so the
+  sentence drops `--strict` entirely and keeps a general clause (this checker's other modes walk the
+  tracker directory only) that carries the lesson without the local detail.
+- **Seam left open: the newly prescribed mode has its own open bug.** `doc-sync` now names `--links`
+  while [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md) is open against that
+  mode's no-match guard. Deliberate per this task's scope, not an oversight for the next agent to
+  close here.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] `doc-sync` names `python .tasks/validate.py --links <path>` (or the repository's equivalent) over
+- [x] `doc-sync` names `python .tasks/validate.py --links <path>` (or the repository's equivalent) over
       the edited document, with a placeholder rather than a literal path.
-- [ ] The sentence no longer attributes relative-link resolution to `--strict`.
-- [ ] The prescribed command, run against a document `doc-sync` would edit, reports on that document:
+- [x] The sentence no longer attributes relative-link resolution to `--strict`.
+- [x] The prescribed command, run against a document `doc-sync` would edit, reports on that document:
       demonstrated by running it against `README.md` and confirming a non-zero document count.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

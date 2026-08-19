@@ -88,7 +88,7 @@ promised not to produce.
 - Adding a spine statement to skills that do not currently carry one. Four exist; make those four
   right rather than giving all twenty a chain to drift.
 - `test-author`'s missing approval gate, which is
-  [`bug-0032`](bug-0032-test-author-never-checks-the-spec-is-approved.md); this task depends on it so
+  [`bug-0032`](done/bug-0032-test-author-never-checks-the-spec-is-approved.md); this task depends on it so
   the characterization exemption is already written when item 3 points at it.
 - The lite-tier `parent` problem in `init-worktracking` and `new-task`, which is
   [`bug-0030`](bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md); this task depends on it as a

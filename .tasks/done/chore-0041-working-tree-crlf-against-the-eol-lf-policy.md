@@ -2,7 +2,7 @@
 id: chore-0041
 title: Thirty tracked files carry CRLF on disk against the repository's own eol=lf policy, invisibly to git status
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: []
@@ -85,6 +85,37 @@ The known writer class is Python writing text without an explicit newline: `Path
 passed. If a script in `scripts/` or a template writer in a skill does that to a tracked file, name it
 in `## Decisions` even if fixing it lands elsewhere.
 
+## Decisions
+
+- **Premise that turned out false: `core.autocrlf=true` is not set at repository scope.** The Problem
+  section infers scope from `git config --get core.autocrlf`, which reports the effective value and not
+  where it came from. `git config --show-origin --get-all core.autocrlf` reports exactly one source,
+  `file:C:/Program Files/Git/etc/gitconfig`, the Git for Windows installer default at **system** scope.
+  There is no repository-scope and no global value. This changes the remedy rather than the finding:
+  it is not a stray setting somebody added here that should be removed, it is the platform default that
+  every Windows contributor will have and cannot reasonably be told to unset. `eol=lf` already
+  neutralises it, so `CONTRIBUTING.md` says that plainly instead of asking anyone to change a config.
+
+- **Seam left open deliberately: the renormalise was not performed.** Four of the seven acceptance
+  criteria (the `w/crlf` count, the no-index-change confirmation, the endings-only commit, and the
+  post-`run-checks.py` recount) describe a working-tree rewrite touching thirty files. Dispatch scoped
+  this run to the two `touched_files` only, because a bulk rewrite collides with every branch in flight.
+  Worth recording for whoever picks it up: in a **fresh** worktree the count is already `0`
+  (`237 i/lf w/lf`, `2 i/none w/none`), before and after `python scripts/run-checks.py`. The thirty
+  files are a property of the author's long-lived checkout, not of a clone, so the renormalise is a
+  one-machine cleanup and not a repository defect.
+
+- **Seam left open deliberately: no writer in `scripts/` writes a tracked file in text mode, so the
+  active writer is still unnamed.** The Implementation notes ask for one. The only two text-mode write
+  sites are `_write` in `../scripts/build-adapters.py` and the manifest write in `../scripts/install.py`,
+  and both call `Path.write_text(content, encoding="utf-8")` with no `newline` argument, so both do emit
+  CRLF on Windows. Neither writes a file tracked here: one writes generated adapters, the other writes
+  `.install-manifest.json`. `install.py` copies payload files with `shutil` and digests
+  `path.read_bytes()`, so the install path is byte-exact and inherits CRLF from the source file on disk
+  rather than creating it. The thirty files were therefore rewritten by something outside `scripts/`,
+  most likely an editor or an agent harness tool, which no change in this repository can prevent.
+  `CONTRIBUTING.md` gains the `newline=""` rule as prevention for the two sites that do exist.
+
 ## Risks and rollback
 
 Touches thirty files' bytes, so the diff is large while the semantic change is nil, and that combination
@@ -95,24 +126,37 @@ the diff is verifiable as endings-only (`git diff --stat` before and after, and
 Reversible by reverting one commit. Because the index is already LF, a revert restores the on-disk state
 and nothing else.
 
+## Decisions
+
+- **2026-08-18: split, rather than tick four criteria this run did not meet.** The task was written
+  with seven criteria, four of which describe a bulk working-tree renormalise. The dispatch scoped
+  that out (`touched_files` is two policy files), so closing with all seven ticked would be the
+  false bookkeeping this repository has an incident on record about. The policy and documentation
+  half is complete and verified; the renormalise half is now
+  [`chore-0042`](../chore-0042-renormalise-the-authors-working-tree.md).
+- **2026-08-18: the successor is re-scoped, because this run falsified the original premise.** The
+  problem statement said `core.autocrlf=true` is set at repository scope with no global value.
+  `git config --show-origin` shows it at **system** scope,
+  `C:/Program Files/Git/etc/gitconfig`, the Git for Windows installer default, with no repository
+  and no global value. The original read came from bare `git config --get`, which reports the
+  effective value and not its origin. So there is nothing here to unset, and `eol=lf` already
+  neutralises it. Measured the same day: a fresh worktree reports `0` files at `w/crlf` while the
+  author's long-lived checkout reports `30`, so this is a one-machine cleanup and not a property of
+  the repository.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] `git ls-files --eol | grep -c 'w/crlf'` returns `0`.
-- [ ] The renormalise produced no index change, confirmed before committing.
-- [ ] The endings-only commit shows no content change: `git diff --ignore-all-space` against its parent
-      is empty for every file in it.
-- [ ] The count is still `0` after `python scripts/run-checks.py` has run, or the active writer is named
-      in `## Decisions`.
-- [ ] `.gitattributes`'s comment describes what `eol=lf` actually does rather than deferring to
+- [x] The four renormalise criteria that stood here were split out to [`chore-0042`](../chore-0042-renormalise-the-authors-working-tree.md) before this task closed, re-scoped from what the run measured. See the decisions section.
+- [x] `.gitattributes`'s comment describes what `eol=lf` actually does rather than deferring to
       `core.autocrlf`.
-- [ ] `CONTRIBUTING.md` says not to set `core.autocrlf` here and gives the command that detects drift.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] `CONTRIBUTING.md` says not to set `core.autocrlf` here and gives the command that detects drift.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -1,9 +1,15 @@
-"""Acceptance tests for .tasks/validate.py.
+"""Acceptance tests for .tasks/validate.py and the copy `init-worktracking` scaffolds.
 
 Two areas, added by two tasks. The `external` field tests are derived from
 docs/spec/tracker-links.md and each is tagged with the scenario id it covers. The link
 tests come from `bug-0011` and have no spec behind them; the validator as a whole has no
 contract yet, only the `external` field does.
+
+Both copies of the validator are driven here, not just this repository's. `bug-0026`
+found the `external` guard and the injectable `main(argv=None)` present only in the copy
+that authored them, so every repository the kit scaffolds got the feature `pr-describe`
+ships and none of the check that makes it safe. A contract that holds in one copy and
+not the other is the failure this file now tests for directly.
 
 Standard library only, per the conventions section of AGENTS.md.
 
@@ -15,6 +21,8 @@ import ast
 import contextlib
 import importlib.util
 import io
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,6 +35,14 @@ TEMPLATE_PATH = (REPO_ROOT / ".agents" / "skills" / "init-worktracking"
 _spec = importlib.util.spec_from_file_location("zen_tasks_validate", MODULE_PATH)
 tv = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tv)
+
+# The template is loaded as a second, independent module rather than compared as text,
+# so the tests below exercise what a scaffolded repository would actually run. It is
+# never registered in sys.modules, so the two copies cannot shadow one another.
+_template_spec = importlib.util.spec_from_file_location(
+    "zen_tasks_validate_template", TEMPLATE_PATH)
+tvt = importlib.util.module_from_spec(_template_spec)
+_template_spec.loader.exec_module(tvt)
 
 TASK = """---
 id: feat-0099
@@ -48,7 +64,15 @@ Body content is not what this test exercises.
 
 
 class TasksRootTestCase(unittest.TestCase):
-    """A throwaway repository root with a .tasks/ tree, shared by both areas."""
+    """A throwaway repository root with a .tasks/ tree, shared by both areas.
+
+    Which copy of the validator a case drives is a class attribute, so a subclass can
+    re-run an entire suite against the template without a second fixture. `bug-0026`
+    chose that over duplicating the setup: a fixture maintained twice drifts for the
+    same reason the validator itself did.
+    """
+
+    module = tv
 
     def setUp(self):
         # Mirror a real repository: a root holding .tasks/ and the file the fixture
@@ -60,20 +84,20 @@ class TasksRootTestCase(unittest.TestCase):
         self.tasks.mkdir()
         (self.root / "README.md").write_text("fixture\n", encoding="utf-8")
 
-        self._real_tasks_dir = tv.TASKS_DIR
-        self._real_repo_root = tv.REPO_ROOT
-        tv.TASKS_DIR = self.tasks
-        tv.REPO_ROOT = self.root
+        self._real_tasks_dir = self.module.TASKS_DIR
+        self._real_repo_root = self.module.REPO_ROOT
+        self.module.TASKS_DIR = self.tasks
+        self.module.REPO_ROOT = self.root
 
     def tearDown(self):
-        tv.TASKS_DIR = self._real_tasks_dir
-        tv.REPO_ROOT = self._real_repo_root
+        self.module.TASKS_DIR = self._real_tasks_dir
+        self.module.REPO_ROOT = self._real_repo_root
         self._tmp.cleanup()
 
     def _run(self):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = tv.main(["--strict"])
+            code = self.module.main(["--strict"])
         return code, buf.getvalue()
 
 
@@ -118,6 +142,132 @@ class ExternalFieldTests(TasksRootTestCase):
         self._write('external: "hams-ollo/zen-agent-skills#123"\n')
         code, out = self._run()
         self.assertEqual(code, 0, out)
+
+
+class TemplateExternalFieldTests(ExternalFieldTests):
+    """Scenarios S-007 and S-008, over the copy `init-worktracking` scaffolds.
+
+    `bug-0026`: the guard existed only in the repository that authored it. `pr-describe`
+    ships to adopters and tells an agent a task file may carry an `external` field, and
+    `init-worktracking` scaffolded the tracker into that same repository with a validator
+    that never checked it. So every repository the kit set up got the feature and not the
+    check, which is the exact silent failure S-007 exists to prevent: a form GitHub does
+    not recognise is ignored, and the issue simply never closes.
+
+    The whole parent suite is re-run rather than restated, deliberately. S-007 and S-008
+    are one contract, so the two copies are held to one set of assertions; a template
+    test written separately could pass while asserting something weaker.
+    """
+
+    module = tvt
+
+
+class TemplateInjectableArgvTests(TasksRootTestCase):
+    """`chore-0017`'s injectable CLI layer, carried into the template by `bug-0026`.
+
+    The point of `main(argv=None)` is that the CLI layer is reachable from a test in the
+    repository the scaffold lands in. The template had `main()` reading `sys.argv`
+    directly, so an adopter could test every helper in the file and never the entry point
+    that decides the exit code.
+    """
+
+    module = tvt
+
+    def _write_task_naming_a_missing_file(self):
+        # A warning, not an error: a missing touched_files path warns by default and is
+        # promoted only by --strict. That gap is what makes the flag observable, which is
+        # what lets these tests prove which argv was actually read.
+        (self.tasks / "feat-0099-test.md").write_text(
+            TASK.format(external="").replace("  - README.md", "  - no-such-file.md"),
+            encoding="utf-8")
+
+    def _run_with(self, argv, sys_argv):
+        buf = io.StringIO()
+        real = sys.argv
+        sys.argv = sys_argv
+        try:
+            with contextlib.redirect_stdout(buf):
+                code = self.module.main() if argv is None else self.module.main(argv)
+        finally:
+            sys.argv = real
+        return code, buf.getvalue()
+
+    def test_an_injected_argv_is_read_instead_of_sys_argv(self):
+        # The oracle that actually proves injection rather than coincidence: sys.argv
+        # and the injected argv disagree about --strict, and the injected one has to
+        # win. Passing an argv that happened to agree with sys.argv would prove nothing.
+        self._write_task_naming_a_missing_file()
+        code, out = self._run_with(["--strict"], ["validate.py"])
+        self.assertNotEqual(
+            code, 0, f"the injected --strict must be the argv that is read\n{out}")
+        self.assertIn("no-such-file.md", out)
+
+    def test_an_injected_empty_argv_overrides_a_strict_sys_argv(self):
+        # The same discrimination in the other direction, so the test cannot pass by
+        # a main() that merely concatenates the two sources.
+        self._write_task_naming_a_missing_file()
+        code, out = self._run_with([], ["validate.py", "--strict"])
+        self.assertEqual(code, 0, f"sys.argv must not leak past an injected argv\n{out}")
+
+    def test_calling_main_with_no_argument_still_reads_sys_argv(self):
+        # The compatibility half. The template is run as a standalone script by whoever
+        # scaffolds it, so making the CLI testable must not change what the CLI does.
+        self._write_task_naming_a_missing_file()
+        code, out = self._run_with(None, ["validate.py", "--strict"])
+        self.assertNotEqual(
+            code, 0, f"the standalone CLI must still honour sys.argv\n{out}")
+
+
+class TemplateStandaloneTests(unittest.TestCase):
+    """`chore-0029`: the template validator runs in a tree holding nothing else.
+
+    Pinned here because `bug-0026` added a module-level regex and a new check to it, and
+    the failure mode worth guarding is an import or a reference that only resolves in
+    this repository. A scaffolded tree has no `docs/spec/`, no `scripts/`, and no sibling
+    from this kit, so the file has to stand entirely on its own.
+    """
+
+    def test_it_validates_a_bare_scaffolded_tree_as_a_subprocess(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tasks = root / ".tasks"
+            tasks.mkdir()
+            (root / "README.md").write_text("fixture\n", encoding="utf-8")
+            # The only file from this kit in the tree is the validator itself.
+            (tasks / "validate.py").write_text(
+                TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+            (tasks / "feat-0099-test.md").write_text(
+                TASK.format(external='external: "#123"\n'), encoding="utf-8")
+
+            proc = subprocess.run(
+                [sys.executable, str(tasks / "validate.py"), "--strict"],
+                capture_output=True, text=True, cwd=str(root))
+
+        self.assertEqual(
+            proc.returncode, 0,
+            f"the template must validate a bare tree standalone\n"
+            f"{proc.stdout}\n{proc.stderr}")
+
+    def test_it_rejects_a_malformed_external_as_a_subprocess(self):
+        # Scenario S-007 through the real entry point an adopter runs, rather than
+        # through an imported module: the check has to survive the trip into a
+        # scaffolded tree, which is the whole subject of bug-0026.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tasks = root / ".tasks"
+            tasks.mkdir()
+            (root / "README.md").write_text("fixture\n", encoding="utf-8")
+            (tasks / "validate.py").write_text(
+                TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+            (tasks / "feat-0099-test.md").write_text(
+                TASK.format(external='external: "issue 123"\n'), encoding="utf-8")
+
+            proc = subprocess.run(
+                [sys.executable, str(tasks / "validate.py"), "--strict"],
+                capture_output=True, text=True, cwd=str(root))
+
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("issue 123", proc.stdout)
 
 
 class RelativeLinkTests(TasksRootTestCase):
@@ -497,26 +647,77 @@ class DocsLinkModeTests(TasksRootTestCase):
 
 
 class ValidatorCopiesAgreeTests(unittest.TestCase):
-    """`bug-0023`: the two copies of the link rule move together or not at all.
+    """`bug-0023` and `bug-0026`: the two copies move together or not at all.
 
     `.tasks/validate.py` and the `init-worktracking` template are deliberate near
     duplicates, because a scaffolded repository has no way to import from this one. The
-    duplication is tolerated; the drift is not, and it has already happened once. A third
-    copy inline in CI learned nothing from `bug-0015` and disagreed with this file about
-    what counts as a link while a comment said the two could not (`chore-0029`).
+    duplication is tolerated; the drift is not, and it has already happened twice. A
+    third copy inline in CI learned nothing from `bug-0015` and disagreed with this file
+    about what counts as a link while a comment said the two could not (`chore-0029`).
+    Then `bug-0026` found the `external` check and `main(argv=None)` in this copy alone.
 
     Docstrings are compared by nobody here on purpose: they are retargeted at a
-    scaffolded repository rather than at this one, so they are expected to differ. The
-    executable code and the shared link regexes are not.
+    scaffolded repository rather than at this one, so they are expected to differ
+    (`bug-0017`). The executable code is not.
     """
 
     LINK_FUNCTIONS = ("broken_links", "code_span_ranges", "fenced_block_ranges",
                       "mislabelled_links", "check_links")
     # The regexes both copies use to decide what a link is and where it may not count.
-    # Not every module-level name: `EXTERNAL_RE` exists only here, because the tracker
-    # links spec it comes from is this repository's contract rather than a scaffold's.
+    # This list is no longer the outer boundary of the guarantee, only a sharper message
+    # for the names most likely to drift: the whole-module comparison below covers every
+    # module-level name including `EXTERNAL_RE`. That distinction is what `bug-0026`
+    # cost. This comment previously recorded `EXTERNAL_RE` as belonging to this
+    # repository alone, so no list-driven check could ever have reported its absence
+    # from the template; the guarantee has to hold over names nobody thought to enumerate.
     LINK_NAMES = ("LINK_RE", "LINK_SKIP_PREFIXES", "LINK_TEXT_RE", "TEXT_PATH_RE",
                   "LINE_SUFFIX_RE", "BACKTICK_RUN_RE", "FENCE_RE")
+
+    @staticmethod
+    def _executable_code(path):
+        """Every executable statement in `path`, as comparable lines, minus docstrings.
+
+        Compared as a dumped AST rather than as text so a comment, a line wrap, or a
+        blank line can never fail this test: the template's comments are deliberately
+        retargeted at a scaffolded repository and are expected to differ. Docstrings are
+        dropped at module, class, and function level for the same reason. Comments never
+        reach the AST at all, so they cost nothing to exclude.
+
+        The result is split into lines so a failure renders as a diff naming the
+        statement that drifted rather than as one unreadable string.
+        """
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                body = node.body
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    node.body = body[1:]
+        return ast.dump(tree, indent=1).splitlines()
+
+    def test_the_executable_code_is_identical_in_both_copies(self):
+        """The durable half of `bug-0026`: a guarantee that needs no list.
+
+        The two tests below pin named functions and named regexes, which is precisely
+        why the `external` check could be missing from the template for months with
+        every gate green: a list-driven check cannot report a name that nobody added to
+        the list. This one enumerates nothing, so it fails on the next rule either copy
+        gains alone, whatever that rule turns out to be.
+
+        The full comparison is affordable rather than brittle because the two files are
+        near duplicates by design and their executable code is currently exact. If a
+        divergence is ever introduced deliberately, narrow this to an allow-list of
+        known-different nodes and say why, rather than deleting the test: the narrower
+        checks below are what this replaced.
+        """
+        self.assertEqual(
+            self._executable_code(MODULE_PATH),
+            self._executable_code(TEMPLATE_PATH),
+            ".tasks/validate.py and the init-worktracking template have drifted. "
+            "Their docstrings and comments may differ; their executable code may not. "
+            "Carry the change into both copies, or narrow this test and say why.")
 
     @staticmethod
     def _body_without_docstring(path, name):

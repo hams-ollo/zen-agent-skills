@@ -14,6 +14,7 @@
 //   delegation-reminder        -> tool.execute.after (task):       warn log. [best-effort]
 //   spec-conformance-gate      -> tool.execute.after (write/edit): throw.    [enforced]
 //   skill-reachability-reminder -> event (session start):          warn log. [best-effort]
+//   install-currency-reminder  -> event (session start):           warn log. [best-effort]
 //
 // The reachability reminder inherits the same weakness as the delegation one: it surfaces
 // as a warn log rather than as context the model reads. That is worth stating twice,
@@ -77,22 +78,32 @@ async function note(client, result) {
 
 export const ZenHooks = async ({ worktree, directory, client }) => {
   const root = () => worktree || directory || process.cwd();
-  let reachabilityReported = false;
+  let sessionStartReported = false;
   return {
     // Fired once per plugin load, which is the closest thing opencode offers to a
     // session start. Guarded rather than trusted: if the event fires more than once, a
     // repeated reminder is exactly the noise the Claude Code path avoids by matching
     // only `startup`.
     event: async ({ event }) => {
-      if (reachabilityReported) return;
+      if (sessionStartReported) return;
       if (event?.type !== "session.created" && event?.type !== "session.start") return;
-      reachabilityReported = true;
+      sessionStartReported = true;
       const rootDir = root();
-      await note(client, runHook("skill-reachability-reminder.py", {
+      const payload = {
         hook_event_name: "SessionStart",
         source: "startup",
         cwd: rootDir,
-      }, rootDir));
+      };
+      // Two independent reminders on the same event, run in order rather than merged:
+      // each answers its own question and each stays silent on its own, so a session may
+      // hear neither, either, or both. See .agents/hooks/README.md for why currency is a
+      // separate hook from reachability.
+      for (const script of [
+        "skill-reachability-reminder.py",
+        "install-currency-reminder.py",
+      ]) {
+        await note(client, runHook(script, payload, rootDir));
+      }
     },
 
     "tool.execute.after": async (input, output) => {

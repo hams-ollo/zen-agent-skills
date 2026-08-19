@@ -48,9 +48,9 @@ know about it.
 **In scope:** amend the contract so it describes the validator that exists, and re-audit the affected
 row. Two documents:
 
-- `docs/spec/validate-skills.md`: state the exception. Whether that is a qualification on `S-009` or
-  a new scenario beside it is the author's call, and the file's own amendment history shows both
-  shapes being used.
+- `docs/spec/validate-skills.md`: state the exception as a **new scenario** beside `S-009`,
+  settled by the author on 2026-08-18; see the decisions section. `chore-0043` carries the
+  identical decision for `build-adapters.md`, so the two are one decision applied twice.
 - `docs/spec/validate-skills.conformance.md`: re-audit `S-009` against the current code, correcting
   the implementation-site description.
 
@@ -65,10 +65,20 @@ verification run for this very task unanswerable.
 - **Any change to `scripts/validate-skills.py`.** The code is right and the contract is behind it.
   Editing the code to match the spec would revert `bug-0027`. This task moves prose only.
 - The same class in the two other tools. `.tasks/validate.py` has no approved contract, and
-  `build-adapters.py` is [`bug-0028`](bug-0028-adapter-link-rewrite-fires-inside-code-spans-and-fences.md),
+  `build-adapters.py` is [`bug-0028`](done/bug-0028-adapter-link-rewrite-fires-inside-code-spans-and-fences.md),
   which carries its own contract question about `S-003` through `S-008`.
 - Re-auditing scenarios `bug-0027` did not touch. A partial audit stated as partial is correct here;
   a whole-spec re-run is `spec-conformance`'s job and a different task.
+
+## Decisions
+
+- **2026-08-18, author: the amendment takes the shape of a new scenario, not a qualification on an
+  existing one.** Applies to both this task and its sibling, so the two read as one decision applied
+  twice. A new `S-NNN` stating that a link inside an inline code span or a fenced block is emitted
+  unchanged is traceable, is citable by a test, and gives `spec-conformance` a row of its own to
+  audit. A qualification folded into an existing scenario would leave the exception with no id, so
+  nothing could cite it and no matrix could report on it separately. The cost accepted is one more
+  scenario per spec to maintain.
 
 ## Implementation notes
 
