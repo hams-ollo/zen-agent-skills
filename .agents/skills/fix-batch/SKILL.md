@@ -394,3 +394,9 @@ follows the repo's house-style module (in this kit,
 [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable
 relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter
 may replace it without touching this skill.
+
+**What a dispatched agent may do unattended** follows the repo's autonomy module (in this kit,
+[`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which consolidates four of the rules stated
+above: `A1` sandbox containment, `A2` scope discipline, and `A4` and `A5`, the verbatim-result and
+disclosure halves of the delegate evidence contract. That file is a swappable default too; a
+downstream adopter may raise or lower the ceiling without touching this skill.

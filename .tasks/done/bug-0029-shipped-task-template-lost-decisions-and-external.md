@@ -60,7 +60,7 @@ again on required frontmatter keys or section headings.
   missing. The four other prose corrections found in the same pass are
   [`chore-0040`](../chore-0040-four-coherence-corrections-across-skill-bodies.md).
 - The `parent`/ROADMAP tier problem in the same template, which is
-  [`bug-0030`](../bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md). Do not fix it here even
+  [`bug-0030`](bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md). Do not fix it here even
   though it is the same file; that task depends on this one for exactly that reason.
 - Porting the validator's `external` check. That is `bug-0026`, and this task depends on it.
 - Any change to `docs/spec/tracker-links.md`. `S-007` already says what should happen.

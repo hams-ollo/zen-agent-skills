@@ -48,7 +48,7 @@ At **lite** there is no `ROADMAP.md` and no `CHANGELOG.md`, so strike every refe
 
 - **`AGENTS.md`**: the header links and task-lifecycle steps 4 and 5. The work-altitude-model section and the lifecycle still describe the model; they just stop pointing at absent files.
 - **`.tasks/README.md`**: the strategy/ledger sentence in the opening paragraph, and the `CHANGELOG.md` and `ROADMAP.md` clauses in its lifecycle section.
-- **`.tasks/_TEMPLATE.md`**: the definition-of-done checkbox that requires a dated `CHANGELOG.md` line. Drop that clause, or the template propagates an unsatisfiable step into every task file the repo will ever create.
+- **`.tasks/_TEMPLATE.md`**: two edits, because this is the file every task the repo ever writes is copied from. First, the definition-of-done checkbox that requires a dated `CHANGELOG.md` line. Drop that clause, or the template propagates an unsatisfiable step into every task file. Second, the `parent` comment and its seed value. Strike the `ROADMAP#N feature-slug` form from the comment, leaving the free-text form, and replace the seed with a plain example of it (`parent: "one line naming the goal this serves"`). `parent` stays required at lite: what changes is what it names, not whether it is answered.
 
 ## Procedure
 

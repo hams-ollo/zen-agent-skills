@@ -172,3 +172,9 @@ kit's formatting on another repo's changelog.
 module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case
 headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a
 downstream adopter may replace it without touching this skill.
+
+**What you may do with the drafts when nobody is watching** follows the repo's autonomy module (in
+this kit, [`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which cites this skill for `A8`:
+the agent prepares and a person dispatches, so this skill prints both artifacts and surfaces the
+command rather than running it, and never merges. That file is a swappable default too; a downstream
+adopter may raise or lower the ceiling without touching this skill.

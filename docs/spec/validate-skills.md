@@ -15,6 +15,14 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-08-19 (`chore-0039`) to state that a markdown link rendering as literal text is not
+a link and is not checked at all: scenario S-022, an exception to the link rules S-009 through
+S-013.** This amendment is **pending the author's re-approval**. It writes down the behaviour
+`bug-0027` gave `check_links()` on 2026-08-18, which the contract did not state at all, and `status`
+is left reading `approved` per the convention in [`README.md`](README.md): `verifier-agent` returns
+`blocked` on a spec that is not approved, so flipping the field would make the verification run for
+this very amendment unanswerable.
+
 **Amended 2026-07-29 (`bug-0008`) on the author's explicit instruction, and re-approved.** S-020 and
 S-021 add the two remaining rules of the skill schema this validator did not check: no angle brackets in
 `description`, and an allow-list of frontmatter properties. Both are hard failures at the consumer.
@@ -176,6 +184,43 @@ validator is the kit-level lint that enforces that bar.
   same page
 - **When** the validator runs
 - **Then** it records no finding for any of them, and does not attempt to resolve them on disk.
+
+### Scenario S-022: a link that renders as literal text is not a link
+
+- **Given** a `SKILL.md` containing a markdown link whose opening bracket sits inside an inline code
+  span (a run of backticks of any length, closed on the same line by a run of the same length) or
+  inside a fenced code block
+- **When** the validator runs
+- **Then** it records no finding for that link, from any of the link rules, and does not resolve it
+  on disk.
+
+  This is an exception to S-009 through S-013 and takes precedence over all of them. Those scenarios
+  sort a link by its *kind*; this one decides whether the text is a link at all. A link rendered as
+  literal text is the body **showing** a link as an example rather than making one, so there is no
+  reader to strand and nothing to resolve. Without this rule a skill body cannot show an example
+  markdown link, which is exactly what the documentation skills want to do, and the error it earns
+  never names the fence as the cause (`bug-0027`).
+
+  The exception includes the portability rule S-011, deliberately rather than incidentally. That
+  rule protects a reader who follows a link that dangles once the skill is installed, and a link
+  rendered as literal text is followed by nobody; keeping the rule armed inside a fence would stop
+  an author showing the very construct the rule exists to teach.
+
+  A link whose *text* is wrapped in a code span, which is how nearly every link in this kit is
+  written, is still checked. It is the link's opening bracket that has to fall inside the span or
+  the fence for this scenario to apply.
+
+  Outside a span or a fence nothing about the link rules changed, and the boundary is worth stating
+  because the two validators here differ on it: an absolute or `file://` link is still an error in
+  this tool, whether by escaping the shipped tree or by failing to resolve, even though the backlog
+  validator in `.tasks/validate.py` tolerates one.
+
+  An unterminated opening fence yields no range and therefore suppresses nothing below it: the links
+  after it are checked as usual. A detector that ran an unclosed fence to end of file would switch
+  the link check off for the rest of the body while still reporting success, which is the one failure
+  indistinguishable from success. An unmatched backtick run opens nothing for the same reason. That
+  trade is the one `bug-0015`, `bug-0017`, `bug-0023` and `bug-0028` each settled in the other
+  checkers carrying this rule, and this contract restates it rather than inheriting it silently.
 
 ### Scenario S-014: contradictory status claim warns but does not fail
 

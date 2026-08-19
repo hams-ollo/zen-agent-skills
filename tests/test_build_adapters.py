@@ -536,5 +536,64 @@ class TestPluginTarget(unittest.TestCase):
             self.assertFalse((default / "skills").exists())
 
 
+class TestSkillAssetsExcludeBytecode(unittest.TestCase):
+    """bug-0036: a byte-cache is not part of the skill payload, in any layout.
+
+    test-quality notes: the condition is built rather than observed. Whether a real
+    skill directory holds a `__pycache__` depends on whether the suite has already
+    imported what is in it, so a test that emits the real kit passes or fails by
+    ordering, which is worse than no test. This makes its own fixture skill instead,
+    and asserts the contrast in one place: the bytecode is gone and the ordinary
+    `.py` beside it survives. Asserting the exclusion alone would also pass if the
+    rule swallowed `templates/validate.py`, which `init-worktracking` is unusable
+    without.
+
+    Both oracles, on disk and on the returned list, because the return value is what
+    the run counts and reports: emitting nothing while still counting it would trade
+    this defect for bug-0025's.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.out = root / "out"
+        self.skill = root / "src" / "fixture-skill"
+        templates = self.skill / "templates"
+        (templates / "__pycache__").mkdir(parents=True)
+        (self.skill / "SKILL.md").write_text("---\nname: fixture-skill\n---\n", encoding="utf-8")
+        (templates / "validate.py").write_text("# a real shipped template\n", encoding="utf-8")
+        (templates / "__pycache__" / "validate.cpython-311.pyc").write_bytes(b"\x00\x00\x00\x00")
+        # An artefact inside __pycache__ whose suffix is not .pyc: the directory
+        # half of the predicate has to catch this one on its own.
+        (templates / "__pycache__" / "stale.json").write_text("{}", encoding="utf-8")
+        # And a byte-cache outside any __pycache__, for the suffix half.
+        (self.skill / "loose.pyc").write_bytes(b"\x00\x00\x00\x00")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_no_target_receives_a_byte_cache_and_a_real_template_still_emits(self):
+        for name, layout in ba.LAYOUTS.items():
+            with self.subTest(target=name):
+                out = self.out / name
+                written = ba.emit_skill_assets(self.skill, out, False, layout)
+                rels = [p.relative_to(out).as_posix() for p in written]
+                on_disk = [p.relative_to(out).as_posix()
+                           for p in out.rglob("*") if p.is_file()]
+
+                expected = f"{layout.assets_dir}/fixture-skill/templates/validate.py"
+                self.assertIn(expected, rels, "a real template must still be emitted")
+                self.assertEqual(on_disk, [expected])
+                self.assertEqual(
+                    (out / expected).read_text(encoding="utf-8"),
+                    "# a real shipped template\n")
+
+                for reported in (rels, on_disk):
+                    self.assertFalse(
+                        [p for p in reported
+                         if p.endswith(".pyc") or "__pycache__" in p.split("/")],
+                        f"byte-cache emitted or counted into {name}: {reported}")
+
+
 if __name__ == "__main__":
     unittest.main()

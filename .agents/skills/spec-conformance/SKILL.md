@@ -52,6 +52,8 @@ An empty result is valid only as `{ audited: [...], unreconciled: [] }`, "no div
 
 Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter may replace it without touching this skill.
 
+When this runs unattended, follow the repo's autonomy module too (in this kit, [`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which consolidates this skill's coverage rule as `A6`: a partial audit is never reported as a whole one, so the audited and unreconciled sets are stated alongside the verdict. That file is a swappable default; a downstream adopter may raise or lower the ceiling without touching this skill.
+
 ## Provenance
 
 Adapted from RepoPrompt Workflows by Balarama Bosch (MIT). The digest below is of the retrieved upstream file, not of this adapted one, which differs by design. Re-check it by running `scripts/check-provenance.py` in the Zen Agent Skills repository.

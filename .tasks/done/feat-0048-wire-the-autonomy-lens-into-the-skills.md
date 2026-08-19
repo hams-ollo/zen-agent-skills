@@ -2,7 +2,7 @@
 id: feat-0048
 title: Wire autonomy.md into the five skills whose rules it consolidates, and guard the next lens against arriving unwired
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #3: harden autonomy.md from what item 2's run revealed, then bless it"
 depends_on: [feat-0047]
@@ -20,7 +20,7 @@ created: 2026-08-18
 
 ## Problem
 
-[`autonomy.md`](../.agents/rules/autonomy.md) opens by calling itself "a **swappable module**, the
+[`autonomy.md`](../../.agents/rules/autonomy.md) opens by calling itself "a **swappable module**, the
 third beside [`house-style.md`] and [`review-quality.md`]". No skill composes it. Measured 2026-08-18:
 
 ```text
@@ -55,7 +55,7 @@ before dispatch: **lens**. See the decisions section. What remains is the wiring
 
 - Add a reference to `autonomy.md` from each of the five skills whose rules it consolidates, in the
   same shape those skills already use for `house-style.md` and `review-quality.md`.
-- Extend [`validate-skills.py`](../scripts/validate-skills.py) with a rule that a file in
+- Extend [`validate-skills.py`](../../scripts/validate-skills.py) with a rule that a file in
   `.agents/rules/` presenting itself as a lens has at least one inbound reference from a skill. That
   rule is the durable half: it is what stops the next lens from arriving unwired.
 
@@ -101,6 +101,41 @@ doing the reference pass twice.
   nothing to bless, since a document that no skill composes cannot be exercised by using the kit.
   Recorded here so a later reader does not re-litigate it.
 
+- **2026-08-19, implementation: each reference names the specific rule the lens consolidates from
+  that skill, not just the module.** The light `house-style.md` shape was mirrored as instructed, one
+  paragraph in each `## Conventions` section, but the sentence cites `A1`, `A2`, `A4` and `A5` in
+  `fix-batch`, `A6` in `spec-conformance`, `A7` in `verifier-agent`, `A8` in `pr-describe`, and the
+  governing principle in `doc-sync`. The wiring list is the lens's own outbound links, so naming the
+  rule at each end makes the pair checkable in both directions: a reader arriving from either file
+  can see whether the claim still holds. A bare "follow the autonomy module" would have satisfied the
+  validator while leaving the same asymmetry the problem section describes.
+
+- **2026-08-19, implementation: the references do not declare the lens canonical over a skill's
+  inline prose.** The problem section names that ambiguity, and it was tempting to settle it here.
+  Declined: `autonomy.md`'s own Scope section already says "a skill may state a local exception", so
+  a reference asserting the module outranks the skill would contradict the module it is wiring in.
+  The reference states that the module is a swappable default and the ceiling may be retuned, which
+  is what the `house-style.md` references say. Reconciling each inline rule against the lens is the
+  second pass this task already puts out of scope.
+
+- **2026-08-19, implementation: the validator rule keys off a self-declaration in the file's opening
+  and requires an inbound reference that names the file.** Two bounds, each chosen against a specific
+  failure. The declaration is read only in the first `LENS_DECLARATION_LINES` (10) lines, because
+  `LENS_DECLARATION_RE` matches the bare word "lens", which any rules document may use when
+  describing its neighbours; all three shipped lenses declare by line 3, so 10 has margin, and the
+  test asserts both that margin and an upper bound rather than the bare number. A reference must
+  contain the lens's filename (`autonomy.md`), not the bare subject word, or a skill merely
+  discussing the topic would satisfy the rule while giving a reader no way to reach the module. A
+  prose mention naming the file counts as well as a link, because the portability contract in
+  `AGENTS.md` tells a skill to name some files in prose rather than link to them.
+
+- **2026-08-19, implementation: the check runs once over the whole tree, after the per-skill loop.**
+  `validate-skills.py` iterated only over `.agents/skills/` and never read `.agents/rules/`, which is
+  exactly why the gap was invisible. "No skill references this lens" is a fact about every skill
+  together rather than about any one of them, so it is a single pass over `portable_root / "rules"`,
+  skipped when no sibling `rules/` directory exists. Placing it inside the per-skill loop would have
+  reported the same lens once per skill.
+
 ## Risks and rollback
 
 Touches five skill bodies, a lens, the kit-level validator and its tests, so it meets the
@@ -118,18 +153,18 @@ Reversible by reverting one commit.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] Each of the five skills the lens names carries a reference to it, and
+- [x] Each of the five skills the lens names carries a reference to it, and
       `grep -rl "autonomy" .agents/skills/` lists exactly those five, no more and no fewer.
-- [ ] `validate-skills.py` fails when a self-declared lens under `.agents/rules/` has no inbound
+- [x] `validate-skills.py` fails when a self-declared lens under `.agents/rules/` has no inbound
       reference from any skill, proven by a test that removes the references and asserts the non-zero
       exit.
-- [ ] The new validator rule is exercised in both directions (a lens without references fails; a
+- [x] The new validator rule is exercised in both directions (a lens without references fails; a
       non-lens rules file without references passes).
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

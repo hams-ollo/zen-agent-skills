@@ -287,12 +287,25 @@ def emit_skill_assets(skill_dir: Path, out: Path, dry: bool,
     emitted body points at. Per skill, unlike the rules module beside it, and
     unconditionally: these are derived from the kit rather than adopted, so a
     re-run refreshes them (S-014).
+
+    Byte-caches are excluded, by the same rule `install.py` filters them with
+    (`_digestable`, and the ignore list `_copy` places with). A skill directory
+    grows a `templates/__pycache__/` as soon as anything imports what is in it,
+    which the test suite does, and the payload this places is meant to be a
+    portable human-readable skill rather than one checkout's compiled bytecode
+    (bug-0036). The directory half of the rule stands on its own: a future
+    artefact inside `__pycache__` with some other suffix is still not part of the
+    skill. Real `.py` files under `templates/`, such as the validator
+    `init-worktracking` scaffolds, are unaffected and still emit.
     """
     written = []
     for src in sorted(skill_dir.rglob("*")):
         if not src.is_file() or src.name == "SKILL.md":
             continue
-        dest = out / layout.assets_dir / skill_dir.name / src.relative_to(skill_dir)
+        rel = src.relative_to(skill_dir)
+        if src.suffix == ".pyc" or "__pycache__" in rel.parts:
+            continue
+        dest = out / layout.assets_dir / skill_dir.name / rel
         if dest.resolve() == src.resolve():
             continue  # building into the kit itself; the file is already there
         if not dry:

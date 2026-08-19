@@ -281,12 +281,12 @@ The rest:
   in one direction only, so an agent following a skill body never reaches the ceiling, and a lens no
   skill composes cannot be exercised, which means it cannot clear the contribution bar. This is the
   gating item under Epic E #3. Scoped as
-  [`feat-0048`](.tasks/feat-0048-wire-the-autonomy-lens-into-the-skills.md).
+  [`feat-0048`](.tasks/done/feat-0048-wire-the-autonomy-lens-into-the-skills.md).
 - **The lite tier scaffolds a required field that cannot be satisfied.** Lite ships no `ROADMAP.md`,
   `_TEMPLATE.md.tmpl` seeds `parent: "ROADMAP#N feature-slug"`, `parent` is required by the shipped
   validator, and `new-task` demands a real ROADMAP parent and offers to add a Feature to a file that
   is not there. `new-task` never mentions the tier. The "Tier stripping at lite" list omits the
-  template. Scoped as [`bug-0030`](.tasks/bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md).
+  template. Scoped as [`bug-0030`](.tasks/done/bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md).
 - **`test-author` is the one spine skill that will derive tests from an unapproved contract.** It
   names an approved spec as its input three times and gates only on well-formedness, while
   `verifier-agent` blocks on a non-`approved` status and `new-task` refuses one outright. Tests are

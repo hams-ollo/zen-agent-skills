@@ -91,7 +91,7 @@ promised not to produce.
   [`bug-0032`](done/bug-0032-test-author-never-checks-the-spec-is-approved.md); this task depends on it so
   the characterization exemption is already written when item 3 points at it.
 - The lite-tier `parent` problem in `init-worktracking` and `new-task`, which is
-  [`bug-0030`](bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md); this task depends on it as a
+  [`bug-0030`](done/bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md); this task depends on it as a
   file-collision ordering, since both edit those two bodies.
 - Any behaviour change. All four are statements of fact about the kit, and the facts are the fix.
 
