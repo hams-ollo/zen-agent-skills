@@ -1,6 +1,6 @@
 ---
 id: feat-0048
-title: Wire autonomy.md into the skills whose rules it consolidates, or demote it from being a lens
+title: Wire autonomy.md into the five skills whose rules it consolidates, and guard the next lens against arriving unwired
 type: feat
 status: open
 priority: P1
@@ -48,20 +48,16 @@ Only the skills do not.
 
 ## Scope
 
-This task decides a question before it changes anything, and the decision is the deliverable as much
-as the wiring.
+The question this task originally posed (lens or document) was answered by the author on 2026-08-18
+before dispatch: **lens**. See the decisions section. What remains is the wiring and the guard.
 
-**In scope:** determine whether `autonomy.md` is a composed lens or a document, then make the
-repository say so consistently.
+**In scope:**
 
-- If **lens**: add a reference from each of the five skills whose rules it consolidates, in the same
-  shape those skills already use for `house-style.md` and `review-quality.md`, and extend
-  [`validate-skills.py`](../scripts/validate-skills.py) with a rule that a file in `.agents/rules/`
-  presenting itself as a lens has at least one inbound reference from a skill. That rule is what stops
-  the next lens from arriving unwired.
-- If **document**: strike the "third beside" claim and the swappable-module framing from
-  `autonomy.md`, say plainly what it is (a written account of rules the skills state inline), and
-  record in the ROADMAP why a lens was the wrong shape.
+- Add a reference to `autonomy.md` from each of the five skills whose rules it consolidates, in the
+  same shape those skills already use for `house-style.md` and `review-quality.md`.
+- Extend [`validate-skills.py`](../scripts/validate-skills.py) with a rule that a file in
+  `.agents/rules/` presenting itself as a lens has at least one inbound reference from a skill. That
+  rule is the durable half: it is what stops the next lens from arriving unwired.
 
 **Out of scope:**
 
@@ -72,6 +68,7 @@ repository say so consistently.
   needs the reference to exist first.
 - Adding a fourth lens. ROADMAP Epic B #20 is held behind this task for exactly this reason.
 - `house-style.md` and `review-quality.md`, which are correctly wired.
+- Re-opening the lens-versus-document choice. It is settled; see the decisions section.
 
 ## Implementation notes
 
@@ -94,6 +91,16 @@ the test why the bound was chosen, matching how `bug-0026` asks its own drift as
 untrusted-content rule enters `autonomy.md`, and wiring a lens whose contents are still moving means
 doing the reference pass twice.
 
+## Decisions
+
+- **2026-08-18, author: `autonomy.md` stays a lens and gets wired in.** The alternative on the table
+  was to demote it to a plain document, strike the "third beside" claim, and let the five skills keep
+  stating their autonomy rules inline. Declined for two reasons. The wiring is what makes the module
+  swappable in practice: an adopter who rewrites the ceiling wants that rewrite to reach the skills,
+  which it cannot do while no skill reads it. And demoting it would leave ROADMAP Epic E #3 with
+  nothing to bless, since a document that no skill composes cannot be exercised by using the kit.
+  Recorded here so a later reader does not re-litigate it.
+
 ## Risks and rollback
 
 Touches five skill bodies, a lens, the kit-level validator and its tests, so it meets the
@@ -105,21 +112,17 @@ lens and one that is not.
 The wiring itself is inert by construction. Adding a reference changes what an agent can reach, not
 what it must do, so the failure direction is an agent reading one more short file.
 
-Reversible by reverting one commit. If the demote branch is chosen instead, the revert is the same and
-the ROADMAP note explaining the choice is the part worth keeping.
+Reversible by reverting one commit.
 
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] The choice (lens or document) is recorded in this task's `## Decisions` section with its reason.
-- [ ] If lens: each of the five skills the lens names carries a reference to it, and
-      `grep -rl "autonomy" .agents/skills/` lists exactly those five.
-- [ ] If lens: `validate-skills.py` fails when a self-declared lens under `.agents/rules/` has no
-      inbound reference from any skill, proven by a test that removes the references and asserts the
-      non-zero exit.
-- [ ] If document: `autonomy.md` no longer claims to be a lens or a swappable module, and no skill
-      references it.
+- [ ] Each of the five skills the lens names carries a reference to it, and
+      `grep -rl "autonomy" .agents/skills/` lists exactly those five, no more and no fewer.
+- [ ] `validate-skills.py` fails when a self-declared lens under `.agents/rules/` has no inbound
+      reference from any skill, proven by a test that removes the references and asserts the non-zero
+      exit.
 - [ ] The new validator rule is exercised in both directions (a lens without references fails; a
       non-lens rules file without references passes).
 - [ ] Existing tests still pass, unchanged in intent.

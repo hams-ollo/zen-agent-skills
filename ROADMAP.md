@@ -271,7 +271,7 @@ The rest:
   in one direction only, so an agent following a skill body never reaches the ceiling, and a lens no
   skill composes cannot be exercised, which means it cannot clear the contribution bar. This is the
   gating item under Epic E #3. Scoped as
-  [`feat-0048`](.tasks/feat-0048-wire-the-autonomy-lens-or-demote-it.md).
+  [`feat-0048`](.tasks/feat-0048-wire-the-autonomy-lens-into-the-skills.md).
 - **The lite tier scaffolds a required field that cannot be satisfied.** Lite ships no `ROADMAP.md`,
   `_TEMPLATE.md.tmpl` seeds `parent: "ROADMAP#N feature-slug"`, `parent` is required by the shipped
   validator, and `new-task` demands a real ROADMAP parent and offers to add a Feature to a file that
