@@ -134,16 +134,16 @@ something else today.
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
-| [`systematic-debugging`](systematic-debugging.md) | **draft** | 13 | none yet |
+| [`systematic-debugging`](systematic-debugging.md) | approved | 13 | none yet, conformance owed at closeout |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
 | [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 153 scenarios. Ten are approved and carry 140 of those scenarios;
-[`systematic-debugging`](systematic-debugging.md) is the eleventh, drafted 2026-08-18 and the only
-one at `draft`, so it is awaiting the author's approval and nothing may decompose or verify against
-it yet. Of the ten approved, nine carry 121 scenarios and every one has a
+Eleven specs, 153 scenarios, all approved.
+[`systematic-debugging`](systematic-debugging.md) is the eleventh, drafted and approved 2026-08-18,
+and it is the second **forward** spec here, written before an implementation, so its conformance
+matrix is owed at closeout rather than now. Of the other ten, nine carry 121 scenarios and every one has a
 conformance matrix as of 2026-08-06, though `install`'s covers 15 of its 18 scenarios: `bug-0018`
 added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout.
 [`cloud-executable`](cloud-executable.md) is the tenth, approved

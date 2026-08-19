@@ -1,6 +1,6 @@
 ---
 title: systematic-debugging
-status: draft
+status: approved
 ---
 
 # systematic-debugging
