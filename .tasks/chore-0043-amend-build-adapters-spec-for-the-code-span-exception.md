@@ -44,10 +44,9 @@ independently-argued exceptions.
 **In scope:** amend the contract so it describes the function that exists, and re-audit the affected
 rows. Two documents:
 
-- `docs/spec/build-adapters.md`: state the exception. Whether that is a qualification on the existing
-  scenarios or a new scenario beside them is the author's call, and `chore-0039` faces the identical
-  choice on `S-009`. **Take the same shape in both**, and if `chore-0039` has already landed, follow
-  what it chose rather than deciding again.
+- `docs/spec/build-adapters.md`: state the exception as a **new scenario**, settled by the author on
+  2026-08-18; see the decisions section. `chore-0039` carries the identical decision for `S-009`, so
+  the two are one decision applied twice.
 - `docs/spec/build-adapters.conformance.md`: re-audit the affected rows against the current code.
 
 Follow the convention in [`docs/spec/README.md`](../docs/spec/README.md) for a spec amended after
@@ -66,6 +65,16 @@ Add the row to that file's re-approval table.
   `validate-skills.py` and `.tasks/validate.py`. `bug-0028` verified they are character-identical and
   recorded the duplication as a deliberate seam; deduplicating them is a separate decision with a
   portability cost, since the tracker validator ships standalone into an adopter's repository.
+
+## Decisions
+
+- **2026-08-18, author: the amendment takes the shape of a new scenario, not a qualification on an
+  existing one.** Applies to both this task and its sibling, so the two read as one decision applied
+  twice. A new `S-NNN` stating that a link inside an inline code span or a fenced block is emitted
+  unchanged is traceable, is citable by a test, and gives `spec-conformance` a row of its own to
+  audit. A qualification folded into an existing scenario would leave the exception with no id, so
+  nothing could cite it and no matrix could report on it separately. The cost accepted is one more
+  scenario per spec to maintain.
 
 ## Implementation notes
 
