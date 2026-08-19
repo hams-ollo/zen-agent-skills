@@ -84,6 +84,113 @@ class TestRewriteLinks(unittest.TestCase):
         self.assertEqual(ba.rewrite_links(body, "pr-describe", ".mdc"), body)
 
 
+class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
+    """Scenarios S-003 through S-008 refined: a link that renders as literal text is not a link.
+
+    The bug population is a skill body that *shows* a markdown link as an example, which
+    the documentation skills are the likeliest to want. `rewrite_links()` matched every
+    link with a bare regex and repointed each one, so the example was rewritten in each
+    generated adapter and the body said one thing in the kit and a different thing
+    everywhere it shipped (bug-0028).
+
+    test-quality notes: this is pure string work over a body, so the unit layer on
+    `rewrite_links` is the lowest faithful one, and the oracle is whole-string equality
+    rather than a substring, because "emitted unchanged" is a claim about the whole body
+    and a substring check passes while the rest of it is mangled. The negative cases
+    carry the weight, because the cheap way to remove a false rewrite is to stop
+    rewriting: a real link beside a closed fence, and one below an unterminated fence,
+    must both still be repointed.
+
+    No scenario states this rule. S-008 is the closest ("external and same-page links are
+    emitted unchanged") and it governs a different class. Whether the contract gains an
+    S-018 in that shape is the author's call, recorded in bug-0028's decisions; these
+    tests are tagged with the scenarios they refine rather than inventing an id.
+    """
+
+    # The two inlining targets differ only in the extension a sibling link is given, so
+    # every case is asserted for both. The plugin target inlines nothing; see the last
+    # test in this class.
+    EXTS = (".mdc", ".prompt.md")
+
+    # One fence holding all three rewritten classes at once: a sibling skill (S-003), the
+    # rules module (S-006), and a skill-local supporting file (S-007). One of them
+    # surviving proves nothing about the other two, since each is a separate branch.
+    FENCED = (
+        "Write the references like this:\n\n"
+        "```markdown\n"
+        "See [`doc-revise`](../doc-revise/SKILL.md) for the edit discipline.\n"
+        "Apply the [`house-style`](../../rules/house-style.md) module.\n"
+        "Fill in [the template](templates/task.md).\n"
+        "```\n"
+    )
+
+    def test_a_link_inside_a_fenced_block_is_emitted_unchanged(self):
+        # Scenarios S-003, S-006, S-007 refined: inside a fence none of the three fires.
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                self.assertEqual(ba.rewrite_links(self.FENCED, "doc-author", ext),
+                                 self.FENCED)
+
+    def test_a_link_inside_an_inline_code_span_is_emitted_unchanged(self):
+        # Markdown opens a span with a backtick run of any length and closes it with a
+        # run of the same length, so a rule that knows only the single form fixes half
+        # the occurrences. The double form is what an author reaches for the moment the
+        # text being quoted contains a backtick of its own.
+        forms = {
+            "single backtick": "Write `[the notes](../doc-revise/SKILL.md)` in the body.\n",
+            "double backtick": "Write ``[`notes`](../doc-revise/SKILL.md)`` in the body.\n",
+        }
+        for label, body in forms.items():
+            for ext in self.EXTS:
+                with self.subTest(form=label, ext=ext):
+                    self.assertEqual(ba.rewrite_links(body, "doc-author", ext), body)
+
+    def test_a_real_link_beside_a_fence_is_still_rewritten(self):
+        # Negative: the exclusion must not switch the rewrite off. The fence here is
+        # closed and the genuine link sits after it, so a scanner that ran the fence past
+        # its closing delimiter would leave the real link unrewritten and dangling in
+        # every adapter. The genuine link also wraps its text in a code span, which is
+        # how nearly every link in this kit is written, so an exclusion keyed to the
+        # wrong bracket would suppress the whole tree rather than one example.
+        body = (
+            "```markdown\n"
+            "See [an example](../doc-revise/SKILL.md).\n"
+            "```\n\n"
+            "Then read [`fix-batch`](../fix-batch/SKILL.md) for the real thing.\n"
+        )
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                out = ba.rewrite_links(body, "doc-author", ext)
+                self.assertIn("](../doc-revise/SKILL.md)", out)
+                self.assertIn(f"](fix-batch{ext})", out)
+                self.assertNotIn(f"](doc-revise{ext})", out)
+
+    def test_an_unterminated_fence_does_not_suppress_the_rewrite_below_it(self):
+        # Negative: an opening fence that is never closed yields no range at all, the
+        # same trade bug-0015, bug-0017, bug-0023, and bug-0027 all made. A detector that
+        # ran it to end of file would disable the rewrite for the rest of the body and
+        # still report success, which is the one failure indistinguishable from success.
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "Then read [`fix-batch`](../fix-batch/SKILL.md) for the real thing.\n"
+        )
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                self.assertIn(f"](fix-batch{ext})",
+                              ba.rewrite_links(body, "doc-author", ext))
+
+    def test_the_plugin_target_copies_a_body_byte_for_byte(self):
+        # The third target rewrites nothing at all (S-016): it copies the SKILL.md, so a
+        # fenced example survives there by construction rather than by exclusion.
+        # Asserted rather than assumed, because the criterion is "unchanged in every
+        # target" and a rewrite added here later would break it silently.
+        src = ba.discover_skills()[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = ba.emit_plugin(src, src.name, "", "", Path(tmp), False)
+            self.assertEqual(dest.read_bytes(), (src / "SKILL.md").read_bytes())
+
+
 class TestFrontmatterParsing(unittest.TestCase):
     """Scenario S-002 at the parser layer: what counts as the description's value.
 

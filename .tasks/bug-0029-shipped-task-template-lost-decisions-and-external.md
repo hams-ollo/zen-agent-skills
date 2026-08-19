@@ -38,7 +38,7 @@ So in a scaffolded repository `fix-batch`'s instruction points at a section that
 carry the field. Neither failure announces itself. This is the shape this kit names as its own enemy:
 a feature that reports success while doing nothing.
 
-**This settles a question [`bug-0026`](bug-0026-scaffolded-validator-lost-the-external-check.md)
+**This settles a question [`bug-0026`](done/bug-0026-scaffolded-validator-lost-the-external-check.md)
 deliberately deferred.** That task found the sibling half (the shipped *validator* lost the `external`
 check) and put this half out of scope, calling it "a separate and arguable question: whether an adopter
 should be taught it, or whether the check should simply hold if they find it". The argument that

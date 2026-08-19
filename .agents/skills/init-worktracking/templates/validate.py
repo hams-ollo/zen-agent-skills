@@ -43,6 +43,11 @@ STATUSES = {"open", "in_progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2"}
 ID_RE = re.compile(r"^(bug|feat|chore|epic)-\d{4}$")
 SCENARIO_RE = re.compile(r"^S-\d{3}$")
+# An upstream issue reference, stored in GitHub's own syntax so emitting it is
+# concatenation rather than translation: `#123` for this repository,
+# `owner/repo#123` for another. A bare number is rejected on purpose, so the
+# stored value stays byte-identical to the form GitHub itself recognises.
+EXTERNAL_RE = re.compile(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#\d+$")
 
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
 
@@ -372,8 +377,10 @@ def check_links(patterns) -> int:
     return 1 if broken else 0
 
 
-def main() -> int:
-    args = sys.argv[1:]
+def main(argv=None) -> int:
+    # `argv` is injectable so the CLI layer is reachable from a test. Calling
+    # main() with no argument behaves exactly as before.
+    args = sys.argv[1:] if argv is None else list(argv)
     # A second mode, and the only one that does not read .tasks/ at all: link-check an
     # arbitrary set of documents, so a CI docs link gate can call this rule rather than
     # restate it. Everything after --links is a glob, resolved from the repository root:
@@ -472,6 +479,16 @@ def main() -> int:
             warn(rel, "scenarios are listed but no spec: field names the contract they come from")
         if spec and not (REPO_ROOT / spec).exists():
             warn(rel, f"spec path does not exist: {spec}")
+
+        # The upstream issue this task serves, when it has one. Absent is fine:
+        # not every task has one. Present but malformed is an error rather than a
+        # warning, because the value is emitted verbatim into a pull request
+        # description: a form GitHub does not recognise is ignored silently, and
+        # the issue simply never closes.
+        external = fm.get("external", "")
+        if external and not EXTERNAL_RE.match(external):
+            err(rel, f"external {external!r} is not a GitHub issue reference "
+                     f"(#123 or owner/repo#123)")
 
     for tid, where in ids_seen.items():
         if len(where) > 1:

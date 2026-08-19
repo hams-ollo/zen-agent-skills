@@ -19,7 +19,7 @@ created: 2026-08-18
 ## Problem
 
 The `touched_files` contract is stated three times and contradicted by the code that enforces it.
-Found 2026-08-18 while authoring [`feat-0049`](feat-0049-install-currency-reminder.md) with
+Found 2026-08-18 while authoring [`feat-0049`](done/feat-0049-install-currency-reminder.md) with
 `new-task`, which produced a task file that failed the repository's own acceptance command.
 
 What the documents say:
@@ -80,7 +80,7 @@ design question and none changes behaviour. This one carries both.
 ## Implementation notes
 
 Whichever way it goes, **both validator copies move together**. This is the exact drift class
-[`bug-0026`](bug-0026-scaffolded-validator-lost-the-external-check.md) is filed against, and that task
+[`bug-0026`](done/bug-0026-scaffolded-validator-lost-the-external-check.md) is filed against, and that task
 asks for an assertion keeping the two copies' executable code in step. If `bug-0026` lands first, that
 assertion should catch a one-sided change here; if this lands first, do not let it be the change that
 proves the assertion was needed.

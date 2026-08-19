@@ -348,6 +348,10 @@ HOOK_REGISTRATIONS = [
      "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
     # `startup` only. The other sources continue a session already told.
     ("skill-reachability-reminder.py", "SessionStart", "startup"),
+    # Same event and the same reasoning, and deliberately a second hook rather than a
+    # branch inside the first: reachability is a directory-name match, currency reads and
+    # digests files, and the reachability reminder's own message disclaims this question.
+    ("install-currency-reminder.py", "SessionStart", "startup"),
 ]
 
 

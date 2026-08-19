@@ -2,7 +2,7 @@
 id: bug-0026
 title: The validator the kit scaffolds into an adopter's repository has no external check, so the silent tracker failure is unguarded everywhere it ships
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0023]
@@ -16,7 +16,7 @@ created: 2026-08-08
 
 ## Problem
 
-[`validate.py`](validate.py) and the copy shipped at
+[`validate.py`](../validate.py) and the copy shipped at
 `.agents/skills/init-worktracking/templates/validate.py` are deliberate near-duplicates. Stripping
 docstrings and diffing their parsed source, 2026-08-08, gives exactly two differences, and the first
 is a missing rule:
@@ -32,12 +32,12 @@ is a missing rule:
 +def main() -> int:
 ```
 
-`S-007` in [`tracker-links.md`](../docs/spec/tracker-links.md) makes a malformed `external` value an
+`S-007` in [`tracker-links.md`](../../docs/spec/tracker-links.md) makes a malformed `external` value an
 **error** rather than a warning, and the reason is written into the validator's own comment: the value
 is emitted verbatim into a pull request description, so "a form GitHub does not recognise is ignored
 silently, and the issue simply never closes".
 
-**The guard exists only in the repository that authored it.** [`pr-describe`](../.agents/skills/pr-describe/SKILL.md)
+**The guard exists only in the repository that authored it.** [`pr-describe`](../../.agents/skills/pr-describe/SKILL.md)
 ships to adopters and tells an agent, in its body, that a task file may carry an `external` field.
 `init-worktracking` scaffolds the tracker into that same repository with a validator that never checks
 it. So every repository this kit sets up gets the feature and not the check, which is the exact
@@ -76,13 +76,32 @@ distinction rather than collapsing it.
 
 The drift assertion is the durable half. A test that parses both files, strips docstrings, and
 compares the result would have caught this and would catch the next one; there is prior art for the
-idea in the wiring-consistency tests in [`test_hooks.py`](../tests/test_hooks.py), which assert a
+idea in the wiring-consistency tests in [`test_hooks.py`](../../tests/test_hooks.py), which assert a
 relationship between files rather than pinning a string. If a full comparison proves too brittle,
 assert the narrower property that every module-level regex and every top-level function name present
 in one is present in the other, and say in the test why the bound was chosen.
 
 `depends_on: [bug-0023]` is a file-collision ordering, not a logical one. That task edits the same
 template validator, and two agents changing it in parallel collide by construction.
+
+## Decisions
+
+- **Rejected the narrower drift bound this task offered as a fallback** (every module-level regex and
+  top-level function name present in one copy is present in the other). Full stripped-AST equality
+  was tried first and turned out exact, so the weaker bound bought nothing. It is also the shape that
+  failed here: the pre-existing name-list test carried a comment recording `EXTERNAL_RE` as this
+  repository's alone, so no list-driven check could ever have reported its absence from the template.
+  A guarantee that has to be enumerated cannot cover the rule nobody thought to enumerate. The two
+  name-list tests are kept for their sharper failure messages, not for their coverage.
+- **Rejected a separate template test class restating S-007 and S-008.** `TemplateExternalFieldTests`
+  subclasses `ExternalFieldTests` and swaps a `module` attribute, so both copies are held to one set
+  of assertions. Two independently authored suites for one contract can drift apart in exactly the
+  way the two validators did.
+- **Seam left open deliberately:** the `external` field is now *validated* in a scaffolded repository
+  and *documented* nowhere in it. `_TEMPLATE.md.tmpl` and `tasks-README.md.tmpl` still do not mention
+  it, so an adopter meets the rule only by tripping it. This task's scope section rules that out of
+  scope and asks for the gap to be reported rather than closed, so it is left for the author to
+  decide whether the scaffold should teach the field or only guard it.
 
 ## Risks and rollback
 
@@ -98,20 +117,20 @@ Reversible by reverting one commit. Nothing already scaffolded changes until its
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test driving the **template** validator that a malformed `external` value fails validation and
+- [x] A test driving the **template** validator that a malformed `external` value fails validation and
       exits non-zero (`S-007`). It must fail against the current template.
-- [ ] A test driving the template validator that an absent `external` key passes (`S-008`), and that
+- [x] A test driving the template validator that an absent `external` key passes (`S-008`), and that
       both `#123` and `owner/repo#123` are accepted.
-- [ ] A test that the two validator copies' executable code agrees, which fails if either gains a rule
+- [x] A test that the two validator copies' executable code agrees, which fails if either gains a rule
       the other lacks.
-- [ ] The template's `main` accepts an injectable `argv`, and a test drives it.
-- [ ] The template validator still runs standalone in a directory holding no other file from this kit,
+- [x] The template's `main` accepts an injectable `argv`, and a test drives it.
+- [x] The template validator still runs standalone in a directory holding no other file from this kit,
       which is the property `chore-0029` demonstrated and this task must not break.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

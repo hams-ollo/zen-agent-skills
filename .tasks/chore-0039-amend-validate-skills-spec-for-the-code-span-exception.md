@@ -65,7 +65,7 @@ verification run for this very task unanswerable.
 - **Any change to `scripts/validate-skills.py`.** The code is right and the contract is behind it.
   Editing the code to match the spec would revert `bug-0027`. This task moves prose only.
 - The same class in the two other tools. `.tasks/validate.py` has no approved contract, and
-  `build-adapters.py` is [`bug-0028`](bug-0028-adapter-link-rewrite-fires-inside-code-spans-and-fences.md),
+  `build-adapters.py` is [`bug-0028`](done/bug-0028-adapter-link-rewrite-fires-inside-code-spans-and-fences.md),
   which carries its own contract question about `S-003` through `S-008`.
 - Re-auditing scenarios `bug-0027` did not touch. A partial audit stated as partial is correct here;
   a whole-spec re-run is `spec-conformance`'s job and a different task.
