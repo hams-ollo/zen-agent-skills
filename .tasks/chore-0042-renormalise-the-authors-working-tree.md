@@ -74,6 +74,27 @@ either site, so a test would have to assert against generated output that is alr
 every run. State that reasoning in the closeout rather than adding a test that pins a byte nobody
 reads.
 
+## Decisions
+
+- **Rejected: a test for the two `newline=""` sites.** Confirmed rather than inherited: neither
+  output is tracked. `scripts/.install-manifest.json` is in `.gitignore`, and nothing under
+  `.cursor/`, `.github/prompts/`, `.claude-plugin/`, or `skills/` that `_write` emits is in
+  `git ls-files`. A test would pin bytes that are regenerated on every run and read by nothing
+  under version control. Verified empirically instead: emitting all three targets produced 96 text
+  files, none containing CRLF, and the manifest written by the install cycle is LF-only.
+- **Seam left open: the renormalise half is not done and is not forgotten.** It belongs to the
+  author's long-lived checkout, which measured `30` files at `w/crlf`. A fresh worktree measures
+  `0` before and after `python scripts/run-checks.py`, so running `git add --renormalize .` here
+  would change nothing and prove nothing, while mixing line-ending churn into a two-line change.
+  Acceptance criteria two through four stay unticked until that command runs on the machine that
+  has the drift.
+- **Seam left open: `build-adapters.py` copies `__pycache__` into its output.** Noticed while
+  measuring the emitted bytes, unrelated to line endings, and left alone as out of scope. The
+  `rglob` in `emit_skill_assets` walks the skill directory verbatim, so a checkout that has run the
+  tests carries `.agents/skills/init-worktracking/templates/__pycache__/validate.cpython-311.pyc`
+  into the emitted adapter tree. Gitignored here, but an adopter would receive compiled bytecode
+  they did not ask for.
+
 ## Risks and rollback
 
 Touches two scripts in different modules, so the more-than-one-module rule fires, though both edits

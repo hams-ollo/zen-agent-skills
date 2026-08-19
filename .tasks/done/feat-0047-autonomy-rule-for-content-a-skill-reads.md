@@ -2,7 +2,7 @@
 id: feat-0047
 title: The threat model names prompt injection as reportable and no skill or lens says anything about it
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #3: harden autonomy.md from what item 2's run revealed"
 depends_on: []
@@ -13,10 +13,10 @@ created: 2026-08-08
 
 ## Problem
 
-[`SECURITY.md`](../SECURITY.md) asks for private reports of "prompt-injection paths, where content a
+[`SECURITY.md`](../../SECURITY.md) asks for private reports of "prompt-injection paths, where content a
 skill is designed to read (a diff, an issue body, a fetched page, a file in the target repo) can
 redirect the agent's behavior". Grepping the whole of `.agents/` for that class on 2026-08-08 returns
-one file, [`test-quality`](../.agents/skills/test-quality/SKILL.md), and it is discussing adversarial
+one file, [`test-quality`](../../.agents/skills/test-quality/SKILL.md), and it is discussing adversarial
 **test inputs** rather than this.
 
 So the kit invites reports of a class it has written nothing about, in a library whose entire premise
@@ -27,10 +27,10 @@ The skills that face it are the ones that read text somebody else can influence 
 
 | Skill | What it reads |
 |---|---|
-| [`pr-describe`](../.agents/skills/pr-describe/SKILL.md) | issue bodies and titles from a tracker |
-| [`house-review`](../.agents/skills/house-review/SKILL.md), [`review-depth`](../.agents/skills/review-depth/SKILL.md) | a diff, which is whatever somebody wrote |
-| [`doc-sync`](../.agents/skills/doc-sync/SKILL.md) | every reader-facing document in a target repository |
-| [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md), [`fix-batch`](../.agents/skills/fix-batch/SKILL.md) | the output and diffs of other agents |
+| [`pr-describe`](../../.agents/skills/pr-describe/SKILL.md) | issue bodies and titles from a tracker |
+| [`house-review`](../../.agents/skills/house-review/SKILL.md), [`review-depth`](../../.agents/skills/review-depth/SKILL.md) | a diff, which is whatever somebody wrote |
+| [`doc-sync`](../../.agents/skills/doc-sync/SKILL.md) | every reader-facing document in a target repository |
+| [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md), [`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) | the output and diffs of other agents |
 
 `fix-batch`'s "a delegated agent's report is a claim, not evidence" doctrine is adjacent and genuinely
 strong, and it is not this: it guards against an optimistic report, not against instructions embedded
@@ -38,7 +38,7 @@ in the material an agent was asked to read.
 
 ## Scope
 
-**In scope:** decide whether [`autonomy.md`](../.agents/rules/autonomy.md) gains a rule drawing the
+**In scope:** decide whether [`autonomy.md`](../../.agents/rules/autonomy.md) gains a rule drawing the
 line between text an agent acts on and text an agent reads, and either write it with its citation or
 record it in that module's held section with a trigger. Then reconcile `SECURITY.md` with whichever
 answer is taken.
@@ -133,20 +133,20 @@ written, because the search below found nothing in this repository to cite.
 
     python scripts/validate-skills.py && python scripts/run-checks.py
 
-- [ ] `autonomy.md` addresses the class, either as a numbered rule carrying a citation in the form the
+- [x] `autonomy.md` addresses the class, either as a numbered rule carrying a citation in the form the
       other eight use, or as an entry in the held section carrying a trigger to revisit.
-- [ ] If a rule is added, its citation names a file, a task id, or a recorded incident, and the search
+- [x] If a rule is added, its citation names a file, a task id, or a recorded incident, and the search
       that produced it (or failed to) is recorded in the task's Decisions section.
-- [ ] If it is held, the held entry states what evidence would move it into the module.
-- [ ] `SECURITY.md` and `autonomy.md` do not contradict each other on whether the class is covered.
-- [ ] No `SKILL.md` is edited.
-- [ ] The module still ships without this repository around it: every reference outside the installed
+- [x] If it is held, the held entry states what evidence would move it into the module.
+- [x] `SECURITY.md` and `autonomy.md` do not contradict each other on whether the class is covered.
+- [x] No `SKILL.md` is edited.
+- [x] The module still ships without this repository around it: every reference outside the installed
       skill tree is named in prose rather than linked, which the lint enforces.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

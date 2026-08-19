@@ -53,7 +53,7 @@ of them, and it is the file every task in the adopter's repository is copied fro
   `spec-plan-readiness` reads it; weakening the schema to fit one tier is the wrong direction and
   should be rejected explicitly rather than left unsaid.
 - The `external` and `## Decisions` gaps in the same template, which are
-  [`bug-0029`](bug-0029-shipped-task-template-lost-decisions-and-external.md). This task depends on it
+  [`bug-0029`](done/bug-0029-shipped-task-template-lost-decisions-and-external.md). This task depends on it
   because they edit the same file.
 - The lite tier's contents. Whether lite should ship a `ROADMAP.md` after all is a product question,
   and the answer this task assumes is no, because the tier exists precisely to avoid the ceremony.

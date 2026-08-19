@@ -2,7 +2,7 @@
 id: bug-0035
 title: CONTRIBUTING and the pull request template still prescribe four commands that cover four of the seven gates
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -14,8 +14,8 @@ created: 2026-08-18
 
 ## Problem
 
-[`feat-0045`](done/feat-0045-committed-acceptance-command.md) made one committed command the
-acceptance gate. [`AGENTS.md`](../AGENTS.md) says so plainly: `run-checks.py` "runs every gate that
+[`feat-0045`](feat-0045-committed-acceptance-command.md) made one committed command the
+acceptance gate. [`AGENTS.md`](../../AGENTS.md) says so plainly: `run-checks.py` "runs every gate that
 decides whether a change here is acceptable, in one command with no flags". Seven gates.
 
 The two documents a **contributor** reads were never updated. `CONTRIBUTING.md` still opens its
@@ -77,6 +77,27 @@ acceptance command and updated `AGENTS.md` and the workflow, and left the two do
 reads. That is the gap `doc-sync`'s current-state classification exists to close, and it was not run
 over these two files at that task's closeout.
 
+## Decisions
+
+- **Rejected: naming the seven gates in either document.** Read from `run-checks.py`, the gates are
+  lint skills, test suite, backlog, adapters dry run, install dry run, install cycle, and doc links.
+  Neither document now states that list or its count, because `AGENTS.md` owns it and a third and
+  fourth copy is precisely what drifted from four to seven here. Both documents point at
+  `AGENTS.md` instead, so the count cannot go stale again.
+- **Seam left open deliberately: `CONTRIBUTING.md` still names one gate command.**
+  `scripts/validate-skills.py` survives as an example of a faster inner loop while reworking a
+  single skill, explicitly labelled a convenience and not a substitute, per this task's scope note.
+  That is one command as an illustration, not a checklist, and it should not be read as the start of
+  a new list to complete.
+- **Premise partly stale: `CONTRIBUTING.md` was not entirely un-updated.** The task says the two
+  contributor documents "were never updated" after `feat-0045`. In fact `CONTRIBUTING.md` already
+  named `python scripts/run-checks.py` and stated its three exit codes, but as a secondary "or run
+  all of them ... in one command" after the four-command block, and it still opened with "Run all
+  four" and still described the template as asking "which of the four you ran". The bug and its
+  scope hold; the fix was a reordering and a promotion rather than an addition. The exit-code prose
+  it already carried was checked against the script and was correct, and was rewritten only to add
+  the reason `2` outranks `1`.
+
 ## Risks and rollback
 
 Touches two documents in different trees and no code, so the more-than-one-module rule does not fire.
@@ -90,19 +111,19 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] `CONTRIBUTING.md`'s "Before you open a change" section prescribes `python scripts/run-checks.py`
+- [x] `CONTRIBUTING.md`'s "Before you open a change" section prescribes `python scripts/run-checks.py`
       as the acceptance command.
-- [ ] `.github/PULL_REQUEST_TEMPLATE.md` asks about that command rather than about four separate ones.
-- [ ] Neither document claims a count of gates that disagrees with `run-checks.py`, verified by
+- [x] `.github/PULL_REQUEST_TEMPLATE.md` asks about that command rather than about four separate ones.
+- [x] Neither document claims a count of gates that disagrees with `run-checks.py`, verified by
       reading the script rather than this task.
-- [ ] The `CONTRIBUTING.md` cross-reference describing the template matches the template as changed.
-- [ ] The unrelated "four" at `CONTRIBUTING.md` line 60, about frontmatter validator errors, is
+- [x] The `CONTRIBUTING.md` cross-reference describing the template matches the template as changed.
+- [x] The unrelated "four" at `CONTRIBUTING.md` line 60, about frontmatter validator errors, is
       untouched.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

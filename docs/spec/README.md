@@ -69,12 +69,12 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-07, five specs are approved and carry an amendment the author has not re-read. One of
-them, `install`, carries two:
+As of 2026-08-19, five specs are approved and carry an amendment the author has not re-read. Two of
+them carry two: `install`, and `build-adapters` since `chore-0043`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
-| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`) | 2026-08-06 |
+| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`) | 2026-08-06, 2026-08-19 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
@@ -128,8 +128,8 @@ something else today.
 
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
-| [`build-adapters`](build-adapters.md) | approved | 17 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
-| [`cloud-executable`](cloud-executable.md) | approved | 19 | [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
+| [`build-adapters`](build-adapters.md) | approved | 18 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
+| [`cloud-executable`](cloud-executable.md) | approved | 19 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
@@ -140,16 +140,21 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 153 scenarios, all approved.
-[`systematic-debugging`](systematic-debugging.md) is the eleventh, drafted and approved 2026-08-18,
-and it is the second **forward** spec here, written before an implementation, so its conformance
-matrix is owed at closeout rather than now. Of the other ten, nine carry 121 scenarios and every one has a
-conformance matrix as of 2026-08-06, though `install`'s covers 15 of its 18 scenarios: `bug-0018`
-added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout.
-[`cloud-executable`](cloud-executable.md) is the tenth, approved
-2026-08-07, and it is the one exception to the matrix claim: it is the first **forward** spec here,
-written before an implementation rather than pinning one that already existed, so there is nothing
-built to audit and it has no sibling report yet. Its conformance matrix is owed at closeout, not now.
+Eleven specs, 154 scenarios, all approved. Ten carry a conformance matrix between them, holding 141
+of those scenarios, recomputed from the files on 2026-08-19 rather than incremented.
+
+Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
+`bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And
+[`systematic-debugging`](systematic-debugging.md), the eleventh, drafted and approved 2026-08-19, is
+the only spec with no matrix at all: it is the second **forward** spec here, written before an
+implementation rather than pinning one that already existed, so there is nothing built to audit yet
+and its matrix is owed at closeout.
+
+[`cloud-executable`](cloud-executable.md) was the first forward spec and stopped being the exception
+on 2026-08-19, when `chore-0034` audited it. That matrix is worth reading for what it declines to
+claim: four of its 31 items are recorded **Not-built**, S-017 to S-019 plus the unattended pull
+request surface, because the Phase 4 proof run they describe is still recorded `blocked` and has
+never run. A matrix that reported them any other way would have been worse than no matrix.
 
 ## A limit worth knowing before reading any matrix
 

@@ -40,6 +40,7 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 | `depends_on` | Task ids that must reach `done/` before this one starts; `[]` if none. |
 | `spec` | Optional. Path to the approved spec this task implements. |
 | `scenarios` | Optional. The `S-NNN` scenario ids from that spec this task covers. |
+| `external` | Optional. The upstream issue this task serves, as `#123` or `owner/repo#123`. |
 | `touched_files` | Every file the task expects to create or modify. |
 | `created` | ISO date the task was authored. |
 
@@ -47,6 +48,12 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 does not come from a spec, which is most of them. Fill both when one exists, because a readiness
 gate run before implementation reads them to confirm every scenario has a task and every task has a
 reason to exist.
+
+`external` is the link back to whatever tracker the work was reported in. It holds a GitHub issue
+reference in GitHub's own syntax, `#123` for an issue in this repository or `owner/repo#123` for one
+in another, and a bare number is rejected so the stored value stays identical to the form GitHub
+recognises. The `pr-describe` skill reads it and emits a closing reference in the pull request body,
+so merging the pull request closes the issue. Omit it for a task nobody filed an issue for.
 
 ## A note on parallel agents
 

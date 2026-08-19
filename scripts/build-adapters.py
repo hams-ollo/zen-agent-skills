@@ -411,7 +411,12 @@ def _write(dest: Path, content: str, dry: bool):
     if dry:
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(content, encoding="utf-8")
+    # `newline=""` disables newline translation, so the bytes on disk are exactly the
+    # newlines in `content` (LF) rather than the platform default, which is CRLF on
+    # Windows. Emitted adapters are untracked, so nothing is broken today; the point is
+    # that a writer whose line endings vary by platform is the shape that makes a
+    # digest comparison answer differently on Windows than on Linux.
+    dest.write_text(content, encoding="utf-8", newline="")
 
 
 EMITTERS = {"cursor": emit_cursor, "vscode": emit_vscode, "plugin": emit_plugin}

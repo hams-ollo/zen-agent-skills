@@ -41,7 +41,7 @@ ships.
   extending the "every hook, everywhere" assertion to it would fail the moment it is correct. The new
   assertion runs the other way: whatever it names must exist.
 - Registering a second hook there. That is a decision `AGENTS.md` reserves, and
-  [`chore-0034`](../chore-0034-cloud-executable-conformance-matrix.md) records it as an open question for
+  [`chore-0034`](chore-0034-cloud-executable-conformance-matrix.md) records it as an open question for
   the author.
 - The interpreter name. `python3` versus `python` is a stated platform trade documented inside the
   settings file itself, and it is not this task's to reopen.
