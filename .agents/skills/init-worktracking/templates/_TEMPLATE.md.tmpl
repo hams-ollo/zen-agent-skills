@@ -10,6 +10,12 @@ depends_on: []
 # no spec. A readiness gate reads them to map this task back to its contract.
 spec: ""
 scenarios: []
+# Optional. The upstream issue this task serves, written in GitHub's own
+# syntax: "#123" for an issue in this repository, "owner/repo#123" for one in
+# another. A bare number is rejected, so the stored value stays identical to
+# the form GitHub itself recognises. The `pr-describe` skill reads this field
+# and emits a closing reference, so merging the pull request closes the issue.
+external: ""
 touched_files:
   - path/to/file/the/task/will/change
   - path/to/its/test
@@ -29,6 +35,23 @@ What is wrong or missing, and why it matters. Point at the exact code, function,
 ## Implementation notes
 
 Any known constraints, the intended approach, edge cases, or prior art in the codebase to mirror. Optional if the Problem + Scope are unambiguous.
+
+## Decisions
+
+Optional, and **required** when the work produced an entry of one of these three kinds. Keep each
+entry to a line or two:
+
+- **A rejected alternative**: what was chosen against, and why.
+- **A seam left open deliberately**, so the next agent does not read it as an oversight and close it.
+- **A premise that turned out false**: what the task claimed, and what the code actually did.
+
+Nothing else belongs here, because something else already owns it: what changed (the commit history),
+whether the tests passed (the test run), whether the change matched its contract (the spec, when the
+task names one), why the work exists at all (the spec or the roadmap item this task hangs from).
+When none of the three kinds apply, delete this section rather than leaving it empty: a heading every
+task carries and most leave blank teaches authors to skip it.
+
+An entry recoverable from `git log` or from a test run is a defect in the entry, not a bonus.
 
 ## Risks and rollback
 

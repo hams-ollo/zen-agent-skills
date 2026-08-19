@@ -13,7 +13,7 @@ created: 2026-08-18
 
 ## Problem
 
-[`bug-0035`](bug-0035-contributing-still-prescribes-the-four-pre-run-checks-commands.md) found that
+[`bug-0035`](done/bug-0035-contributing-still-prescribes-the-four-pre-run-checks-commands.md) found that
 `CONTRIBUTING.md` and the pull request template still prescribed the individual commands that
 `feat-0045` replaced with one acceptance command. Its delegate agent flagged, without reading them,
 that other documents might carry the same instruction. Checked 2026-08-18: one does.

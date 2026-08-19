@@ -276,7 +276,13 @@ def load_manifest():
 def save_manifest(entries, dry):
     if dry:
         return
-    MANIFEST.write_text(json.dumps({"entries": entries}, indent=2), encoding="utf-8")
+    # `newline=""` disables newline translation, so the manifest holds exactly the
+    # newlines in the string rather than the platform default, which is CRLF on Windows.
+    # The manifest is gitignored, so nothing is broken today; the point is that `--check`
+    # compares digests of bytes read off disk, and a writer whose line endings vary by
+    # platform is the shape that makes such a comparison answer differently per platform.
+    MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                        encoding="utf-8", newline="")
 
 
 def is_managed(target: Path, manifest) -> bool:

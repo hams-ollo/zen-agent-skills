@@ -11,6 +11,11 @@ that authored them, so every repository the kit scaffolds got the feature `pr-de
 ships and none of the check that makes it safe. A contract that holds in one copy and
 not the other is the failure this file now tests for directly.
 
+`bug-0029` adds a third area over the same pair of files one level up: the task
+template the scaffold ships alongside that validator. It had lost the `external` field
+the validator now checks and the `## Decisions` section two shipped skills read it for,
+so an adopter got a rule enforced and never explained.
+
 Standard library only, per the conventions section of AGENTS.md.
 
 Scope is still deliberately narrow. `.tasks/validate.py` had no test file before
@@ -21,6 +26,7 @@ import ast
 import contextlib
 import importlib.util
 import io
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,6 +37,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULE_PATH = REPO_ROOT / ".tasks" / "validate.py"
 TEMPLATE_PATH = (REPO_ROOT / ".agents" / "skills" / "init-worktracking"
                  / "templates" / "validate.py")
+TASK_TEMPLATE_PATH = REPO_ROOT / ".tasks" / "_TEMPLATE.md"
+TASK_TEMPLATE_TMPL_PATH = (REPO_ROOT / ".agents" / "skills" / "init-worktracking"
+                           / "templates" / "_TEMPLATE.md.tmpl")
 
 _spec = importlib.util.spec_from_file_location("zen_tasks_validate", MODULE_PATH)
 tv = importlib.util.module_from_spec(_spec)
@@ -765,6 +774,84 @@ class ValidatorCopiesAgreeTests(unittest.TestCase):
                     self._assignment(TEMPLATE_PATH, name),
                     f"{name} differs between .tasks/validate.py and the "
                     f"init-worktracking template; both copies move together")
+
+
+class TaskTemplateCopiesAgreeTests(unittest.TestCase):
+    """`bug-0029`: the two task templates carry the same fields and sections.
+
+    `.tasks/_TEMPLATE.md` and the copy `init-worktracking` scaffolds are the same
+    contract stated twice, for the same reason the validator is: a scaffolded repository
+    has no way to read this one. The template one directory up from the validator drifted
+    in exactly the way `bug-0026` found the validator itself had. It lost the `external`
+    field, so `pr-describe`'s closing reference could never fire in a scaffolded
+    repository, and it lost `## Decisions`, which `fix-batch` names as the definition of
+    the admissible entry kinds it dispatches agents to fill in. Neither absence announced
+    itself, because a skill pointing at a section that does not exist still reads
+    correctly.
+
+    Only the field names and the section headings are compared. The prose under them is
+    deliberately retargeted at a scaffolded repository (`bug-0017`) and is supposed to
+    differ, so pinning it would fail on every honest edit and teach the next author to
+    delete this test.
+    """
+
+    @staticmethod
+    def _frontmatter_keys(path):
+        """The frontmatter keys of `path`, read by the validator's own parser.
+
+        Parsed rather than pattern-matched so the test agrees with the code an adopter
+        actually runs: a key this parser cannot see is a key no validator will check.
+        """
+        parsed = tv.parse_frontmatter(path.read_text(encoding="utf-8"))
+        if parsed is None:
+            raise AssertionError(f"{path} has no frontmatter block")
+        return set(parsed)
+
+    @staticmethod
+    def _headings(path):
+        """The `## ` section headings of `path`, as a set."""
+        return set(re.findall(
+            r"^## (.+)$", path.read_text(encoding="utf-8"), flags=re.MULTILINE))
+
+    def test_the_frontmatter_fields_are_identical_in_both_templates(self):
+        self.assertEqual(
+            self._frontmatter_keys(TASK_TEMPLATE_PATH),
+            self._frontmatter_keys(TASK_TEMPLATE_TMPL_PATH),
+            ".tasks/_TEMPLATE.md and the init-worktracking task template offer "
+            "different frontmatter fields. Their comments may be retargeted; the set "
+            "of fields may not differ. Carry the field into both copies.")
+
+    def test_the_section_headings_are_identical_in_both_templates(self):
+        self.assertEqual(
+            self._headings(TASK_TEMPLATE_PATH),
+            self._headings(TASK_TEMPLATE_TMPL_PATH),
+            ".tasks/_TEMPLATE.md and the init-worktracking task template offer "
+            "different sections. Their prose may be retargeted; the set of headings "
+            "may not differ. Carry the section into both copies.")
+
+
+class ScaffoldedTaskTemplateTests(TasksRootTestCase):
+    """`bug-0029`: what the scaffold ships still passes what the scaffold validates.
+
+    The two halves land in an adopter's repository together, so the field the template
+    now offers has to be one the shipped validator accepts. Driven against the template
+    validator rather than this repository's copy, because the adopter runs that one.
+    """
+
+    module = tvt
+
+    def test_the_shipped_template_filled_in_with_an_external_value_validates(self):
+        filled = (TASK_TEMPLATE_TMPL_PATH.read_text(encoding="utf-8")
+                  .replace("id: TYPE-NNNN", "id: feat-0099")
+                  .replace('external: ""', 'external: "#123"')
+                  .replace("  - path/to/file/the/task/will/change", "  - README.md")
+                  .replace("  - path/to/its/test", "  - README.md")
+                  .replace("created: YYYY-MM-DD", "created: 2026-08-19"))
+        self.assertIn('external: "#123"', filled,
+                      "the shipped template offers no external field to fill in")
+        (self.tasks / "feat-0099-test.md").write_text(filled, encoding="utf-8")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
 
 
 if __name__ == "__main__":

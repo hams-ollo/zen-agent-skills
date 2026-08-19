@@ -26,33 +26,19 @@ The canonical rules live in [`AGENTS.md`](AGENTS.md). It is written for AI agent
 
 ## Before you open a change
 
-Run all four. They are stdlib-only, so there is nothing to install:
-
-```bash
-python scripts/validate-skills.py
-```
-
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
-
-```bash
-python .tasks/validate.py --strict
-```
-
-```bash
-python scripts/build-adapters.py --dry-run
-```
-
-Or run all of them, plus the three CI also runs, in one command:
+Run the acceptance command. It is stdlib-only, so there is nothing to install:
 
 ```bash
 python scripts/run-checks.py
 ```
 
-That is the same script CI calls, so the gate set cannot drift between the two. It exits 0 when everything passed, 1 when a gate failed, and 2 when a gate could not run at all. CI runs it on Linux, macOS, and Windows across the supported Python range, so passing locally is necessary but not sufficient: a change can still fail on a platform you did not run.
+That one command runs every gate that decides whether a change here is acceptable, and it takes no flags. [`AGENTS.md`](AGENTS.md) names what those gates are, and this page deliberately does not restate the list: three copies of it is how the count last went stale. It is also the same script CI calls, so the gate set cannot drift between local and CI either.
 
-The pull request template asks which of the four you ran, and reminds you where a closing reference has to go if the change closes an issue. See [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) if you want to read it before you get there, and [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) for the linking rules themselves.
+It exits 0 when every gate passed, 1 when a gate ran and failed, and 2 when a gate could not run at all. A 2 outranks a 1: it means the report itself is incomplete, which is a different claim from the change being bad. Every gate runs even after one fails, so a single run tells you everything that is wrong rather than only the first thing. CI runs it on Linux, macOS, and Windows across the supported Python range, so passing locally is necessary but not sufficient: a change can still fail on a platform you did not run.
+
+While you are iterating, running one gate directly is a faster loop, for instance `python scripts/validate-skills.py` while you are reworking a single skill. That is a convenience and not a substitute, because the acceptance command is what decides.
+
+The pull request template asks whether you ran it, and reminds you where a closing reference has to go if the change closes an issue. See [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) if you want to read it before you get there, and [`docs/ISSUE-LINKING.md`](docs/ISSUE-LINKING.md) for the linking rules themselves.
 
 ## Conventions
 

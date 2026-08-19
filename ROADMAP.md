@@ -240,9 +240,9 @@ third gap, so the two were the whole of it.
 
 **Landed 2026-08-18, in one worktree-isolated batch of six**: `bug-0026`, `bug-0028`, `bug-0031`,
 `bug-0032`, `chore-0041` and `feat-0049`. Two findings the batch itself surfaced are filed rather
-than fixed: [`chore-0042`](.tasks/chore-0042-renormalise-the-authors-working-tree.md), the
+than fixed: [`chore-0042`](.tasks/done/chore-0042-renormalise-the-authors-working-tree.md), the
 renormalise remainder plus the two `Path.write_text` sites that can reintroduce the drift, and
-[`chore-0043`](.tasks/chore-0043-amend-build-adapters-spec-for-the-code-span-exception.md), the
+[`chore-0043`](.tasks/done/chore-0043-amend-build-adapters-spec-for-the-code-span-exception.md), the
 contract half of `bug-0028`, since six scenarios govern `rewrite_links()` and none of them excepts a
 link that is not a link. The batch also hit the `fix-batch` dispatch trap for the second recorded
 time: all six worktrees were cut from `origin/main` rather than from the dispatch commit, and four
@@ -263,7 +263,7 @@ Two are the kit's own named failure signature, something that reports success wh
   admissible" and reads an `external` field to build GitHub closing references. Neither the
   `## Decisions` section nor the `external` field exists in `_TEMPLATE.md.tmpl`, so in every
   repository this kit scaffolds, one instruction is a dangling pointer and one feature can never
-  fire. Scoped as [`bug-0029`](.tasks/bug-0029-shipped-task-template-lost-decisions-and-external.md).
+  fire. Scoped as [`bug-0029`](.tasks/done/bug-0029-shipped-task-template-lost-decisions-and-external.md).
   This settles the question [`bug-0026`](.tasks/done/bug-0026-scaffolded-validator-lost-the-external-check.md)
   deliberately deferred as "a separate and arguable question": it is not a question of whether to
   teach an adopter the field, because two shipped skills already treat the template as the authority.
@@ -305,7 +305,7 @@ The rest:
   at repository scope pulling the other way and a `.gitattributes` comment describing behaviour the
   next line overrides. Invisible to `git status`, because `text=auto` normalises on the way back in,
   and material because two comparators here read bytes off disk rather than through git. Scoped as
-  [`chore-0041`](.tasks/done/chore-0041-working-tree-crlf-against-the-eol-lf-policy.md) **Shipped 2026-08-18** on its policy half (`chore-0041`). The run falsified two of the finding's own claims: `core.autocrlf=true` sits at system scope, the Git for Windows installer default, not at repository scope, so there is nothing to unset; and a fresh worktree reports `0` at `w/crlf` against this checkout's `30`, so the drift is one machine's. The renormalise remainder, re-scoped accordingly, is [`chore-0042`](.tasks/chore-0042-renormalise-the-authors-working-tree.md)..
+  [`chore-0041`](.tasks/done/chore-0041-working-tree-crlf-against-the-eol-lf-policy.md) **Shipped 2026-08-18** on its policy half (`chore-0041`). The run falsified two of the finding's own claims: `core.autocrlf=true` sits at system scope, the Git for Windows installer default, not at repository scope, so there is nothing to unset; and a fresh worktree reports `0` at `w/crlf` against this checkout's `30`, so the drift is one machine's. The renormalise remainder, re-scoped accordingly, is [`chore-0042`](.tasks/done/chore-0042-renormalise-the-authors-working-tree.md)..
 
 Two findings were **not** filed, and are recorded here so a later reader does not take the silence
 for an oversight:

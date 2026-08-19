@@ -22,6 +22,12 @@ re-approved on 2026-07-27 and this repository has no machine-readable way to say
 unapproved amendment inside"; re-approval of the paragraphs added by `feat-0034` is the author's and
 is not granted here.
 
+Amended 2026-08-19 (`chore-0043`) to state that a markdown link rendering as literal text is not a
+link and is emitted unchanged: scenario S-018, an exception to the rewrite rules S-003 through S-008.
+**This amendment is pending the author's re-approval.** It writes down the behaviour `bug-0028` gave
+`rewrite_links()` on 2026-08-18, which the contract did not state at all; `status` is left reading
+`approved` for the reason the paragraph above gives.
+
 ## Problem
 
 Claude Code and OpenCode discover skills from a directory, so `install.py` can place a skill's own
@@ -134,6 +140,33 @@ every test still pass, because no test asserts the reason.
   same page
 - **When** the adapter is emitted
 - **Then** each appears in the adapter byte-for-byte as written.
+
+### Scenario S-018: a link that renders as literal text is not a link
+
+- **Given** a skill body containing a markdown link whose target sits inside an inline code span (a
+  run of backticks of any length, closed on the same line by a run of the same length) or inside a
+  fenced code block
+- **When** the adapter is emitted
+- **Then** that link appears byte-for-byte as written, in every target.
+
+  This is an exception to S-003 through S-008 and takes precedence over all of them. Those scenarios
+  sort a link by its *kind*; this one decides whether the text is a link at all. A link rendered as
+  literal text is the body **showing** a link as an example rather than making one, so repointing it
+  rewrites what the skill says instead of where it points, and the kit then reads one way while every
+  generated adapter reads another. Nothing fails when that happens: the adapter renders, the run
+  reports success, and the only reader who finds out is one following a documented example in another
+  repository (`bug-0028`).
+
+  A link whose *text* is wrapped in a code span, which is how nearly every link in this kit is
+  written, is still rewritten. It is the link's target that has to fall inside the span or the fence
+  for this scenario to apply.
+
+  An unterminated opening fence yields no range and therefore suppresses nothing below it: the links
+  after it are rewritten as usual. A detector that ran an unclosed fence to end of file would switch
+  the rewrite off for the rest of the body while still reporting success, which is the one failure
+  indistinguishable from success. An unmatched backtick run opens nothing for the same reason. That
+  trade is the one `bug-0015`, `bug-0017`, `bug-0023` and `bug-0027` each settled in the other two
+  tools carrying this rule, and this contract restates it rather than inheriting it silently.
 
 ### Scenario S-009: the material the rewritten links point at is emitted
 
