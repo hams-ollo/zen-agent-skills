@@ -73,6 +73,14 @@ anything that diagnoses.
 - **Harness-portable.** No dependency on a particular agent runtime, debugger, or language toolchain,
   per the portability contract in `AGENTS.md`. The procedure is stated in terms of observations and
   commands the target repository already has.
+- **This contract owns the kit's classification vocabulary.** Decided by the author 2026-08-18. The
+  three verdicts above are the kit's single vocabulary for "what did the investigation conclude", and
+  `feat-0042` consumes them rather than defining `false_positive`, `core_issue` and `futility` as a
+  parallel set. The correspondence it was scoped against is exact enough to make two vocabularies a
+  translation layer rather than a distinction: `false_positive` is `not_reproducible` reached from the
+  reviewing side, `core_issue` is `root_cause_found`, and `futility` is `architectural` triggered by a
+  repeat count rather than a hypothesis count. A skill that must classify after repeated failure calls
+  this one and reports its verdict.
 
 ## Scenarios
 
@@ -205,13 +213,6 @@ anything that diagnoses.
    to the implementation. Naming one costs portability, since not every target repository is a git
    worktree; leaving it open risks an implementation that instruments in place and relies on cleanup.*
 
-2. **Does this contract own the `false_positive` / `core_issue` / `futility` vocabulary, or align with
-   it?** *Recommendation: own the concepts and retarget `feat-0042` to consume them. `not_reproducible`
-   and `false_positive` are the same finding reached from two directions, and `architectural` and
-   `futility` differ only in what triggered the count. Two vocabularies for one distinction is how the
-   spine acquires a translation layer nobody wants to maintain. This is a decision for the author
-   because it changes an already-filed task's scope.*
-
-3. **What is the default investigation bound?** *Recommendation: leave the number out of this contract
+2. **What is the default investigation bound?** *Recommendation: leave the number out of this contract
    and set it in the skill, since it is a tuning value rather than a behavioral commitment. S-004
    constrains only that a bound exists, is declared, and terminates the run.*
