@@ -215,3 +215,9 @@ Rules:
 Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
 sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
 swappable default; a downstream adopter may replace it without touching this skill.
+
+When this runs unattended, follow the repo's autonomy module too (in this kit,
+[`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which consolidates this skill's
+independence rule as `A7`: the agent that verifies is not the agent that wrote the implementation,
+and where the harness cannot separate them, say which agent produced the verdict. That file is a
+swappable default; a downstream adopter may raise or lower the ceiling without touching this skill.

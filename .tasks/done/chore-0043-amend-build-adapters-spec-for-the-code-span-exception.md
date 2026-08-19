@@ -35,7 +35,7 @@ nothing will catch here, because a matrix audits the scenarios that exist.
 This is the third instance of one defect class and the second of this exact amendment. `bug-0023`
 fixed it in `.tasks/validate.py`, `bug-0027` in `scripts/validate-skills.py`, and `bug-0028` in
 `scripts/build-adapters.py`. The contract half of the second was filed as
-[`chore-0039`](../chore-0039-amend-validate-skills-spec-for-the-code-span-exception.md), still open.
+[`chore-0039`](chore-0039-amend-validate-skills-spec-for-the-code-span-exception.md), still open.
 This task is its sibling, and the two should read as one decision applied twice rather than as two
 independently-argued exceptions.
 

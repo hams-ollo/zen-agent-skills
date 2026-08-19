@@ -2,7 +2,7 @@
 id: chore-0044
 title: The install guide's Validate changes section carries the same pre-run-checks instruction bug-0035 fixed in two other documents
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0035]
@@ -13,12 +13,12 @@ created: 2026-08-18
 
 ## Problem
 
-[`bug-0035`](done/bug-0035-contributing-still-prescribes-the-four-pre-run-checks-commands.md) found that
+[`bug-0035`](bug-0035-contributing-still-prescribes-the-four-pre-run-checks-commands.md) found that
 `CONTRIBUTING.md` and the pull request template still prescribed the individual commands that
 `feat-0045` replaced with one acceptance command. Its delegate agent flagged, without reading them,
 that other documents might carry the same instruction. Checked 2026-08-18: one does.
 
-[`INSTALL.md`](../docs/INSTALL.md) has a `## Validate changes` section that tells a reader to "Run
+[`INSTALL.md`](../../docs/INSTALL.md) has a `## Validate changes` section that tells a reader to "Run
 the skill linter from the repository root", gives `python scripts/validate-skills.py`, then "Run the
 kit's own test suite" and gives that command too. Same shape, same gap: a reader who follows it runs
 two of the seven gates and is told nothing about the other five, including the three that cover the
@@ -58,20 +58,37 @@ Keep whatever the section says about running the linter alone while iterating on
 `bug-0035` kept the equivalent. The bug is that the individual commands are presented as sufficient,
 not that naming them at all is wrong.
 
+## Decisions
+
+- **A premise that turned out false**: the task says the section names two commands, the linter and
+  the test suite. It named five, adding the backlog validator and the adapter and install dry runs.
+  The gap was smaller than filed but the same in kind: five of the seven gates presented as the way
+  a change is validated, with the install cycle and the documentation link check absent and no sign
+  that anything was missing.
+- **A rejected alternative**: the paragraph describing what `validate-skills.py` checks (the schema
+  rules, the link rules, the draft-and-shipped conflict) was dropped rather than kept beside the
+  acceptance command. Keeping one gate's internals in a section that no longer prescribes that gate
+  re-creates the defect in a quieter form, and `CONTRIBUTING.md` and `AGENTS.md` already own those
+  rules. The section now points a reader there instead, so nothing is unreachable.
+- **A seam left open deliberately**: the faster-loop example is the install dry run rather than the
+  skill linter that `CONTRIBUTING.md` names. Same shape, one command and not a list, chosen for the
+  document a reader of the installer is actually in. Do not read the difference as drift between the
+  two pages.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] `INSTALL.md`'s `## Validate changes` section prescribes `python scripts/run-checks.py` as the
+- [x] `INSTALL.md`'s `## Validate changes` section prescribes `python scripts/run-checks.py` as the
       command that decides whether a change is acceptable.
-- [ ] It does not restate the gate list or a gate count.
-- [ ] Its shape matches what `bug-0035` established in `CONTRIBUTING.md`, verified by reading both.
-- [ ] No other section of `INSTALL.md` is modified.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] It does not restate the gate list or a gate count.
+- [x] Its shape matches what `bug-0035` established in `CONTRIBUTING.md`, verified by reading both.
+- [x] No other section of `INSTALL.md` is modified.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

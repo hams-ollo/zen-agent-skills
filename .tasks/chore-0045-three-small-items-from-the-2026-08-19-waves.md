@@ -8,6 +8,7 @@ parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: [bug-0036]
 touched_files:
   - tests/test_build_adapters.py
+  - tests/test_validate_skills.py
   - docs/spec/README.md
   - .agents/skills/init-worktracking/templates/tasks-README.md.tmpl
 created: 2026-08-19
@@ -31,9 +32,11 @@ protect instead of describing a pending question. This matters slightly more tha
 is harder to map to the row it supports.
 
 **2. `docs/spec/README.md` says four where its own table says five.**
-The marker-key section at line 64 reads "Four do, listed below", and the re-approval table below it
-has carried five rows since `house-review` was added. `chore-0043` updated the neighbouring line to
-"As of 2026-08-19, five specs", so the document now contradicts itself two lines apart. The count is
+The marker-key section reads "Four do, listed below", and the re-approval table below it grew past
+that number some time ago and grew again on 2026-08-19 when `chore-0039` added its row. Count the
+rows rather than taking any number from this file, which was already wrong once: it said five while
+this task sat open, and `chore-0039` landed a sixth. `chore-0043` updated the neighbouring line to
+"As of 2026-08-19", so the document now contradicts itself two lines apart. The count is
 the argument for eventually replacing that table with a frontmatter key, which is the one place a
 wrong number actively undercuts the point being made.
 
@@ -51,12 +54,14 @@ the schema is told about eight fields and handed a template with nine.
   as pending.
 - Item 2: correct the count to match the table, and check it rather than incrementing it.
 - Item 3: add a `title` row to the field table, matching the surrounding rows' style.
+- Item 4, added 2026-08-19 once its blocker cleared: retag `bug-0027`'s docstrings in
+  `tests/test_validate_skills.py` to `S-022`, the same correction item 1 makes for `S-018`.
 
 **Out of scope:**
 
-- `bug-0027`'s tests in `tests/test_validate_skills.py`, which carry the same stale phrasing about
-  `validate-skills.md`. That id does not exist until [`chore-0039`](chore-0039-amend-validate-skills-spec-for-the-code-span-exception.md)
-  lands, so retagging them is that task's follow-up, not this one's. Do not guess the id.
+- Nothing about `bug-0027`'s tests any more. They were held out while the id they needed did not
+  exist; [`chore-0039`](done/chore-0039-amend-validate-skills-spec-for-the-code-span-exception.md)
+  landed it as `S-022` on 2026-08-19, so retagging them is now item 4 below rather than a deferral.
 - The marker-key decision itself. Item 2 corrects a number inside an argument; whether that argument
   should be acted on is `docs/spec/README.md`'s standing open question and the author's.
 - The kit's own `.tasks/README.md`, which is a different file from the template and is not missing the
@@ -85,7 +90,8 @@ id reference are stale.
 - [ ] `docs/spec/README.md`'s marker-key count equals the number of rows in its re-approval table,
       verified by counting the rows.
 - [ ] `tasks-README.md.tmpl`'s field table has a `title` row.
-- [ ] `tests/test_validate_skills.py` is untouched, since its id does not exist yet.
+- [ ] `bug-0027`'s test docstrings in `tests/test_validate_skills.py` cite `S-022`, and none
+      describes that decision as still open.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done

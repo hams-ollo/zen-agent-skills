@@ -301,3 +301,10 @@ Rules:
 Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
 sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
 swappable default; a downstream adopter may replace it without touching this skill.
+
+When this runs unattended, follow the repo's autonomy module too (in this kit,
+[`.agents/rules/autonomy.md`](../../rules/autonomy.md)), whose governing principle this skill is
+cited for stating outright: detect and report, never rewrite, and the failure mode must be inaction.
+That is why dry run is the default here, why detection never changes a file, and why a contract
+document is reported rather than edited. That file is a swappable default; a downstream adopter may
+raise or lower the ceiling without touching this skill.

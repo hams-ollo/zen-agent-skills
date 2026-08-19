@@ -69,7 +69,7 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-19, five specs are approved and carry an amendment the author has not re-read. Two of
+As of 2026-08-19, six specs are approved and carry an amendment the author has not re-read. Two of
 them carry two: `install`, and `build-adapters` since `chore-0043`.
 
 | Spec | Amendment | Amended |
@@ -79,6 +79,7 @@ them carry two: `install`, and `build-adapters` since `chore-0043`.
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
+| [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`) | 2026-08-19 |
 
 The fifth row was missed when this table was first written, and how it was missed is the argument
 for eventually replacing this table with a marker key. `house-review`'s note says its frontmatter is
@@ -137,10 +138,10 @@ something else today.
 | [`systematic-debugging`](systematic-debugging.md) | approved | 13 | none yet, conformance owed at closeout |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
-| [`validate-skills`](validate-skills.md) | approved | 21 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
+| [`validate-skills`](validate-skills.md) | approved | 22 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 154 scenarios, all approved. Ten carry a conformance matrix between them, holding 141
+Eleven specs, 155 scenarios, all approved. Ten carry a conformance matrix between them, holding 142
 of those scenarios, recomputed from the files on 2026-08-19 rather than incremented.
 
 Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because

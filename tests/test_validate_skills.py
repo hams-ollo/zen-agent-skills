@@ -30,6 +30,11 @@ _spec = importlib.util.spec_from_file_location("validate_skills", MODULE_PATH)
 vs = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vs)
 
+# The upper end of the lens-declaration window, asserted rather than assumed. The real
+# lenses are 30 to 300 lines long, so a window at or above this stops distinguishing an
+# opening from a body and the "declares itself" test becomes "mentions a lens anywhere".
+MAX_LENS_WINDOW = 25
+
 GOOD_FM = "---\nname: {name}\ndescription: {desc}\n---\n"
 LONG_DESC = ("Use this skill when you need a thorough action whose description states both what it "
              "does and when to use it.")
@@ -632,6 +637,153 @@ class TestSkillsDirectoryPreconditions(unittest.TestCase):
             code, out = _run(Path(tmp))
         self.assertEqual(code, 0)
         self.assertIn("No skills found", out)
+
+
+class TestLensComposition(unittest.TestCase):
+    """A self-declared lens under `.agents/rules/` that no skill references fails (feat-0048).
+
+    The bug population is a lens that reads perfectly and reaches nobody. `autonomy.md`
+    shipped calling itself "the third beside house-style.md and review-quality.md" while
+    no skill composed it, and every gate passed, because nothing here read the rules
+    directory at all. A lens is composed rather than run, so an uncomposed one is inert
+    and the swappability promise fails with it: an adopter rewrites the ceiling and
+    nothing changes.
+
+    The negative cases carry the weight, as they do for the link checks above. This rule
+    reads files nobody asked it to lint, so a false positive lands on a document whose
+    author never opted into being a lens, and the cheap response to that is to delete the
+    rule. A plain rules document with no inbound reference must pass.
+    """
+
+    LENS_OPENING = (
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**, the fourth beside the other three.\n\n"
+        "It governs something.\n"
+    )
+    PLAIN_RULES_DOC = (
+        "# What lives in this directory\n\n"
+        "One file per swappable module the skills compose. Replace any of them.\n"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "agents" / "skills"
+        self.rules = self.root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_rules(self, name: str, text: str) -> None:
+        (self.rules / name).write_text(text, encoding="utf-8")
+
+    def test_a_self_declared_lens_with_no_inbound_reference_errors(self):
+        # The feat-0048 condition itself: the lens declares, no skill points back.
+        self._write_rules("example.md", self.LENS_OPENING)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1)
+        self.assertIn("declares itself a lens but no skill references it", out)
+        self.assertIn("agents/rules/example.md", out)
+
+    def test_a_referenced_lens_does_not_error(self):
+        # The wiring this task performs, in miniature: one skill points at the lens the
+        # way the five real ones now do, and the rule is satisfied.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_non_lens_rules_file_without_references_passes(self):
+        # The other direction, and the one that keeps the rule from being deleted: a
+        # rules-directory document that never presents itself as a lens is not required
+        # to be composed, even though it mentions swappable modules in its body.
+        self._write_rules("README.md", self.PLAIN_RULES_DOC)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("declares itself a lens", out)
+
+    def test_the_bare_subject_word_is_not_a_reference(self):
+        # A skill that merely discusses the topic gives a reader no way to reach the
+        # module, so the reference has to name the file. Without this the rule would be
+        # satisfied by prose and stop protecting anything.
+        self._write_rules("autonomy.md", self.LENS_OPENING)
+        body = "Respect the autonomy ceiling when running unattended.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("declares itself a lens but no skill references it", out)
+
+    def test_a_prose_mention_naming_the_file_counts_as_a_reference(self):
+        # The portability contract in AGENTS.md tells a skill to name some files in prose
+        # rather than link to them, so requiring a markdown link specifically would push
+        # authors to break one rule to satisfy another.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = "The ceiling is stated in `example.md` beside this skill.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_declaration_below_the_opening_window_is_not_a_declaration(self):
+        # Why the window is bounded at all: LENS_DECLARATION_RE matches the bare word
+        # "lens", which any rules document may use when describing its neighbours. Only
+        # the opening is a declaration about *this* file, so a mention further down must
+        # not conscript a document into being a lens.
+        deep = self.PLAIN_RULES_DOC + "\n" * 40 + "This file is a **swappable module**.\n"
+        self._write_rules("README.md", deep)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_the_opening_window_clears_every_shipped_lens_with_margin(self):
+        # Why the bound is 10 lines and not smaller: it must hold every real lens, with
+        # room for a longer title block, and it must stay well short of a whole body.
+        # Bounded in both directions rather than asserted as a bare number, matching how
+        # bug-0026 asks a drift assertion to be bounded: if a future lens declares itself
+        # later than this, the constant is what moves, and this test says so.
+        rules_dir = REPO_ROOT / ".agents" / "rules"
+        for path in sorted(rules_dir.glob("*.md")):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            declaring = [i + 1 for i, line in enumerate(lines)
+                         if vs.LENS_DECLARATION_RE.search(line)]
+            with self.subTest(lens=path.name):
+                self.assertTrue(declaring, f"{path.name} no longer declares itself a lens")
+                self.assertLessEqual(
+                    declaring[0], vs.LENS_DECLARATION_LINES,
+                    f"{path.name} declares itself on line {declaring[0]}, past the "
+                    f"{vs.LENS_DECLARATION_LINES}-line opening window",
+                )
+        self.assertLess(vs.LENS_DECLARATION_LINES, MAX_LENS_WINDOW,
+                        "a window this wide stops being an opening and reads the body")
+
+    def test_every_shipped_lens_is_composed_by_at_least_one_skill(self):
+        # The rule against the real tree: the assertion that would have caught
+        # autonomy.md, and that catches the next lens added without wiring.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        skill_texts = {d.name: (d / "SKILL.md").read_text(encoding="utf-8")
+                       for d in sorted(skills_dir.iterdir()) if d.is_dir()}
+        errors = []
+        vs.check_lenses_are_composed(skills_dir.parent / "rules", skill_texts, errors)
+        self.assertEqual(errors, [])
+
+    def test_autonomy_is_composed_by_exactly_the_five_skills_it_cites(self):
+        # feat-0048's own acceptance criterion, kept as a test because the wiring list is
+        # the lens's outbound links: a skill gets a reference if and only if the lens
+        # claims one of its rules. A sixth reference would make the lens look composed
+        # somewhere it is not load-bearing, and a fifth missing one leaves a cited skill
+        # unable to reach the module.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        referencing = sorted(d.name for d in skills_dir.iterdir()
+                             if d.is_dir()
+                             and "autonomy.md" in (d / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual(
+            referencing,
+            ["doc-sync", "fix-batch", "pr-describe", "spec-conformance", "verifier-agent"],
+        )
 
 
 if __name__ == "__main__":

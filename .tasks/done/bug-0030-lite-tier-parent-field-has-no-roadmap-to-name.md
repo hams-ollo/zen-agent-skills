@@ -2,7 +2,7 @@
 id: bug-0030
 title: The lite tier scaffolds a required parent field pointing at a ROADMAP the tier does not ship
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: [bug-0029]
@@ -15,14 +15,14 @@ created: 2026-08-18
 
 ## Problem
 
-At the **lite** tier, [`init-worktracking`](../.agents/skills/init-worktracking/SKILL.md) ships
+At the **lite** tier, [`init-worktracking`](../../.agents/skills/init-worktracking/SKILL.md) ships
 `AGENTS.md`, `.tasks/` and a `CLAUDE.md` pointer, and deliberately no `ROADMAP.md` and no
 `CHANGELOG.md`. Four things then disagree:
 
 - `_TEMPLATE.md.tmpl` seeds `parent: "ROADMAP#N feature-slug"`.
 - `parent` is a **required** field in the validator that ships alongside it, so it cannot simply be
   left blank.
-- [`new-task`](../.agents/skills/new-task/SKILL.md) demands "a real `parent`: the ROADMAP Feature/Epic
+- [`new-task`](../../.agents/skills/new-task/SKILL.md) demands "a real `parent`: the ROADMAP Feature/Epic
   it serves", and its Step 4 instructs the agent, when no Feature fits, to "draft a one-line Feature to
   add to `ROADMAP.md`".
 - `new-task` never mentions the tier at all. `grep -c "tier"` over its body returns `0`.
@@ -53,7 +53,7 @@ of them, and it is the file every task in the adopter's repository is copied fro
   `spec-plan-readiness` reads it; weakening the schema to fit one tier is the wrong direction and
   should be rejected explicitly rather than left unsaid.
 - The `external` and `## Decisions` gaps in the same template, which are
-  [`bug-0029`](done/bug-0029-shipped-task-template-lost-decisions-and-external.md). This task depends on it
+  [`bug-0029`](bug-0029-shipped-task-template-lost-decisions-and-external.md). This task depends on it
   because they edit the same file.
 - The lite tier's contents. Whether lite should ship a `ROADMAP.md` after all is a product question,
   and the answer this task assumes is no, because the tier exists precisely to avoid the ceremony.
@@ -72,6 +72,38 @@ same step costs nothing and keeps the two checks together.
 Keep the tier-stripping section's reason intact when adding to its list. That reason is the argument
 for this change and a later reader needs it more than the list.
 
+## Decisions
+
+- **Chosen: `parent` keeps a required field at every tier, and its *form* follows the tier.** With a
+  `ROADMAP.md`, it names the Feature or Epic; at lite it is one line of free text naming the goal.
+  The field's stated purpose is that intent be readable without the roadmap, which never required a
+  roadmap to exist, so this costs the schema nothing and only makes the seed honest. The real cost is
+  that `parent` values are no longer uniform across tiers, so anything that later wants to *parse*
+  `parent` rather than read it has two shapes to handle. Accepted: nothing parses it today (the
+  shipped validator checks presence only, not format), and a consumer that needs structure should
+  read `spec`/`scenarios`, which exist for exactly that.
+
+- **Rejected: make `parent` optional when there is no `ROADMAP.md`.** Named out of scope by this task
+  and rejected here explicitly rather than by silence. An optional field is answered by nobody: the
+  lite tier is where the roadmap altitude is missing, so it is the tier that most needs each task to
+  say what it serves. Weakening the schema to fit the smallest tier would also split the shipped
+  validator's contract by tier, which is the one thing that ships identically everywhere.
+
+- **Rejected: leave the `ROADMAP#N` seed alone and fix this in prose only.** Cheapest diff, wrong
+  place. The seed is the line every task in the adopter's repository is copied from, so prose in a
+  skill body loses to a placeholder in a template every time. Prose was kept as well, not instead.
+
+- **Rejected: ship a `ROADMAP.md` at lite after all.** Out of scope by the task, and it inverts the
+  tier's reason for existing.
+
+- **Seam left open deliberately: no permanent test was added.** `touched_files` names no test file,
+  and `tests/test_tasks_validate.py` is the drift-test module other tasks in this wave are likely to
+  be editing, so writing into it from an isolated worktree trades a real merge conflict for a small
+  assurance gain. Acceptance criterion 4 was verified by running the shipped template validator over
+  a lite-stripped, filled-in copy of `_TEMPLATE.md.tmpl` in a scratch directory (exit 0, 0 errors, 0
+  warnings). A permanent `ScaffoldedTaskTemplateTests` case pinning the lite `parent` form is the
+  natural follow-up.
+
 ## Risks and rollback
 
 Touches two skill bodies and a template, so it meets the more-than-one-module rule. The failure mode to
@@ -86,17 +118,17 @@ Reversible by reverting one commit. Nothing already scaffolded changes until its
 
     python .tasks/validate.py --strict && python scripts/run-checks.py
 
-- [ ] `_TEMPLATE.md.tmpl`'s `parent` comment names both an at-lite form and a with-ROADMAP form.
-- [ ] The "Tier stripping at lite" list includes `_TEMPLATE.md.tmpl` and says what to strike.
-- [ ] `new-task` names the tier: with no `ROADMAP.md` present it does not offer to add a Feature to
+- [x] `_TEMPLATE.md.tmpl`'s `parent` comment names both an at-lite form and a with-ROADMAP form.
+- [x] The "Tier stripping at lite" list includes `_TEMPLATE.md.tmpl` and says what to strike.
+- [x] `new-task` names the tier: with no `ROADMAP.md` present it does not offer to add a Feature to
       one, and it accepts the lite `parent` form.
-- [ ] A task file authored against the lite form passes the shipped validator.
-- [ ] A task file authored in this repository still uses and resolves a ROADMAP parent, unchanged.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] A task file authored against the lite form passes the shipped validator.
+- [x] A task file authored in this repository still uses and resolves a ROADMAP parent, unchanged.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -853,6 +853,28 @@ class ScaffoldedTaskTemplateTests(TasksRootTestCase):
         code, out = self._run()
         self.assertEqual(code, 0, out)
 
+    def test_the_lite_form_parent_validates_against_the_shipped_validator(self):
+        """`bug-0030`: at lite there is no ROADMAP.md, so `parent` holds free text.
+
+        That task verified this by hand and deliberately added no test, to stay inside
+        its `touched_files` while a sibling was editing this module. The collision did
+        not materialise, so the check is pinned here instead of resting on one run.
+        """
+        stripped = (TASK_TEMPLATE_TMPL_PATH.read_text(encoding="utf-8")
+                    .replace("id: TYPE-NNNN", "id: feat-0098")
+                    .replace('parent: "ROADMAP#N feature-slug"',
+                             'parent: "offline-first sync"')
+                    .replace("  - path/to/file/the/task/will/change", "  - README.md")
+                    .replace("  - path/to/its/test", "  - README.md")
+                    .replace("created: YYYY-MM-DD", "created: 2026-08-19"))
+        self.assertIn('parent: "offline-first sync"', stripped,
+                      "the lite substitution did not replace the seeded parent value")
+        self.assertNotIn('parent: "ROADMAP#N', stripped,
+                         "the ROADMAP-form parent survived the substitution")
+        (self.tasks / "feat-0098-test.md").write_text(stripped, encoding="utf-8")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
 
 if __name__ == "__main__":
     unittest.main()

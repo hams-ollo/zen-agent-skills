@@ -8,7 +8,8 @@ limit both target harnesses enforce, and a body that is not so long it
 defeats progressive disclosure, and frontmatter written in a form no real YAML
 parser can read. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
-exists, and warns when a skill asserts both draft and shipped status. A link inside
+exists, that every self-declared lens under `.agents/rules/` is referenced by at
+least one skill, and warns when a skill asserts both draft and shipped status. A link inside
 an inline code span or a fenced code block is left alone, because it renders as
 literal text and opens nothing, so a skill may show an example link. Standard
 library only. Exits non-zero on error.
@@ -93,6 +94,21 @@ SHIPPED_STATUS_RE = re.compile(
     r"|\b(?:shipped|blessed)\s+(?:on\s+)?\d{4}-\d{2}-\d{2}\b",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# A rules file that presents itself as a lens: something a skill is meant to compose,
+# rather than a plain document that happens to live beside them. All three shipped
+# lenses say so in their own opening, either by naming themselves one in the title or
+# by the "swappable module" formula the rules directory uses as a header convention.
+#
+# Keyed off that self-declaration rather than a list of filenames, deliberately: a
+# hardcoded list passes the day a fourth lens is added and nobody edits this script,
+# which is the exact failure feat-0048 was filed for. `autonomy.md` called itself the
+# third lens for ten days while no skill composed it, and every gate passed.
+LENS_DECLARATION_RE = re.compile(r"\*\*swappable module\*\*|\blens\b", re.IGNORECASE)
+
+# How far into a rules file the self-declaration has to appear. See
+# `declares_itself_a_lens` for why the window exists and why it is this size.
+LENS_DECLARATION_LINES = 10
 
 
 def parse_frontmatter(text: str):
@@ -287,6 +303,54 @@ def check_frontmatter_is_parseable(text: str, rel: str, errors: list) -> None:
             )
 
 
+def declares_itself_a_lens(text: str) -> bool:
+    """True when a rules file's opening presents it as a lens skills compose.
+
+    Bounded to the first `LENS_DECLARATION_LINES` lines because the declaration is a
+    header convention, not a fact stated anywhere in the body: all three shipped lenses
+    make it by line 3 (a title ending in "lens", or "This file is a **swappable
+    module**"). Without the bound the patterns are broad enough to match any rules file
+    that merely *mentions* a lens further down, for instance a directory README
+    describing what the other files are, and a check that fires on a document nobody
+    intended as a lens gets switched off rather than satisfied.
+    """
+    opening = "\n".join(text.splitlines()[:LENS_DECLARATION_LINES])
+    return bool(LENS_DECLARATION_RE.search(opening))
+
+
+def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) -> None:
+    """Flag a self-declared lens under `.agents/rules/` that no skill references.
+
+    A lens is composed, not run: it reaches an agent only through the skill that points
+    at it. One nobody points at is inert, and the failure is silent, because the module
+    still reads correctly on its own and its claim to govern anything is never tested.
+    The swappability promise fails with it: an adopter who rewrites the module changes
+    nothing, which is the same class of defect the link-escape rule catches.
+
+    A reference is the lens's filename appearing anywhere in a `SKILL.md`, which counts
+    both the usual relative link and a prose mention that names the file. The bare word
+    (`autonomy`) is deliberately not enough, or any skill discussing the subject would
+    satisfy the rule without giving a reader a way to reach the module.
+
+    Skipped entirely when there is no sibling `rules/` directory, since a skills tree
+    without one has no lens to leave unwired.
+    """
+    if not rules_dir.is_dir():
+        return
+    for rules_file in sorted(rules_dir.glob("*.md")):
+        text = rules_file.read_text(encoding="utf-8")
+        if not declares_itself_a_lens(text):
+            continue
+        if any(rules_file.name in skill_text for skill_text in skill_texts.values()):
+            continue
+        errors.append(
+            f"{_rel(rules_file)}: declares itself a lens but no skill references it, so "
+            f"nothing composes it and an adopter who rewrites it changes nothing. Point at "
+            f"it from the skills whose rules it holds (one line in a `## Conventions` "
+            f"section is the usual shape), or drop the self-declaration from its opening."
+        )
+
+
 def check_status_contradiction(text: str, rel: str, warnings: list) -> None:
     """Warn when a skill asserts both draft and shipped status."""
     if DRAFT_STATUS_RE.search(text) and SHIPPED_STATUS_RE.search(text):
@@ -310,6 +374,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     skill_names = {d.name for d in skills}
     # Everything install.py ships: the skills plus the sibling rules module.
     portable_root = skills_dir.parent.resolve()
+    skill_texts: dict = {}
 
     for d in skills:
         rel = _rel(d)
@@ -318,6 +383,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             errors.append(f"{rel}: no SKILL.md")
             continue
         text = skill_md.read_text(encoding="utf-8")
+        skill_texts[d.name] = text
         fm, body_lines = parse_frontmatter(text)
         if fm is None:
             errors.append(f"{rel}/SKILL.md: no YAML frontmatter")
@@ -354,6 +420,11 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         check_links(skill_md, text, skill_names, rel, errors, portable_root)
         check_frontmatter_is_parseable(text, rel, errors)
         check_status_contradiction(text, rel, warnings)
+
+    # Checked once over the whole tree rather than per skill: "no skill references this
+    # lens" is a fact about every skill together, and it is the one rule here that reads
+    # outside .agents/skills/.
+    check_lenses_are_composed(portable_root / "rules", skill_texts, errors)
 
     for w in warnings:
         print(f"WARN  {w}")

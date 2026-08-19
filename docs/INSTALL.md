@@ -183,39 +183,19 @@ Ask the installed harness to use a skill by name, or select the generated rule o
 
 ## Validate changes
 
-Run the skill linter from the repository root:
+One command decides whether a change to the kit is acceptable, and it takes no flags:
 
 ```bash
-python scripts/validate-skills.py
+python scripts/run-checks.py
 ```
 
-It checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status. It also enforces the parts of the skill schema that fail at the consumer rather than here: a description over 1024 characters or containing an angle bracket, a frontmatter property outside the six the schema permits, and frontmatter written in a form no real YAML parser can read. All four have shipped as real defects, and the shipped skills pass Anthropic's own `quick_validate.py` as well as this one.
+[`run-checks.py`](../scripts/run-checks.py) runs every gate in a single pass, including the ones that cover the installer this page documents. [`AGENTS.md`](../AGENTS.md) names what those gates are, and this page deliberately does not restate the list: a second copy of it is a second thing to go stale. CI calls the same script, so the gate set cannot drift between your machine and the pipeline either.
 
-Run the kit's own test suite:
+It exits `0` when every gate passed, `1` when a gate ran and failed, and `2` when a gate could not run at all. A `2` outranks a `1`, for the same reason `--check` above uses that precedence: an incomplete report is a different claim from a bad change. Every gate runs even after one fails, so a single run tells you everything that is wrong rather than only the first thing. CI runs Linux, macOS, and Windows across the supported Python range, so passing locally is necessary but not sufficient.
 
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
+The gates that place files use a throwaway home under `./.tmp/`, so a real installation of your own is never touched. While you are iterating, running one gate directly is a faster loop, for instance `python scripts/install.py --dry-run --home ./.tmp/zen-home` while you are reworking the installer. That is a convenience and not a substitute, because the acceptance command is what decides.
 
-Check the work-tracking backlog for structural integrity:
-
-```bash
-python .tasks/validate.py --strict
-```
-
-Preview adapter generation without writing files:
-
-```bash
-python scripts/build-adapters.py --dry-run
-```
-
-Preview installation for a specific test home without touching your normal tool directories:
-
-```bash
-python scripts/install.py --dry-run --home ./.tmp/zen-home
-```
-
-The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](../tests/) covers the kit's own tooling, derived from the specifications in [`spec/`](spec/); the kit has no runtime application to test.
+The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](../tests/) covers the kit's own tooling, derived from the specifications in [`spec/`](spec/); the kit has no runtime application to test. The contribution rules themselves, including what the skill schema requires of a skill's frontmatter, live in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Uninstall
 
