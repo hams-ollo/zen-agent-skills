@@ -9,6 +9,7 @@ depends_on: []
 touched_files:
   - docs/spec/install.md
   - docs/spec/install.conformance.md
+  - docs/spec/README.md
 created: 2026-08-06
 ---
 
@@ -66,6 +67,16 @@ return `blocked` on the run verifying this very task. Add the row to that file's
 - The behaviour of `--check` itself, including the adopted-lens carve-out, which `chore-0031`
   verified and `bug-0020` refines.
 - The other amended specs in the queue.
+
+## Decisions
+
+- **2026-08-20: `touched_files` corrected before dispatch, and the task deferred one wave because of
+  it.** Acceptance criterion "`docs/spec/README.md`'s re-approval queue gains the row" required
+  editing a file the surface did not declare. That is the same authoring defect that let `chore-0034`
+  and `chore-0043` collide in that paragraph undetected on 2026-08-19, and it is invisible to the
+  pre-dispatch overlap check, which reads `touched_files`. Declared now. The consequence is that this
+  task collides with any sibling amending a spec in the same wave, which is why it was held out of the
+  2026-08-20 wave in favour of `chore-0047`, which needs that file for two reasons rather than one.
 
 ## Implementation notes
 
