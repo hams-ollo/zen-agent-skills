@@ -8,6 +8,7 @@ parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: [chore-0040]
 touched_files:
   - .agents/skills/fix-batch/SKILL.md
+  - .agents/skills/reconcile-worktrees/SKILL.md
 created: 2026-08-18
 ---
 
@@ -54,6 +55,27 @@ The skill already documents the mechanism that avoids it, under "Dispatch, batch
 *different* repository": create the worktrees yourself at an explicit sha. It is filed there as a
 cross-repository special case, so nobody reaches it for a same-repo batch, which is the common one.
 
+
+**A second stale base, at the other end of the same run.** Added 2026-08-20 by the author's decision
+to fold it here rather than file it separately, because it is the same family: a base that lags its
+target lies to you, and the lie is invisible locally.
+
+A wave branch cut from the last merge commit rather than from the target's tip cannot see any file
+authored after the cut. So `python scripts/run-checks.py` passes on the branch while the merge result
+fails, and the failure lands as a red CI build after the pull request is open. Twice now:
+
+```text
+wave 2  chore-0044 filed on developer after the cut, links to bug-0035, which the wave moved
+        to done/. Branch green, pull_request run red on all six cells.
+wave 4  bug-0037 filed on developer after the cut, links to chore-0046, same shape. Plus a real
+        conflict in .tasks/.scaffold.json, both branches having bumped id_high_water.
+```
+
+Wave 4 is the sharper evidence, because its `pull_request` CI run never fired at all, so the only
+signal available was the branch-alone run, which is green by construction in this case. The defect was
+found by reproducing the merge locally. A check that only exists in CI is not a check when the trigger
+can skip.
+
 ## Scope
 
 **In scope:** a pre-dispatch verification step in Step 3, and the recovery when it fails.
@@ -72,6 +94,11 @@ cross-repository special case, so nobody reaches it for a same-repo batch, which
   file identical across both commits is fine and one the fast-forward touched is not.
 - Point at the explicit-sha worktree creation the skill already documents as the durable fix, and
   stop filing it as cross-repository-only.
+- In [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md), state the branch rule
+  for the other end of the run: cut the landing branch from the target's current tip, and merge the
+  target in before opening the pull request rather than after CI objects. Its Step 1 already computes
+  each worktree's real base and flags a mismatch, so this is the same check applied to the branch the
+  worktrees land on, which that step does not currently mention.
 
 **Out of scope:**
 
@@ -128,8 +155,10 @@ Reversible by reverting one commit.
 - [ ] The staleness disclosure an affected agent owes is stated.
 - [ ] The explicit-sha worktree creation is reachable from the same-repo path, not only from the
       cross-repository one.
-- [ ] Both dated incidents are cited, so the instruction carries its evidence rather than reading as
-      caution.
+- [ ] Both dated worktree incidents are cited, so the instruction carries its evidence rather than
+      reading as caution.
+- [ ] `reconcile-worktrees` states the branch rule, citing the two waves where a branch cut from a
+      stale base passed locally and failed on merge.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
