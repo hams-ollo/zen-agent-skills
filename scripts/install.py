@@ -34,7 +34,9 @@ deliberately, and an overwrite destroys that without asking.
 The baseline is per entry, not per manifest, so a manifest written before this change
 degrades one entry at a time. Such an entry reports `unknown`, never `ok`: a clean
 result for a state nobody recorded is the same silent failure --check exists to
-remove, one level up. Re-install to establish a baseline.
+remove, one level up. Re-install to establish a baseline, except for the adopted
+rules module: re-installing that one preserves your files and records nothing, so
+--replace-adopted is the only route to a baseline there (bug-0020).
 
 A --profile selects which skills to place, and defaults to less than all of them
 because every installed description is loaded so an agent can route to it. A profile
@@ -994,6 +996,8 @@ def _check_entry(entry) -> tuple:
       entry could be compared anyway, and deliberately is not: the adopted half cannot be
       answered without a baseline, and a per-entry verdict that reads `ok` while half of it
       is unanswerable is the clean-looking-but-partial result this check exists to remove.
+      The status is one word, the remedy is not: an adopted entry is told to run
+      `--replace-adopted`, because re-installing that one preserves it and records nothing.
     - **`linked`** for a target that is a symlink to its own source. It cannot be stale,
       because it *is* the source. Read from the filesystem rather than from the recorded
       `mode`, since a copy can replace a link between runs.
@@ -1012,6 +1016,18 @@ def _check_entry(entry) -> tuple:
     # baseline than a missing one, and treating it as valid let a hand-edited manifest
     # report `revised` at exit 0 for an entry nothing had been recorded for.
     if not recorded:
+        # The remedy differs by kind, and only here (bug-0020). Re-installing a derived
+        # entry does establish a baseline; re-installing an unrecorded adopted one
+        # deliberately preserves every file and records nothing (bug-0018), so the adopter
+        # follows the instruction, nothing changes, and the next run prints it again.
+        # `--replace-adopted` is the one route to a baseline there. Asked of the entry name
+        # for the reason the `revised` branch below asks it: the classification travels in
+        # the record rather than being re-derived from a path.
+        if entry.get("name") in ADOPTED_ENTRY_NAMES:
+            return "unknown", ("installed before digests were recorded, so whether it is "
+                               "current is unknown. A re-install preserves this module and "
+                               "records nothing; run --replace-adopted to take the kit's "
+                               "copy and establish a baseline.")
         return "unknown", ("installed before digests were recorded, so whether it is "
                            "current is unknown. Re-install to establish a baseline.")
     if not (target.exists() or target.is_symlink()):
@@ -1125,9 +1141,16 @@ def check(home: Path) -> int:
         return 2
 
     counts = {"ok": 0, "linked": 0, "revised": 0, "diverged": 0, "unknown": 0, "error": 0}
+    # `counts` is keyed by status, and the unknown remedy is decided by kind (bug-0020).
+    # Tracked in this loop rather than re-derived from the manifest afterwards, so the two
+    # answers cannot drift apart.
+    unknown_kinds = set()
     for entry in sorted(scoped, key=lambda e: (e.get("tool", ""), e.get("name", ""))):
         status, message = _check_entry(entry)
         counts[status] += 1
+        if status == "unknown":
+            unknown_kinds.add("adopted" if entry.get("name") in ADOPTED_ENTRY_NAMES
+                              else "derived")
         print(f"{status:9} {entry.get('tool', ''):8} {entry.get('name', '')}  {message}")
 
     print(f"\n{counts['ok']} current, {counts['diverged']} diverged, "
@@ -1141,7 +1164,13 @@ def check(home: Path) -> int:
               "alone; merge the kit's change only if you want it.")
     if counts["unknown"]:
         print("An entry predates the digest baseline, so its state is unknown rather than "
-              "current. Re-install to establish one.")
+              "current.")
+        if "derived" in unknown_kinds:
+            print("Re-install to establish one.")
+        if "adopted" in unknown_kinds:
+            print("The adopted rules module is among them, and re-installing it preserves "
+                  "your files and records nothing: run --replace-adopted to establish a "
+                  "baseline there.")
     if counts["error"] or counts["unknown"]:
         return 2
     return 1 if counts["diverged"] else 0
