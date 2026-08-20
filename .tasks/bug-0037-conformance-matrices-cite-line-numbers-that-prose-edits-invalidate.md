@@ -16,7 +16,7 @@ created: 2026-08-20
 ## Problem
 
 [`cloud-executable.conformance.md`](../docs/spec/cloud-executable.conformance.md) cites its evidence
-by line number, 39 times. [`chore-0046`](chore-0046-write-conformance-into-the-closeout-lifecycle.md)
+by line number, 39 times. [`chore-0046`](done/chore-0046-write-conformance-into-the-closeout-lifecycle.md)
 added two lines to `AGENTS.md` and shifted everything below them, so two of those citations now point
 at unrelated text. Measured 2026-08-20 in that task's own worktree:
 

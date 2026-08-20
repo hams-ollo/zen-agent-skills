@@ -16,7 +16,7 @@ license: MIT
 
 # new-task
 
-Author task files that an isolated agent can execute without asking questions. This is the upstream of the work-tracking spine: `new-task` (author) -> `init-worktracking` (the system it writes into) -> `fix-batch` (parallel agents) -> `reconcile-worktrees` (merge back). The quality of everything downstream is capped by the quality of the task file, so this skill spends effort up front on purpose.
+Author task files that an isolated agent can execute without asking questions. This is the decomposition step of the kit spine: `new-task` -> `fix-batch` (parallel worktree-isolated agents). It writes *into* the `.tasks/` system that `init-worktracking` scaffolds, so `init-worktracking` runs before this skill rather than after it, which is why Step 1 stops and points at it when `.tasks/` is absent. When the input is an approved spec, `spec-plan-readiness` gates the task set before dispatch (Step 7). The quality of everything downstream is capped by the quality of the task file, so this skill spends effort up front on purpose.
 
 ## The bar a task file must clear
 

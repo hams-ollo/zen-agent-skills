@@ -103,4 +103,4 @@ Offer, as the natural next step, to author the repo's first task with `new-task`
 
 - This skill only writes config and calls `init-worktracking`. It installs nothing and runs no package manager, so it is safe in any environment.
 - Linter/formatter opinions live in the [house code-style layer](#house-code-style-layer), edit-once and swappable, never clobbering a repo's existing config.
-- It is the front door of the kit: `project-bootstrap` -> `init-worktracking` -> `new-task` -> `fix-batch` -> `reconcile-worktrees`.
+- It is the front door of the kit spine, and it names only its own end of it: `project-bootstrap` -> `init-worktracking` -> `spec-author`. Every skill along the spine names just its own neighbours, so no body restates the whole chain and the statements cannot drift apart from each other.

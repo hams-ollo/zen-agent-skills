@@ -2,7 +2,7 @@
 id: chore-0046
 title: A contract-governed task can close with no conformance audit, because the gate that would catch it is installed and unregistered
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -18,7 +18,7 @@ it. The closeout lifecycle in `AGENTS.md`'s work-altitude-model section names fo
 acceptance command passing, `depends_on` all done, a `doc-sync` pass, and the `done/` move plus a
 CHANGELOG line and a ROADMAP strikethrough. Conformance is not among them.
 
-The kit ships a hook for exactly this. [`spec-conformance-gate.py`](../.agents/hooks/spec-conformance-gate.py)
+The kit ships a hook for exactly this. [`spec-conformance-gate.py`](../../.agents/hooks/spec-conformance-gate.py)
 fires when work a contract governs is closed with no audit of whether the implementation matches it.
 It is placed by `--with-hooks` and it is **not registered** in the committed `.claude/settings.json`,
 which carries exactly one hook by a deliberate exception the conventions section documents. So the
@@ -39,7 +39,7 @@ existing `doc-sync` step.
 - It applies only when the task declares a `spec`, since most tasks do not and a blanket obligation
   would be noise on every chore.
 - It says what satisfies it: the spec's matrix covers the scenarios this task's `scenarios` field
-  claims, produced or updated with [`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md).
+  claims, produced or updated with [`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md).
 - It says what to do when the matrix is deliberately owed rather than produced, which is the honest
   state for a forward spec whose implementation does not exist yet, and which both `cloud-executable`
   and `systematic-debugging` have legitimately been in. An obligation with no legal way to defer
@@ -70,6 +70,25 @@ that is the case that argues for it.
 Keep it to the shape of the surrounding clauses. That section is read by every agent that closes a
 task here, and it is already dense.
 
+## Decisions
+
+- **Rejected: registering [`spec-conformance-gate.py`](../../.agents/hooks/spec-conformance-gate.py) in
+  `.claude/settings.json`.** Decided by the author on 2026-08-19 and restated here: the written rule
+  costs nothing and does not widen the one-committed-hook exception, which the conventions section of
+  `AGENTS.md` draws narrow and explains at length. `.claude/settings.json` is untouched.
+- **Rejected: a test pinning the new clause.** The change is prose in a rules document with no
+  executable surface, and the only test shape available would assert the exact wording, which fails
+  on any future rewording that preserves the meaning. The one sentence of `AGENTS.md` a test does
+  read is the S-006 bound in the acceptance-command section, which this change does not touch.
+- **Seam left open deliberately: the obligation names no frontmatter key of its own.** It keys off
+  the task's existing `spec` and `scenarios` fields rather than introducing a `conformance:` key or
+  asking `validate.py` to enforce one, so `.tasks/validate.py` still cannot tell a deferred matrix
+  from a missing one. That check is a separate decision, and mechanical enforcement remains available
+  to an adopter through the hook.
+- **Seam left open deliberately: `AGENTS.md.tmpl` is unchanged.** Whether an adopter's scaffolded
+  tracker carries this obligation depends on whether they adopt the spec spine at all, which this
+  task rules out of scope.
+
 ## Risks and rollback
 
 One file, prose only, so the more-than-one-module rule does not fire.
@@ -86,18 +105,18 @@ tool enforces, so nothing breaks if it is removed.
 
     python scripts/run-checks.py
 
-- [ ] The closeout lifecycle in `AGENTS.md` names a conformance obligation for tasks that declare a
+- [x] The closeout lifecycle in `AGENTS.md` names a conformance obligation for tasks that declare a
       `spec`, beside the `doc-sync` step.
-- [ ] It names `spec-conformance` as what satisfies it and states the legal deferral for a spec with
+- [x] It names `spec-conformance` as what satisfies it and states the legal deferral for a spec with
       nothing built to audit yet.
-- [ ] It carries the incident that produced it, as the two neighbouring clauses do.
-- [ ] `.claude/settings.json` is unchanged, and the one-committed-hook exception in the conventions
+- [x] It carries the incident that produced it, as the two neighbouring clauses do.
+- [x] `.claude/settings.json` is unchanged, and the one-committed-hook exception in the conventions
       section still reads as accurate.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

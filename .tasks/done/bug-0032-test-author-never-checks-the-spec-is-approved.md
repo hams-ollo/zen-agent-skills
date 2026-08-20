@@ -50,7 +50,7 @@ make the frontmatter and body consistent with it.
   replace one.
 - Characterization mode, which by definition has no spec and must stay reachable. The gate applies to
   the acceptance mode only, and saying so explicitly is part of the change, since
-  [`chore-0040`](../chore-0040-four-coherence-corrections-across-skill-bodies.md) separately makes
+  [`chore-0040`](chore-0040-four-coherence-corrections-across-skill-bodies.md) separately makes
   `fix-batch` point at that mode.
 - `verifier-agent` and `new-task`, which are correct.
 - Whether the verdict should be `blocked` in `verifier-agent`'s sense. `test-author` has no verdict

@@ -40,7 +40,7 @@ Do not dump the whole system on a 200-line project. Ask which tier fits, or infe
 | **standard** | lite + `ROADMAP.md` + `CHANGELOG.md` | most repos; the full altitude model |
 | **team** | standard + a CI/pre-commit invocation of the validator + optional Cursor/Copilot pointers | repos with many contributors or agents, where drift must be caught mechanically |
 
-`validate.py` ships at every tier. It is one stdlib-only file with no dependencies, so the "do not bury a small repo" argument does not apply to it, and three sibling skills (`new-task`, `fix-batch`, `reconcile-worktrees`) instruct agents to run it unconditionally. Withholding it at lite made those instructions dead references. What **team** adds is not the file but its mechanical enforcement in CI or a pre-commit hook.
+`validate.py` ships at every tier. It is one stdlib-only file with no dependencies, so the "do not bury a small repo" argument does not apply to it, and three sibling skills (`new-task`, `reconcile-worktrees`, `doc-sync`) instruct agents to run it unconditionally. Withholding it at lite made those instructions dead references. What **team** adds is not the file but its mechanical enforcement in CI or a pre-commit hook.
 
 ### Tier stripping at lite
 

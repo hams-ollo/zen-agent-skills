@@ -15,6 +15,16 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-08-20 (`chore-0047`) to state the lens-composition rule: a file under the sibling
+rules module that declares itself a lens must be referenced by at least one skill. Scenario S-023,
+plus the Proposed Surface entry admitting that the tool reads `.agents/rules/` and not only
+`.agents/skills/`.** This amendment is **pending the author's re-approval**. It writes down the
+behaviour `feat-0048` gave the validator on 2026-08-19, which this contract did not mention at all.
+It is structurally unlike every amendment before it: each earlier rule here is about a **skill**, and
+this is the first that reads a sibling directory, which is why the surface entry is part of the
+amendment rather than an afterthought. `status` is left reading `approved` per the convention in
+[`README.md`](README.md), for the reason the note below gives.
+
 **Amended 2026-08-19 (`chore-0039`) to state that a markdown link rendering as literal text is not
 a link and is not checked at all: scenario S-022, an exception to the link rules S-009 through
 S-013.** This amendment is **pending the author's re-approval**. It writes down the behaviour
@@ -285,13 +295,54 @@ validator is the kit-level lint that enforces that bar.
 - **Then** it records an error naming the offending key and the permitted set, and exits non-zero,
   because the schema rejects an unrecognised property outright rather than ignoring it.
 
+### Scenario S-023: a self-declared lens that no skill references fails
+
+- **Given** a file in the sibling rules module whose opening presents it as a lens, either by naming
+  itself one or by the "swappable module" formula that directory uses as a header convention, and no
+  `SKILL.md` anywhere in the tree that references it
+- **When** the validator runs
+- **Then** it records an error naming that file and exits non-zero, because a lens is composed rather
+  than run: it reaches an agent only through a skill that points at it, so one nobody points at is
+  inert and an adopter who rewrites it changes nothing.
+
+  This is the only rule in this contract about a file that is **not a skill**, and the only one whose
+  subject is the absence of an inbound reference rather than the state of an outbound one. Every other
+  rule above is checked per skill; this one is a fact about every skill together, so an unreferenced
+  lens is reported once, not once per skill that failed to reference it. That is also why the gap
+  existed long enough to need a rule: nothing here read the rules directory at all, so a lens shipped
+  calling itself the third beside two others while no skill composed it, and every gate passed
+  (`feat-0048`).
+
+  **What counts as a reference** is the lens's filename appearing in a `SKILL.md`. A relative link to
+  the module counts, and so does prose naming the file, because the portability contract in
+  `AGENTS.md` tells a skill to name some files in prose rather than link to them, and requiring a link
+  specifically would push an author to break one rule to satisfy another. A bare subject-word mention
+  is deliberately not a reference: a skill that discusses autonomy without ever naming `autonomy.md`
+  would satisfy the rule while leaving a reader no way to reach the module, which is the failure the
+  rule exists to catch rather than a lesser form of compliance.
+
+  **A reference does not make the lens canonical** over the referencing skill's own inline prose. The
+  rule is about reachability only: it asks that at least one skill point at the module, not that any
+  skill defer to it. Stating it the other way would contradict the module being wired in, since
+  `autonomy.md`'s own Scope section says a skill may state a local exception, and the same is true of
+  the other two lenses. Which of a skill's inline rules should be thinned in favour of a lens it now
+  points at is an editorial question this validator has no view on.
+
+  **The declaration is read in the file's opening**, not anywhere in its body. A rules-directory
+  document that merely mentions a lens further down, such as one describing what its neighbours are,
+  is not conscripted into being one, and a rules file that never declares itself a lens is under no
+  obligation to be referenced by anything. That bound is what keeps the rule usable: it reads files
+  nobody asked it to lint, so a finding against a document whose author never opted into being a lens
+  invites deleting the rule rather than satisfying it.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
 | Invocation | `python scripts/validate-skills.py` |
+| What it reads | every skill directory under the target skills directory, and the sibling rules module beside it (`.agents/skills/` and `.agents/rules/` for the default target). The rules module is read only for S-023; no rule above it inspects a rules file's contents, and nothing outside that pair is read. |
 | Exit code | non-zero when any error is recorded, zero otherwise (warnings do not fail) |
-| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary. When the skills directory is absent, a missing-directory error instead of the summary; when it is present but empty, a no-skills-found line instead of the summary. |
+| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary. When the skills directory is absent, a missing-directory error instead of the summary; when it is present but empty, a no-skills-found line instead of the summary. The count `N` is of skills, so an S-023 error raises the error count without changing it. |
 
 ## Open Questions
 

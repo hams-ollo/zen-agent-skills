@@ -70,6 +70,14 @@ return `blocked` on the run verifying this very task. Add the row to that file's
 
 ## Decisions
 
+- **2026-08-20: one more surface to add, found by `bug-0024`.** That task made a structurally invalid
+  manifest exit 2 naming the offending entry, across `--check`, `--uninstall` and install, and the
+  contract does not describe that behaviour at all. Its agent recommended a scenario for it and could
+  not write one, since `docs/spec/install.md` is outside its `touched_files` and this task already owns
+  the file. Add it in the same pass as the two flags: an unreadable-but-parsing manifest exits 2,
+  places nothing, and leaves the record byte-identical. Its tests are ready to tag with the id.
+
+
 - **2026-08-20: `touched_files` corrected before dispatch, and the task deferred one wave because of
   it.** Acceptance criterion "`docs/spec/README.md`'s re-approval queue gains the row" required
   editing a file the surface did not declare. That is the same authoring defect that let `chore-0034`

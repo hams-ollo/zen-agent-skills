@@ -33,6 +33,8 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -1631,6 +1633,188 @@ class CheckReportsWhatItComparedTests(unittest.TestCase):
         status, message = inst._check_entry({"target": ".", "source": ".", "digests": {}})
         self.assertEqual(status, "unknown")
         self.assertIn("Re-install", message)
+
+
+MALFORMED_MANIFESTS = {
+    "an entry with no target": {
+        "entries": [{"tool": "claude", "name": "alpha", "source": "s"}]},
+    "an entry whose target is null": {
+        "entries": [{"tool": "claude", "name": "alpha", "target": None, "source": "s"}]},
+    "a top-level list rather than an object": [
+        {"tool": "claude", "name": "alpha", "target": "t", "source": "s"}],
+    "an entry that is not an object": {"entries": ["alpha"]},
+}
+
+# Runs install.py exactly as its own `__main__` guard does, with only the manifest
+# constant moved off the real repository. A subprocess and not an in-process call,
+# because the defect under test is what a *process* reports: an uncaught exception
+# inside main() prints a traceback to stderr and exits 1, and 1 is this tool's word for
+# "an installed target has diverged". An in-process call sees the exception and never
+# sees either half of the wrong answer.
+_DRIVER = """\
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("zen_install", sys.argv[1])
+inst = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(inst)
+inst.MANIFEST = Path(sys.argv[2])
+raise SystemExit(inst.main(sys.argv[3:]))
+"""
+
+
+class MalformedManifestTests(unittest.TestCase):
+    """bug-0024: a manifest that parses but is the wrong shape must not exit 1.
+
+    All four shapes below were reproduced against this file on 2026-08-08 and again on
+    2026-08-20, after `bug-0022`, `feat-0049`, and `chore-0042` had each edited it. Every
+    one raised out of `main()`, which the CLI turns into a traceback at exit 1. Exit 1 in
+    this tool means "at least one installed target has diverged from its source", so a
+    caller scripting around `--check` was told its install had drifted when in fact
+    nothing had been compared. The true state is exit 2, could not run, which the
+    acceptance command, `check-provenance.py`, and `check()`'s own docstring all rank
+    above 1 for that reason.
+
+    The manifest is per-machine and gitignored, so these shapes come from an interrupted
+    write, a full disk, or a partly synced home rather than from an attacker.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.manifest = self.root / "manifest.json"
+        self.driver = self.root / "driver.py"
+        self.driver.write_text(_DRIVER, encoding="utf-8")
+
+    def _write(self, payload):
+        self.manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _run(self, *argv):
+        """The CLI, at the process layer. Returns the completed process."""
+        return subprocess.run(
+            [sys.executable, str(self.driver), str(MODULE_PATH), str(self.manifest),
+             *argv],
+            capture_output=True, text=True, timeout=300)
+
+    def _commands(self):
+        return (("--check", "--home", str(self.home)),
+                ("--uninstall", "--dry-run", "--home", str(self.home)),
+                ("--dry-run", "--home", str(self.home), "--tools", "claude"))
+
+    def _assert_could_not_run(self, result):
+        self.assertEqual(result.returncode, 2,
+                         f"expected 2 (could not run), got {result.returncode}.\n"
+                         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        self.assertNotIn("Traceback (most recent call last)", result.stderr)
+        self.assertEqual(result.stderr.strip(), "")
+
+    def test_every_malformed_shape_is_could_not_run_rather_than_diverged(self):
+        for label, payload in MALFORMED_MANIFESTS.items():
+            for argv in self._commands():
+                with self.subTest(shape=label, command=argv[0]):
+                    self._write(payload)
+                    self._assert_could_not_run(self._run(*argv))
+
+    def test_the_report_names_the_manifest_and_the_offending_entry(self):
+        entry_level = ("an entry with no target", "an entry whose target is null",
+                       "an entry that is not an object")
+        for label in entry_level:
+            with self.subTest(shape=label):
+                self._write(MALFORMED_MANIFESTS[label])
+                out = self._run("--check", "--home", str(self.home)).stdout
+                self.assertIn(str(self.manifest), out)
+                self.assertIn("entry 0", out)
+                self.assertIn("re-install", out.lower())
+
+    def test_a_wrong_top_level_shape_says_what_the_file_is_instead(self):
+        self._write(MALFORMED_MANIFESTS["a top-level list rather than an object"])
+        out = self._run("--check", "--home", str(self.home)).stdout
+        self.assertIn(str(self.manifest), out)
+        self.assertIn("a list", out)
+        self.assertIn("re-install", out.lower())
+
+    def test_a_named_entry_is_reported_by_its_name_as_well_as_its_index(self):
+        # The index alone is a poor handle in a record of a hundred entries, and the name
+        # is the column the tool prints everywhere else.
+        self._write({"entries": [{"tool": "claude", "name": "alpha",
+                                  "target": str(self.home / "alpha")},
+                                 {"tool": "claude", "name": "house-review"}]})
+        out = self._run("--check", "--home", str(self.home)).stdout
+        self.assertIn("entry 1", out)
+        self.assertIn("house-review", out)
+
+    def test_an_unknown_extra_key_is_still_a_valid_record(self):
+        # A reader that faults on what it does not recognise turns an upgrade written by
+        # a later version of this tool into what looks like corruption. Asserted through
+        # --uninstall because it answers 0 for a record it could read and 2 for one it
+        # could not, so the two outcomes are actually distinguishable.
+        placed = self.home / ".claude" / "skills" / "alpha"
+        placed.mkdir(parents=True)
+        self._write({"schema": 7, "entries": [
+            {"tool": "claude", "name": "alpha", "target": str(placed),
+             "source": str(REPO_ROOT), "mode": "copy", "provenance": {"run": 3}}]})
+        result = self._run("--uninstall", "--dry-run", "--home", str(self.home))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("alpha", result.stdout)
+        self.assertNotIn("Cannot read the install record", result.stdout)
+
+    def test_corrupt_bytes_still_degrade_to_an_empty_record(self):
+        # The pre-existing behaviour, unchanged: bytes that do not parse never named an
+        # install, so reading them as nothing recorded is truthful. Only a file that
+        # parses carries a record worth refusing to act on.
+        self.manifest.write_text("{not json at all", encoding="utf-8")
+
+        removal = self._run("--uninstall", "--dry-run", "--home", str(self.home))
+        self.assertEqual(removal.returncode, 0, removal.stdout + removal.stderr)
+        self.assertIn("Nothing recorded as installed.", removal.stdout)
+        self.assertNotIn("Cannot read the install record", removal.stdout)
+
+        # --check answers 2 here too, but for its own pre-existing reason (S-005,
+        # nothing recorded beneath this home), not because the file was rejected.
+        checked = self._run("--check", "--home", str(self.home))
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("Nothing recorded as installed beneath", checked.stdout)
+        self.assertNotIn("Cannot read the install record", checked.stdout)
+
+
+class MalformedManifestInstallChoiceTests(unittest.TestCase):
+    """What a real (not dry-run) install does with a record it cannot read.
+
+    bug-0024 left this an open choice: refuse, or treat the record as empty and let every
+    existing target report CONFLICT. Refusing is the choice, and it is asserted here
+    rather than left implicit, because the alternative is not merely a different message:
+    proceeding ends in `save_manifest`, which writes a fresh record over the damaged one
+    and takes with it every target recorded under a home this run never looked at.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        inst.MANIFEST = self._real_manifest
+
+    def test_a_real_install_places_nothing_and_leaves_the_record_alone(self):
+        damaged = json.dumps(MALFORMED_MANIFESTS["an entry with no target"], indent=2)
+        inst.MANIFEST.write_text(damaged, encoding="utf-8")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = inst.install(["claude"], "copy", self.home, dry=False, profile="core")
+
+        self.assertEqual(rc, 2, buf.getvalue())
+        self.assertIn("Nothing was placed", buf.getvalue())
+        self.assertFalse(self.home.exists(),
+                         "a refused install must not create the discovery directory")
+        self.assertEqual(inst.MANIFEST.read_text(encoding="utf-8"), damaged,
+                         "the damaged record must survive the run that refused it")
 
 
 if __name__ == "__main__":

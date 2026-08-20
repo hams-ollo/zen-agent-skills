@@ -300,7 +300,7 @@ The rest:
   `fix-batch` points worktree agents at `test-author` without naming the characterization mode those
   agents actually need; and `spec-conformance` writes a report to disk by default while
   `verifier-agent`, which composes it, promises no file unless a destination was supplied. Scoped as
-  [`chore-0040`](.tasks/chore-0040-four-coherence-corrections-across-skill-bodies.md).
+  [`chore-0040`](.tasks/done/chore-0040-four-coherence-corrections-across-skill-bodies.md).
 - **Thirty tracked files are CRLF on disk against an `eol=lf` policy**, with `core.autocrlf=true` set
   at repository scope pulling the other way and a `.gitattributes` comment describing behaviour the
   next line overrides. Invisible to `git status`, because `text=auto` normalises on the way back in,
