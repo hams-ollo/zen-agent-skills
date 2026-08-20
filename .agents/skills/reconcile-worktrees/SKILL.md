@@ -61,6 +61,27 @@ checkout's current `HEAD`, flag that explicitly. Changes made against a since-mo
 care, because the diff you are about to apply may no longer cleanly represent "just this worktree's
 changes" once `main` has moved.
 
+**Apply the same rule to the branch the worktrees land on**, which is the half this step has always
+left out. Cut the landing branch from the target branch's current tip, not from the last merge
+commit, and merge the target back into it before opening the pull request rather than after CI
+objects:
+
+```
+git fetch origin
+git merge origin/<target-branch>
+```
+
+A branch that lags its target cannot see any file authored after the cut, so the acceptance command
+passes on the branch while the merge result fails. Twice in the repository this skill was written
+in. Wave 2's branch could not see a task file added to the target after the cut, one that linked to
+a task the wave had moved into `done/`: the branch ran green and the `pull_request` job ran red on
+all six CI cells. Wave 4 repeated the shape and is the sharper case, because its `pull_request` job
+never fired at all, leaving the branch-alone run, green by construction here, as the only signal;
+the defect was found only by reproducing the merge locally, and it came with a real conflict in a
+shared bookkeeping file both branches had bumped. **A check that only exists in CI is not a check
+when the trigger can skip**, so do the merge and rerun the acceptance command locally before you
+open anything.
+
 **Then check each worktree's delegate report against the contract.**
 [`fix-batch`](../fix-batch/SKILL.md#the-delegate-report-contract) requires a fixed field set from
 every agent it dispatches, on the rule that an unmet field stops the work from advancing. That rule

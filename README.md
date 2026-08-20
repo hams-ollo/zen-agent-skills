@@ -57,24 +57,24 @@ flowchart LR
     A[project-bootstrap] --> B[init-worktracking]
   end
   subgraph Contract
-    C[spec-author] --> D[spec-plan-readiness]
+    C[spec-author] --> E[new-task]
   end
   subgraph Build
-    E[new-task] --> F[fix-batch]
+    D[spec-plan-readiness] --> F[fix-batch]
   end
   subgraph Verify
     G[test-author] --> H[spec-conformance]
     H --> I[verifier-agent]
   end
   B --> C
-  D --> E
+  E --> D
   F --> G
   I --> J[reconcile-worktrees]
   J --> L[doc-sync]
   L --> K[pr-describe]
 ```
 
-The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, which is gated for readiness before any code is written. The approved specification is decomposed into atomic tasks, independent tasks can be dispatched to isolated agents, tests are derived from the specification's scenarios, and the implementation is audited against the contract. A final independent verification runs the declared commands and returns a pass, fail, or blocked verdict with evidence, and only then is the work reconciled. After it lands, `doc-sync` detects which documents the change invalidated, and the result is documented for review.
+The front door scaffolds a project and its work tracker. A rough idea becomes a written specification, and once a human approves it, it is decomposed into atomic tasks. The specification and that task set are then gated for readiness together, because the gate reads both and a blocked verdict authorizes no tests, code, or delegation. Only then can independent tasks be dispatched to isolated agents, with tests derived from the specification's scenarios and the implementation audited against the contract. A final independent verification runs the declared commands and returns a pass, fail, or blocked verdict with evidence, and only then is the work reconciled. After it lands, `doc-sync` detects which documents the change invalidated, and the result is documented for review.
 
 Three report-only lenses are composed by the skills above rather than run on their own: `spec-quality` (specification well-formedness), `test-quality` (test design), and `review-quality` (code review). See [`docs/CATALOG.md`](docs/CATALOG.md) for the complete inventory and the status of each skill.
 

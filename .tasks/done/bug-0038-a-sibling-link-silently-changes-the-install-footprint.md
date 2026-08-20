@@ -2,7 +2,7 @@
 id: bug-0038
 title: Writing a markdown link to a sibling skill silently changes which skills a profile installs, and nothing warns the author
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: [chore-0040]
@@ -16,7 +16,7 @@ created: 2026-08-20
 
 ## Problem
 
-`SIBLING_REF_RE` in [`install.py`](../scripts/install.py) is
+`SIBLING_REF_RE` in [`install.py`](../../scripts/install.py) is
 
 ```python
 SIBLING_REF_RE = re.compile(r"\]\(\.\./([^/)]+)/SKILL\.md")
@@ -28,7 +28,7 @@ profile edge; the same skill named in backticks is not.
 
 Nobody writing a skill body knows this. Discovered 2026-08-20 by `chore-0040`'s agent, which was
 correcting a spine statement and wrote `pr-describe`'s new neighbour as
-`[doc-sync](../doc-sync/SKILL.md)`, the obvious and readable form. Three `test_install.ProfileTests`
+`[doc-sync](../../doc-sync/SKILL.md)`, the obvious and readable form. Three `test_install.ProfileTests`
 cases failed. The `core` seed is exactly `project-bootstrap`, `init-worktracking`, `pr-describe`;
 `doc-sync` sits in the fourteen-skill strongly connected component, so one link pulled that whole
 component into `core` and collapsed it into `spine`, both at 13501 characters, breaking the
@@ -96,17 +96,62 @@ Reversible by reverting one commit. No installed tree changes until someone re-r
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] The conventions section of `AGENTS.md` states that a relative link to a sibling `SKILL.md` is a
+- [x] The conventions section of `AGENTS.md` states that a relative link to a sibling `SKILL.md` is a
       profile edge, and names the backtick form for stating chain position without creating one.
-- [ ] `tests/test_install.py` asserts resolved profile membership by name, and a test proves that
+- [x] `tests/test_install.py` asserts resolved profile membership by name, and a test proves that
       adding a sibling link to a skill outside a profile's closure changes that profile's membership.
-- [ ] That test fails against the current code only in the sense of not existing; adding a link in a
+- [x] That test fails against the current code only in the sense of not existing; adding a link in a
       fixture must produce a named-set difference rather than a size difference.
-- [ ] The existing character-budget and ordering assertions still pass, unchanged in intent.
+- [x] The existing character-budget and ordering assertions still pass, unchanged in intent.
+
+## Decisions
+
+- **The rule lives in the portability contract (section 5), with a pointer from the conventions
+  section (section 6).** The acceptance criterion names "the conventions section", and its own
+  parenthetical identifies the text it means as "the portability contract's three legal link
+  classes", which is section 5's link bullet. Those are two different headings in the current
+  `AGENTS.md`. The substance went next to the three legal link classes, because that is the bullet an
+  author reads when deciding how to write a link and the new rule is the same sentence's business.
+  Section 6 gets one line saying the link is load-bearing and pointing up, so a reader who arrives at
+  "relative markdown links" as a formatting convention is told it is not only formatting. No
+  substance is duplicated.
+
+- **`install.py` gains a comment above `SIBLING_REF_RE` and nothing else.** The task's implementation
+  notes forbid explaining the closure algorithm again, and `resolve_profile` already does. The
+  comment states only what the regex means for a skill author, and points at `AGENTS.md` as the place
+  that rule is written for the person who can trip it.
+
+- **Profile membership is pinned as a named constant, `EXPECTED_PROFILE_MEMBERSHIP`, not as a size.**
+  This is the "one place a legitimate change updates once" the risk section asks for. `core` and
+  `spine` are listed by name; `all` is deliberately not, because its seed is `None` and a literal
+  list would have to be edited by every new skill, so it is asserted as the property (every shipped
+  skill) instead.
+
+- **A second test guards the constant itself.** `test_each_pinned_profile_holds_its_seed_and_is_closed_over_it`
+  re-derives the two properties the pinned sets are a snapshot of (the seed survives resolution, and
+  no member links outside the set). Without it, a future agent could silence a real regression by
+  pasting the new set into the constant, which is exactly the failure mode a pinned list invites.
+
+- **The reproduction fixture links to a skill outside the closure, and a sibling test covers the
+  trap.** `test_a_link_to_a_skill_outside_the_closure_moves_it_into_the_profile` adds `omega` (which
+  itself reaches `zeta`) and asserts the named difference `{omega, zeta}`, plus the on-disk placed
+  set. `test_a_link_to_a_skill_already_in_the_closure_changes_nothing` pins the free case that made
+  two of `chore-0040`'s links invisible, so the fixture records that the same edit is sometimes free.
+  A third test pins that the backtick form creates no edge, which is the escape hatch `AGENTS.md` now
+  tells authors to use.
+
+- **Verified the new assertion catches the real defect, then reverted the probe.** Appending
+  `[doc-sync](../../doc-sync/SKILL.md)` to `pr-describe/SKILL.md` made the new test fail naming all
+  fifteen skills that moved into `core`. Appending `[human-handoff](../../human-handoff/SKILL.md)`
+  instead made it fail naming `human-handoff` and `agent-handoff`, a two-skill pull. Both probes were
+  reverted with `git checkout --`; no skill body is changed by this task.
+
+- **Nothing was changed in how profiles resolve, and `docs/spec/install.md` was not touched**, per the
+  task's out-of-scope list and `chore-0033` being queued against that file.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

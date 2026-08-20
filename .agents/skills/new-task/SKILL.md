@@ -83,7 +83,7 @@ If the user gave enough detail, confirm your understanding in one or two sentenc
 Before writing `touched_files`, actually find the surface:
 
 - Grep/search for the function, symbol, config key, or behavior named in the request.
-- Identify the source file(s) that change and their corresponding test file(s). If a test file does not exist yet, include the path it should be created at.
+- Identify the source file(s) that change and their corresponding test file(s). `touched_files` carries only paths that already exist, so a test file that does not exist yet does not go there: `validate.py --strict` reports a path that is not in the tree, and `--strict` is what a backlog gate runs. Name the path it should be created at in the **Scope** section instead.
 - Note the exact scoped test command from the section of `AGENTS.md` that lists the repo's technical commands (for a monorepo, the per-package command that covers these files).
 
 If you cannot find the surface, say so and ask, rather than writing a plausible-looking but wrong `touched_files`.
@@ -104,7 +104,7 @@ For each task, copy `.tasks/_TEMPLATE.md`, assign the next id (filename `<type>-
 
 - Frontmatter: `id`, `type`, `status: open`, `priority`, `parent`, `depends_on`, `touched_files`, `created` (today, ISO), plus `spec` and `scenarios` when the task came from an approved spec.
 - **Problem**: what is wrong or missing and why, pointing at exact code with relative links.
-- **Scope**: in-scope change, and an explicit out-of-scope list.
+- **Scope**: in-scope change, and an explicit out-of-scope list. Name every file the task will create here, with the exact path it belongs at, because `touched_files` cannot carry a path that does not exist yet and this is the only place the implementing agent can read where a new file goes.
 - **Implementation notes**: constraints, intended approach, edge cases, prior art to mirror. Optional if Problem + Scope are unambiguous.
 - **Risks and rollback**: only when the deterministic rule above fires. Check it against the `touched_files` you just wrote, since "touches more than one module" is answerable from that list rather than from intuition. Delete the section when it does not apply.
 - **Acceptance criteria**: the literal command that must pass, plus concrete checkboxes (new/updated test, existing tests pass, task-specific checks).
@@ -114,7 +114,7 @@ Follow the repo's own conventions from the conventions section of `AGENTS.md` (d
 
 ### Step 6: self-check and update bookkeeping
 
-1. Run the shipped validator: `python .tasks/validate.py` (or `--strict` if every `touched_files` path already exists). Fix anything it flags. Do not hand over a task file that does not pass.
+1. Run the shipped validator: `python .tasks/validate.py --strict`. Every `touched_files` path already exists by the rule in Step 3, so `--strict` is the mode to check against, and it is the mode a backlog gate in CI runs. Fix anything it flags. Do not hand over a task file that does not pass.
 2. If `.tasks/.scaffold.json` exists, update its `id_high_water` for the types you consumed, so the next author does not collide.
 3. If you added a ROADMAP Feature, write that one line now (with user assent).
 
