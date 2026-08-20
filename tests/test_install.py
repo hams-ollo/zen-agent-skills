@@ -519,6 +519,32 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertEqual(seen, [expected])
 
 
+# Resolved profile membership, by name, pinned in one place (bug-0038).
+#
+# A profile's seed in install.py is not its membership: the seed is expanded over the
+# sibling links found in skill bodies, so writing `[doc-sync](../doc-sync/SKILL.md)` into
+# any skill body can move skills between profiles. `chore-0040` did exactly that while
+# correcting a sentence, and the only symptom was `core` and `spine` reporting the same
+# description-character total, which took real diagnosis to trace back to one link.
+# Comparing sets by name fails with the skill that moved, instead of with two numbers.
+#
+# `all` is not listed: its seed is None, so its membership is every shipped skill, and a
+# literal list here would have to be edited by every new skill. It is checked as that
+# property instead, below.
+#
+# A legitimate profile change updates this constant once and nothing else. An
+# unintended one is what it exists to catch, so read the named difference before editing:
+# if a skill you did not mean to move appears here, a sibling link is the defect.
+EXPECTED_PROFILE_MEMBERSHIP = {
+    "core": {"init-worktracking", "pr-describe", "project-bootstrap"},
+    "spine": {"doc-author", "doc-revise", "doc-sync", "fix-batch", "house-review",
+              "init-worktracking", "new-task", "pr-describe", "project-bootstrap",
+              "reconcile-worktrees", "review-depth", "spec-author", "spec-conformance",
+              "spec-plan-readiness", "spec-quality", "test-author", "test-quality",
+              "verifier-agent"},
+}
+
+
 class ProfileTests(unittest.TestCase):
     """Scenarios S-013 and S-014: the profile axis, its closure, and its budget report.
 
@@ -558,6 +584,40 @@ class ProfileTests(unittest.TestCase):
         all_skills = inst.discover_skills()
         selected, _ = inst.resolve_profile(inst.DEFAULT_PROFILE, all_skills)
         self.assertLess(len(selected), len(all_skills))
+
+    def test_resolved_profile_membership_is_what_the_seed_and_its_closure_say(self):
+        # Scenario S-013, bug-0038: the oracle is the set of names, not its size. Every
+        # other assertion in this class is arithmetic or ordering, and a one-skill move
+        # satisfies all of them. This one names the skill that moved.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        for name, expected in EXPECTED_PROFILE_MEMBERSHIP.items():
+            with self.subTest(profile=name):
+                selected, _ = inst.resolve_profile(name, shipped)
+                self.assertEqual({d.name for d in selected}, expected)
+
+    def test_the_all_profile_is_every_shipped_skill(self):
+        # Scenario S-013, bug-0038: `all` has no seed to close over, so its membership is
+        # asserted as that property rather than pinned as a list that every new skill
+        # would have to edit.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        selected, added = inst.resolve_profile("all", shipped)
+        self.assertEqual({d.name for d in selected}, {d.name for d in shipped})
+        self.assertEqual(added, [])
+
+    def test_each_pinned_profile_holds_its_seed_and_is_closed_over_it(self):
+        # Scenario S-013, bug-0038: the pinned sets are a tripwire, not the contract.
+        # This is the contract they snapshot, so an edit to the constant cannot quietly
+        # record a membership the resolver would never produce.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        by_name = {d.name: d for d in shipped}
+        for name, expected in EXPECTED_PROFILE_MEMBERSHIP.items():
+            with self.subTest(profile=name):
+                seed = {n for n in inst.PROFILE_SEEDS[name] if n in by_name}
+                self.assertLessEqual(seed, expected, "the seed must survive resolution")
+                for member in sorted(expected):
+                    reachable = inst.sibling_refs(by_name[member]) & set(by_name)
+                    self.assertLessEqual(reachable, expected,
+                                         f"{member} links outside {name}")
 
     def test_profiles_are_nested_from_smallest_to_largest(self):
         # Scenario S-013: core is a subset of spine, and spine of all. A profile set that
@@ -651,6 +711,96 @@ def _fixture_skill(skills_dir, name, description, status=None, refs=(), body_ext
     if body_extra:
         lines.append(body_extra)
     (d / "SKILL.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class SiblingLinkIsAProfileEdgeTests(unittest.TestCase):
+    """bug-0038, under S-013: markdown link syntax in a skill body is a profile edge.
+
+    Run against a fixture tree rather than `.agents/skills/`, because the behaviour under
+    test is what happens when a body is *edited*, and editing a real skill to prove it
+    would change the kit's own install footprint.
+
+    The failure this pins is not that the closure is wrong. It is correct, and
+    deliberately so. It is that an author writing the readable link form for a skill they
+    only meant to name changes what the installer places, with no signal. `chore-0040`
+    tripped it and was caught only because the collapse was large enough to break a
+    character-budget invariant; a one-skill pull satisfies every budget assertion.
+
+    Two of the links `chore-0040` added were free, because their targets were already in
+    the closure by another path. That is the trap in
+    `test_a_link_to_a_skill_already_in_the_closure_changes_nothing`: the same edit is
+    sometimes free and sometimes doubles a profile, which is precisely why the author
+    cannot tell by looking.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+        self._real = (inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.MANIFEST = self.root / "manifest.json"
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "all": None}
+
+    def tearDown(self):
+        inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST = self._real
+        self._tmp.cleanup()
+
+    def _members(self, profile="core"):
+        selected, _ = inst.resolve_profile(profile, inst.discover_skills())
+        return {d.name for d in selected}
+
+    def _placed(self, profile="core"):
+        home = self.root / f"home-{profile}-{len(list(self.root.iterdir()))}"
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst.install(["claude"], "copy", home, False, profile)
+        base = home / ".claude" / "skills"
+        return {p.name for p in base.iterdir()} if base.is_dir() else set()
+
+    def test_a_link_to_a_skill_outside_the_closure_moves_it_into_the_profile(self):
+        # bug-0038: one added link, and the profile grows by the linked skill and
+        # everything it reaches. The assertion is a named difference, so the report says
+        # `omega` and `zeta` rather than reporting that a number changed.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"])
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        _fixture_skill(self.skills, "omega", "does omega things when asked", refs=["zeta"])
+        _fixture_skill(self.skills, "zeta", "does zeta things when asked")
+        before = self._members()
+        self.assertEqual(before, {"alpha", "beta"})
+
+        # The edit an author makes for readability: a neighbour written as a link.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked",
+                       refs=["beta", "omega"])
+        after = self._members()
+        self.assertEqual(after - before, {"omega", "zeta"})
+        self.assertEqual(after, {"alpha", "beta", "omega", "zeta"})
+        self.assertEqual(self._placed(), after, "the install footprint follows the link")
+
+    def test_a_link_to_a_skill_already_in_the_closure_changes_nothing(self):
+        # bug-0038, the trap: `gamma` is already reached through `beta`, so linking it
+        # from `alpha` too is free. Sometimes free and sometimes doubling is the reason
+        # the rule has to be written down rather than learned from a failing test.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"])
+        _fixture_skill(self.skills, "beta", "does beta things when asked", refs=["gamma"])
+        _fixture_skill(self.skills, "gamma", "does gamma things when asked")
+        before = self._members()
+        self.assertEqual(before, {"alpha", "beta", "gamma"})
+
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked",
+                       refs=["beta", "gamma"])
+        self.assertEqual(self._members(), before)
+
+    def test_naming_a_sibling_in_backticks_creates_no_edge(self):
+        # bug-0038: the form AGENTS.md tells an author to use when they mean to state
+        # chain position rather than composition. If this ever starts creating an edge,
+        # the documented escape hatch is gone and every prose mention becomes load-bearing.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"],
+                       body_extra="Runs after `omega` in the chain, and does not compose it.\n")
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        _fixture_skill(self.skills, "omega", "does omega things when asked")
+        self.assertEqual(inst.sibling_refs(self.skills / "alpha"), {"beta"})
+        self.assertEqual(self._members(), {"alpha", "beta"})
 
 
 class DraftMarkerTests(unittest.TestCase):

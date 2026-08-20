@@ -109,6 +109,12 @@ PROFILE_SEEDS = {
 }
 DEFAULT_PROFILE = "spine"
 
+# The one syntax that makes a skill a profile edge: a markdown link from one skill body
+# to a sibling SKILL.md. The same skill named in backticks is prose and creates no edge,
+# which is the form for stating chain position. Authors trip this by writing the readable
+# link form for a neighbour they only meant to name (chore-0040), so the rule is stated
+# for skill authors in AGENTS.md's portability contract, not only here where they will
+# never read it.
 SIBLING_REF_RE = re.compile(r"\]\(\.\./([^/)]+)/SKILL\.md")
 # Narrow readers for one frontmatter field, deliberately not a YAML parser. The block
 # scalar case matters here for the same reason it does in validate-skills.py: without

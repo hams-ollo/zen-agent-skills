@@ -2,7 +2,7 @@
 id: bug-0039
 title: The README spine diagram runs spec-plan-readiness before new-task, and that gate cannot run until new-task has produced what it gates
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: [chore-0040]
@@ -13,7 +13,7 @@ created: 2026-08-20
 
 ## Problem
 
-[`README.md`](../README.md)'s Mermaid flowchart has:
+[`README.md`](../../README.md)'s Mermaid flowchart has:
 
 ```text
 C[spec-author] --> D[spec-plan-readiness]
@@ -76,6 +76,40 @@ Worth knowing: `spec-plan-readiness` returning `blocked` authorizes no tests, co
 its position is not decorative. A reader following the diagram literally would run the gate against a
 spec alone, get an answer about an incomplete input, and treat it as permission.
 
+## Decisions
+
+**Eleven edges re-derived, three found wrong.** All three are the one seam between `Contract` and
+`Build`: `spec-author --> spec-plan-readiness`, `spec-plan-readiness --> new-task`, and
+`new-task --> fix-batch`. The third was not in this task's problem statement and is wrong for the
+same reason as the other two: `new-task` says "the next step is not `fix-batch`: it is
+`spec-plan-readiness` over the spec plus this task set ... it runs before dispatch, not after", so an
+edge straight from `new-task` to `fix-batch` routes around the gate on the very path the diagram
+draws (one that starts at `spec-author`). The remaining eight edges each hold against both skills
+they connect. The corrected seam is `spec-author --> new-task --> spec-plan-readiness --> fix-batch`.
+
+**Rejected alternative: adding a second edge into `spec-plan-readiness` rather than moving it.** The
+scope allowed either. Moving it wins because the gate has exactly one legal position on this path,
+and a diagram that shows the gate both before and gating the decomposition preserves the reading
+this bug exists to remove.
+
+**Rejected alternative: keeping `new-task` in the `Build` subgraph.** `new-task` moves into
+`Contract` and `spec-plan-readiness` into `Build` so both subgraphs keep two nodes and the gate
+stands at the entrance to `Build`, which is what a go/no-go gate is. The subgraph labels themselves
+did not change.
+
+**A premise that turned out false, in the reverse direction from the one this task names.**
+`README.md` line 30 already said the gate "blocks implementation until a spec **and its task
+decomposition** are provably implementable", four sentences above a diagram that contradicted it. The
+README disagreed with itself, not only with the skills, so the correction had a witness inside the
+same file the whole time.
+
+**A seam left open deliberately: `init-worktracking` never names `spec-author`.** The `B --> C` edge
+rests on `project-bootstrap` alone, whose Notes state the chain
+`project-bootstrap -> init-worktracking -> spec-author`. `init-worktracking`'s own Step 8 offers
+`new-task` as its next step and mentions no spec at all. Nothing contradicts the edge, since that
+Step 8 handoff is the non-contract path, but only one of the two skills asserts it, unlike every
+other edge here. Left as found rather than closed, because closing it means editing a skill body.
+
 ## Risks and rollback
 
 One file, no code, so the more-than-one-module rule does not fire.
@@ -90,15 +124,15 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] The diagram no longer places `spec-plan-readiness` before `new-task`.
-- [ ] Every edge in the diagram is consistent with the two skills it connects, checked against their
+- [x] The diagram no longer places `spec-plan-readiness` before `new-task`.
+- [x] Every edge in the diagram is consistent with the two skills it connects, checked against their
       bodies, and the closeout states how many edges were re-derived and how many were found wrong.
-- [ ] No skill body is modified.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] No skill body is modified.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -43,7 +43,7 @@ The re-anchoring step is in that list because its absence was invisible for mont
 | `spec` | Optional. Path to the approved spec this task implements. |
 | `scenarios` | Optional. The `S-NNN` scenario ids from that spec this task covers. |
 | `external` | Optional. The upstream GitHub issue this task serves: `#123` here, `owner/repo#123` elsewhere. |
-| `touched_files` | Every file the task expects to create or modify. |
+| `touched_files` | Every file the task expects to read or modify, each of which must already exist. |
 | `created` | ISO date the task was authored. |
 
 `external` links the task to the issue tracker. Store the reference in GitHub's own syntax, because
@@ -55,6 +55,12 @@ emission is concatenation rather than translation. See [`docs/spec/tracker-links
 does not come from a spec, which is most of them. Fill both when one exists, because a readiness
 gate run before implementation reads them to confirm every scenario has a task and every task has a
 reason to exist.
+
+`touched_files` is the agent's entire read/write surface, and every path in it must already exist:
+`validate.py --strict` reports one that does not, and `--strict` is the mode a backlog gate in CI
+runs, so naming a file that has not been created yet fails the build. A file the task will **create**
+is named in that task's **Scope** section instead, with the exact path it belongs at. That is where
+an implementing agent reads where a new file goes, and where an author says it.
 
 ## A note on parallel agents
 

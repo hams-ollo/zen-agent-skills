@@ -41,7 +41,7 @@ It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves 
 | `spec` | Optional. Path to the approved spec this task implements. |
 | `scenarios` | Optional. The `S-NNN` scenario ids from that spec this task covers. |
 | `external` | Optional. The upstream issue this task serves, as `#123` or `owner/repo#123`. |
-| `touched_files` | Every file the task expects to create or modify. |
+| `touched_files` | Every file the task expects to read or modify, each of which must already exist. |
 | `created` | ISO date the task was authored. |
 
 `spec` and `scenarios` are what make a task traceable back to a contract. Omit both for a task that
@@ -54,6 +54,12 @@ reference in GitHub's own syntax, `#123` for an issue in this repository or `own
 in another, and a bare number is rejected so the stored value stays identical to the form GitHub
 recognises. The `pr-describe` skill reads it and emits a closing reference in the pull request body,
 so merging the pull request closes the issue. Omit it for a task nobody filed an issue for.
+
+`touched_files` is the agent's entire read/write surface, and every path in it must already exist:
+`validate.py --strict` reports one that does not, and `--strict` is the mode a backlog gate in CI
+runs, so naming a file that has not been created yet fails the build. A file the task will **create**
+is named in that task's **Scope** section instead, with the exact path it belongs at. That is where
+an implementing agent reads where a new file goes, and where an author says it.
 
 ## A note on parallel agents
 

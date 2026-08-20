@@ -2,7 +2,7 @@
 id: bug-0034
 title: fix-batch tells you to record the dispatch commit and never to check the worktree was cut from it, which has now cost two batches
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Kit coherence hardening (2026-08-18 review pass)"
 depends_on: [chore-0040]
@@ -14,7 +14,7 @@ created: 2026-08-18
 
 ## Problem
 
-[`fix-batch`](../.agents/skills/fix-batch/SKILL.md) Step 3 says to record the dispatch sha first,
+[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) Step 3 says to record the dispatch sha first,
 and gives the right reason: it is the one piece of state that cannot be recovered afterwards, since
 `git worktree list` reports current `HEAD` rather than the creation point. It never says to check
 that the worktrees were actually cut from it. That check is the whole value of having recorded it,
@@ -94,7 +94,7 @@ can skip.
   file identical across both commits is fine and one the fast-forward touched is not.
 - Point at the explicit-sha worktree creation the skill already documents as the durable fix, and
   stop filing it as cross-repository-only.
-- In [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md), state the branch rule
+- In [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md), state the branch rule
   for the other end of the run: cut the landing branch from the target's current tip, and merge the
   target in before opening the pull request rather than after CI objects. Its Step 1 already computes
   each worktree's real base and flags a mismatch, so this is the same check applied to the branch the
@@ -102,8 +102,6 @@ can skip.
 
 **Out of scope:**
 
-- Any change to `reconcile-worktrees`. Its Step 1 already computes each worktree's real base and
-  says to flag a mismatch, which is why this landed safely; the gap is at dispatch, not at landing.
 - The hardened prompt in Step 3. The honest-blocker instruction worked and should not be weakened by
   adding a base check to every agent's prompt, which would put the same diagnosis in N places.
 - Diagnosing why `isolation: "worktree"` ignores the requested base. That is harness behaviour, not
@@ -130,6 +128,30 @@ Be explicit that the fast-forward is conditional. Both preconditions matter and 
 2026-08-18 batch checked them before acting while another used `git reset --hard` without saying it
 had checked. State them as a pair.
 
+## Decisions
+
+- **Rejected: keeping `isolation: "worktree"` as the documented same-repo dispatch path with the
+  post-dispatch check bolted on.** That is the shape the 2026-08-18 `b950c9e` wave falsified. The
+  check races agent self-repair, so it can only ever lower-bound the damage. The harness bullet now
+  names explicit-sha creation as the same-repo path and demotes `isolation: "worktree"` to the
+  convenience path with its failure record stated.
+- **Rejected: adding a base check to the hardened prompt.** Explicitly out of scope, and it would
+  put the same diagnosis in N places, which is what this task moves out of the prompts. The
+  honest-blocker instruction (item 6) is left untouched and is now cited by the evidence list as
+  working but in the wrong place.
+- **Premise partly false: the `Out of scope` bullet "Any change to `reconcile-worktrees`" contradicts
+  the newer in-scope bullet and acceptance criterion for that same file.** The 2026-08-20 fold-in
+  added the branch rule without retiring the older exclusion. Resolved in favour of the in-scope
+  bullet and the acceptance criteria, which are the mechanically checked ones.
+- **Seam left open: no test.** Both changes are prose in skill bodies with no executable surface. A
+  test here could only pin wording, which `chore-0040` and this task both demonstrate is churn.
+  `validate-skills.py` and the docs link check already cover the mechanical properties (link
+  resolution, frontmatter, lint), and they run inside the acceptance command.
+- **Seam left open: the branch rule's merge command in `reconcile-worktrees` names `origin` and a
+  `<target-branch>` placeholder rather than the kit's `developer`.** The skill is portable and its
+  Conventions section defers to the target repo, so the incident evidence is described without
+  naming this kit's task ids or its acceptance command.
+
 ## Risks and rollback
 
 One skill body, prose only, no procedure removed. It does not meet the more-than-one-module rule and
@@ -147,23 +169,23 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] Step 3 makes explicit-sha worktree creation the primary path for a same-repo batch.
-- [ ] Step 3 names the post-dispatch check against the recorded sha, with the command, and states
+- [x] Step 3 makes explicit-sha worktree creation the primary path for a same-repo batch.
+- [x] Step 3 names the post-dispatch check against the recorded sha, with the command, and states
       that a clean result is a lower bound rather than proof, because it races agent self-repair.
-- [ ] The recovery names `git merge --ff-only`, both of its preconditions, and why `git reset --hard`
+- [x] The recovery names `git merge --ff-only`, both of its preconditions, and why `git reset --hard`
       is not the default.
-- [ ] The staleness disclosure an affected agent owes is stated.
-- [ ] The explicit-sha worktree creation is reachable from the same-repo path, not only from the
+- [x] The staleness disclosure an affected agent owes is stated.
+- [x] The explicit-sha worktree creation is reachable from the same-repo path, not only from the
       cross-repository one.
-- [ ] Both dated worktree incidents are cited, so the instruction carries its evidence rather than
+- [x] Both dated worktree incidents are cited, so the instruction carries its evidence rather than
       reading as caution.
-- [ ] `reconcile-worktrees` states the branch rule, citing the two waves where a branch cut from a
+- [x] `reconcile-worktrees` states the branch rule, citing the two waves where a branch cut from a
       stale base passed locally and failed on merge.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
