@@ -62,6 +62,31 @@ run would have produced, and the conclusion would have been false in both halves
 and the fix held. There is no row, and no preceding gate, for the session having been on a commit
 without `7703632`. A person following the table lands on a hook bug that does not exist.
 
+**It happened again while this task was being filed, in the sibling shape.** The branch carrying
+this file was cut from `origin/developer` at `bc2726c`, correctly and deliberately. `chore-0051`
+merged to `developer` twenty minutes later at `bc4f901`, moving its own task file into `done/`. This
+file's link to it still resolved on the branch, so `python scripts/run-checks.py` passed locally and
+`python .tasks/validate.py --strict` reported `0 error(s)`, and the merge result failed on all six CI
+cells:
+
+```text
+ERROR .tasks/bug-0043-...md: relative link does not resolve:
+      chore-0051-cloud-proof-scenarios-name-a-task-that-is-already-closed.md
+Checked 143 task files: 1 error(s), 0 warning(s).
+```
+
+That exact shape is `bug-0034`'s second half, which is `done`: *"a wave branch cut from the last merge
+commit rather than from the target's tip cannot see any file authored after the cut, so
+`run-checks.py` passes on the branch while the merge result fails."* Its fix is a rule in
+[`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md) telling the batch's landing
+step to merge the target in before opening the pull request. A lone cloud session never reads that
+skill.
+
+So the two occurrences an hour apart are the same sentence from opposite ends: **the rules for this
+exist, they are correct, and not one of them is addressed to a single unattended session.** That is
+the finding, and it is why the fix belongs in `autonomy.md` and in the prompts rather than in another
+skill body.
+
 **Why no existing rule covers it.**
 [`bug-0034`](done/bug-0034-fix-batch-never-checks-the-worktree-base.md) is the same family and fixed
 the two neighbouring cases: worktrees mis-cut at dispatch, and a landing branch cut from a stale tip.
@@ -109,17 +134,19 @@ starts it.
   acceptance command deliberately does not, and `bug-0034` already recorded that a check living only
   in CI is not a check when the trigger can skip.
 - **Re-running the proof.** A person starts it, and
-  [`chore-0051`](chore-0051-cloud-proof-scenarios-name-a-task-that-is-already-closed.md) is already
-  changing which task it dispatches.
+  [`chore-0051`](done/chore-0051-cloud-proof-scenarios-name-a-task-that-is-already-closed.md) has
+  already repointed it at an open task.
 - **The `bug-0020` change itself.** It is correct, it has been rebased onto `developer` and
   re-validated there, and the defect it fixes is genuinely unfixed on `developer`.
 
 ## Implementation notes
 
-**`chore-0051` also touches this runbook, and the regions differ.** That task rewords `S-017` and
-`S-018`'s **Given** clauses and the preconditions section; this one changes the two prompts, the
-`S-008` reading table, and the runs table. Neither is a dependency of the other, but whichever lands
-second should read the other's diff rather than assume its own line numbers.
+**`chore-0051` landed in this runbook on 2026-08-20 and the regions do not collide.** It reworded
+`S-017` and `S-018`'s **Given** clauses, the preconditions table, and the `S-017` prompt's task; this
+one changes what both prompts *check*, the `S-008` reading table, and the runs table. Every premise
+above was re-read against the post-`chore-0051` runbook and all of them still hold: the precondition
+is still stated only to the person, neither prompt carries a base check, and the reading table is
+unchanged.
 
 **Prefer stating the required commit as a commit, not a branch.** The runbook already made this
 choice once, after naming `feat/epic-e-delegated-execution` in a section that outlived the branch, and
