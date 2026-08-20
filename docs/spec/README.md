@@ -69,13 +69,14 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-20, six specs are approved and carry an amendment the author has not re-read. Three of
-them carry two: `install`, `build-adapters` since `chore-0043`, and `validate-skills` since
+As of 2026-08-20, seven specs are approved and carry an amendment the author has not re-read. Three
+of them carry two: `install`, `build-adapters` since `chore-0043`, and `validate-skills` since
 `chore-0047`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
 | [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`) | 2026-08-06, 2026-08-19 |
+| [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`) | 2026-08-20 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |

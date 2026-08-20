@@ -9,6 +9,20 @@ Behavioral contract for making this repository workable from a cloud agent sessi
 2026-08-07 for item 2 of Epic E in [`ROADMAP.md`](../../ROADMAP.md). **Approved by the author on
 2026-08-07.**
 
+**Amended 2026-08-20 (`chore-0051`) to repoint `S-017` and `S-018` at an open task: their **Given**
+clauses named [`bug-0018`](../../.tasks/done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md),
+which closed on 2026-08-08, one day after the runbook that dispatches it was written.** This
+amendment is **pending the author's re-approval**. The contract specified a proof run that could not
+be performed, and nothing reported it: all seven gates pass, and `validate.py --strict` passes because
+the runbook's link to that task resolves correctly into `done/`, so the move made the link more valid
+rather than less. The substitute is
+[`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen
+because `S-018`'s "the unfixed `install.py`" stays literally true of it and its first acceptance
+criterion already requires a test failing against the current message. `status` is left reading
+`approved` per the convention in [`README.md`](README.md), for the reason that file gives. Nothing
+else in this contract changes, and `S-017` to `S-019` stay **Not-built**, since only the run itself
+can move them.
+
 A **forward** spec, and the first here: every other spec in this directory was written against code
 that already existed, so it described a contract that already held. This one does not, which moves
 where the risk sits. A retrospective spec can be wrong about what the code does, and an audit finds
@@ -241,7 +255,7 @@ have caught, and then has no command to catch it with either.
 
 ### Scenario S-017: the proof run lands as a draft pull request carrying its evidence
 
-- **Given** [`bug-0018`](../../.tasks/done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md)
+- **Given** [`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md)
   dispatched to a cloud session under the autonomy rules module
 - **When** the session completes its work
 - **Then** the work is on a branch whose name carries the `claude/` prefix, a pull request exists in
