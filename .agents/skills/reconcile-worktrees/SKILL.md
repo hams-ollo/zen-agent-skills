@@ -6,9 +6,10 @@ description: >-
   or merging blindly. Use whenever asked to "reconcile the worktrees", "merge these agent
   branches", "bring the worktree changes back into main", "clean up the worktrees", or when
   multiple agent worktree directories exist and their changes need to land in the primary
-  checkout. It is the closing step of the kit spine: new-task authors, fix-batch dispatches to
-  isolated agents, reconcile-worktrees lands the verified results. Also use it proactively after a
-  fix-batch run once every spawned agent has been individually verified, as the natural next step.
+  checkout. It is the landing step of the kit spine: new-task authors, fix-batch dispatches to
+  isolated agents, reconcile-worktrees consolidates the verified results, and doc-sync follows it.
+  Also use it proactively after a fix-batch run once every spawned agent has been individually
+  verified, as the natural next step.
 license: MIT
 ---
 
@@ -18,7 +19,7 @@ Bring the verified contents of one or more isolated git worktrees into the main 
 clean, reviewable diff, without silently overwriting anything, without committing on the user's
 behalf, and without trusting that "no conflicts reported" means "safe".
 
-This is the closing step of the kit spine: [`new-task`](../new-task/SKILL.md) authors the task
+This is the landing step of the kit spine: [`new-task`](../new-task/SKILL.md) authors the task
 files, [`fix-batch`](../fix-batch/SKILL.md) dispatches them to isolated worktree agents, and this
 skill consolidates the results. It assumes each worktree has already been through its own
 verification pass via [`verifier-agent`](../verifier-agent/SKILL.md) (`fix-batch`'s Step 6 is what
@@ -27,6 +28,12 @@ not about trusting them in the first place. If a worktree has not been independe
 run [`verifier-agent`](../verifier-agent/SKILL.md) against it first. The same holds for the report
 the worktree arrived with: it meets `fix-batch`'s delegate report contract, or the worktree does not
 land. Step 1 is where that is checked.
+
+Landing the diff is where this skill stops, and it is not where the spine stops. A batch that has
+just been consolidated is the single change most likely to have invalidated the reader-facing
+documents, and nothing above notices, so `doc-sync` runs next, over the combined result rather than
+over any one worktree. Offer it as the natural next step when you report in Step 7, and say so even
+when the diff looks purely internal, since that judgment is what `doc-sync` exists to make.
 
 ## Why this exists
 

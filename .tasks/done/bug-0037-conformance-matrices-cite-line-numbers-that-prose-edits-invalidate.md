@@ -2,7 +2,7 @@
 id: bug-0037
 title: A conformance matrix cites evidence by line number, so an unrelated prose edit above it silently makes the citation point at something else
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: [chore-0046]
@@ -15,8 +15,8 @@ created: 2026-08-20
 
 ## Problem
 
-[`cloud-executable.conformance.md`](../docs/spec/cloud-executable.conformance.md) cites its evidence
-by line number, 39 times. [`chore-0046`](done/chore-0046-write-conformance-into-the-closeout-lifecycle.md)
+[`cloud-executable.conformance.md`](../../docs/spec/cloud-executable.conformance.md) cites its evidence
+by line number, 39 times. [`chore-0046`](chore-0046-write-conformance-into-the-closeout-lifecycle.md)
 added two lines to `AGENTS.md` and shifted everything below them, so two of those citations now point
 at unrelated text. Measured 2026-08-20 in that task's own worktree:
 
@@ -77,6 +77,37 @@ precise and the most brittle, so use it where the row is about specific wording,
 `depends_on: [chore-0046]` is logical, not a file collision: that task is what shifted the lines, and
 re-deriving before it lands would produce citations that are stale on arrival.
 
+## Decisions
+
+- **Premise false, the denominator.** The task says "all eleven matrices" and "the other nine
+  matrices". There are **ten** `*.conformance.md` files and eleven specs: `systematic-debugging` is an
+  approved forward spec with no matrix yet, correctly so. The two files with line numbers leave
+  **eight** clean matrices, not nine. The counts of 39 and 1, totalling 40, are correct.
+- **Premise false, the shift.** The task attributes the two wrong `AGENTS.md` rows to `chore-0046`
+  adding two lines. The acceptance-command section actually moved **five** lines net since the matrix
+  was written, across two landings (`09181e8` wave-4 and `9a7d888` wave-5), so `chore-0046` explains
+  part of the drift and not all of it.
+- **Premise false, the count of pointers.** The acceptance grep counts 40 tokens that carry a
+  filename, but 25 further bare `:NNN` continuations (`` `:196` ``, `` `:236-239` ``) sit in the same
+  cells and are just as fragile. **65 line pointers were re-derived, not 40**: 39 named plus 25 bare
+  in `cloud-executable.conformance.md`, and 1 named in `house-review.conformance.md`. The grep would
+  have passed with all 25 left in place. **Corrected at closeout from the agent's reported 64**, which
+  undercounted the bare continuations by one; the artifact was already complete, verified by both
+  patterns returning zero matches across all ten matrices.
+- **Premise false, the `house-review` row.** Its single `scripts/install.py:42` is not a citation into
+  this repository: it is a verbatim excerpt of the skill's own finding template, which uses a
+  `file:line` location as a worked example. There was nothing to re-derive, so the row was re-worded to
+  name the shape rather than reproduce the literal, and a clause was added saying it is an example.
+- **Rejected alternative: quoted phrases throughout.** Symbol names (`run_all()`, `_has_kit_skill()`,
+  `THROWAWAY_HOME`) were preferred wherever the row is about behavior, because a symbol survives an
+  edit anywhere in the file while a quote survives only until someone rewords the line. Quotes were
+  kept only where the row is genuinely about specific wording, such as the `AGENTS.md` bound.
+- **Seam left open: nothing enforces this.** No checker was added, per the out-of-scope section. The
+  only guard against regression is one added sentence in the matrix intro stating the citation form.
+  The re-derivation found **one already-stale row the task did not know about** (`install.py:983-986`,
+  which pointed at `_check_entry()` rather than `check()`'s `if not scoped` branch), from a different
+  cause than the `AGENTS.md` pair, which is evidence toward building that checker.
+
 ## Risks and rollback
 
 Two documents and no code, so the more-than-one-module rule does not fire.
@@ -92,17 +123,17 @@ Reversible by reverting one commit. Nothing depends on the citation form.
 
     python scripts/run-checks.py
 
-- [ ] No conformance matrix cites evidence by line number: `grep -ohE '[A-Za-z0-9_./-]+\.(md|py|json|mjs|yml):[0-9]+' docs/spec/*.conformance.md` returns nothing.
-- [ ] Every replaced citation was re-derived against the current file, and the closeout states how
+- [x] No conformance matrix cites evidence by line number: `grep -ohE '[A-Za-z0-9_./-]+\.(md|py|json|mjs|yml):[0-9]+' docs/spec/*.conformance.md` returns nothing.
+- [x] Every replaced citation was re-derived against the current file, and the closeout states how
       many of the 40 were found already stale.
-- [ ] The two known-wrong rows, `AGENTS.md:117` and `AGENTS.md:107-117`, point at the content they
+- [x] The two known-wrong rows, `AGENTS.md:117` and `AGENTS.md:107-117`, point at the content they
       claim.
-- [ ] No spec file is modified and no re-approval row is added.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] No spec file is modified and no re-approval row is added.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
