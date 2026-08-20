@@ -2,7 +2,7 @@
 id: chore-0051
 title: The cloud proof scenarios and their runbook both dispatch bug-0018, which closed the day after they were written
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E: delegated execution"
 depends_on: []
@@ -18,9 +18,9 @@ created: 2026-08-20
 
 ## Problem
 
-`S-017` and `S-018` in [`cloud-executable.md`](../docs/spec/cloud-executable.md) name
-[`bug-0018`](done/bug-0018-reinstall-destroys-an-adopter-edited-lens.md) by name in their **Given**
-clauses, and [`cloud-executable.runbook.md`](../docs/spec/cloud-executable.runbook.md) carries a
+`S-017` and `S-018` in [`cloud-executable.md`](../../docs/spec/cloud-executable.md) name
+[`bug-0018`](bug-0018-reinstall-destroys-an-adopter-edited-lens.md) by name in their **Given**
+clauses, and [`cloud-executable.runbook.md`](../../docs/spec/cloud-executable.runbook.md) carries a
 paste-ready prompt that dispatches it.
 
 **`bug-0018` is `status: done`.** It was implemented locally and merged as pull request #23 on
@@ -49,12 +49,12 @@ still hold and does not mention the task's status.
 actually open.
 
 - Reword `S-017` and `S-018`'s **Given** clauses to name
-  [`bug-0020`](bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen by the author
+  [`bug-0020`](../bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen by the author
   on 2026-08-20 as the substitute. It is the closest available: a code defect in `scripts/install.py`,
   the exact file `S-018`'s "the unfixed `install.py`" names, so that clause stays literally true, and
   its first acceptance criterion already requires a test failing against the current message.
 - Add the dated amendment note and leave `status: approved`, per the convention in
-  [`docs/spec/README.md`](../docs/spec/README.md), and add the row to that file's re-approval queue.
+  [`docs/spec/README.md`](../../docs/spec/README.md), and add the row to that file's re-approval queue.
 - Replace the runbook's stale prompt with one that dispatches the substitute. The prompt given in
   chat on 2026-08-20 is the starting point, not a specification; re-derive it against the task file.
 - Correct the runbook's "Before you start" table, which asserts preconditions without checking that
@@ -106,21 +106,21 @@ verification run is made unanswerable by the change.
 
     python scripts/run-checks.py
 
-- [ ] `S-017` and `S-018`'s Given clauses name an **open** task, verified by checking that task is not
+- [x] `S-017` and `S-018`'s Given clauses name an **open** task, verified by checking that task is not
       in `.tasks/done/` at the time of the edit.
-- [ ] `S-018`'s "the unfixed `install.py`" clause is still literally true of the named task's
+- [x] `S-018`'s "the unfixed `install.py`" clause is still literally true of the named task's
       `touched_files`, checked rather than assumed.
-- [ ] The runbook's main prompt dispatches the same task the spec names, and the two agree word for
+- [x] The runbook's main prompt dispatches the same task the spec names, and the two agree word for
       word on the task id.
-- [ ] The runbook's observation-only reachability prompt is byte-identical to its current form.
-- [ ] A dated amendment note is added, `status:` still reads `approved`, and a row is added to
+- [x] The runbook's observation-only reachability prompt is byte-identical to its current form.
+- [x] A dated amendment note is added, `status:` still reads `approved`, and a row is added to
       `docs/spec/README.md`'s re-approval queue.
-- [ ] `S-017` to `S-019` remain **Not-built** in the conformance matrix, since no run has happened.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] `S-017` to `S-019` remain **Not-built** in the conformance matrix, since no run has happened.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
