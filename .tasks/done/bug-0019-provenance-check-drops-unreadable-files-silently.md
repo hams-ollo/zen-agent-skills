@@ -2,7 +2,7 @@
 id: bug-0019
 title: An unreadable file drops all its provenance records and the run still reports success
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: []
@@ -14,7 +14,7 @@ created: 2026-08-06
 
 ## Problem
 
-`collect()` in [`check-provenance.py`](../scripts/check-provenance.py) wraps its read in
+`collect()` in [`check-provenance.py`](../../scripts/check-provenance.py) wraps its read in
 `except OSError: continue`:
 
 ```python
@@ -83,6 +83,24 @@ log names this seam but bounds it as "all fields misspelled", which its verifier
 the truth. The behaviour predates `bug-0016` and is unchanged by it. Fixing it is a separate task
 about grammar; this one is about I/O. Correct the bound in `bug-0016`'s log if that task is taken.
 
+## Decisions
+
+- **Rejected: keeping `collect()`'s single-list return and adding a sibling that reports the
+  failures.** It would have left the swallowing version in the file for the next caller to pick up,
+  which is how this defect reached a second function in the first place. `collect()` now returns
+  `(found, unreadable)`, so no caller can hold the records without also holding the failures.
+- **Rejected: a fifth summary count and a new exit code.** An unreadable file is counted into the
+  existing `error` bucket, because `2` already means "this run could not answer the question" and
+  that is exactly what an unreadable file produces. A new field in the summary line would also have
+  rewritten the one string a dozen existing oracles assert on, for a cosmetic gain.
+- **Seam deliberately widened: `--list` exits 2 on an unreadable file too.** Slightly beyond the
+  task's wording, which speaks about the run. `--list` claims to print every URL a run would
+  contact, so a file it could not read makes that list short in the same silent way the counts were
+  short. Recorded here so it is not read as scope creep.
+- **Seam left open as directed: the first-field-typo path in `parse_records()` is untouched**, and
+  `bug-0016`'s decision log is not corrected, because that correction is conditional on the separate
+  grammar task being taken.
+
 ## Risks and rollback
 
 The risk is that a repository with a genuinely unreadable file in scope now fails a check that used
@@ -93,23 +111,23 @@ discovered. Rollback is one revert; nothing persisted changes.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/validate-skills.py && python .tasks/validate.py --strict
 
-- [ ] A test proving an unreadable provenance file is **named** in the output, failing against the
+- [x] A test proving an unreadable provenance file is **named** in the output, failing against the
       current `collect()`.
-- [ ] A test proving the run exits non-zero when a file cannot be read.
-- [ ] A test proving the other files are still checked and reported, so one unreadable file does not
+- [x] A test proving the run exits non-zero when a file cannot be read.
+- [x] A test proving the other files are still checked and reported, so one unreadable file does not
       abort the run.
-- [ ] The failure is a clear message, not a traceback, matching the unreachable-source path.
-- [ ] The test uses a stubbed read failure rather than a real OS lock, so it passes on Windows,
+- [x] The failure is a clear message, not a traceback, matching the unreachable-source path.
+- [x] The test uses a stubbed read failure rather than a real OS lock, so it passes on Windows,
       macOS, and Linux.
-- [ ] `python scripts/check-provenance.py --list` still reports 8 records across 7 files on a clean
+- [x] `python scripts/check-provenance.py --list` still reports 8 records across 7 files on a clean
       tree, and the live run still exits 0.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.

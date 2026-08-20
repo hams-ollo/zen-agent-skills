@@ -8,7 +8,9 @@ reported CONFLICT and skipped for you to resolve.
 In copy mode, re-run recognition relies on scripts/.install-manifest.json to
 know which targets this tool created. If that manifest is deleted, previously
 copied targets are treated as unmanaged and reported CONFLICT (symlink mode
-recognizes its own links directly and does not have this dependency).
+recognizes its own links directly and does not have this dependency). If it is
+present but structurally damaged, every command stops at exit 2 naming the file
+and the offending entry, rather than acting on a record it cannot read.
 
     python scripts/install.py --dry-run          # preview
     python scripts/install.py                     # install (copy on Windows, symlink on POSIX)
@@ -264,13 +266,114 @@ def profile_budgets(skills):
             for name in PROFILE_SEEDS}
 
 
+class ManifestError(Exception):
+    """The manifest parsed as JSON but is not a record this tool can read.
+
+    Raised by `load_manifest()` and caught by each of its three callers, which is the
+    shape the callers dictate: `install`, `uninstall`, and `check` all need to stop, but
+    they stop with different words, and a sentinel return value would have every caller
+    re-deriving the reason from a value that cannot carry one.
+    """
+
+
+# What a reader here actually dereferences, and nothing beyond it (bug-0024). Every key
+# below is read by `install`, `uninstall`, `check`, or `_check_entry`; a key none of them
+# reads is not validated, because a validator strict enough to reject a record written by
+# a later version of this tool turns an upgrade into what looks like corruption. An
+# unrecognised key is ignored in both directions, deliberately.
+#
+# `target` is the one required key: `install`, `uninstall`, and `check` each subscript it
+# directly, so an entry without it is not a record of anything. The rest are optional and
+# faulted on only when present and of the wrong type, since each has a reader that already
+# tolerates its absence.
+_OPTIONAL_ENTRY_TYPES = {
+    "source": (str, "a string"),      # _check_entry: Path(entry.get("source", ""))
+    "tool": (str, "a string"),        # check(): sort key and printed column
+    "name": (str, "a string"),        # check(): sort key, and the ADOPTED_ENTRY_NAMES test
+    "digests": (dict, "an object"),   # _compare(): iterated as a mapping
+}
+
+
+def _describe(value) -> str:
+    """Name a JSON value's shape the way the file that holds it spells it."""
+    return {type(None): "null", bool: "a boolean", int: "a number", float: "a number",
+            str: "a string", list: "a list", dict: "an object"}.get(type(value),
+                                                                    repr(value))
+
+
+def _validate_manifest(data) -> None:
+    """Raise `ManifestError` naming the first structural fault, or return.
+
+    The message is half the fix. A manifest is per-machine and gitignored, so the reader
+    of this message is the only person who can see the file: naming the entry and the key
+    is the difference between a one-line repair and an investigation this report exists to
+    save. The caller adds the path and the remedy.
+    """
+    if not isinstance(data, dict):
+        raise ManifestError(f'its top-level value is {_describe(data)}, not an object '
+                            f'with an "entries" list')
+    entries = data.get("entries")
+    if entries is None:
+        raise ManifestError('it has no "entries" list')
+    if not isinstance(entries, list):
+        raise ManifestError(f'its "entries" is {_describe(entries)}, not a list')
+
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ManifestError(f"entry {i} is {_describe(entry)}, not an object")
+        where = f"entry {i}"
+        if isinstance(entry.get("name"), str):
+            where += f" ({entry['name']!r})"
+        if "target" not in entry:
+            raise ManifestError(f'{where} has no "target", so it records no installed '
+                                f"path")
+        target = entry["target"]
+        if not isinstance(target, str) or not target:
+            raise ManifestError(f'{where} has a "target" that is {_describe(target)}, '
+                                f"not a path")
+        for key, (want, described) in _OPTIONAL_ENTRY_TYPES.items():
+            if key in entry and not isinstance(entry[key], want):
+                raise ManifestError(f'{where} has a "{key}" that is '
+                                    f"{_describe(entry[key])}, not {described}")
+
+
 def load_manifest():
+    """The recorded install, or `{"entries": []}` when there is nothing readable.
+
+    Raises `ManifestError` when the file parses as JSON but is not shaped like a manifest.
+
+    Corrupt bytes and a wrong shape are treated differently on purpose. Bytes that do not
+    parse carry no recoverable information and never did name an install, so an empty
+    record is a truthful reading of them. A file that parses does carry a record, possibly
+    of targets under homes this run is not even looking at, and reading it as empty would
+    quietly authorise placing over them or reporting them absent. So the wrong shape stops
+    the run instead, at exit 2 (could not run) rather than exit 1 (diverged), because a
+    caller scripting around `--check` treats 1 as an answer and 2 as the absence of one.
+    """
     if MANIFEST.is_file():
         try:
-            return json.loads(MANIFEST.read_text(encoding="utf-8"))
+            data = json.loads(MANIFEST.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return {"entries": []}
+        _validate_manifest(data)
+        return data
     return {"entries": []}
+
+
+def report_unreadable_manifest(exc: ManifestError, consequence: str) -> int:
+    """Print the stated exit-2 report for an unreadable manifest and return 2.
+
+    One helper rather than three copies, so the path and the remedy cannot drift apart
+    between the three commands that can hit this.
+    """
+    print(f"Cannot read the install record at {MANIFEST}: {exc}.")
+    print(f"{consequence}")
+    print("The record is written per machine and is not in version control, so an "
+          "interrupted write, a full disk, or a partly synced home produces exactly "
+          "this. Nothing here repairs it: re-install to establish a fresh record "
+          "(python scripts/install.py), or delete the file and re-install, which is "
+          "the same thing with the damaged copy gone.")
+    return 2
 
 
 def save_manifest(entries, dry):
@@ -451,7 +554,19 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
               f"{len(added)} skill(s) added ({', '.join(added)}). A skill that composes a "
               f"sibling is broken without it.\n")
 
-    manifest = load_manifest()
+    # Refusing to place anything is the stated choice for a damaged record (bug-0024).
+    # The alternative, reading it as empty, is the documented behaviour for a *deleted*
+    # manifest and would report CONFLICT for every target already there, which is a
+    # defensible answer only when the tool genuinely knows nothing. Here it knows the
+    # record exists and cannot be trusted, and proceeding would write a fresh manifest
+    # over it, discarding whatever targets it recorded under other homes. That is the one
+    # irreversible outcome available, so it is the one not taken.
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was placed: this run would have written a fresh record over "
+                 "the damaged one, losing whatever it still records.")
     entries = {e["target"]: e for e in manifest["entries"]}
     conflicts = 0
     preserved_adopted = False
@@ -799,7 +914,13 @@ def _beneath(target: str, home: Path) -> bool:
 
 
 def uninstall(home: Path, dry: bool) -> int:
-    manifest = load_manifest()
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was removed: the record names what this tool placed, and "
+                 "removing files on the strength of a record it cannot read is exactly "
+                 "the mistake to avoid.")
     if not manifest["entries"]:
         print("Nothing recorded as installed.")
         return 0
@@ -978,9 +1099,15 @@ def check(home: Path) -> int:
 
     0   every entry beneath this home matches its source, or cannot be stale
     1   at least one installed target has diverged from its source
-    2   at least one entry has no baseline, or could not be compared at all
+    2   at least one entry has no baseline, or could not be compared at all, or the
+        record itself could not be read
     """
-    manifest = load_manifest()
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was checked, so this run makes no claim either way about "
+                 "whether the installed skills are current.")
     scoped = [e for e in manifest["entries"] if _beneath(e["target"], home)]
     if not scoped:
         # Deliberately not zero. Nothing recorded is indistinguishable from a record that

@@ -58,7 +58,7 @@ again on required frontmatter keys or section headings.
 
 - `fix-batch`'s and `pr-describe`'s bodies. They are correct as written; the template is what is
   missing. The four other prose corrections found in the same pass are
-  [`chore-0040`](../chore-0040-four-coherence-corrections-across-skill-bodies.md).
+  [`chore-0040`](chore-0040-four-coherence-corrections-across-skill-bodies.md).
 - The `parent`/ROADMAP tier problem in the same template, which is
   [`bug-0030`](bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md). Do not fix it here even
   though it is the same file; that task depends on this one for exactly that reason.

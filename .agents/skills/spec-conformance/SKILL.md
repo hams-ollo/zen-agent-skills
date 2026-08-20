@@ -34,7 +34,7 @@ It is the report-only half of the kit's independent verification. The matrix it 
 
 ## Output
 
-Write the matrix and the coverage proof, conventionally to `docs/spec/<spec>.conformance.md` (adjust the location to fit repos without a `docs/spec/` convention):
+The output is the matrix and the coverage proof. Where they go is the caller's to decide, because this is a lens: when a composing skill supplies a report destination, or states that it returns its report inline and writes no file, follow that skill rather than writing a file it just promised not to write. Run standalone, with no composing skill to defer to, write them to `docs/spec/<spec>.conformance.md` (adjust the location to fit repos without a `docs/spec/` convention). The content is the same either way:
 
 - matrix rows: `{ section, item, status: Conformed|Diverged|Not-built, evidence, note }`
 - `audited`: every spec section and item checked

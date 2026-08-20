@@ -30,9 +30,12 @@ The defect each group protects against:
                   wrong reason
   blank line    - one blank line inside a block deletes the record from the run entirely,
                   and the checker reports a clean count nobody has reason to doubt
+  unreadable    - a file the process cannot read drops every record it carries, is named
+                  nowhere, and leaves a narrowed count that reads exactly like a clean one
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -92,6 +95,53 @@ def run(body, fetcher, argv=()):
     try:
         out = io.StringIO()
         code = cp.main(argv=list(argv), root=root, fetcher=fetcher, out=out)
+        return code, out.getvalue()
+    finally:
+        tmp.cleanup()
+
+
+LOCKED_URL = URL.replace("skills/x/", "skills/locked/")
+
+_REAL_READ_TEXT = Path.read_text
+
+
+def deny_reads(*skills):
+    """Make `read_text` raise for the named skills, and read every other file normally.
+
+    A stubbed failure rather than a real lock. An exclusive handle (`dwShareMode=0`) is a
+    Windows-only trick, and the property under test is what the checker does with an
+    OSError, not how an operating system produces one.
+    """
+
+    def read_text(self, *args, **kwargs):
+        if self.parent.name in skills:
+            raise PermissionError(13, "Permission denied")
+        return _REAL_READ_TEXT(self, *args, **kwargs)
+
+    return unittest.mock.patch.object(Path, "read_text", read_text)
+
+
+def make_pair_root():
+    """A root with two adapted files, each carrying one record, under separate skills."""
+    tmp = tempfile.TemporaryDirectory()
+    root = Path(tmp.name)
+    for name, url in (("locked", LOCKED_URL), ("readable", URL)):
+        skill = root / ".agents" / "skills" / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_bytes(
+            (f"---\nname: {name}\n---\n\n# {name}\n\nAdapted, so it differs from upstream.\n\n"
+             + block(url=url)).encode("utf-8")
+        )
+    return tmp, root
+
+
+def run_pair(fetcher, argv=(), denied=("locked",)):
+    """Run against that pair with the named skills' files made unreadable."""
+    tmp, root = make_pair_root()
+    try:
+        out = io.StringIO()
+        with deny_reads(*denied) if denied else contextlib.nullcontext():
+            code = cp.main(argv=list(argv), root=root, fetcher=fetcher, out=out)
         return code, out.getvalue()
     finally:
         tmp.cleanup()
@@ -351,7 +401,7 @@ class HttpsOnlySourceTest(unittest.TestCase):
         # The real records, not fixtures. All eight were https:// before this tightening,
         # so it breaks nothing; this is the test that says so rather than a claim in a
         # commit message that nobody can re-run.
-        found = cp.collect(REPO_ROOT)
+        found, _ = cp.collect(REPO_ROOT)
         self.assertEqual(len(found), 8)
         for rel, record in found:
             with self.subTest(path=rel, line=record["line"]):
@@ -539,18 +589,119 @@ class BlankLineInsideABlockTest(unittest.TestCase):
         self.assertEqual(cp.parse_records(text), [])
 
 
+class UnreadableFileTest(unittest.TestCase):
+    """bug-0019: an unreadable file dropped every record it carried, at exit 0.
+
+    `collect()` wrapped its read in `except OSError: continue`, so a file another process
+    held open contributed no records, was named nowhere, and left a smaller count that is
+    indistinguishable from a clean result. Demonstrated on 2026-08-06 by holding a Windows
+    exclusive handle on one provenance-carrying file: 9 records readable, 8 records locked,
+    exit 0 either way.
+
+    So the oracles here assert the path is named and the exit code moved. "Does not crash"
+    and "the other records were still checked" both passed against the bug. The fixture
+    carries a second, readable file for the opposite reason: a fix that aborted on the
+    first bad file would hide the state of everything after it, and a fix that failed every
+    run would too.
+    """
+
+    LOCKED = ".agents/skills/locked/SKILL.md"
+    READABLE = ".agents/skills/readable/SKILL.md"
+
+    def test_the_unreadable_file_is_named_in_the_output(self):
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertIn(self.LOCKED, output)
+        self.assertIn("could not be read", output)
+
+    def test_the_run_exits_non_zero_when_a_file_cannot_be_read(self):
+        code, _ = run_pair(serve(UPSTREAM))
+        self.assertEqual(code, 2)
+
+    def test_the_readable_files_are_still_checked_and_reported(self):
+        # One unreadable file must not hide the state of the others, so the readable
+        # record is genuinely fetched and compared rather than merely counted.
+        seen = []
+
+        def fetcher(url, timeout=30):
+            seen.append(url)
+            return UPSTREAM
+
+        code, output = run_pair(fetcher)
+        self.assertEqual(code, 2)
+        self.assertEqual(seen, [URL])
+        self.assertIn(f"{self.READABLE}:", output)
+        self.assertIn("up to date", output)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_failure_is_a_clear_message_not_a_traceback(self):
+        # Matching the unreachable-source path: a traceback reads as a defect in this
+        # script rather than as a file somebody else has open.
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertNotIn("Traceback", output)
+        self.assertIn("Permission denied", output)
+
+    def test_the_report_says_the_counts_are_incomplete(self):
+        # The count is the only number reported and nothing else states what it should
+        # have been, so the run has to say the number it printed is short.
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertIn("counts above are incomplete", output)
+
+    def test_an_unreadable_file_is_not_reported_as_nothing_recorded(self):
+        # The worst variant: when every file in scope is unreadable, the old code printed
+        # the line a repository with no fold-ins prints, and exited 0.
+        code, output = run_pair(serve(UPSTREAM), denied=("locked", "readable"))
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn(self.LOCKED, output)
+        self.assertIn(self.READABLE, output)
+
+    def test_list_mode_names_the_unreadable_file_and_exits_non_zero(self):
+        # --list claims to print every URL a run would contact, so an unread file makes
+        # that list short in the same silent way.
+        def never(url, timeout=30):
+            raise AssertionError("--list must fetch nothing")
+
+        code, output = run_pair(never, argv=["--list"])
+        self.assertEqual(code, 2)
+        self.assertIn(self.LOCKED, output)
+        self.assertIn("could not be read", output)
+        self.assertIn("1 record(s).", output)
+
+    def test_a_clean_run_still_succeeds(self):
+        # The other direction. A check that failed whenever it was run would satisfy
+        # every assertion above and be worthless.
+        code, output = run_pair(serve(UPSTREAM), denied=())
+        self.assertEqual(code, 0)
+        self.assertIn("2 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+        self.assertNotIn("could not be read", output)
+
+    def test_collect_returns_the_failures_alongside_the_records(self):
+        # At the unit layer, because this is where the records were dropped: a caller
+        # cannot report what the helper never handed it.
+        tmp, root = make_pair_root()
+        try:
+            with deny_reads("locked"):
+                found, unreadable = cp.collect(root)
+        finally:
+            tmp.cleanup()
+        self.assertEqual([rel for rel, _ in found], [self.READABLE])
+        self.assertEqual([rel for rel, _ in unreadable], [self.LOCKED])
+        self.assertIn("Permission denied", unreadable[0][1])
+
+
 class RepositoryRecordsTest(unittest.TestCase):
     """Every block actually recorded in this repository is well formed. No network."""
 
     def test_all_seven_backfilled_targets_carry_a_valid_record(self):
-        found = cp.collect(REPO_ROOT)
+        found, _ = cp.collect(REPO_ROOT)
         self.assertTrue(found, "no provenance records found in this repository")
         for rel, record in found:
             with self.subTest(path=rel, line=record["line"]):
                 self.assertIsNone(cp.validate(record), f"{rel}:{record['line']}")
 
     def test_the_backfilled_files_are_the_expected_set(self):
-        recorded = {rel for rel, _ in cp.collect(REPO_ROOT)}
+        recorded = {rel for rel, _ in cp.collect(REPO_ROOT)[0]}
         for expected in (
             ".agents/skills/spec-quality/SKILL.md",
             ".agents/skills/spec-plan-readiness/SKILL.md",
@@ -566,9 +717,12 @@ class RepositoryRecordsTest(unittest.TestCase):
         # Pins the count in both directions. A grammar widened until it collects unrelated
         # `source:` lines raises it; one narrowed until a real block drops out lowers it,
         # and the second failure is the silent one.
-        found = cp.collect(REPO_ROOT)
+        found, unreadable = cp.collect(REPO_ROOT)
         self.assertEqual(len(found), 8)
         self.assertEqual(len({rel for rel, _ in found}), 7)
+        # And the count is a full one rather than a narrowed one: if any file in scope
+        # could not be read, 8 would be what survived rather than what is there.
+        self.assertEqual(unreadable, [])
 
     def test_the_review_depth_output_template_contributes_no_records(self):
         # The real file, not a fixture. `source: detected | user` in review-depth's output

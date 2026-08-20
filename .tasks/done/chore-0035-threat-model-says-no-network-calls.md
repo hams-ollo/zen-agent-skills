@@ -47,7 +47,7 @@ in the terms a reporter would need. Require `https://` for a new record, and bou
 - Any allow-list of hosts. Nobody has been bitten, and a list that has to be maintained is a worse
   answer than a stated property.
 - The parser's silent-skip behaviour on an unreadable file, which is
-  [`bug-0019`](../bug-0019-provenance-check-drops-unreadable-files-silently.md).
+  [`bug-0019`](bug-0019-provenance-check-drops-unreadable-files-silently.md).
 
 ## Implementation notes
 

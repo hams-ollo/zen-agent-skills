@@ -2,7 +2,7 @@
 id: bug-0024
 title: A structurally invalid manifest crashes with a traceback at exit 1, the code that means diverged
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0022]
@@ -14,7 +14,7 @@ created: 2026-08-08
 
 ## Problem
 
-`load_manifest()` in [`install.py`](../scripts/install.py) catches `json.JSONDecodeError`, so a
+`load_manifest()` in [`install.py`](../../scripts/install.py) catches `json.JSONDecodeError`, so a
 manifest of corrupt bytes degrades cleanly to an empty record. A manifest that **parses** but has the
 wrong shape does not. Four shapes, all reproduced 2026-08-08:
 
@@ -31,8 +31,8 @@ install     rc=1   KeyError: 'target'                                    install
 **The exit code is the defect, not the traceback.** All four exit 1, which in this tool's own
 vocabulary means "at least one installed target has diverged from its source". The true state is "the
 check could not run", which is exit 2. That precedence is argued at length in three places, the
-`check()` docstring here, [`check-provenance.py`](../scripts/check-provenance.py), and
-[`run-checks.py`](../scripts/run-checks.py), each for the same reason: a reader who treats a
+`check()` docstring here, [`check-provenance.py`](../../scripts/check-provenance.py), and
+[`run-checks.py`](../../scripts/run-checks.py), each for the same reason: a reader who treats a
 could-not-run as a clean "no" is reasoning from an answer nobody produced. A caller scripting around
 `--check` gets a confident wrong answer.
 
@@ -52,7 +52,7 @@ message naming the manifest and what is wrong with it, and cover the shapes abov
 **Out of scope:**
 
 - Repairing or rewriting a damaged manifest. Detect and report, per rule `A3` in
-  [`autonomy.md`](../.agents/rules/autonomy.md). Re-installing is the documented route back and it is
+  [`autonomy.md`](../../.agents/rules/autonomy.md). Re-installing is the documented route back and it is
   a person's decision.
 - Changing the manifest format. Nothing about the record on disk changes; only how a bad one is read.
 - Treating an unrecognised extra key as an error. A forward-compatible reader ignores what it does
@@ -76,6 +76,31 @@ The message matters as much as the code. Name the manifest path, name the entry 
 and name the remedy, which is to re-install and establish a fresh record. A message that says only
 "invalid manifest" leaves the reader the investigation the report exists to save.
 
+## Decisions
+
+- **`install` refuses rather than treating an unreadable record as empty.** Rejected the
+  empty-record read: it is the documented answer for a *deleted* manifest, where the tool
+  genuinely knows nothing, but here it knows a record exists and is damaged, and the run would
+  end in `save_manifest` writing a fresh record over it. That discards every target recorded
+  under a home this run never looked at, and it is the only irreversible outcome on the table.
+- **`load_manifest()` raises rather than returning a sentinel.** Rejected a tuple or a
+  `None` return: all three callers stop, but each stops with different words, and a value
+  that cannot carry a reason has every caller re-deriving one.
+- **The corrupt-bytes and wrong-shape paths are deliberately asymmetric.** Bytes that do not
+  parse still degrade to `{"entries": []}`; a file that parses stops the run. Out of scope
+  per the acceptance criteria, and defensible (unparseable bytes never named an install, so
+  reading them as nothing is truthful), but it is a seam: a reader may reasonably expect both
+  to report exit 2 naming the file. Left open rather than closed by a drive-by.
+- **Validation covers `tool`, `name`, and `digests` as well as `target` and `source`.** The
+  task named the last two. The other three are dereferenced too: `check()` sorts on `tool`
+  and `name`, which raises on a mixed-type list, and `_compare` iterates `digests` as a
+  mapping. Faulted on only when present and wrong-typed, so an absent optional key and an
+  unrecognised key are both still fine.
+- **A premise that held.** The task's four shapes were reproduced 2026-08-08; all four still
+  reproduce at `6a1f194` after `bug-0022`, `feat-0049`, and `chore-0042` edited this file.
+  One detail differs: `install` with a null `target` did not crash, it exited 0 having placed
+  nothing, which is the same wrong answer wearing a cleaner code.
+
 ## Risks and rollback
 
 The failure direction to design against is a validator strict enough to reject a record written by a
@@ -89,17 +114,17 @@ commit; no manifest is rewritten, so nothing needs migrating back.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test per shape (missing `target`, null `target`, top-level list, entry that is not an object)
+- [x] A test per shape (missing `target`, null `target`, top-level list, entry that is not an object)
       asserting exit 2 and no traceback on stderr. Each must fail against the current `install.py`.
-- [ ] The printed message names the manifest path and the offending entry.
-- [ ] A valid manifest carrying an unknown extra key is still accepted.
-- [ ] The existing corrupt-JSON behaviour is unchanged.
-- [ ] Whatever `install` does with an unreadable record is asserted by a test, not left implicit.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The printed message names the manifest path and the offending entry.
+- [x] A valid manifest carrying an unknown extra key is still accepted.
+- [x] The existing corrupt-JSON behaviour is unchanged.
+- [x] Whatever `install` does with an unreadable record is asserted by a test, not left implicit.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

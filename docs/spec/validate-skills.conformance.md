@@ -3,7 +3,7 @@ title: validate-skills conformance
 spec: docs/spec/validate-skills.md
 audited: 2026-07-27
 supersedes: 2026-07-24 audit (S-001 through S-008 only)
-re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039)
+re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039), 2026-08-20 (chore-0047)
 ---
 
 # validate-skills conformance matrix
@@ -30,6 +30,15 @@ not read as auditing an approved contract in full. The five link rows S-009 thro
 re-audited against the current function in the same pass and all five remain `Conformed`: none of
 their branches changed, and each is now reached only for a link the span and fence guard let through. This is a partial
 re-audit of the rows `bug-0027` moved, not a regeneration; no other row was re-derived.
+
+Extended 2026-08-20 (`chore-0047`) with S-023, the lens-composition rule `feat-0048` added to the
+script on 2026-08-19 and this contract did not state.
+That amendment is likewise **pending the author's re-approval**.
+This is an extension rather than a regeneration: the one new row was audited
+against the code as it now stands, and no carried-forward row was re-derived, because
+`check_lenses_are_composed()` is called after the per-skill loop and touches no function any other row
+cites. S-023 is the first row here whose evidence sits outside `.agents/skills/`, which is why the
+Proposed Surface gained a "what it reads" entry and this matrix gained a row for it.
 
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies on 2026-08-19, `LINK_RE` matches 133 links and 0 of them sit
@@ -67,15 +76,19 @@ two tools carry character-identical copies of the two range helpers.
 | Scenarios | S-019 unparseable frontmatter fails | Conformed | `check_frontmatter_is_parseable()`, called from `main()` after `check_links()` | errors on a plain unquoted scalar containing `": "` or ending in `":"`, and skips a block scalar or a fully quoted value. Confirmed by execution: a copy of the real `.agents/` tree with `house-review`'s description put back into the single-line plain form that shipped exits 1 with the nested-mapping error. The message states that it checks one known construct rather than YAML validity, which is the honest limit of a standard-library check |
 | Scenarios | S-020 angle bracket in a description fails | Conformed | `main()` / the `if desc and ("<" in desc or ">" in desc)` branch | reads the parsed value, so the twelve block-scalar descriptions are not flagged for the `>` in their own indicator. `human-handoff` was violating this in the field and is fixed |
 | Scenarios | S-021 unrecognised frontmatter property fails | Conformed | `main()` / the `for key in sorted(set(fm) - ALLOWED_FRONTMATTER_KEYS)` loop, with the `ALLOWED_FRONTMATTER_KEYS` constant | an allow-list of the schema's six properties, commented with its source and the date it was read. `version` is deliberately excluded: the reference implementation rejects it even though Anthropic's own example skill documents it as optional |
+| Scenarios | S-023 a self-declared lens no skill references fails | Conformed | `check_lenses_are_composed()`, called from `main()` after the per-skill loop with `portable_root / "rules"` and the `skill_texts` dict `main()` accumulates; declaration by `declares_itself_a_lens()` over `LENS_DECLARATION_RE` and `LENS_DECLARATION_LINES` | added by `chore-0047`, writing down what `feat-0048` built. One error per unreferenced lens, not one per skill, because the call sits outside the loop. A reference is `rules_file.name in skill_text`, so a relative link and a prose mention naming the file both satisfy it and the bare subject word does not, which is what the scenario states. The declaration is read only in the opening (10 lines), keyed to a self-declaration rather than a filename list, so the rule fires for the next lens too. Measured 2026-08-20: 3 files in `.agents/rules/`, all 3 declare themselves lenses inside the window, and all 3 are referenced, by 20, 5 and 4 skills respectively, so the rule reports nothing today and is a guard rather than a live exclusion. **One asymmetry recorded, not a divergence**: the substring test is unguarded by the code-span and fence ranges S-022 applies to the link rules, so a body that only *showed* a lens filename inside a fence would satisfy this rule. The scenario says "appearing in a `SKILL.md`" and the code does exactly that, so the row conforms; whether the guard should extend here is the author's call and is filed as a finding rather than changed |
 | Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | module `__main__` guard | `if __name__ == "__main__": raise SystemExit(main())` |
+| Proposed Surface | What it reads: skills plus the sibling rules module | Conformed | `main()` / `portable_root = skills_dir.parent.resolve()` and the `check_lenses_are_composed(portable_root / "rules", ...)` call | added by `chore-0047`. `portable_root` already existed to serve the S-011 portability guard; the lens rule is the first use that reads a file under it. Nothing outside the skills directory and its sibling `rules/` is opened |
 | Proposed Surface | Exit non-zero on error only | Conformed | `main()` / final `return 1 if errors else 0` | warnings do not affect the exit code |
 | Proposed Surface | Output format | Conformed | `main()` / the `WARN`/`ERROR` print loops and the `Checked ...` summary print, plus the two early-return prints | per-issue lines then the summary; the missing-directory and no-skills-found lines replace the summary as the amended surface states |
 
 ## Coverage proof
 
-- **audited**: S-001 through S-022, and all three Proposed Surface elements (invocation, exit code,
-  output format). Every spec item was checked. S-022 is numbered after S-021 and placed beside
-  S-013 in both documents, because it is the exception the link rows are read against.
+- **audited**: S-001 through S-023, and all four Proposed Surface elements (invocation, what it
+  reads, exit code, output format). Every spec item was checked. S-022 is numbered after S-021 and
+  placed beside S-013 in both documents, because it is the exception the link rows are read against.
+  S-023 is placed last in both, because it is the only rule whose subject is not a skill and it is
+  read against nothing above it.
 - **unreconciled**:
   - **S-008 (Diverged)**: disposition **accepted-with-reason**. The "what and when" bar is aspirational
     and a full natural-language check is out of scope for a standard-library structural linter; the
@@ -108,6 +121,8 @@ lacks one). Against [`tests/test_validate_skills.py`](../../tests/test_validate_
 | S-020, S-021 | present | added by `bug-0008`. Five tests: an angle bracket errors, a block-scalar description is not flagged for its own indicator, an unrecognised key (`version`) errors, all six permitted properties together pass, and both rules hold across the real nineteen. The two negative cases are the ones that keep the checks usable: flagging a block scalar would fail twelve valid skills, and rejecting a legal property would fail a valid skill while looking like a kit bug |
 | S-019 | present | added by `bug-0007`. Six tests: the two positive constructs (a colon-space inside a plain scalar, and a value ending in a colon), three negative cases that must not fire (a block scalar, a quoted value, and a URL whose colon has no following space), and one that runs the check over all nineteen shipped skills, which is the assertion that would have caught the defect. The negative cases carry the weight: a false positive would push authors to contort a description to satisfy a checker rather than a parser |
 | S-018 | present | three tests: a block scalar whose text is exactly at the limit must pass (it measured 3 over before the fix), every indicator form strips at the parser layer, and two negative cases hold, a plain scalar and prose containing angle brackets. The negative cases are the load-bearing ones, because over-eager stripping shortens a description silently instead of failing |
+
+| S-023 | present | added by `feat-0048`, nine tests in `TestLensComposition`. Two positives, a declared lens with no inbound reference and one whose only mention is the bare subject word, both of which must error. The other seven are negatives, and they carry the weight for the reason the class docstring gives: this rule reads files nobody asked it to lint, so a false positive lands on a document whose author never opted into being a lens and the cheap response is to delete the rule. They cover a referenced lens by link, a reference by prose naming the file, a plain rules document that never declares itself, and a declaration below the opening window. The last three run against the real tree: the opening window clears every shipped lens with margin (bounded in both directions rather than asserted as a bare number, per `bug-0026`), every shipped lens is composed, and `autonomy.md` is referenced by exactly the five skills it cites, no more and no fewer. **The tests predate the scenario id**, as S-022's did: they are tagged `feat-0048` rather than `S-023`, and this task changes no file under `tests/`. `chore-0045` item 4 makes exactly this correction for S-022 and does not cover S-023, which postdates it, so the S-023 retag is an open follow-up rather than an already-filed one |
 
 Every scenario except S-008 now has a covering test, including the code-span rule that had tests
 before it had a scenario. S-008 remains deliberately untested, because a

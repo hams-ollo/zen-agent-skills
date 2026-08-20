@@ -7,9 +7,10 @@ description: >-
   bugs", "work through the backlog", "spin up agents to fix X, Y, Z", or "parallelize these
   fixes", especially when there are 2 or more distinct, independently-fixable items and the user
   wants them actioned rather than just discussed. It is the parallel-execution step of the kit
-  spine: new-task authors the task files, fix-batch dispatches them, reconcile-worktrees lands
-  them. Do not use it for a single fix (just do it directly) or for changes that are inherently
-  sequential or interdependent (one agent's output feeds the next's input), since worktree
+  spine: new-task authors the task files, fix-batch dispatches them, verifier-agent proves them,
+  reconcile-worktrees lands them. Do not use it for a single fix (just do it directly) or for
+  changes that are inherently sequential or interdependent (one agent's output feeds the next's
+  input), since worktree
   isolation assumes the items do not need to see each other's work in progress.
 license: MIT
 ---
@@ -23,11 +24,12 @@ The value here is specifically in catching what unsupervised agents get wrong, b
 and their own summaries will not tell you.
 
 This is the parallel-execution step of the kit spine: [`new-task`](../new-task/SKILL.md) authors
-the atomic task files, `fix-batch` dispatches them to isolated agents, and
-[`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the verified results into the main
-working tree. Read the target repository's `AGENTS.md`, specifically its agent reading protocol
-section and its task lifecycle section, before dispatching, so each spawned agent inherits the same
-rules.
+the atomic task files, `fix-batch` dispatches them to isolated agents,
+[`test-author`](../test-author/SKILL.md) and [`verifier-agent`](../verifier-agent/SKILL.md) prove
+each result at Step 6, and [`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the
+verified ones into the main working tree. Read the target repository's `AGENTS.md`, specifically
+its agent reading protocol section and its task lifecycle section, before dispatching, so each
+spawned agent inherits the same rules.
 
 ## Why this exists
 
@@ -171,9 +173,15 @@ Every prompt must include, in substance:
 5. **How to produce the test the acceptance command runs**, when the task's criteria name a test
    that does not exist yet. Point the agent at [`test-author`](../test-author/SKILL.md): derive the
    test from the scenario it protects, tag it with that `S-NNN` id, and pick the layer and oracle
-   through the [`test-quality`](../test-quality/SKILL.md) lens. Without this the agent writes
-   whatever test makes its own change pass, which is the failure mode the whole verification stage
-   exists to catch, arriving one step earlier than the stage that would catch it.
+   through the [`test-quality`](../test-quality/SKILL.md) lens. **Say which of that skill's two
+   modes the agent is in**, because the mode is not obvious from where it is standing: most
+   dispatched agents hold a single bug or chore task and no approved spec, and `test-author`'s
+   acceptance mode requires one. That case is its **characterization** mode, which is exempt from
+   the spec gates and pins the code's current observable behavior instead. Only a task that
+   actually carries an approved spec and `S-NNN` ids is the acceptance-mode case. Without this the
+   agent writes whatever test makes its own change pass, which is the failure mode the whole
+   verification stage exists to catch, arriving one step earlier than the stage that would catch
+   it.
 6. **A request for an honest blocker report** over a confident-sounding improvisation: "If
    something about this task's premise turns out to be wrong, or you hit a blocker you are not
    sure how to resolve within your own worktree, stop and report it clearly rather than guessing."

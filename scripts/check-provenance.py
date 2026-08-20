@@ -27,7 +27,8 @@ Exit codes
 ----------
 0   every fetchable record matches its recorded digest
 1   at least one recorded source has drifted
-2   an error: a source could not be fetched, or a record is malformed
+2   an error: a source could not be fetched, a file in scope could not be read, or a
+    record is malformed
 
 What it contacts, and under what limits
 ---------------------------------------
@@ -41,6 +42,13 @@ and exceeding it is an error rather than a truncated digest.
 
 Drift and errors both name the offending source and the file that records it, because a
 non-zero exit whose output does not say what moved costs the reader the whole investigation.
+
+A file in scope that cannot be read is reported the same way and exits 2, rather than being
+skipped. Skipping it dropped every record that file carried, named the file nowhere, and left
+a smaller count that reads exactly like a clean result (bug-0019). On Windows the trigger is
+ordinary: another process holding an exclusive handle, a scanner mid-scan, an editor lock.
+The other files are still checked, because one unreadable file should not hide the state of
+the rest.
 
 The convention itself, including the field list and where a block lives in each file type,
 is in the conventions section of AGENTS.md. Standard library only, per that same section.
@@ -158,17 +166,33 @@ def iter_provenance_files(root):
 
 
 def collect(root):
-    """Every (relative path, record) pair recorded under `root`."""
+    """The records recorded under `root`, and the files that could not be read.
+
+    Returns `(found, unreadable)`: `found` is a list of (relative path, record) pairs, and
+    `unreadable` a list of (relative path, reason) pairs for every file in scope whose read
+    raised OSError.
+
+    Both halves are returned rather than only the first, because this read used to be wrapped
+    in a bare `except OSError: continue` (bug-0019). That dropped every record the file
+    carried, named the file nowhere, and left the run reporting a smaller count that looks
+    exactly like a clean result. Returning the failures alongside the records puts them where
+    a caller cannot fail to see them, which a helper that swallowed them could not.
+
+    Reading continues past a failure. One unreadable file must not hide the state of the
+    others, so the caller reports them all and lets the exit code carry the verdict.
+    """
     found = []
+    unreadable = []
     for path in iter_provenance_files(root):
+        rel = path.relative_to(root).as_posix()
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
+            unreadable.append((rel, str(exc)))
             continue
-        rel = path.relative_to(root).as_posix()
         for record in parse_records(text):
             found.append((rel, record))
-    return found
+    return found, unreadable
 
 
 def validate(record):
@@ -249,14 +273,26 @@ def check_record(record, fetcher):
     )
 
 
+def unreadable_note(count):
+    """The paragraph that says what an unreadable file did to this run's counts."""
+    noun = "file" if count == 1 else "files"
+    return (
+        f"{count} {noun} in scope could not be read, so every provenance record they\n"
+        "carry went unchecked and the counts above are incomplete. This is reported\n"
+        "rather than skipped because a narrowed count is indistinguishable from a clean\n"
+        "one. A file held open by another process is the usual cause on Windows; re-run\n"
+        "once it is readable.\n"
+    )
+
+
 def main(argv=None, root=None, fetcher=None, out=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     out = sys.stdout if out is None else out
     root = REPO_ROOT if root is None else Path(root)
     fetcher = fetch if fetcher is None else fetcher
 
-    records = collect(root)
-    if not records:
+    records, unreadable = collect(root)
+    if not records and not unreadable:
         out.write("No provenance records found. Nothing folded in is recorded, which is\n"
                   "either correct or a sign a fold-in skipped the convention in AGENTS.md.\n")
         return 0
@@ -265,7 +301,14 @@ def main(argv=None, root=None, fetcher=None, out=None):
         for rel, record in records:
             state = record.get("status", "recorded")
             out.write(f"{rel}:{record['line']}  [{state}]  {record.get('source', '(no source)')}\n")
+        for rel, reason in unreadable:
+            out.write(f"{rel}  could not be read: {reason}\n")
         out.write(f"\n{len(records)} record(s).\n")
+        if unreadable:
+            # --list claims to print everything a run would contact. A file it could not
+            # read may record a source that is now missing from that list.
+            out.write(unreadable_note(len(unreadable)))
+            return 2
         return 0
 
     counts = {"ok": 0, "unlocatable": 0, "drift": 0, "error": 0}
@@ -274,10 +317,18 @@ def main(argv=None, root=None, fetcher=None, out=None):
         counts[status] += 1
         out.write(f"{rel}:{record['line']}  {message}\n")
 
+    # An unreadable file counts in the bucket that already means "this run could not answer
+    # the question", which is what it produces, and which already exits 2.
+    for rel, reason in unreadable:
+        counts["error"] += 1
+        out.write(f"{rel}  could not be read: {reason}\n")
+
     out.write(
         f"\n{counts['ok']} up to date, {counts['drift']} drifted, "
         f"{counts['unlocatable']} unlocatable, {counts['error']} error(s).\n"
     )
+    if unreadable:
+        out.write(unreadable_note(len(unreadable)))
     if counts["error"]:
         return 2
     if counts["drift"]:

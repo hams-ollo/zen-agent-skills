@@ -54,7 +54,7 @@ is real, it is load-bearing, and it exists only as a pattern in closed tasks.
 ## Scope
 
 This task decides a question before it changes anything, and the decision is the deliverable as much
-as the edit. **It was considered for [`chore-0040`](chore-0040-four-coherence-corrections-across-skill-bodies.md)
+as the edit. **It was considered for [`chore-0040`](done/chore-0040-four-coherence-corrections-across-skill-bodies.md)
 and kept separate on purpose**, because that task's stated premise is that none of its items carries a
 design question and none changes behaviour. This one carries both.
 
