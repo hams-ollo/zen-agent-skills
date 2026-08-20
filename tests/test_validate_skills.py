@@ -722,8 +722,63 @@ class TestLensComposition(unittest.TestCase):
         # The portability contract in AGENTS.md tells a skill to name some files in prose
         # rather than link to them, so requiring a markdown link specifically would push
         # authors to break one rule to satisfy another.
+        #
+        # The mention here sits inside an inline code span, because backticks are how the
+        # house style writes a filename in prose. bug-0040 excluded fenced blocks from this
+        # rule and deliberately left spans counting, so this fixture is also the pin on
+        # that decision: the span exclusion S-022 applies to links would fail the exact
+        # form S-023 protects.
         self._write_rules("example.md", self.LENS_OPENING)
         body = "The ceiling is stated in `example.md` beside this skill.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_mention_only_inside_a_fenced_block_is_not_a_reference(self):
+        # Scenario S-023 (bug-0040): a fenced block is the body *showing* what a reference
+        # looks like, most often sample text a skill tells some other agent to write, so it
+        # points no reader at the module and composes nothing. The filename appears nowhere
+        # else in this fixture on purpose: a body that also named it in prose would pass
+        # either way and prove nothing.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "Give the delegate a line shaped like this one:\n\n"
+            "```markdown\n"
+            "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+            "```\n"
+        )
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("declares itself a lens but no skill references it", out)
+
+    def test_a_real_reference_beside_a_fenced_example_still_counts(self):
+        # Scenario S-023 (negative): the exclusion must not switch the rule off. The fence
+        # here is closed and the genuine reference sits after it, so a scanner that ran the
+        # fence past its closing delimiter would fail this skill for the wrong reason.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "Give the delegate a line shaped like this one:\n\n"
+            "```markdown\n"
+            "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+            "```\n\n"
+            "This skill itself follows [`example.md`](../../rules/example.md).\n"
+        )
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_an_unterminated_fence_does_not_hide_the_reference_below_it(self):
+        # Scenario S-023 (negative): an opening fence that is never closed yields no range
+        # at all, so the real reference below it still counts. The opposite trade would let
+        # one stray fence suppress every mention under it and report the lens as unwired.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "This skill follows [`example.md`](../../rules/example.md).\n"
+        )
         _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
         code, out = _run(self.skills)
         self.assertEqual(code, 0, out)

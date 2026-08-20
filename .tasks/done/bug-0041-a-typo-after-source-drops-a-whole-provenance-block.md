@@ -2,7 +2,7 @@
 id: bug-0041
 title: A typo on the field after source drops the whole provenance block silently, the third instance of that signature in one file
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: [bug-0019]
@@ -14,11 +14,11 @@ created: 2026-08-20
 
 ## Problem
 
-`parse_records()` in [`check-provenance.py`](../scripts/check-provenance.py) drops an entire
+`parse_records()` in [`check-provenance.py`](../../scripts/check-provenance.py) drops an entire
 provenance block when the field immediately after `source:` is misspelled. The record simply does not
 exist as far as the run is concerned, and the run reports success.
 
-Left explicitly out of scope by [`bug-0019`](done/bug-0019-provenance-check-drops-unreadable-files-silently.md)
+Left explicitly out of scope by [`bug-0019`](bug-0019-provenance-check-drops-unreadable-files-silently.md)
 and reported by its agent as worth its own file, which is what this is.
 
 **It is the third instance of one signature in a single file**, and that is the argument for taking it
@@ -86,22 +86,47 @@ records the tool sees before and after, because a change in that count is the fi
 Reversible by reverting one commit. This tool is deliberately outside required CI because it needs
 network, so nothing else depends on its exit code.
 
+## Decisions
+
+- **"Complete" is decided by placement, not by the field names.** A run whose `source:` line sits
+  inside a placement the convention names, a fence tagged `provenance` or an underlined `Provenance`
+  docstring section, is a record whatever it collected, and validate() then reports its shortfall
+  against the five required keys (or the `status: unlocatable` substitution, unchanged). Outside
+  those placements the old content rule stands: at least one other recognised key. That split is
+  what lets a mistyped block be reported without `review-depth`'s `source: detected | user` being
+  reported with it.
+- **Rejected: near-miss detection on the key name.** A mistyped key is one a small edit distance from
+  a recognised one; an unrelated field is not. It would have worked on `authr` for `author`, and it
+  fails in both directions on cases this tree already contains or invites: `hash:` for `sha256:` is
+  a typo no distance threshold calls one, and a template's own `notes:` field is one edit from
+  `note:` and is not a typo at all. The threshold would have had nothing behind it, where placement
+  is a question `AGENTS.md` already answers.
+- **Seam left open: a typo on `source` itself.** `sorce:` inside a `provenance` fence still produces
+  no record, because the scan only ever starts at a `source:` line. Same family, same file, and
+  deliberately not fixed here: this task scopes to "a block that opens with `source:`". A fence
+  tagged `provenance` that contains no `source:` line at all is detectable with the placement
+  machinery this change adds, and is the natural next task.
+- **Premise checked and left alone: `AGENTS.md` line 155.** It says "the parser requires at least one
+  other field". After this change that holds outside a declared placement and not inside one, where a
+  lone `source:` line now yields a record reported as missing four fields. The task puts `AGENTS.md`
+  out of scope, so the sentence is reported as a finding rather than edited.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A block whose field after `source:` is misspelled is named in the output and changes the exit
+- [x] A block whose field after `source:` is misspelled is named in the output and changes the exit
       code, proven by a test that fails against the current code.
-- [ ] A record using `status: unlocatable` still parses and is not reported as malformed, proven by a
+- [x] A record using `status: unlocatable` still parses and is not reported as malformed, proven by a
       test.
-- [ ] The closeout states the record count before and after the change, so a previously-dropped block
+- [x] The closeout states the record count before and after the change, so a previously-dropped block
       is reported as a finding rather than absorbed.
-- [ ] No network request is made by any test.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] No network request is made by any test.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

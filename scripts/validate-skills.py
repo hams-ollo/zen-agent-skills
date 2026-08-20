@@ -318,6 +318,35 @@ def declares_itself_a_lens(text: str) -> bool:
     return bool(LENS_DECLARATION_RE.search(opening))
 
 
+def _names_file_outside_fences(text: str, filename: str) -> bool:
+    """True when `filename` appears in `text` somewhere other than a fenced code block.
+
+    A fence is the body *showing* what a reference looks like rather than making one. In
+    a skill that is usually sample text some other agent is being told to write, so it
+    points no reader at the file and composes nothing, which is the failure the lens rule
+    exists to catch rather than a lesser form of compliance (`bug-0040`).
+
+    Inline code spans are deliberately **not** excluded, which is where this parts company
+    with the link rules and their S-022 exception. A link inside a span is not a link at
+    all: its brackets render as literal text, so there is nothing to follow and no reader
+    to strand. A filename inside a span is still prose naming the file, and backticks are
+    how the house style writes such a mention, so excluding spans here would reject the
+    exact form S-023 protects and push an author to drop the backticks to satisfy a
+    validator.
+
+    An unterminated opening fence yields no range at all, inherited from
+    `fenced_block_ranges()`, so one stray fence cannot suppress every mention below it and
+    report a wired lens as unwired.
+    """
+    fences = fenced_block_ranges(text)
+    start = text.find(filename)
+    while start != -1:
+        if not any(lo <= start < hi for lo, hi in fences):
+            return True
+        start = text.find(filename, start + len(filename))
+    return False
+
+
 def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) -> None:
     """Flag a self-declared lens under `.agents/rules/` that no skill references.
 
@@ -327,10 +356,13 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
     The swappability promise fails with it: an adopter who rewrites the module changes
     nothing, which is the same class of defect the link-escape rule catches.
 
-    A reference is the lens's filename appearing anywhere in a `SKILL.md`, which counts
-    both the usual relative link and a prose mention that names the file. The bare word
-    (`autonomy`) is deliberately not enough, or any skill discussing the subject would
-    satisfy the rule without giving a reader a way to reach the module.
+    A reference is the lens's filename appearing in a `SKILL.md` outside every fenced
+    code block, which counts both the usual relative link and a prose mention that names
+    the file. The bare word (`autonomy`) is deliberately not enough, or any skill
+    discussing the subject would satisfy the rule without giving a reader a way to reach
+    the module. A mention inside a fence is not enough either, for the same reason: it
+    shows what a reference looks like instead of making one. See
+    `_names_file_outside_fences()` for why inline code spans still count.
 
     Skipped entirely when there is no sibling `rules/` directory, since a skills tree
     without one has no lens to leave unwired.
@@ -341,13 +373,16 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
         text = rules_file.read_text(encoding="utf-8")
         if not declares_itself_a_lens(text):
             continue
-        if any(rules_file.name in skill_text for skill_text in skill_texts.values()):
+        if any(_names_file_outside_fences(skill_text, rules_file.name)
+               for skill_text in skill_texts.values()):
             continue
         errors.append(
             f"{_rel(rules_file)}: declares itself a lens but no skill references it, so "
             f"nothing composes it and an adopter who rewrites it changes nothing. Point at "
             f"it from the skills whose rules it holds (one line in a `## Conventions` "
-            f"section is the usual shape), or drop the self-declaration from its opening."
+            f"section is the usual shape), or drop the self-declaration from its opening. "
+            f"Naming the file only inside a fenced code block does not count: that shows "
+            f"what a reference looks like rather than making one."
         )
 
 

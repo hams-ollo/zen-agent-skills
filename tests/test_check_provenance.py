@@ -32,6 +32,9 @@ The defect each group protects against:
                   and the checker reports a clean count nobody has reason to doubt
   unreadable    - a file the process cannot read drops every record it carries, is named
                   nowhere, and leaves a narrowed count that reads exactly like a clean one
+  misspelled    - one mistyped field name after `source:` deletes the whole block from the
+                  run, at exit 0, and the fix for it goes too far the other way and starts
+                  reporting a template's own `source:` field as a broken fold-in
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
@@ -688,6 +691,124 @@ class UnreadableFileTest(unittest.TestCase):
         self.assertEqual([rel for rel, _ in found], [self.READABLE])
         self.assertEqual([rel for rel, _ in unreadable], [self.LOCKED])
         self.assertIn("Permission denied", unreadable[0][1])
+
+
+DOCSTRING_BLOCK = (
+    '"""A hook.\n'
+    "\n"
+    "Provenance\n"
+    "----------\n"
+    f"source: {URL}\n"
+    "author: Balarama Bosch\n"
+    "license: MIT\n"
+    "retrieved: 2026-08-06\n"
+    f"sha256: {UPSTREAM_SHA}\n"
+    '"""\n'
+)
+
+
+class MisspelledFieldTest(unittest.TestCase):
+    """bug-0041: a typo on the field after `source:` deleted the whole block, at exit 0.
+
+    The run ended on the mistyped line with only `source` collected, which failed the same
+    "at least one other recognised key" test that keeps `review-depth`'s unrelated `source:`
+    field out of the record set. So the block did not become malformed, it stopped existing:
+    no line in the output, no count, exit 0, and the upstream it credits never re-fetched
+    again. Asserting "the well-formed block still parses" would have passed against that,
+    because the well-formed block always did. The oracle has to be the mistyped one.
+
+    The opposite failure is live and is why the fix keys on placement rather than on the
+    field name: `review-depth`'s output template really does carry a `source:` line, inside
+    a ```text fence, and any rule that turns every bare `source:` run into a record makes
+    the checker fail on a skill nobody touched. Both directions are tested here.
+    """
+
+    def test_the_record_survives_a_misspelled_field(self):
+        records = cp.parse_records(block().replace("author:", "authr:"))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source"], URL)
+
+    def test_the_run_names_the_file_and_the_misspelled_field(self):
+        code, output = run(block().replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn(".agents/skills/x/SKILL.md", output)
+        self.assertIn("authr", output)
+
+    def test_the_misspelled_block_is_counted_as_an_error_not_as_nothing(self):
+        # The bug's signature is a count that looks clean, so the count is the oracle.
+        code, output = run(block().replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_a_malformed_block_is_never_fetched(self):
+        def never(url, timeout=30):
+            raise AssertionError("a record that cannot be checked must not be fetched")
+
+        code, _ = run(block().replace("author:", "authr:"), never)
+        self.assertEqual(code, 2)
+
+    def test_a_typo_on_the_last_field_is_reported_too(self):
+        # `note:` is optional, so the run had already collected every required field. The
+        # block is still mistyped, and a checker that shrugs at it teaches the next author
+        # that some field names are approximate.
+        body = block()[:-4] + "notes: backfilled baseline\n```\n"
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("notes", output)
+
+    def test_the_docstring_placement_reports_a_misspelled_field_the_same_way(self):
+        # The convention names two placements and the hooks use this one. A fix that only
+        # understood markdown fences would leave half the tree exactly as it was.
+        code, output = run(DOCSTRING_BLOCK.replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("authr", output)
+
+    def test_the_docstring_placement_still_parses_when_it_is_well_formed(self):
+        code, output = run(DOCSTRING_BLOCK, serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_an_unlocatable_record_is_not_made_malformed_by_the_placement_rule(self):
+        # The same family in the opposite direction: `status: unlocatable` legitimately
+        # omits `retrieved` and `sha256`, so a placement rule paired with a naive
+        # required-keys check would report every honest unlocatable record as broken.
+        def never(url, timeout=30):
+            raise AssertionError("an unlocatable record must not be fetched")
+
+        code, output = run(UnlocatablePath.BLOCK, never)
+        self.assertEqual(code, 0)
+        self.assertIn("0 up to date, 0 drifted, 1 unlocatable, 0 error(s).", output)
+
+    def test_a_source_field_in_someone_elses_fence_is_still_ignored(self):
+        # The review-depth shape as a fixture: a `source:` line inside a ```text fence,
+        # followed by field names this parser does not recognise. Before the placement
+        # rule it was dropped for want of a second recognised key, which is the same
+        # reason a mistyped block was dropped. Now it is dropped for being somewhere else.
+        text = (
+            "```text\n"
+            "depth: quick | standard | deep\n"
+            "source: detected | user\n"
+            "changeset: the range the signals were computed over\n"
+            "changeset_source: resolved | supplied\n"
+            "```\n"
+        )
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_source_field_in_open_prose_is_still_ignored(self):
+        # And outside any fence, where the content rule is the only one that applies.
+        text = "source: detected | user\nchangeset: working tree\n"
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_whole_run_of_that_shape_exits_zero_with_nothing_recorded(self):
+        def never(url, timeout=30):
+            raise AssertionError("nothing here should be fetched")
+
+        code, output = run(
+            "```text\nsource: detected | user\nchangeset: working tree\n```\n", never
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("No provenance records found", output)
 
 
 class RepositoryRecordsTest(unittest.TestCase):
