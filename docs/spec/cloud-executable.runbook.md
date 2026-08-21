@@ -230,6 +230,7 @@ the base, then read the table.
 |---|---|---|---|
 | 2026-08-07 | `08b0a6d` | The `bug-0018` proof run (`S-017` to `S-019`) | **No.** Cause found afterwards: the hook counted this kit's own `.agents/skills/` sources at project scope, so it was silent in a fresh clone. Fixed at `7703632`. |
 | 2026-08-20 | cut from `a07286b` (`main`), rebased to `bc4f901` | The `bug-0020` proof run (`S-017` to `S-019`), per `chore-0051` | **No, and the hook is not the cause.** The session was staged on a branch cut from `main`, 99 files behind `developer`, so the hook that would have fired was the pre-`bug-0021` copy, which counts any `SKILL.md` and is silenced by a populated foreign `~/.claude/skills`. Reproduced independently: `main`'s hook runs, exits 0, and is silent in that state; `developer`'s reports. **`S-008` remains untested, not disproved.** `S-017` and `S-018` were satisfied by the same run and independently verified. `S-019` was not exercised, since the gates exited 0. Cause and fix: `bug-0043`. |
+| 2026-08-21 | `9bc32ac` | Observation-only run of `S-008`, base gate printed `BASE_OK` | **Yes.** The `NO SKILLS REACHABLE` message was present in context at session start, before any tool call, and the hook run by hand reports the same text. `yes` + `reports`: `S-008` confirmed live. |
 
 ## If it fails
 
