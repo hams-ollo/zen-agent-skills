@@ -3,7 +3,7 @@ title: validate-skills conformance
 spec: docs/spec/validate-skills.md
 audited: 2026-07-27
 supersedes: 2026-07-24 audit (S-001 through S-008 only)
-re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039), 2026-08-20 (chore-0047), 2026-08-20 (bug-0040)
+re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039), 2026-08-20 (chore-0047), 2026-08-20 (bug-0040), 2026-08-21 (chore-0036)
 ---
 
 # validate-skills conformance matrix
@@ -55,6 +55,21 @@ inert in the kit today; the second is why the span half would not have been, and
 skill rather than in the abstract, since `house-review` names `house-style.md` only in the span
 "it is swappable like `house-style.md`" and would have been the one body to lose its reference.
 
+Re-audited 2026-08-21 (`chore-0036`), which widened the checked file set from each skill's
+`SKILL.md` to the markdown a skill ships beside it, and added a second summary line reporting how
+many supporting files were read and how many were skipped. **This contract does not state that rule
+at all**, and the task that built it declares `scenarios: []`, so nothing here is audited against a
+scenario for it. The pass is recorded the only honest way available: the `Output format` row moves to
+`Diverged`, the `What it reads` row keeps its status and gains a note, and the unreconciled section
+below carries the amendment that is owed. This is the fourth time the implementation has grown past
+this contract (after `feat-0023`, `bug-0027`, and `feat-0048`), and the pattern is worth naming: the
+gap is always found at the next task's closeout rather than by any gate. Only those two rows were
+re-derived; every other row is carried forward, safe because `check_supporting_files()` and
+`classify_supporting_file()` are new functions no other row cites, and the one existing function the
+change touched, `check_links()`, kept every branch and every message body (`chore-0036` renamed two
+of its parameters and made the `../<name>/SKILL.md` shortcut conditional, which is reached only from
+the new caller).
+
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies on 2026-08-19, `LINK_RE` matches 133 links and 0 of them sit
 inside a code span or a fence, so every skill lints exactly as it did before the guard existed. That
@@ -93,9 +108,9 @@ two tools carry character-identical copies of the two range helpers.
 | Scenarios | S-021 unrecognised frontmatter property fails | Conformed | `main()` / the `for key in sorted(set(fm) - ALLOWED_FRONTMATTER_KEYS)` loop, with the `ALLOWED_FRONTMATTER_KEYS` constant | an allow-list of the schema's six properties, commented with its source and the date it was read. `version` is deliberately excluded: the reference implementation rejects it even though Anthropic's own example skill documents it as optional |
 | Scenarios | S-023 a self-declared lens no skill references fails | Conformed | `check_lenses_are_composed()`, called from `main()` after the per-skill loop with `portable_root / "rules"` and the `skill_texts` dict `main()` accumulates; declaration by `declares_itself_a_lens()` over `LENS_DECLARATION_RE` and `LENS_DECLARATION_LINES` | added by `chore-0047`, writing down what `feat-0048` built. One error per unreferenced lens, not one per skill, because the call sits outside the loop. A reference is `_names_file_outside_fences(skill_text, rules_file.name)`, so a relative link and a prose mention naming the file both satisfy it and the bare subject word does not, which is what the scenario states. The declaration is read only in the opening (10 lines), keyed to a self-declaration rather than a filename list, so the rule fires for the next lens too. Re-measured 2026-08-20 (`bug-0040`): 3 files in `.agents/rules/`, all 3 declare themselves lenses inside the window, and all 3 are referenced, by 20, 5 and 4 skills respectively, unchanged by the fence guard, so the rule reports nothing today and is a guard rather than a live exclusion. **The asymmetry the `chore-0047` audit recorded here is closed** and no longer appears in this row: a body whose only mention of a lens filename sits inside a fenced block no longer satisfies the rule, which is the same refinement S-022 makes for the link rules. **S-023's wording is unchanged and still holds**: the scenario says the filename appears in a `SKILL.md`, and the fence guard changes which appearances count rather than what the scenario asserts, exactly as S-022 does for S-009 through S-013. The guard stops at fences and does not extend to inline code spans, argued in the extension note above |
 | Proposed Surface | Invocation `python scripts/validate-skills.py` | Conformed | module `__main__` guard | `if __name__ == "__main__": raise SystemExit(main())` |
-| Proposed Surface | What it reads: skills plus the sibling rules module | Conformed | `main()` / `portable_root = skills_dir.parent.resolve()` and the `check_lenses_are_composed(portable_root / "rules", ...)` call | added by `chore-0047`. `portable_root` already existed to serve the S-011 portability guard; the lens rule is the first use that reads a file under it. Nothing outside the skills directory and its sibling `rules/` is opened |
+| Proposed Surface | What it reads: skills plus the sibling rules module | Conformed | `main()` / `portable_root = skills_dir.parent.resolve()` and the `check_lenses_are_composed(portable_root / "rules", ...)` call | added by `chore-0047`. `portable_root` already existed to serve the S-011 portability guard; the lens rule is the first use that reads a file under it. Nothing outside the skills directory and its sibling `rules/` is opened. Re-derived 2026-08-21 (`chore-0036`): still conformed, and the surface sentence "every skill directory under the target skills directory" is now true of the whole directory rather than of its `SKILL.md` alone. `check_supporting_files()` walks each skill directory and opens the markdown it finds there, which is inside the pair this element names, so the boundary the element draws is unmoved. The wording is nonetheless weaker than it reads, because it was written when only one file per directory was ever opened; the amendment owed below asks for it to say so |
 | Proposed Surface | Exit non-zero on error only | Conformed | `main()` / final `return 1 if errors else 0` | warnings do not affect the exit code |
-| Proposed Surface | Output format | Conformed | `main()` / the `WARN`/`ERROR` print loops and the `Checked ...` summary print, plus the two early-return prints | per-issue lines then the summary; the missing-directory and no-skills-found lines replace the summary as the amended surface states |
+| Proposed Surface | Output format | Diverged | spec: the `Proposed Surface` "Output" row; code: `main()` / the second `print` following the `Checked ...` summary print | the contract states the run ends at the `Checked N skill(s): E error(s), W warning(s).` summary. `chore-0036` prints a further line, `Link-checked N supporting file(s) beside them; skipped ... template(s) ... and ... non-markdown file(s).`, on every run that reaches the summary. Everything the element does state is unchanged: the `WARN`/`ERROR` loops, the summary line itself verbatim, and the two early-return prints that replace it. The divergence is an addition the contract does not mention, not a contradiction of anything in it |
 
 ## Coverage proof
 
@@ -104,6 +119,12 @@ two tools carry character-identical copies of the two range helpers.
   placed beside S-013 in both documents, because it is the exception the link rows are read against.
   S-023 is placed last in both, because it is the only rule whose subject is not a skill and it is
   read against nothing above it.
+- **re-derived in the 2026-08-21 (`chore-0036`) pass**: two Proposed Surface elements only, `Output
+  format` and `What it reads`. The twenty-three scenario rows and the other two surface elements are
+  carried forward from the passes named in the header, unchanged and not re-checked. Stated because a
+  partial audit is not a whole one. They are safe to carry because the change added two functions no
+  row cites and left every branch and message body of `check_links()`, the one function any row
+  cites, as it was.
 - **re-derived in the 2026-08-20 (`bug-0040`) pass**: S-023 only, plus its row in the test-coverage
   table. The other twenty-two rows and all four Proposed Surface elements are carried forward from
   the passes named in the header, unchanged and not re-checked in this pass. Stated because a partial
@@ -115,6 +136,21 @@ two tools carry character-identical copies of the two range helpers.
     length proxy is a deliberate, documented approximation. If the kit later wants to enforce it, the
     honest fix is to soften the spec wording to "length proxy" or add a real check, not to claim the
     current code satisfies the stated intent. Unchanged from the 2026-07-24 audit.
+  - **Output format (Diverged)**, and the supporting-file rule behind it: disposition **amend the
+    spec**. `chore-0036` gave the validator a rule this contract states nowhere: the markdown a skill
+    ships beside its `SKILL.md` is link-checked under the same three rules S-009 through S-013 carry,
+    resolved from where the supporting file sits, and a file whose name ends in `.tmpl` is excluded
+    because its links are authored for the repository it is written into. The run reports the checked
+    and skipped counts on a second summary line. **No scenario is claimed for it here**, deliberately:
+    `chore-0036` declares `scenarios: []`, its tests are characterization rather than acceptance, and
+    inventing an id at closeout would let a matrix assert coverage of a contract clause nobody wrote.
+    What is owed is one scenario in the spec (the sibling of S-009 for a supporting file, with the
+    `.tmpl` exclusion and the `../<name>/SKILL.md` shortcut being off for such a file), a widened
+    `Output` element, and a `What it reads` element that says the whole skill directory rather than
+    leaving "every skill directory" to be read as its `SKILL.md`. Until then the rule is pinned only
+    by `TestSupportingFileLinkChecks` in
+    [`tests/test_validate_skills.py`](../../tests/test_validate_skills.py), which is the same position
+    S-022 and S-023 were in before `chore-0039` and `chore-0047` wrote them down.
 
 S-014 was the second unreconciled item when this matrix was first regenerated on 2026-07-27, carrying
 disposition **fix**. The author chose to widen rather than to narrow the scenario, the patterns were
@@ -123,8 +159,8 @@ because the divergence is the useful part of the history: the check had shipped 
 believed correct for two days, and was only caught when a scenario was written that stated the
 condition semantically instead of restating the implementation.
 
-No spec item was silently dropped. One item diverges, accepted with a stated reason; everything else
-conforms.
+No spec item was silently dropped. Two items diverge: S-008, accepted with a stated reason, and the
+`Output format` element, which awaits the amendment named above. Everything else conforms.
 
 ## Test coverage of spec invariants
 
@@ -147,6 +183,18 @@ lacks one). Against [`tests/test_validate_skills.py`](../../tests/test_validate_
 Every scenario except S-008 now has a covering test, including the code-span rule that had tests
 before it had a scenario. S-008 remains deliberately untested, because a
 passing test there would assert behavior the accepted divergence says does not exist.
+
+**Thirteen tests in the file cover no scenario in this contract**, and that is stated here rather
+than left for a reader to notice a table row missing. `TestSupportingFileLinkChecks` pins the
+supporting-file rule `chore-0036` added on 2026-08-21, tagged as characterization and carrying no
+S-NNN id because no scenario states the rule; the amendment owed is in the unreconciled section
+above. They are the same shape as the rest of the link tests, positives for an unresolved link, an
+escaping link, and the sibling-shortcut false negative, and negatives for the exclusions, a `.tmpl`
+file, a non-markdown file, a byte cache, and a link inside a fence. Measured 2026-08-21 against the
+pre-change script: 8 fail and 2 error, which is what makes them tests of the change rather than a
+restatement of it. The other 3 pass on both sides, which is what a negative case should do and is why
+they are not counted as evidence of the change: a supporting file whose links resolve, a `.tmpl` file
+that must not be read, and a non-markdown file that must not be read.
 
 All five S-017 and S-018 tests were confirmed to fail against the pre-fix script before it was changed,
 so they test the change rather than restate it. The two positive S-019 tests likewise fail against the

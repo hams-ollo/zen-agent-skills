@@ -35,6 +35,9 @@ The defect each group protects against:
   misspelled    - one mistyped field name after `source:` deletes the whole block from the
                   run, at exit 0, and the fix for it goes too far the other way and starts
                   reporting a template's own `source:` field as a broken fold-in
+  unsourced     - a placement whose `source:` key is mistyped, or that carries no source
+                  line at all, yields no record at all, so the run prints the clean empty
+                  state of a repository with nothing folded in
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
@@ -73,6 +76,19 @@ def block(sha=UPSTREAM_SHA, url=URL, retrieved="2026-08-06", gap=""):
         f"sha256: {sha}\n"
         "```\n"
     )
+
+
+FENCE = "`" * 3
+
+
+def provenance_fence(*lines):
+    """A declared markdown placement carrying exactly `lines`, well formed or not.
+
+    block() cannot express these: every shape below is missing the `source:` line that
+    block() is built around, and one of them is missing every line.
+    """
+    body = "".join(f"{line}\n" for line in lines)
+    return f"## Provenance\n\n{FENCE}provenance\n{body}{FENCE}\n"
 
 
 def make_root(body):
@@ -811,6 +827,138 @@ class MisspelledFieldTest(unittest.TestCase):
         self.assertIn("No provenance records found", output)
 
 
+class UnsourcedPlacementTest(unittest.TestCase):
+    """bug-0042: a placement that never produced a `source:` token was examined by nothing.
+
+    bug-0041 made a mistyped field *after* `source:` reportable. Two shapes survived it,
+    both for one reason: parse_records() only ever began a run at a line whose key is
+    exactly `source`, so a block that never produces that token was not examined at all.
+    A typo on the key itself (`sorce:`) and a fence carrying every field but that one both
+    printed nothing, counted nothing, and exited 0, which is what a repository with nothing
+    folded in prints. The oracle has to be those shapes; a well-formed block always parsed.
+
+    The empty placement is decided the other way and tested here too. It records nothing to
+    re-fetch, so it is named in the output and left out of the counts rather than failing
+    the run: see unsourced_placements() in the script for the rejected alternative.
+    """
+
+    SORCE = provenance_fence(
+        f"sorce: {URL}",
+        "author: Balarama Bosch",
+        "license: MIT",
+        "retrieved: 2026-08-06",
+        f"sha256: {UPSTREAM_SHA}",
+    )
+    NO_SOURCE = provenance_fence(
+        "author: Balarama Bosch",
+        "license: MIT",
+        "retrieved: 2026-08-06",
+        f"sha256: {UPSTREAM_SHA}",
+    )
+
+    def test_a_typo_on_the_source_key_still_produces_a_record(self):
+        records = cp.parse_records(self.SORCE)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["placement"], "no-source")
+
+    def test_the_run_names_the_file_and_the_mistyped_key(self):
+        code, output = run(self.SORCE, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn(".agents/skills/x/SKILL.md", output)
+        self.assertIn("sorce", output)
+
+    def test_the_mistyped_key_is_counted_as_an_error_not_as_nothing(self):
+        # The bug's signature is a count that looks clean, so the count is the oracle.
+        code, output = run(self.SORCE, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_a_placement_carrying_no_source_line_is_reported(self):
+        code, output = run(self.NO_SOURCE, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("no 'source:' line", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_neither_shape_is_ever_fetched(self):
+        def never(url, timeout=30):
+            raise AssertionError("a record that cannot be checked must not be fetched")
+
+        for body in (self.SORCE, self.NO_SOURCE):
+            with self.subTest(body=body.splitlines()[2]):
+                code, _ = run(body, never)
+                self.assertEqual(code, 2)
+
+    def test_the_docstring_placement_reports_a_mistyped_key_the_same_way(self):
+        # The convention names two placements and the hooks use this one, so a fix that
+        # only understood markdown fences would leave half the tree exactly as it was.
+        code, output = run(DOCSTRING_BLOCK.replace("source:", "sorce:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("sorce", output)
+
+    def test_list_mode_names_the_placement_and_says_it_has_no_source(self):
+        code, output = run(self.SORCE, serve(UPSTREAM), argv=("--list",))
+        self.assertEqual(code, 0)
+        self.assertIn("[no-source]", output)
+        self.assertIn("(no source)", output)
+
+    def test_an_empty_placement_is_named_but_does_not_fail_the_run(self):
+        def never(url, timeout=30):
+            raise AssertionError("an empty placement records nothing to fetch")
+
+        code, output = run(provenance_fence(), never)
+        self.assertEqual(code, 0)
+        self.assertIn("is empty", output)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_an_empty_placement_holding_only_a_blank_line_is_the_same(self):
+        # The fence closed immediately and the fence holding one blank line are the same
+        # placement to a reader, and the first has no lines between its markers at all.
+        def never(url, timeout=30):
+            raise AssertionError("an empty placement records nothing to fetch")
+
+        code, output = run(provenance_fence(""), never)
+        self.assertEqual(code, 0)
+        self.assertIn("is empty", output)
+
+    def test_an_empty_docstring_placement_is_named_too(self):
+        def never(url, timeout=30):
+            raise AssertionError("an empty placement records nothing to fetch")
+
+        body = '"""A hook.\n\nProvenance\n----------\n"""\n'
+        code, output = run(body, never)
+        self.assertEqual(code, 0)
+        self.assertIn("is empty", output)
+
+    def test_an_empty_placement_does_not_hide_the_records_beside_it(self):
+        # The whole family is "the run examined less than it claimed", so the real record
+        # must still be fetched and counted with an unfinished fence sitting next to it.
+        code, output = run(provenance_fence() + "\n" + block(), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+        self.assertIn("is empty", output)
+
+    def test_a_mistyped_key_in_someone_elses_fence_is_still_ignored(self):
+        # The opposite failure, live: detection keys on the placement, so a rule that
+        # widened to any near-`source` key would start reporting unrelated fenced examples.
+        text = (
+            f"{FENCE}text\n"
+            "depth: quick | standard | deep\n"
+            "sorce: detected | user\n"
+            f"{FENCE}\n"
+        )
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_run_over_someone_elses_fence_still_exits_zero_with_nothing_recorded(self):
+        def never(url, timeout=30):
+            raise AssertionError("nothing here should be fetched")
+
+        code, output = run(f"{FENCE}text\nsorce: detected | user\n{FENCE}\n", never)
+        self.assertEqual(code, 0)
+        self.assertIn("No provenance records found", output)
+
+
 class RepositoryRecordsTest(unittest.TestCase):
     """Every block actually recorded in this repository is well formed. No network."""
 
@@ -844,6 +992,20 @@ class RepositoryRecordsTest(unittest.TestCase):
         # And the count is a full one rather than a narrowed one: if any file in scope
         # could not be read, 8 would be what survived rather than what is there.
         self.assertEqual(unreadable, [])
+
+    def test_no_record_in_this_repository_is_a_placement_without_a_source(self):
+        # bug-0042 in the tree rather than in a fixture: every one of the eight is a real
+        # sourced record, so the new rule reports nothing here and the count is unmoved.
+        found, _ = cp.collect(REPO_ROOT)
+        self.assertEqual([rel for rel, record in found if record.get("placement")], [])
+
+    def test_the_review_depth_file_declares_no_provenance_placement(self):
+        # The regression fixture from the other end. Its `source:` line is ignored because
+        # of where it sits, so the file must contain no declared placement at all: if one
+        # appeared, the placement-driven pass would report the skill as an unsourced block.
+        path = REPO_ROOT / ".agents" / "skills" / "review-depth" / "SKILL.md"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(cp.placement_regions(cp.declared_lines(lines)), [])
 
     def test_the_review_depth_output_template_contributes_no_records(self):
         # The real file, not a fixture. `source: detected | user` in review-depth's output
