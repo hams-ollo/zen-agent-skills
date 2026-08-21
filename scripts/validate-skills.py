@@ -20,6 +20,13 @@ scripts/install.py), so a link that escapes the `.agents/` tree resolves here an
 dangles everywhere the skill is actually used. Those are errors even though the
 file they name exists in this repository.
 
+The same link rules run over the markdown a skill ships *beside* its SKILL.md, in
+`references/` or anywhere else in the skill directory, because those files are part
+of the one tree that installs into an adopter's repository and nothing else looks at
+them: the `--links` globs the CI gate passes never reach `.agents/` (chore-0036).
+A file whose name carries the `.tmpl` suffix is deliberately not checked; see
+`classify_supporting_file` for the rule and why it is drawn there.
+
     python scripts/validate-skills.py
 """
 from __future__ import annotations
@@ -59,6 +66,11 @@ BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 SIBLING_SKILL_RE = re.compile(r"^\.\./([^/]+)/SKILL\.md$")
 EXTERNAL_LINK_PREFIXES = ("http://", "https://", "mailto:")
+
+# The two file kinds a skill ships beside its SKILL.md, and the marker that tells them
+# apart. See `classify_supporting_file` for the argument; these are the constants it reads.
+TEMPLATE_SUFFIX = ".tmpl"
+SUPPORTING_MARKDOWN_SUFFIXES = frozenset({".md", ".mdc"})
 
 # A run of one or more backticks, and a fenced code block delimiter: a whole line whose
 # content is a run of three or more backticks, optionally followed by an info string.
@@ -227,13 +239,26 @@ def _link_targets(text: str):
             yield target
 
 
-def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: list,
-                portable_root: Path | None = None) -> None:
+def check_links(source: Path, text: str, skill_names: set, label: str, errors: list,
+                portable_root: Path | None = None, sibling_shortcut: bool = True) -> None:
     """Flag unresolved relative links, dangling siblings, and non-portable links.
+
+    `source` is the file the links were read from, and every relative target resolves
+    from its parent directory. `label` is what the error messages name, so a caller
+    checking a supporting file passes that file's path rather than the skill's.
 
     `portable_root` is the highest directory a skill link may reach: the `.agents/`
     tree that install.py ships (the skills plus the rules module beside them). A link
     above it resolves in this repository and dangles once the skill is installed.
+
+    `sibling_shortcut` governs the `../<name>/SKILL.md` rule, and is off for a
+    supporting file. That rule reads the target as a skill *name* rather than as a
+    path, which is only correct one directory level up from a sibling skill, where a
+    SKILL.md sits. From a supporting file one level deeper, `../beta/SKILL.md` names a
+    subdirectory of this skill and not the skill `beta`, so the shortcut would clear a
+    genuinely broken link whenever a real skill happened to share the name. With the
+    shortcut off, the same link is resolved on disk like any other, which is correct
+    there and simply reports the ordinary "does not exist" message.
 
     A link inside an inline code span or a fenced code block is not checked at all, by
     any of the three rules here, because it is not a link: it renders as literal text.
@@ -248,25 +273,104 @@ def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: l
         path_part, _, _anchor = target.partition("#")
         if not path_part:
             continue  # anchor-only link within the same page
-        sibling = SIBLING_SKILL_RE.match(path_part)
+        sibling = SIBLING_SKILL_RE.match(path_part) if sibling_shortcut else None
         if sibling:
             sibling_name = sibling.group(1)
             if sibling_name not in skill_names:
                 errors.append(
-                    f"{rel}/SKILL.md: references sibling skill {sibling_name!r} via "
+                    f"{label}: references sibling skill {sibling_name!r} via "
                     f"{path_part}, but no such skill exists in this kit"
                 )
             continue
-        resolved = (skill_md.parent / path_part).resolve()
+        resolved = (source.parent / path_part).resolve()
         if portable_root is not None and not resolved.is_relative_to(portable_root):
             errors.append(
-                f"{rel}/SKILL.md: link escapes the shipped skill tree: {path_part}. "
+                f"{label}: link escapes the shipped skill tree: {path_part}. "
                 f"It resolves in this repo but dangles once the skill is installed; "
                 f"name the file in prose instead of linking to it."
             )
             continue
         if not resolved.exists():
-            errors.append(f"{rel}/SKILL.md: link target does not exist: {path_part}")
+            errors.append(f"{label}: link target does not exist: {path_part}")
+
+
+def classify_supporting_file(path: Path) -> str:
+    """Sort a file shipped beside a SKILL.md into `template`, `markdown`, or `other`.
+
+    Only `markdown` is link-checked, and the bound is the whole point of this rule
+    (chore-0036). A skill directory holds two kinds of file, and they answer the
+    question "where do this file's links resolve from?" differently:
+
+    - Read **in place**, from inside the installed skill tree: a `references/` note, or
+      a document describing the directory it sits in. Its relative links must resolve
+      from where the file sits, which is exactly what `check_links` already tests, so
+      the SKILL.md rule extends to it unchanged.
+    - Written **somewhere else**: a template, whose links are authored for the
+      destination and are meant to dangle where the file currently sits. A link to
+      `.tasks/` inside `AGENTS.md.tmpl` is correct at an adopter's repository root.
+      Resolving it from `.agents/skills/init-worktracking/templates/` would report every
+      such link as broken and make the check unusable.
+
+    The marker is the `.tmpl` suffix, which this kit already puts on exactly the files
+    it writes into another repository. It is deliberately a property of the file itself
+    rather than a table of destinations declared in a skill body or in this script: a
+    table is a second source of truth that drifts from the skill silently, and the
+    silent-drift failure is the one this whole rule exists to catch. The cost is that a
+    destination-bound markdown file added *without* the suffix would be checked against
+    this repository and would report links written for somewhere else. That failure is
+    loud rather than silent, and the fix is to rename the file, which is also what makes
+    it a template to every other reader.
+
+    `other` covers the non-markdown files (a `.py`, a `.toml`, a `.json`). Markdown link
+    syntax in those is not a link, so they are counted and not read.
+    """
+    if path.name.endswith(TEMPLATE_SUFFIX):
+        return "template"
+    if path.suffix.lower() in SUPPORTING_MARKDOWN_SUFFIXES:
+        return "markdown"
+    return "other"
+
+
+def _is_shipped(rel: Path, path: Path) -> bool:
+    """Whether a file under a skill directory is authored content the kit distributes.
+
+    Mirrors `_digestable` in scripts/install.py, which in turn mirrors the ignore list
+    its `_copy` places with (`shutil.ignore_patterns("__pycache__", "*.pyc")`). A byte
+    cache is in no installed skill, so it belongs in neither the checking nor the count.
+
+    Not hypothetical: `init-worktracking/templates/validate.py` grows a `__pycache__` the
+    moment the test suite imports it, and without this the reported supporting-file count
+    would depend on whether the tests had already run.
+    """
+    return path.suffix != ".pyc" and "__pycache__" not in rel.parts
+
+
+def check_supporting_files(skill_dir: Path, skill_names: set, rel: str, errors: list,
+                           portable_root: Path | None = None) -> dict:
+    """Link-check the markdown a skill ships beside its SKILL.md; return the file counts.
+
+    The counts are returned rather than printed so `main` can report one total across
+    the tree. All three are reported, including the two that were skipped, because a
+    coverage number nobody can compare across runs is the gap this rule closes rather
+    than a report of it: "0 supporting files checked" reads identically whether the rule
+    is working or the walk is broken, until the count of what it declined to read sits
+    beside it.
+    """
+    counts = {"markdown": 0, "template": 0, "other": 0}
+    skill_md = skill_dir / "SKILL.md"
+    for path in sorted(p for p in skill_dir.rglob("*") if p.is_file()):
+        if path == skill_md:
+            continue
+        if not _is_shipped(path.relative_to(skill_dir), path):
+            continue
+        kind = classify_supporting_file(path)
+        counts[kind] += 1
+        if kind != "markdown":
+            continue
+        label = f"{rel}/{path.relative_to(skill_dir).as_posix()}"
+        check_links(path, path.read_text(encoding="utf-8"), skill_names, label, errors,
+                    portable_root, sibling_shortcut=False)
+    return counts
 
 
 def check_frontmatter_is_parseable(text: str, rel: str, errors: list) -> None:
@@ -410,10 +514,18 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     # Everything install.py ships: the skills plus the sibling rules module.
     portable_root = skills_dir.parent.resolve()
     skill_texts: dict = {}
+    supporting = {"markdown": 0, "template": 0, "other": 0}
 
     for d in skills:
         rel = _rel(d)
         skill_md = d / "SKILL.md"
+        # Before the SKILL.md checks, and outside every `continue` below them: what a
+        # skill ships beside its body is a fact about the directory, so a skill whose
+        # frontmatter fails to parse must not silently drop its supporting files from
+        # both the checking and the count.
+        for kind, n in check_supporting_files(d, skill_names, rel, errors,
+                                              portable_root).items():
+            supporting[kind] += n
         if not skill_md.is_file():
             errors.append(f"{rel}: no SKILL.md")
             continue
@@ -452,7 +564,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         if body_lines > MAX_BODY_LINES:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")
-        check_links(skill_md, text, skill_names, rel, errors, portable_root)
+        check_links(skill_md, text, skill_names, f"{rel}/SKILL.md", errors, portable_root)
         check_frontmatter_is_parseable(text, rel, errors)
         check_status_contradiction(text, rel, warnings)
 
@@ -468,6 +580,12 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
 
     print(f"\nChecked {len(skills)} skill(s): "
           f"{len(errors)} error(s), {len(warnings)} warning(s).")
+    # A second line rather than a longer first one: the summary above is the shape the
+    # contract states and the tests assert, and the supporting-file coverage is a
+    # different count answering a different question.
+    print(f"Link-checked {supporting['markdown']} supporting file(s) beside them; "
+          f"skipped {supporting['template']} template(s) whose links are written for "
+          f"another repository and {supporting['other']} non-markdown file(s).")
     return 1 if errors else 0
 
 

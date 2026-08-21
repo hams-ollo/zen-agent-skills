@@ -2,7 +2,7 @@
 id: bug-0042
 title: A typo on the source key itself still deletes the whole block, and so does a provenance fence carrying no source line
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: [bug-0041]
@@ -14,7 +14,7 @@ created: 2026-08-20
 
 ## Problem
 
-[`bug-0041`](done/bug-0041-a-typo-after-source-drops-a-whole-provenance-block.md) closed the case
+[`bug-0041`](bug-0041-a-typo-after-source-drops-a-whole-provenance-block.md) closed the case
 where the field **after** `source:` is misspelled. Two siblings survive it, both reported by its agent
 and both confirmed against the fixed code:
 
@@ -80,24 +80,62 @@ that is the number this task starts from.
 Reversible by reverting one commit. This tool is deliberately outside required CI because it needs
 network, so nothing else depends on its exit code.
 
+## Decisions
+
+- **An empty declared placement is named in the output and does not fail the run.** A placement
+  holding nothing claims no provenance and records no digest, so nothing can silently drift behind
+  it, and the usual author is a skill that opened a fence it has not filled in yet. The run prints
+  the file and line and a short paragraph saying it was named rather than counted, and exits on the
+  other records alone. That keeps the property this whole bug family is about, which is that the tool
+  never passes over part of its input without saying so, without spending it on a defect any reader
+  of the file can already see.
+  *Rejected: failing the run on an empty placement.* The run is also how an author checks the records
+  that are finished, so the strict reading stops a whole check over a fence somebody is mid-way
+  through writing. Rejected on that cost, not on implementation effort: the strict reading is one
+  line shorter.
+- **A placement that holds `key: value` lines but no `source:` line is a malformed record, reported
+  and exit 2.** Both seams are this shape and it is one cause, as the task says: `sorce:` and a fence
+  with no source line at all both mean a fold-in was claimed in a declared placement and nothing will
+  ever re-fetch it. That is precisely the silence `bug-0016`, `bug-0019` and `bug-0041` each closed
+  one instance of.
+- **The run says the same thing for a near-miss key as for an unrelated one, and names every key the
+  placement holds.** The task asked what should be said when the key is close to `source` as against
+  nothing like it. The answer is one message either way, listing the keys found, so the reader sees
+  `sorce, author, license, retrieved, sha256` and draws the conclusion themselves. Classifying the
+  two apart would need the edit-distance threshold `bug-0041` rejected, and reversing that here would
+  leave two disagreeing rules in one parser, which is the thing this task was told not to do.
+- **Detection reuses `declared_lines()` and adds no second scan of the text.** `placement_regions()`
+  regroups its per-line booleans into contiguous regions, and `unsourced_placements()` asks which
+  region produced no record. Both read the output of the existing scanner; neither looks at the text
+  for a placement marker of its own.
+- **`declared_lines()` now marks a placement's opening marker as inside it** (the ```` ```provenance ````
+  fence line, or the `Provenance` heading's underline). Without that, a fence closed on the very next
+  line has zero declared lines and is invisible to a region-based pass, so the empty case would have
+  been caught or missed depending on whether the author happened to leave a blank line inside. No
+  field is ever read off a marker line, and a closing fence stays outside, so two adjacent placements
+  never merge into one region.
+- **Record count before and after: 8 and 8**, across the same seven files, with 0 unreadable and 0
+  malformed both times. Nothing in the tree was hidden by the old rule: the eight placements the
+  convention declares are the eight records the run already saw.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A block whose own key is misspelled (`sorce:`) inside a declared placement is named in the
+- [x] A block whose own key is misspelled (`sorce:`) inside a declared placement is named in the
       output and changes the exit code, proven by a test that fails against the current code.
-- [ ] A declared placement carrying no `source:` line is handled per the decision recorded above,
+- [x] A declared placement carrying no `source:` line is handled per the decision recorded above,
       proven by a test either way.
-- [ ] `review-depth/SKILL.md`'s non-provenance `source:` line still contributes no record, proven
+- [x] `review-depth/SKILL.md`'s non-provenance `source:` line still contributes no record, proven
       against the real file rather than a fixture alone.
-- [ ] The fix reuses `declared_lines()` rather than adding a second scanner.
-- [ ] The closeout states the record count before and after.
-- [ ] No network request is made by any test.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The fix reuses `declared_lines()` rather than adding a second scanner.
+- [x] The closeout states the record count before and after.
+- [x] No network request is made by any test.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

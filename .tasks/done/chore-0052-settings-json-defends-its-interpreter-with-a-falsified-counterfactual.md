@@ -2,7 +2,7 @@
 id: chore-0052
 title: The committed hook registration defends its interpreter choice with a counterfactual the 2026-08-21 cloud run falsified
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E: delegated execution"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-08-21
 
 ## Problem
 
-[`.claude/settings.json`](../.claude/settings.json) is the kit's one committed hook registration, and
+[`.claude/settings.json`](../../.claude/settings.json) is the kit's one committed hook registration, and
 its `_comment` block carries the decision record for that exception. Defending the `python3`
 interpreter, it asserts:
 
@@ -77,7 +77,7 @@ distrust of the whole block or repetition of the claim.
   run confirmed.
 - Adding a second hook, or widening the exception. `AGENTS.md` states that is a new decision, and it
   still is.
-- [`AGENTS.md`](../AGENTS.md)'s own conventions section, which points at this file for the reasoning
+- [`AGENTS.md`](../../AGENTS.md)'s own conventions section, which points at this file for the reasoning
   and does not restate the interpreter claim. Confirm that rather than assuming it; if it does restate
   it, it is in scope after all.
 - The `docs/spec/cloud-executable.conformance.md` observation recording this finding, written at the
@@ -115,19 +115,40 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] `python -c "import json; json.load(open('.claude/settings.json'))"` exits 0.
-- [ ] The `hooks` object is unchanged, proven by comparing it against the previous revision rather
+- [x] `python -c "import json; json.load(open('.claude/settings.json'))"` exits 0.
+- [x] The `hooks` object is unchanged, proven by comparing it against the previous revision rather
       than by inspection.
-- [ ] The falsified counterfactual is gone, and no replacement sentence asserts what `python` would
+- [x] The falsified counterfactual is gone, and no replacement sentence asserts what `python` would
       have done in an environment nobody measured.
-- [ ] The interpreter is still `python3`.
-- [ ] The rationale names the 2026-08-21 measurement, its platform, and both paths it found.
-- [ ] `AGENTS.md` checked for a restatement of the same claim, and the result stated either way.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The interpreter is still `python3`.
+- [x] The rationale names the 2026-08-21 measurement, its platform, and both paths it found.
+- [x] `AGENTS.md` checked for a restatement of the same claim, and the result stated either way.
+- [x] Existing tests still pass, unchanged in intent.
+
+## Decisions
+
+- **A seam left open deliberately.** Two other places in the repository restate the same falsified
+  counterfactual, and neither was touched because neither is in `touched_files` and the task's scope
+  section names only the conformance file's observation as out of scope, not its matrix rows. They
+  are: the `Bootstrap registration committed in .claude/settings.json` row in
+  [`cloud-executable.conformance.md`](../../docs/spec/cloud-executable.conformance.md), which says the
+  hook "would not have launched in the exact environment the committed-settings exception was granted
+  for" and closes "Caught by independent verification before any cloud run"; and the
+  `CommittedRegistrationTests` class docstring in [`test_hooks_reachability.py`](../../tests/test_hooks_reachability.py),
+  which says "The failure would have been silent in the worst available way". The test's assertion is
+  unaffected (`python3` is still correct), only its stated reason is. Left for a follow-up rather than
+  widened into here.
+- **Rejected: deleting the closing "Found by independent verification before any cloud run, not
+  after".** The task allowed correcting or dropping it. It is kept and turned around instead, because
+  the sentence is the record of how the error happened, and deleting it removes the only trace of why
+  a reasoned claim read as a verified one.
+- **Confirmed rather than assumed:** `AGENTS.md` does not restate the interpreter claim.
+  `grep -n -i "python3\|interpreter\|first draft" AGENTS.md` returns nothing, so the out-of-scope
+  clause holds and no edit was needed there.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

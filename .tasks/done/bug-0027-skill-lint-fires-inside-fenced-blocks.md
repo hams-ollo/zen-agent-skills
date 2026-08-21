@@ -59,7 +59,7 @@ or a fenced code block, and cover it with tests.
   the `LINK_SKIP_PREFIXES` comment already gives: weakening it would trade a real portability check
   for a cosmetic one.
 - Link-checking a skill's supporting files, which is
-  [`chore-0036`](../chore-0036-link-check-skill-supporting-files.md) and depends on this.
+  [`chore-0036`](chore-0036-link-check-skill-supporting-files.md) and depends on this.
 - The sibling-skill reference check, which reads a name rather than a path and is unaffected.
 
 ## Implementation notes
