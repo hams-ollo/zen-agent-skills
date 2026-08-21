@@ -49,7 +49,7 @@ still hold and does not mention the task's status.
 actually open.
 
 - Reword `S-017` and `S-018`'s **Given** clauses to name
-  [`bug-0020`](../bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen by the author
+  [`bug-0020`](bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen by the author
   on 2026-08-20 as the substitute. It is the closest available: a code defect in `scripts/install.py`,
   the exact file `S-018`'s "the unfixed `install.py`" names, so that clause stays literally true, and
   its first acceptance criterion already requires a test failing against the current message.

@@ -65,7 +65,7 @@ and stop the manifest carrying a digest for a file the run knows is gone. Correc
   only the missing one is being added.
 - Restoring the file. `--check` detects and reports and never rewrites, per rule `A3` in
   [`autonomy.md`](../../.agents/rules/autonomy.md). `--replace-adopted` is the existing route back.
-- The `unknown` remedy wording, which is [`bug-0020`](../bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md).
+- The `unknown` remedy wording, which is [`bug-0020`](bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md).
 - Amending `docs/spec/install.md`. Its Proposed Surface does not list `--check` at all, which is
   [`chore-0033`](../chore-0033-amend-install-spec-for-check-and-with-hooks.md)'s scope. Note the
   divergence in the closeout rather than amending unasked, following the precedent `chore-0031` set.

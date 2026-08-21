@@ -37,13 +37,31 @@ mechanism over.
 
 ## The prompt
 
-Dispatches [`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md),
+Dispatches [`bug-0020`](../../.tasks/done/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md),
 which is the task `S-017` names. Confirm it is still open before pasting this, per the last row of the
 table above.
 
 ```text
-Read AGENTS.md in full, then .tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md,
-then only the files that task names in touched_files. Implement that task.
+STEP 0, BEFORE READING ANYTHING ELSE. Verify the commit you were cut from. A session staged on the
+wrong base reads superseded code and produces a report that is internally consistent, fully
+evidenced, and wrong about the repository. That happened on 2026-08-20: a run cut from main, which
+was 99 files and 11,296 insertions behind developer, implemented against main's copies while its
+pull request targeted developer, and GitHub reported it mergeable and clean throughout.
+
+Run all three and paste the output in your pull request body:
+
+  git rev-parse HEAD
+  git merge-base --is-ancestor 7703632 HEAD && echo BASE_OK || echo BASE_STALE
+  git rev-list --count HEAD..origin/developer
+
+If the second prints BASE_STALE, or the third prints anything other than 0, STOP. Do not implement
+anything. Open no pull request. Report it as a blocker naming what you were cut from and what you
+needed, and end the session. Recovering by rebasing is acceptable only if you then re-derive and
+re-measure EVERY result on the new base, and say in your report that you did.
+
+Then: read AGENTS.md in full, then
+.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md, then only the files that task
+names in touched_files. Implement that task.
 
 Mode: implementation, unattended. You are the proof run for docs/spec/cloud-executable.md scenarios
 S-017, S-018, and S-019. The task is real work and must be done properly, but what is actually under
@@ -153,6 +171,16 @@ That has never been checked on the actual platform.
 ```text
 This is an observation-only run. Do not fix anything, and do not change any behaviour.
 
+STEP 0, BEFORE ANYTHING ELSE. Run this and paste the output:
+
+  git merge-base --is-ancestor 7703632 HEAD && echo BASE_OK || echo BASE_STALE
+
+If it prints BASE_STALE you are on a commit WITHOUT the hook fix, the hook you would be observing is
+the superseded one, and observation 1 says nothing about the shipped hook. STOP, report only that,
+and end the session. Do not answer the other observations, because a "no" from a stale base reads
+identically to a "no" from a broken hook and would be recorded as evidence against a fix that is
+fine. That is not hypothetical: it is what the 2026-08-20 run produced.
+
 Report these four things, verbatim, and nothing else:
 
 1. Did a message beginning "NO SKILLS REACHABLE" appear in your context at the very start of this
@@ -182,6 +210,13 @@ on your part, and reporting it accurately is the entire job.
 
 ### Reading the result
 
+**Read Step 0 first, and stop here if it printed `BASE_STALE`.** The table below is valid only for a
+session cut from a commit containing `7703632`. On a stale base every row is wrong, and the wrongness
+is not obvious: `no` plus `silent` reads as "the fix did not hold" when the truth is that the fix was
+never present. That misreading is the reason this gate exists rather than a caution: the 2026-08-20
+run produced exactly `no` plus `silent`, and both halves of that row would have been false. Verify
+the base, then read the table.
+
 | Obs 1 (in context) | Obs 2 (run by hand) | What it means |
 |---|---|---|
 | yes | reports | `S-008` confirmed live. The bootstrap works end to end. |
@@ -194,6 +229,7 @@ on your part, and reporting it accurately is the entire job.
 | Date | Commit | Purpose | Startup message seen? |
 |---|---|---|---|
 | 2026-08-07 | `08b0a6d` | The `bug-0018` proof run (`S-017` to `S-019`) | **No.** Cause found afterwards: the hook counted this kit's own `.agents/skills/` sources at project scope, so it was silent in a fresh clone. Fixed at `7703632`. |
+| 2026-08-20 | cut from `a07286b` (`main`), rebased to `bc4f901` | The `bug-0020` proof run (`S-017` to `S-019`), per `chore-0051` | **No, and the hook is not the cause.** The session was staged on a branch cut from `main`, 99 files behind `developer`, so the hook that would have fired was the pre-`bug-0021` copy, which counts any `SKILL.md` and is silenced by a populated foreign `~/.claude/skills`. Reproduced independently: `main`'s hook runs, exits 0, and is silent in that state; `developer`'s reports. **`S-008` remains untested, not disproved.** `S-017` and `S-018` were satisfied by the same run and independently verified. `S-019` was not exercised, since the gates exited 0. Cause and fix: `bug-0043`. |
 
 ## If it fails
 

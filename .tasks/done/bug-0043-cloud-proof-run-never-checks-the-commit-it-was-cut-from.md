@@ -2,7 +2,7 @@
 id: bug-0043
 title: The cloud proof run states its base precondition only to the person staging it, so a session cut from the wrong commit reports a confident wrong answer
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -16,7 +16,7 @@ created: 2026-08-20
 
 ## Problem
 
-[`cloud-executable.runbook.md`](../docs/spec/cloud-executable.runbook.md) is careful about the
+[`cloud-executable.runbook.md`](../../docs/spec/cloud-executable.runbook.md) is careful about the
 commit a proof session runs on. Its "Before you start" table checks
 `git merge-base --is-ancestor 7703632 origin/developer`, step 3 of "Start the session" says
 **"Branch: `developer`. Not `main`"** and says why, and the `S-008` section states the condition as a
@@ -51,7 +51,7 @@ be byte-identical on both branches. Nothing in the run surfaced the gap.
 
 The cost was a false finding in a shipped report. The session reported the reachability hook as
 counting any `SKILL.md`, proposed a name-based fix, and offered it as new. That is
-[`bug-0021`](done/bug-0021-reachability-counts-any-skill-not-a-kit-skill.md), which had already been
+[`bug-0021`](bug-0021-reachability-counts-any-skill-not-a-kit-skill.md), which had already been
 found, fixed in exactly that way, closed, and merged to `developer` before the run began. The session
 was reading superseded code and reasoning correctly about it.
 
@@ -78,7 +78,7 @@ Checked 143 task files: 1 error(s), 0 warning(s).
 That exact shape is `bug-0034`'s second half, which is `done`: *"a wave branch cut from the last merge
 commit rather than from the target's tip cannot see any file authored after the cut, so
 `run-checks.py` passes on the branch while the merge result fails."* Its fix is a rule in
-[`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md) telling the batch's landing
+[`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md) telling the batch's landing
 step to merge the target in before opening the pull request. A lone cloud session never reads that
 skill.
 
@@ -88,7 +88,7 @@ the finding, and it is why the fix belongs in `autonomy.md` and in the prompts r
 skill body.
 
 **Why no existing rule covers it.**
-[`bug-0034`](done/bug-0034-fix-batch-never-checks-the-worktree-base.md) is the same family and fixed
+[`bug-0034`](bug-0034-fix-batch-never-checks-the-worktree-base.md) is the same family and fixed
 the two neighbouring cases: worktrees mis-cut at dispatch, and a landing branch cut from a stale tip.
 It put a base check in the dispatcher's hands and **explicitly declined** to put one in the
 per-agent prompt, on the ground that it would place the same diagnosis in N places. That reasoning is
@@ -114,7 +114,7 @@ starts it.
 - **Fix the "Reading the result" table** so the base is ruled out before any row is read. Either a
   gate sentence above the table or an added column; the requirement is that `no` plus `silent` can no
   longer be read as "the fix did not hold" while the base is unverified.
-- **Add a rule to [`autonomy.md`](../.agents/rules/autonomy.md)**: an unattended agent verifies the
+- **Add a rule to [`autonomy.md`](../../.agents/rules/autonomy.md)**: an unattended agent verifies the
   commit it is working from against the branch its work targets before trusting what it reads, and
   discloses the result. It is citable now, which is the bar that module sets, and `A8`'s own honest
   qualification asks for exactly this kind of confirmation from a real unattended run.
@@ -123,18 +123,18 @@ starts it.
 
 **Out of scope:**
 
-- **[`fix-batch`](../.agents/skills/fix-batch/SKILL.md) and
-  [`reconcile-worktrees`](../.agents/skills/reconcile-worktrees/SKILL.md).** `bug-0034` owns those and
+- **[`fix-batch`](../../.agents/skills/fix-batch/SKILL.md) and
+  [`reconcile-worktrees`](../../.agents/skills/reconcile-worktrees/SKILL.md).** `bug-0034` owns those and
   its decisions stand, including its refusal to put a base check in a batch dispatch prompt. Do not
   reopen that.
 - **How the cloud environment picks the branch it cuts.** That is harness behavior, not this
   repository's, and the fix here is to be correct in spite of it. This is `bug-0034`'s stance on the
   same question, restated for the same reason.
-- **A gate in [`run-checks.py`](../scripts/run-checks.py) or CI.** It needs remote refs, which the
+- **A gate in [`run-checks.py`](../../scripts/run-checks.py) or CI.** It needs remote refs, which the
   acceptance command deliberately does not, and `bug-0034` already recorded that a check living only
   in CI is not a check when the trigger can skip.
 - **Re-running the proof.** A person starts it, and
-  [`chore-0051`](done/chore-0051-cloud-proof-scenarios-name-a-task-that-is-already-closed.md) has
+  [`chore-0051`](chore-0051-cloud-proof-scenarios-name-a-task-that-is-already-closed.md) has
   already repointed it at an open task.
 - **The `bug-0020` change itself.** It is correct, it has been rebased onto `developer` and
   re-validated there, and the defect it fixes is genuinely unfixed on `developer`.
@@ -188,24 +188,24 @@ State it as conditional on the run having a base to check, in the shape the modu
 
     python scripts/run-checks.py
 
-- [ ] Both paste-ready prompts in the runbook carry a base check as their first step, naming a
+- [x] Both paste-ready prompts in the runbook carry a base check as their first step, naming a
       commit rather than a branch, and instruct the session to stop and report a blocker when it
       fails.
-- [ ] The `S-008` "Reading the result" table cannot be read to blame the hook while the base is
+- [x] The `S-008` "Reading the result" table cannot be read to blame the hook while the base is
       unverified: a base gate precedes it, or the table carries the base as an explicit dimension.
-- [ ] `autonomy.md` carries a base-verification rule with a citation to this run, following the
+- [x] `autonomy.md` carries a base-verification rule with a citation to this run, following the
       module's stated gate that a rule which cannot be cited does not belong in it.
-- [ ] The "Runs performed" table has a row for the 2026-08-20 run recording the commit, the `no`, and
+- [x] The "Runs performed" table has a row for the 2026-08-20 run recording the commit, the `no`, and
       the base as the cause.
-- [ ] `python .tasks/validate.py --strict` passes, including every relative link in this file.
-- [ ] No change to `fix-batch`, `reconcile-worktrees`, `run-checks.py`, or any `.github/workflows/`
+- [x] `python .tasks/validate.py --strict` passes, including every relative link in this file.
+- [x] No change to `fix-batch`, `reconcile-worktrees`, `run-checks.py`, or any `.github/workflows/`
       file, which are all named out of scope above.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a
       reason.
-- [ ] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
+- [x] File moved to `.tasks/done/`, `status: done`, **with its relative links re-anchored for the
       extra directory level**; one dated line added to `CHANGELOG.md` referencing this task id.
