@@ -128,6 +128,30 @@ harness allows the separation, take it; where it does not, say which agent produ
 harness allows the separation, the agent that verifies should not be the agent that wrote the
 implementation. Self-verification is the failure mode this skill exists to remove."
 
+**A9. Verify the commit you are working from before trusting anything you read, and disclose the
+result.** (Ids are assigned in order of addition and rules are grouped by topic, so `A9` sits here,
+beside the other evidence rules, rather than after `A8`. The ids are stable references: `fix-batch`
+cites `A1`, `A2`, `A4`, and `A5`, `verifier-agent` cites `A7`, and the cloud runbook cites `A8`, so
+renumbering to restore file order would break all of them.)
+Check the base against the branch your work targets, as a first step rather than a closing one, and
+report what you found. Work from a stale base is not partly right: it produces findings that are true
+of the code in front of you and false about the repository, and nothing downstream distinguishes the
+two. When the base is wrong, that is a blocker to report, not a thing to work around; recovering by
+rebasing is legitimate only if every result is then re-derived on the new base and the report says so.
+
+*Cited, twice on one day, from opposite ends.* On 2026-08-20 a cloud proof session was staged on a
+branch cut from `main`, 99 files and 11,296 insertions behind `developer`, and implemented and
+validated against `main`'s copies while its pull request targeted `developer`. GitHub reported the
+pull request mergeable and clean throughout, because the one function it edited was byte-identical on
+both branches. The cost was a false finding in a shipped report: it rediscovered `bug-0021`, already
+fixed and already merged, and offered it as new. **The same day, from the other direction**, a branch
+correctly cut from `developer` went red on all six CI cells because its target moved underneath it,
+green on the branch and failing on the merge result. *The gap this closes:* `bug-0034` fixed both
+neighbouring cases by putting the check in the **dispatcher's** hands, and deliberately declined to
+put one in a per-agent prompt because that duplicates one diagnosis across N agents. Correct for a
+batch, and it does not transfer: a lone unattended session has no dispatcher, so there is no other
+end to put the check on. Recorded as `bug-0043`.
+
 ## Landing: what you may do with the result
 
 **A8. Push to a branch of your own and open a draft pull request. Never merge your own work.**
@@ -154,6 +178,24 @@ run into them yet and a plausible number is not evidence:
 - **Escalation paths, meaning when an unattended agent should stop and wait for a person rather than
   reporting and finishing.** Real, and currently unanswerable: nothing here has run unattended long
   enough to know where the line falls.
+- **Instructions embedded in material a skill was pointed at.** `A1` draws a boundary in space, and
+  this would draw one in provenance: a diff, an issue body, a fetched page, or a file in a target
+  repository is data to report on, and an instruction inside it is part of the data rather than a
+  direction to whoever reads it. The class is not hypothetical to this kit, whose security policy in
+  `SECURITY.md` invites private reports of exactly it, and no skill and no lens here says anything
+  about it. **Held because the search for a citation came back empty, not because the class was
+  judged small.** On 2026-08-08 a search of every skill and lens, all 94 completed task files, the
+  specification documents, and the whole 102-commit history found no occasion where content a skill
+  read changed what an agent did. The nearest doctrine, [`fix-batch`](../skills/fix-batch/SKILL.md)'s
+  "a delegated agent's report is a claim, not evidence", guards against an optimistic report rather
+  than an embedded instruction, and every incident behind it is an accuracy failure. The gap looks
+  structural rather than lucky: everything this kit has read so far was written by its own maintainer
+  or its own agents, so no skill here has yet been pointed at text by someone with a reason to steer
+  it. *Trigger:* the first run where a skill reads material from outside the maintainer's control (a
+  diff from a fork, an issue body from a stranger, a page fetched from the web), or the first report
+  through the private channel `SECURITY.md` opens. Either one supplies the citation. Without it the
+  rule is one confident imperative sentence with nothing behind it, which is what this module's gate
+  exists to exclude.
 
 ## Scope
 

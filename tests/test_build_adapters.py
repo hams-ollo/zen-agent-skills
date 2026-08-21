@@ -84,6 +84,113 @@ class TestRewriteLinks(unittest.TestCase):
         self.assertEqual(ba.rewrite_links(body, "pr-describe", ".mdc"), body)
 
 
+class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
+    """Scenarios S-003 through S-008 refined: a link that renders as literal text is not a link.
+
+    The bug population is a skill body that *shows* a markdown link as an example, which
+    the documentation skills are the likeliest to want. `rewrite_links()` matched every
+    link with a bare regex and repointed each one, so the example was rewritten in each
+    generated adapter and the body said one thing in the kit and a different thing
+    everywhere it shipped (bug-0028).
+
+    test-quality notes: this is pure string work over a body, so the unit layer on
+    `rewrite_links` is the lowest faithful one, and the oracle is whole-string equality
+    rather than a substring, because "emitted unchanged" is a claim about the whole body
+    and a substring check passes while the rest of it is mangled. The negative cases
+    carry the weight, because the cheap way to remove a false rewrite is to stop
+    rewriting: a real link beside a closed fence, and one below an unterminated fence,
+    must both still be repointed.
+
+    No scenario states this rule. S-008 is the closest ("external and same-page links are
+    emitted unchanged") and it governs a different class. Whether the contract gains an
+    S-018 in that shape is the author's call, recorded in bug-0028's decisions; these
+    tests are tagged with the scenarios they refine rather than inventing an id.
+    """
+
+    # The two inlining targets differ only in the extension a sibling link is given, so
+    # every case is asserted for both. The plugin target inlines nothing; see the last
+    # test in this class.
+    EXTS = (".mdc", ".prompt.md")
+
+    # One fence holding all three rewritten classes at once: a sibling skill (S-003), the
+    # rules module (S-006), and a skill-local supporting file (S-007). One of them
+    # surviving proves nothing about the other two, since each is a separate branch.
+    FENCED = (
+        "Write the references like this:\n\n"
+        "```markdown\n"
+        "See [`doc-revise`](../doc-revise/SKILL.md) for the edit discipline.\n"
+        "Apply the [`house-style`](../../rules/house-style.md) module.\n"
+        "Fill in [the template](templates/task.md).\n"
+        "```\n"
+    )
+
+    def test_a_link_inside_a_fenced_block_is_emitted_unchanged(self):
+        # Scenarios S-003, S-006, S-007 refined: inside a fence none of the three fires.
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                self.assertEqual(ba.rewrite_links(self.FENCED, "doc-author", ext),
+                                 self.FENCED)
+
+    def test_a_link_inside_an_inline_code_span_is_emitted_unchanged(self):
+        # Markdown opens a span with a backtick run of any length and closes it with a
+        # run of the same length, so a rule that knows only the single form fixes half
+        # the occurrences. The double form is what an author reaches for the moment the
+        # text being quoted contains a backtick of its own.
+        forms = {
+            "single backtick": "Write `[the notes](../doc-revise/SKILL.md)` in the body.\n",
+            "double backtick": "Write ``[`notes`](../doc-revise/SKILL.md)`` in the body.\n",
+        }
+        for label, body in forms.items():
+            for ext in self.EXTS:
+                with self.subTest(form=label, ext=ext):
+                    self.assertEqual(ba.rewrite_links(body, "doc-author", ext), body)
+
+    def test_a_real_link_beside_a_fence_is_still_rewritten(self):
+        # Negative: the exclusion must not switch the rewrite off. The fence here is
+        # closed and the genuine link sits after it, so a scanner that ran the fence past
+        # its closing delimiter would leave the real link unrewritten and dangling in
+        # every adapter. The genuine link also wraps its text in a code span, which is
+        # how nearly every link in this kit is written, so an exclusion keyed to the
+        # wrong bracket would suppress the whole tree rather than one example.
+        body = (
+            "```markdown\n"
+            "See [an example](../doc-revise/SKILL.md).\n"
+            "```\n\n"
+            "Then read [`fix-batch`](../fix-batch/SKILL.md) for the real thing.\n"
+        )
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                out = ba.rewrite_links(body, "doc-author", ext)
+                self.assertIn("](../doc-revise/SKILL.md)", out)
+                self.assertIn(f"](fix-batch{ext})", out)
+                self.assertNotIn(f"](doc-revise{ext})", out)
+
+    def test_an_unterminated_fence_does_not_suppress_the_rewrite_below_it(self):
+        # Negative: an opening fence that is never closed yields no range at all, the
+        # same trade bug-0015, bug-0017, bug-0023, and bug-0027 all made. A detector that
+        # ran it to end of file would disable the rewrite for the rest of the body and
+        # still report success, which is the one failure indistinguishable from success.
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "Then read [`fix-batch`](../fix-batch/SKILL.md) for the real thing.\n"
+        )
+        for ext in self.EXTS:
+            with self.subTest(ext=ext):
+                self.assertIn(f"](fix-batch{ext})",
+                              ba.rewrite_links(body, "doc-author", ext))
+
+    def test_the_plugin_target_copies_a_body_byte_for_byte(self):
+        # The third target rewrites nothing at all (S-016): it copies the SKILL.md, so a
+        # fenced example survives there by construction rather than by exclusion.
+        # Asserted rather than assumed, because the criterion is "unchanged in every
+        # target" and a rewrite added here later would break it silently.
+        src = ba.discover_skills()[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = ba.emit_plugin(src, src.name, "", "", Path(tmp), False)
+            self.assertEqual(dest.read_bytes(), (src / "SKILL.md").read_bytes())
+
+
 class TestFrontmatterParsing(unittest.TestCase):
     """Scenario S-002 at the parser layer: what counts as the description's value.
 
@@ -244,6 +351,90 @@ class TestInvocationContract(unittest.TestCase):
             self.assertEqual([p for p in out.rglob("*") if p.is_file()], [])
 
 
+class TestSharedAssetAccounting(unittest.TestCase):
+    """Scenario S-012's second half: a preview's counts must describe the real run.
+
+    test-quality notes: the defect (bug-0025) is a number, not a file, so no oracle
+    over the emitted tree can see it. `TestEmittedTreeResolves` passes against the
+    bug and always would, because the tree a real run leaves behind is correct; it
+    is the preview's report of that tree that was wrong, by a factor of the skill
+    count. The oracle therefore has to be the reported count itself, and it has to
+    be differential: an absolute number would be a restatement of today's kit
+    inventory that a new rules file breaks, whereas dry-run-equals-real-run is the
+    property S-012 actually states and holds for any inventory.
+
+    The counts are read back out of stdout rather than off a return value, because
+    stdout is where a reader gets them and a preview nobody can read has no use.
+    """
+
+    ASSETS_RE = re.compile(r"plus (\d+) shared asset file\(s\)")
+
+    def _assets(self, printed):
+        m = self.ASSETS_RE.search(printed)
+        self.assertIsNotNone(m, f"no shared asset count in output:\n{printed}")
+        return int(m.group(1))
+
+    def _rules_sources(self):
+        return sorted(p.relative_to(ba.RULES_DIR).as_posix()
+                      for p in ba.RULES_DIR.rglob("*") if p.is_file())
+
+    def test_a_preview_reports_the_asset_count_a_real_run_writes(self):
+        # The bug: the rules module was re-emitted once per skill, and only a real
+        # run's `dest.exists()` collapsed the duplicates, so the preview counted
+        # them all. Both target sets are exercised because the single-layout case
+        # (cursor and vscode share one) and the two-layout case (cursor and plugin
+        # each get their own copy) have different correct answers, and a fix that
+        # hoists the emission has to keep emitting it once *per layout*.
+        for target in ("cursor,vscode", "cursor,plugin"):
+            with self.subTest(target=target):
+                with tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp)
+                    _, preview = _run(["--target", target, "--out", str(out), "--dry-run"])
+                    _, real = _run(["--target", target, "--out", str(out)])
+                    self.assertEqual(self._assets(preview), self._assets(real),
+                                     "the preview must report what the real run writes")
+
+    def test_a_real_run_counts_exactly_the_files_it_left_on_disk(self):
+        # The other half of the same property, and the reason the equality above is
+        # not satisfiable by making both numbers equally wrong: this pins the real
+        # run's count to the tree it produced. The rules half is asserted by name
+        # as well, since "each rules file exactly once" is invisible in a total.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            _, printed = _run(["--out", str(out)])
+            on_disk = [p for root in (".agents/rules", ".agents/skills")
+                       for p in (out / root).rglob("*") if p.is_file()]
+            self.assertEqual(self._assets(printed), len(on_disk))
+            self.assertEqual(
+                sorted(p.relative_to(out / ".agents" / "rules").as_posix()
+                       for p in (out / ".agents" / "rules").rglob("*") if p.is_file()),
+                self._rules_sources())
+
+    def test_an_adopted_rules_file_is_left_alone_and_counted_in_neither_run(self):
+        # S-010 in the reporting dimension. The file surviving is already covered;
+        # what is not is that a preview must not promise to write it either, which
+        # is the same divergence as the bug from the other side.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, fresh = _run(["--out", tmp, "--dry-run"])
+            baseline = self._assets(fresh)
+
+        mine = "# my own house style\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            adopted = out / ".agents" / "rules" / "house-style.md"
+            adopted.parent.mkdir(parents=True)
+            adopted.write_text(mine, encoding="utf-8")
+
+            _, preview = _run(["--out", str(out), "--dry-run"])
+            self.assertEqual(self._assets(preview), baseline - 1,
+                             "a preview must not offer to write a file it would skip")
+            self.assertEqual(adopted.read_text(encoding="utf-8"), mine)
+
+            _, real = _run(["--out", str(out)])
+            self.assertEqual(self._assets(real), baseline - 1)
+            self.assertEqual(adopted.read_text(encoding="utf-8"), mine)
+
+
 class TestPluginTarget(unittest.TestCase):
     """Scenarios S-015, S-016, S-017: the Claude Code plugin distribution tree.
 
@@ -343,6 +534,65 @@ class TestPluginTarget(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertFalse((default / ".claude-plugin").exists())
             self.assertFalse((default / "skills").exists())
+
+
+class TestSkillAssetsExcludeBytecode(unittest.TestCase):
+    """bug-0036: a byte-cache is not part of the skill payload, in any layout.
+
+    test-quality notes: the condition is built rather than observed. Whether a real
+    skill directory holds a `__pycache__` depends on whether the suite has already
+    imported what is in it, so a test that emits the real kit passes or fails by
+    ordering, which is worse than no test. This makes its own fixture skill instead,
+    and asserts the contrast in one place: the bytecode is gone and the ordinary
+    `.py` beside it survives. Asserting the exclusion alone would also pass if the
+    rule swallowed `templates/validate.py`, which `init-worktracking` is unusable
+    without.
+
+    Both oracles, on disk and on the returned list, because the return value is what
+    the run counts and reports: emitting nothing while still counting it would trade
+    this defect for bug-0025's.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.out = root / "out"
+        self.skill = root / "src" / "fixture-skill"
+        templates = self.skill / "templates"
+        (templates / "__pycache__").mkdir(parents=True)
+        (self.skill / "SKILL.md").write_text("---\nname: fixture-skill\n---\n", encoding="utf-8")
+        (templates / "validate.py").write_text("# a real shipped template\n", encoding="utf-8")
+        (templates / "__pycache__" / "validate.cpython-311.pyc").write_bytes(b"\x00\x00\x00\x00")
+        # An artefact inside __pycache__ whose suffix is not .pyc: the directory
+        # half of the predicate has to catch this one on its own.
+        (templates / "__pycache__" / "stale.json").write_text("{}", encoding="utf-8")
+        # And a byte-cache outside any __pycache__, for the suffix half.
+        (self.skill / "loose.pyc").write_bytes(b"\x00\x00\x00\x00")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_no_target_receives_a_byte_cache_and_a_real_template_still_emits(self):
+        for name, layout in ba.LAYOUTS.items():
+            with self.subTest(target=name):
+                out = self.out / name
+                written = ba.emit_skill_assets(self.skill, out, False, layout)
+                rels = [p.relative_to(out).as_posix() for p in written]
+                on_disk = [p.relative_to(out).as_posix()
+                           for p in out.rglob("*") if p.is_file()]
+
+                expected = f"{layout.assets_dir}/fixture-skill/templates/validate.py"
+                self.assertIn(expected, rels, "a real template must still be emitted")
+                self.assertEqual(on_disk, [expected])
+                self.assertEqual(
+                    (out / expected).read_text(encoding="utf-8"),
+                    "# a real shipped template\n")
+
+                for reported in (rels, on_disk):
+                    self.assertFalse(
+                        [p for p in reported
+                         if p.endswith(".pyc") or "__pycache__" in p.split("/")],
+                        f"byte-cache emitted or counted into {name}: {reported}")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,8 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -517,6 +519,32 @@ class InstallAcceptanceTests(unittest.TestCase):
         self.assertEqual(seen, [expected])
 
 
+# Resolved profile membership, by name, pinned in one place (bug-0038).
+#
+# A profile's seed in install.py is not its membership: the seed is expanded over the
+# sibling links found in skill bodies, so writing `[doc-sync](../doc-sync/SKILL.md)` into
+# any skill body can move skills between profiles. `chore-0040` did exactly that while
+# correcting a sentence, and the only symptom was `core` and `spine` reporting the same
+# description-character total, which took real diagnosis to trace back to one link.
+# Comparing sets by name fails with the skill that moved, instead of with two numbers.
+#
+# `all` is not listed: its seed is None, so its membership is every shipped skill, and a
+# literal list here would have to be edited by every new skill. It is checked as that
+# property instead, below.
+#
+# A legitimate profile change updates this constant once and nothing else. An
+# unintended one is what it exists to catch, so read the named difference before editing:
+# if a skill you did not mean to move appears here, a sibling link is the defect.
+EXPECTED_PROFILE_MEMBERSHIP = {
+    "core": {"init-worktracking", "pr-describe", "project-bootstrap"},
+    "spine": {"doc-author", "doc-revise", "doc-sync", "fix-batch", "house-review",
+              "init-worktracking", "new-task", "pr-describe", "project-bootstrap",
+              "reconcile-worktrees", "review-depth", "spec-author", "spec-conformance",
+              "spec-plan-readiness", "spec-quality", "test-author", "test-quality",
+              "verifier-agent"},
+}
+
+
 class ProfileTests(unittest.TestCase):
     """Scenarios S-013 and S-014: the profile axis, its closure, and its budget report.
 
@@ -556,6 +584,40 @@ class ProfileTests(unittest.TestCase):
         all_skills = inst.discover_skills()
         selected, _ = inst.resolve_profile(inst.DEFAULT_PROFILE, all_skills)
         self.assertLess(len(selected), len(all_skills))
+
+    def test_resolved_profile_membership_is_what_the_seed_and_its_closure_say(self):
+        # Scenario S-013, bug-0038: the oracle is the set of names, not its size. Every
+        # other assertion in this class is arithmetic or ordering, and a one-skill move
+        # satisfies all of them. This one names the skill that moved.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        for name, expected in EXPECTED_PROFILE_MEMBERSHIP.items():
+            with self.subTest(profile=name):
+                selected, _ = inst.resolve_profile(name, shipped)
+                self.assertEqual({d.name for d in selected}, expected)
+
+    def test_the_all_profile_is_every_shipped_skill(self):
+        # Scenario S-013, bug-0038: `all` has no seed to close over, so its membership is
+        # asserted as that property rather than pinned as a list that every new skill
+        # would have to edit.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        selected, added = inst.resolve_profile("all", shipped)
+        self.assertEqual({d.name for d in selected}, {d.name for d in shipped})
+        self.assertEqual(added, [])
+
+    def test_each_pinned_profile_holds_its_seed_and_is_closed_over_it(self):
+        # Scenario S-013, bug-0038: the pinned sets are a tripwire, not the contract.
+        # This is the contract they snapshot, so an edit to the constant cannot quietly
+        # record a membership the resolver would never produce.
+        shipped, _ = inst.partition_drafts(inst.discover_skills())
+        by_name = {d.name: d for d in shipped}
+        for name, expected in EXPECTED_PROFILE_MEMBERSHIP.items():
+            with self.subTest(profile=name):
+                seed = {n for n in inst.PROFILE_SEEDS[name] if n in by_name}
+                self.assertLessEqual(seed, expected, "the seed must survive resolution")
+                for member in sorted(expected):
+                    reachable = inst.sibling_refs(by_name[member]) & set(by_name)
+                    self.assertLessEqual(reachable, expected,
+                                         f"{member} links outside {name}")
 
     def test_profiles_are_nested_from_smallest_to_largest(self):
         # Scenario S-013: core is a subset of spine, and spine of all. A profile set that
@@ -649,6 +711,96 @@ def _fixture_skill(skills_dir, name, description, status=None, refs=(), body_ext
     if body_extra:
         lines.append(body_extra)
     (d / "SKILL.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class SiblingLinkIsAProfileEdgeTests(unittest.TestCase):
+    """bug-0038, under S-013: markdown link syntax in a skill body is a profile edge.
+
+    Run against a fixture tree rather than `.agents/skills/`, because the behaviour under
+    test is what happens when a body is *edited*, and editing a real skill to prove it
+    would change the kit's own install footprint.
+
+    The failure this pins is not that the closure is wrong. It is correct, and
+    deliberately so. It is that an author writing the readable link form for a skill they
+    only meant to name changes what the installer places, with no signal. `chore-0040`
+    tripped it and was caught only because the collapse was large enough to break a
+    character-budget invariant; a one-skill pull satisfies every budget assertion.
+
+    Two of the links `chore-0040` added were free, because their targets were already in
+    the closure by another path. That is the trap in
+    `test_a_link_to_a_skill_already_in_the_closure_changes_nothing`: the same edit is
+    sometimes free and sometimes doubles a profile, which is precisely why the author
+    cannot tell by looking.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "skills"
+        self.skills.mkdir()
+        self._real = (inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST)
+        inst.SKILLS_DIR = self.skills
+        inst.MANIFEST = self.root / "manifest.json"
+        inst.PROFILE_SEEDS = {"core": ["alpha"], "all": None}
+
+    def tearDown(self):
+        inst.SKILLS_DIR, inst.PROFILE_SEEDS, inst.MANIFEST = self._real
+        self._tmp.cleanup()
+
+    def _members(self, profile="core"):
+        selected, _ = inst.resolve_profile(profile, inst.discover_skills())
+        return {d.name for d in selected}
+
+    def _placed(self, profile="core"):
+        home = self.root / f"home-{profile}-{len(list(self.root.iterdir()))}"
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst.install(["claude"], "copy", home, False, profile)
+        base = home / ".claude" / "skills"
+        return {p.name for p in base.iterdir()} if base.is_dir() else set()
+
+    def test_a_link_to_a_skill_outside_the_closure_moves_it_into_the_profile(self):
+        # bug-0038: one added link, and the profile grows by the linked skill and
+        # everything it reaches. The assertion is a named difference, so the report says
+        # `omega` and `zeta` rather than reporting that a number changed.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"])
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        _fixture_skill(self.skills, "omega", "does omega things when asked", refs=["zeta"])
+        _fixture_skill(self.skills, "zeta", "does zeta things when asked")
+        before = self._members()
+        self.assertEqual(before, {"alpha", "beta"})
+
+        # The edit an author makes for readability: a neighbour written as a link.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked",
+                       refs=["beta", "omega"])
+        after = self._members()
+        self.assertEqual(after - before, {"omega", "zeta"})
+        self.assertEqual(after, {"alpha", "beta", "omega", "zeta"})
+        self.assertEqual(self._placed(), after, "the install footprint follows the link")
+
+    def test_a_link_to_a_skill_already_in_the_closure_changes_nothing(self):
+        # bug-0038, the trap: `gamma` is already reached through `beta`, so linking it
+        # from `alpha` too is free. Sometimes free and sometimes doubling is the reason
+        # the rule has to be written down rather than learned from a failing test.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"])
+        _fixture_skill(self.skills, "beta", "does beta things when asked", refs=["gamma"])
+        _fixture_skill(self.skills, "gamma", "does gamma things when asked")
+        before = self._members()
+        self.assertEqual(before, {"alpha", "beta", "gamma"})
+
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked",
+                       refs=["beta", "gamma"])
+        self.assertEqual(self._members(), before)
+
+    def test_naming_a_sibling_in_backticks_creates_no_edge(self):
+        # bug-0038: the form AGENTS.md tells an author to use when they mean to state
+        # chain position rather than composition. If this ever starts creating an edge,
+        # the documented escape hatch is gone and every prose mention becomes load-bearing.
+        _fixture_skill(self.skills, "alpha", "does alpha things when asked", refs=["beta"],
+                       body_extra="Runs after `omega` in the chain, and does not compose it.\n")
+        _fixture_skill(self.skills, "beta", "does beta things when asked")
+        _fixture_skill(self.skills, "omega", "does omega things when asked")
+        self.assertEqual(inst.sibling_refs(self.skills / "alpha"), {"beta"})
+        self.assertEqual(self._members(), {"alpha", "beta"})
 
 
 class DraftMarkerTests(unittest.TestCase):
@@ -902,6 +1054,37 @@ class StalenessCheckTests(unittest.TestCase):
                 return parts[0]
         return None
 
+    @staticmethod
+    def _message(out, name):
+        """The message the check reported for one entry, or None if it reported none.
+
+        The sibling of `_status`, over the same `<status> <tool> <name>  <message>` line,
+        and load-bearing for the same reason (bug-0020). A run whose unknown entries are a
+        mix prints one remedy per entry, so an `assertIn` over the whole report is answered
+        by whichever entry happens to carry the wanted sentence and says nothing at all
+        about the entry under test.
+        """
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == name:
+                return " ".join(parts[3:])
+        return None
+
+    @staticmethod
+    def _summary(out):
+        """Everything the check printed after its per-entry lines, or "" if it printed none.
+
+        Bounded to the tail on purpose, for `_message`'s reason one level up: the per-entry
+        lines carry remedies of their own, so an assertion over the whole report cannot
+        tell a summary that names the right remedy from an entry line that happens to.
+        The counts line is the boundary, and it is the one line that always ends the report.
+        """
+        lines = out.splitlines()
+        for i, line in enumerate(lines):
+            if "error(s)." in line:
+                return "\n".join(lines[i + 1:])
+        return ""
+
     def test_an_install_records_a_digest_for_every_file_it_places(self):
         # The baseline, at the lowest layer, and the reason it is per file rather than per
         # skill: a skill is a directory, and a stale `templates/report.md` is exactly as
@@ -970,6 +1153,52 @@ class StalenessCheckTests(unittest.TestCase):
                          "no entry may read as current without a recorded baseline")
         self.assertIn("re-install to establish a baseline", out.lower())
 
+    def _unknown_run(self):
+        """A check over a manifest carrying no digests at all, as bug-0020 describes it.
+
+        Staged exactly like the test above, by stripping the key from a real manifest, so
+        every entry is unknown and the rules entry among them is the adopted one.
+        """
+        self._install()
+        older = {"entries": [{k: v for k, v in e.items() if k != "digests"}
+                             for e in self._entries()]}
+        inst.MANIFEST.write_bytes(json.dumps(older, indent=2).encode("utf-8"))
+        return self._check()
+
+    def test_an_unrecorded_rules_entry_names_replace_adopted_rather_than_re_install(self):
+        # bug-0020. Re-install is the right remedy for a derived entry and, since bug-0018,
+        # a no-op for this one: a re-install of an unrecorded rules module preserves every
+        # file and records nothing, so the adopter follows the instruction, nothing changes,
+        # and the same instruction prints again. `--replace-adopted` is the one route that
+        # establishes a baseline here, and the message that has to name it is this entry's
+        # own, read per entry: the derived entries in this very run print the old sentence.
+        code, out = self._unknown_run()
+        self.assertEqual(code, 2, "the state is still unanswerable, so the exit code holds")
+        self.assertEqual(self._status(out, "rules"), "unknown")
+        self.assertIn("--replace-adopted", self._message(out, "rules"))
+
+    def test_an_unrecorded_derived_entry_still_says_re_install(self):
+        # The other half, and the reason the fix is name-scoped rather than a rewrite of the
+        # shared sentence: re-installing a skill directory does establish a baseline, so
+        # swapping this remedy for the adopted one would trade one wrong instruction for
+        # another. Read per entry for the same reason as above, in the opposite direction.
+        code, out = self._unknown_run()
+        self.assertEqual(self._status(out, "alpha"), "unknown")
+        message = self._message(out, "alpha")
+        self.assertIn("Re-install to establish a baseline", message)
+        self.assertNotIn("--replace-adopted", message)
+
+    def test_the_run_summary_names_both_remedies_when_the_unknown_entries_are_a_mix(self):
+        # The summary prints one line per status, not per kind, so a run whose unknown
+        # entries include the rules module has to say both things or mis-advise half of
+        # them. Bounded to the tail after the counts line, because the per-entry lines above
+        # it already name both remedies and would answer either assertion on their own.
+        code, out = self._unknown_run()
+        summary = self._summary(out)
+        self.assertIn("Re-install to establish one.", summary)
+        self.assertIn("--replace-adopted", summary)
+        self.assertEqual(code, 2)
+
     def test_an_adopter_edited_rules_file_is_not_reported_as_divergence(self):
         # The noise case, and the reason it is decided rather than mechanical. A lens is the
         # one file an adopter is invited to rewrite (build-adapters.md S-010 and S-014), so
@@ -1009,6 +1238,97 @@ class StalenessCheckTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(self._status(out, "alpha"), "diverged")
         self.assertIn("gone", out)
+
+    def test_a_rules_file_deleted_from_the_install_is_named_and_exits_non_zero(self):
+        # bug-0022, the reproduction itself. The adopted comparison runs the recorded
+        # baseline against the source and never opens the installed tree, so a lens that is
+        # simply *gone* was reported `ok` at exit 0. Whole-directory absence is caught a
+        # branch earlier; per-file absence was caught by nothing. The file deleted here is
+        # house-review's entire rubric, which is the incident this kit cites more than any
+        # other, and the installer's very next run already says the file is missing.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+
+        code, out = self._check()
+        self.assertEqual(code, 1, "a lens missing from the install must not exit zero")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("review-quality.md", out,
+                      "the report must name the file, not only the module")
+
+    def test_only_the_missing_lens_is_named_and_an_edited_one_is_not(self):
+        # The failure direction bug-0022's risk section names: a check that swept an edited
+        # lens into the same report would be noise on every run for exactly the people the
+        # adopted exemption was written for. Absence and edit are different claims, and only
+        # the first is being added.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+
+        _, out = self._check()
+        named = [l for l in out.splitlines() if "gone from the installed module" in l]
+        self.assertEqual(len(named), 1, f"exactly one file is missing, got {named}")
+        self.assertIn("review-quality.md", named[0])
+
+    def test_a_rules_file_the_adopter_added_is_ignored_by_the_check(self):
+        # Ignored in both directions. The install side is pinned by
+        # `test_a_lens_the_adopter_added_beside_the_kits_is_not_deleted`: it is neither
+        # refreshed nor removed nor recorded. This is the check side of the same rule: a
+        # file absent from the recorded baseline was placed by nobody, so it is neither
+        # divergence nor news, and the new absence question must not read it backwards as
+        # "in the install, absent from the record".
+        self._install()
+        (self.home / ".claude" / "rules" / "my-own-lens.md").write_text(
+            "# my own lens\n\nrules the kit never shipped.\n", encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0)
+        self.assertEqual(self._status(out, "rules"), "ok")
+        self.assertNotIn("my-own-lens.md", out)
+
+    def test_a_missing_lens_and_a_moved_source_are_reported_in_one_entry(self):
+        # The two questions are independent and the entry carries one status word, so the
+        # actionable one wins and the other is not dropped on the floor. Reporting only the
+        # status would silently lose whichever answer lost the tie, which is the partial
+        # result A6 forbids.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 1, "the fault outranks the news")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("review-quality.md", out)
+        self.assertIn("house-style.md", out, "the upstream move must still be reported")
+
+    def test_an_unanswerable_entry_still_outranks_a_missing_lens(self):
+        # The documented precedence, unchanged: "could not answer" outranks "diverged",
+        # because the first says the report itself cannot be trusted. Staged by stripping
+        # one skill entry's digests while a rules file is missing, so both verdicts are live
+        # in the same run.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nblocker, major, minor, nit.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "review-quality.md").unlink()
+        entries = self._entries()
+        for e in entries:
+            if e["name"] == "alpha":
+                e.pop("digests")
+        inst.MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                                 encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 2, "an unanswerable entry outranks a diverged one")
+        self.assertEqual(self._status(out, "alpha"), "unknown")
+        self.assertEqual(self._status(out, "rules"), "diverged")
 
     def test_the_check_never_rewrites_the_install_or_the_record(self):
         # The decision this shares with feat-0043: detect and report, never overwrite. An
@@ -1343,6 +1663,63 @@ class AdoptedModulePreservationTests(unittest.TestCase):
         self.assertEqual(self._lens().read_text(encoding="utf-8"), mine,
                          "the edit survived one re-install and not the next")
 
+    def test_a_lens_the_adopter_removed_is_no_longer_recorded_as_placed(self):
+        # The other half of bug-0022. The removal branch named the file in plain words and
+        # left `digests[rel]` standing from the recorded baseline, so the record went on
+        # asserting a file the run had just said was gone. Nothing reconciled the two, which
+        # is what let `--check` keep reading a baseline for a file nobody has.
+        self._install()
+        self._lens("review-quality.md").unlink()
+
+        _, out = self._install()
+        self.assertIn("you removed it", out, "precondition: the run must notice the removal")
+        self.assertNotIn("review-quality.md", self._entry("rules")["digests"],
+                         "the record must not claim a file the run reported as gone")
+        self.assertIn("house-style.md", self._entry("rules")["digests"],
+                      "the rest of the baseline must survive")
+
+    def test_a_removal_recorded_by_one_run_is_no_longer_a_fault_at_the_next_check(self):
+        # Why the record has to be reconciled and not merely be tidy. Without the drop, a
+        # deliberate deletion is `diverged` at exit 1 on every check forever, which is
+        # precisely the noise the adopted exemption exists to avoid: the adopter would have
+        # no route back to a clean report except restoring a file they chose not to have.
+        #
+        # What the drop buys is bounded, and the bound is asserted rather than glossed. The
+        # absence claim goes away and the run is no longer a fault, but the file is still
+        # named, now under `revised`: with no baseline, a lens the adopter deleted is
+        # indistinguishable from one the kit has newly started shipping, and the second is
+        # worth telling them about. It resolves on the next install, which places the file
+        # (see `test_the_run_after_a_recorded_removal_ships_the_lens_again`).
+        self._install()
+        self._lens("review-quality.md").unlink()
+        self._install()
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home)
+        out = buf.getvalue()
+        self.assertEqual(code, 0, "a removal the record has accepted is not a fault")
+        self.assertNotIn("gone from the installed module", out,
+                         "the absence claim must not survive the record accepting it")
+
+    def test_the_run_after_a_recorded_removal_ships_the_lens_again(self):
+        # The seam this trade leaves open, pinned so it is visible rather than discovered.
+        # Once the removal is dropped from the record, a later run cannot tell a lens the
+        # adopter deleted from one they have never been sent, so it places it. Remembering
+        # the removal instead would need the manifest to carry a tombstone, which is a
+        # format change bug-0022 explicitly rules out ("no manifest migration"), and the
+        # alternative it rules in is permanent false divergence. Nothing of the adopter's is
+        # destroyed either way: the file they deleted is not there to lose.
+        self._install()
+        self._lens("review-quality.md").unlink()
+        self._install()
+        self.assertFalse(self._lens("review-quality.md").exists(),
+                         "the run that records the removal must not restore it")
+
+        self._install()
+        self.assertTrue(self._lens("review-quality.md").is_file(),
+                        "with no record of the removal, the kit's lens is placed as new")
+
     def test_a_manifest_predating_the_digests_preserves_the_lens_and_says_so(self):
         # chore-0031's baseline is per entry, so an install predating it records nothing and
         # an edited lens is indistinguishable from an untouched one. The failure directions
@@ -1483,6 +1860,188 @@ class CheckReportsWhatItComparedTests(unittest.TestCase):
         status, message = inst._check_entry({"target": ".", "source": ".", "digests": {}})
         self.assertEqual(status, "unknown")
         self.assertIn("Re-install", message)
+
+
+MALFORMED_MANIFESTS = {
+    "an entry with no target": {
+        "entries": [{"tool": "claude", "name": "alpha", "source": "s"}]},
+    "an entry whose target is null": {
+        "entries": [{"tool": "claude", "name": "alpha", "target": None, "source": "s"}]},
+    "a top-level list rather than an object": [
+        {"tool": "claude", "name": "alpha", "target": "t", "source": "s"}],
+    "an entry that is not an object": {"entries": ["alpha"]},
+}
+
+# Runs install.py exactly as its own `__main__` guard does, with only the manifest
+# constant moved off the real repository. A subprocess and not an in-process call,
+# because the defect under test is what a *process* reports: an uncaught exception
+# inside main() prints a traceback to stderr and exits 1, and 1 is this tool's word for
+# "an installed target has diverged". An in-process call sees the exception and never
+# sees either half of the wrong answer.
+_DRIVER = """\
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("zen_install", sys.argv[1])
+inst = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(inst)
+inst.MANIFEST = Path(sys.argv[2])
+raise SystemExit(inst.main(sys.argv[3:]))
+"""
+
+
+class MalformedManifestTests(unittest.TestCase):
+    """bug-0024: a manifest that parses but is the wrong shape must not exit 1.
+
+    All four shapes below were reproduced against this file on 2026-08-08 and again on
+    2026-08-20, after `bug-0022`, `feat-0049`, and `chore-0042` had each edited it. Every
+    one raised out of `main()`, which the CLI turns into a traceback at exit 1. Exit 1 in
+    this tool means "at least one installed target has diverged from its source", so a
+    caller scripting around `--check` was told its install had drifted when in fact
+    nothing had been compared. The true state is exit 2, could not run, which the
+    acceptance command, `check-provenance.py`, and `check()`'s own docstring all rank
+    above 1 for that reason.
+
+    The manifest is per-machine and gitignored, so these shapes come from an interrupted
+    write, a full disk, or a partly synced home rather than from an attacker.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.manifest = self.root / "manifest.json"
+        self.driver = self.root / "driver.py"
+        self.driver.write_text(_DRIVER, encoding="utf-8")
+
+    def _write(self, payload):
+        self.manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _run(self, *argv):
+        """The CLI, at the process layer. Returns the completed process."""
+        return subprocess.run(
+            [sys.executable, str(self.driver), str(MODULE_PATH), str(self.manifest),
+             *argv],
+            capture_output=True, text=True, timeout=300)
+
+    def _commands(self):
+        return (("--check", "--home", str(self.home)),
+                ("--uninstall", "--dry-run", "--home", str(self.home)),
+                ("--dry-run", "--home", str(self.home), "--tools", "claude"))
+
+    def _assert_could_not_run(self, result):
+        self.assertEqual(result.returncode, 2,
+                         f"expected 2 (could not run), got {result.returncode}.\n"
+                         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        self.assertNotIn("Traceback (most recent call last)", result.stderr)
+        self.assertEqual(result.stderr.strip(), "")
+
+    def test_every_malformed_shape_is_could_not_run_rather_than_diverged(self):
+        for label, payload in MALFORMED_MANIFESTS.items():
+            for argv in self._commands():
+                with self.subTest(shape=label, command=argv[0]):
+                    self._write(payload)
+                    self._assert_could_not_run(self._run(*argv))
+
+    def test_the_report_names_the_manifest_and_the_offending_entry(self):
+        entry_level = ("an entry with no target", "an entry whose target is null",
+                       "an entry that is not an object")
+        for label in entry_level:
+            with self.subTest(shape=label):
+                self._write(MALFORMED_MANIFESTS[label])
+                out = self._run("--check", "--home", str(self.home)).stdout
+                self.assertIn(str(self.manifest), out)
+                self.assertIn("entry 0", out)
+                self.assertIn("re-install", out.lower())
+
+    def test_a_wrong_top_level_shape_says_what_the_file_is_instead(self):
+        self._write(MALFORMED_MANIFESTS["a top-level list rather than an object"])
+        out = self._run("--check", "--home", str(self.home)).stdout
+        self.assertIn(str(self.manifest), out)
+        self.assertIn("a list", out)
+        self.assertIn("re-install", out.lower())
+
+    def test_a_named_entry_is_reported_by_its_name_as_well_as_its_index(self):
+        # The index alone is a poor handle in a record of a hundred entries, and the name
+        # is the column the tool prints everywhere else.
+        self._write({"entries": [{"tool": "claude", "name": "alpha",
+                                  "target": str(self.home / "alpha")},
+                                 {"tool": "claude", "name": "house-review"}]})
+        out = self._run("--check", "--home", str(self.home)).stdout
+        self.assertIn("entry 1", out)
+        self.assertIn("house-review", out)
+
+    def test_an_unknown_extra_key_is_still_a_valid_record(self):
+        # A reader that faults on what it does not recognise turns an upgrade written by
+        # a later version of this tool into what looks like corruption. Asserted through
+        # --uninstall because it answers 0 for a record it could read and 2 for one it
+        # could not, so the two outcomes are actually distinguishable.
+        placed = self.home / ".claude" / "skills" / "alpha"
+        placed.mkdir(parents=True)
+        self._write({"schema": 7, "entries": [
+            {"tool": "claude", "name": "alpha", "target": str(placed),
+             "source": str(REPO_ROOT), "mode": "copy", "provenance": {"run": 3}}]})
+        result = self._run("--uninstall", "--dry-run", "--home", str(self.home))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("alpha", result.stdout)
+        self.assertNotIn("Cannot read the install record", result.stdout)
+
+    def test_corrupt_bytes_still_degrade_to_an_empty_record(self):
+        # The pre-existing behaviour, unchanged: bytes that do not parse never named an
+        # install, so reading them as nothing recorded is truthful. Only a file that
+        # parses carries a record worth refusing to act on.
+        self.manifest.write_text("{not json at all", encoding="utf-8")
+
+        removal = self._run("--uninstall", "--dry-run", "--home", str(self.home))
+        self.assertEqual(removal.returncode, 0, removal.stdout + removal.stderr)
+        self.assertIn("Nothing recorded as installed.", removal.stdout)
+        self.assertNotIn("Cannot read the install record", removal.stdout)
+
+        # --check answers 2 here too, but for its own pre-existing reason (S-005,
+        # nothing recorded beneath this home), not because the file was rejected.
+        checked = self._run("--check", "--home", str(self.home))
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("Nothing recorded as installed beneath", checked.stdout)
+        self.assertNotIn("Cannot read the install record", checked.stdout)
+
+
+class MalformedManifestInstallChoiceTests(unittest.TestCase):
+    """What a real (not dry-run) install does with a record it cannot read.
+
+    bug-0024 left this an open choice: refuse, or treat the record as empty and let every
+    existing target report CONFLICT. Refusing is the choice, and it is asserted here
+    rather than left implicit, because the alternative is not merely a different message:
+    proceeding ends in `save_manifest`, which writes a fresh record over the damaged one
+    and takes with it every target recorded under a home this run never looked at.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        inst.MANIFEST = self._real_manifest
+
+    def test_a_real_install_places_nothing_and_leaves_the_record_alone(self):
+        damaged = json.dumps(MALFORMED_MANIFESTS["an entry with no target"], indent=2)
+        inst.MANIFEST.write_text(damaged, encoding="utf-8")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = inst.install(["claude"], "copy", self.home, dry=False, profile="core")
+
+        self.assertEqual(rc, 2, buf.getvalue())
+        self.assertIn("Nothing was placed", buf.getvalue())
+        self.assertFalse(self.home.exists(),
+                         "a refused install must not create the discovery directory")
+        self.assertEqual(inst.MANIFEST.read_text(encoding="utf-8"), damaged,
+                         "the damaged record must survive the run that refused it")
 
 
 if __name__ == "__main__":

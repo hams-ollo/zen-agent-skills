@@ -17,6 +17,12 @@
             "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\"",
             "statusMessage": "Skill reachability",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/install-currency-reminder.py\"",
+            "statusMessage": "Install currency",
+            "timeout": 20
           }
         ]
       }

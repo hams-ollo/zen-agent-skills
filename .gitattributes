@@ -1,5 +1,13 @@
-# Normalize line endings across platforms. Text files are stored as LF in the
-# repo; Git converts on checkout per each contributor's core.autocrlf.
+# Normalize line endings across platforms. Text files are LF in the index and LF
+# on checkout everywhere, Windows included. `eol=lf` is an explicit per-path
+# setting, so it overrides whatever `core.autocrlf` a contributor happens to
+# have, and Git for Windows sets `core.autocrlf=true` at system scope by
+# default. Nobody has to unset anything: a fresh clone is LF on disk regardless.
+#
+# `text=auto` covers the other direction, normalizing CRLF back to LF on the way
+# into the index. That is why a tool that rewrites a tracked file with CRLF
+# after checkout leaves `git status` and `git diff` clean and nothing reports the
+# drift. Only `git ls-files --eol` sees it; CONTRIBUTING.md carries the check.
 * text=auto eol=lf
 
 # Be explicit about the file kinds this kit ships.

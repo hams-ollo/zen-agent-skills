@@ -6,9 +6,10 @@ description: >-
   or merging blindly. Use whenever asked to "reconcile the worktrees", "merge these agent
   branches", "bring the worktree changes back into main", "clean up the worktrees", or when
   multiple agent worktree directories exist and their changes need to land in the primary
-  checkout. It is the closing step of the kit spine: new-task authors, fix-batch dispatches to
-  isolated agents, reconcile-worktrees lands the verified results. Also use it proactively after a
-  fix-batch run once every spawned agent has been individually verified, as the natural next step.
+  checkout. It is the landing step of the kit spine: new-task authors, fix-batch dispatches to
+  isolated agents, reconcile-worktrees consolidates the verified results, and doc-sync follows it.
+  Also use it proactively after a fix-batch run once every spawned agent has been individually
+  verified, as the natural next step.
 license: MIT
 ---
 
@@ -18,7 +19,7 @@ Bring the verified contents of one or more isolated git worktrees into the main 
 clean, reviewable diff, without silently overwriting anything, without committing on the user's
 behalf, and without trusting that "no conflicts reported" means "safe".
 
-This is the closing step of the kit spine: [`new-task`](../new-task/SKILL.md) authors the task
+This is the landing step of the kit spine: [`new-task`](../new-task/SKILL.md) authors the task
 files, [`fix-batch`](../fix-batch/SKILL.md) dispatches them to isolated worktree agents, and this
 skill consolidates the results. It assumes each worktree has already been through its own
 verification pass via [`verifier-agent`](../verifier-agent/SKILL.md) (`fix-batch`'s Step 6 is what
@@ -27,6 +28,12 @@ not about trusting them in the first place. If a worktree has not been independe
 run [`verifier-agent`](../verifier-agent/SKILL.md) against it first. The same holds for the report
 the worktree arrived with: it meets `fix-batch`'s delegate report contract, or the worktree does not
 land. Step 1 is where that is checked.
+
+Landing the diff is where this skill stops, and it is not where the spine stops. A batch that has
+just been consolidated is the single change most likely to have invalidated the reader-facing
+documents, and nothing above notices, so `doc-sync` runs next, over the combined result rather than
+over any one worktree. Offer it as the natural next step when you report in Step 7, and say so even
+when the diff looks purely internal, since that judgment is what `doc-sync` exists to make.
 
 ## Why this exists
 
@@ -60,6 +67,27 @@ or use the base sha `fix-batch` recorded at dispatch. If a worktree's base diffe
 checkout's current `HEAD`, flag that explicitly. Changes made against a since-moved base need extra
 care, because the diff you are about to apply may no longer cleanly represent "just this worktree's
 changes" once `main` has moved.
+
+**Apply the same rule to the branch the worktrees land on**, which is the half this step has always
+left out. Cut the landing branch from the target branch's current tip, not from the last merge
+commit, and merge the target back into it before opening the pull request rather than after CI
+objects:
+
+```
+git fetch origin
+git merge origin/<target-branch>
+```
+
+A branch that lags its target cannot see any file authored after the cut, so the acceptance command
+passes on the branch while the merge result fails. Twice in the repository this skill was written
+in. Wave 2's branch could not see a task file added to the target after the cut, one that linked to
+a task the wave had moved into `done/`: the branch ran green and the `pull_request` job ran red on
+all six CI cells. Wave 4 repeated the shape and is the sharper case, because its `pull_request` job
+never fired at all, leaving the branch-alone run, green by construction here, as the only signal;
+the defect was found only by reproducing the merge locally, and it came with a real conflict in a
+shared bookkeeping file both branches had bumped. **A check that only exists in CI is not a check
+when the trigger can skip**, so do the merge and rerun the acceptance command locally before you
+open anything.
 
 **Then check each worktree's delegate report against the contract.**
 [`fix-batch`](../fix-batch/SKILL.md#the-delegate-report-contract) requires a fixed field set from

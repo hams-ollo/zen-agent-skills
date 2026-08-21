@@ -8,7 +8,8 @@ license: MIT
 
 The back half of the work spine: after a branch is built, turn its diff into a pull
 request description and a matching changelog entry, both in the target repo's own style.
-It is the closing bookend to `project-bootstrap` -> `init-worktracking` -> `new-task`.
+It is the closing bookend of the kit spine, running immediately after `doc-sync` has
+reconciled the documentation with what the branch changed.
 
 It **drafts text; it does not touch GitHub.** It reads the diff and writes two artifacts
 for the user to place: a PR body and a changelog entry. Creating or editing the actual PR
@@ -158,8 +159,9 @@ never calls `gh` or the GitHub API itself.
   entry locally). It never creates or edits a PR, and never rewrites changelog history.
 - Portable by inspection: the changelog format and any PR template come from the target
   repo, not from this kit. Do not hardcode this kit's own conventions into another repo.
-- It is the closing bookend of the kit spine: `project-bootstrap` -> `init-worktracking`
-  -> `new-task` -> (build) -> `pr-describe`.
+- It is the closing bookend of the kit spine, and it names only its own end of it:
+  `reconcile-worktrees` -> `doc-sync` -> `pr-describe`. Each skill earlier in the chain
+  names its own neighbours, so no body carries a copy of the whole thing to drift.
 
 ## Conventions
 
@@ -172,3 +174,9 @@ kit's formatting on another repo's changelog.
 module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case
 headings, clickable relative links, named sources, no em-dashes. That file is a swappable default; a
 downstream adopter may replace it without touching this skill.
+
+**What you may do with the drafts when nobody is watching** follows the repo's autonomy module (in
+this kit, [`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which cites this skill for `A8`:
+the agent prepares and a person dispatches, so this skill prints both artifacts and surfaces the
+command rather than running it, and never merges. That file is a swappable default too; a downstream
+adopter may raise or lower the ceiling without touching this skill.

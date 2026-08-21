@@ -8,7 +8,10 @@ limit both target harnesses enforce, and a body that is not so long it
 defeats progressive disclosure, and frontmatter written in a form no real YAML
 parser can read. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
-exists, and warns when a skill asserts both draft and shipped status. Standard
+exists, that every self-declared lens under `.agents/rules/` is referenced by at
+least one skill, and warns when a skill asserts both draft and shipped status. A link inside
+an inline code span or a fenced code block is left alone, because it renders as
+literal text and opens nothing, so a skill may show an example link. Standard
 library only. Exits non-zero on error.
 
 Link checks are made against the *shipped* layout, not just the authoring one. A
@@ -57,6 +60,20 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 SIBLING_SKILL_RE = re.compile(r"^\.\./([^/]+)/SKILL\.md$")
 EXTERNAL_LINK_PREFIXES = ("http://", "https://", "mailto:")
 
+# A run of one or more backticks, and a fenced code block delimiter: a whole line whose
+# content is a run of three or more backticks, optionally followed by an info string.
+# Up to three spaces of indentation, per CommonMark. The info string may not contain a
+# backtick, because a run followed by a backtick is simply a longer run.
+#
+# These two patterns and the two helpers below are REPRODUCED from `.tasks/validate.py`,
+# where bug-0015 and bug-0017 taught the backlog validator that a link rendered as
+# literal text is not a link. Copied rather than imported: the two validators are
+# separate tools with separate lifecycles, and `validate.py` also ships as a template
+# into other repositories, so neither may depend on the other. The regexes are kept
+# character-identical to the originals so a later reader can diff the two copies.
+BACKTICK_RUN_RE = re.compile(r"`+")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
+
 # A skill declaring itself a draft in prose while also declaring itself shipped
 # (typically a "- Shipped <date>" provenance bullet) is self-contradictory.
 #
@@ -77,6 +94,21 @@ SHIPPED_STATUS_RE = re.compile(
     r"|\b(?:shipped|blessed)\s+(?:on\s+)?\d{4}-\d{2}-\d{2}\b",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# A rules file that presents itself as a lens: something a skill is meant to compose,
+# rather than a plain document that happens to live beside them. All three shipped
+# lenses say so in their own opening, either by naming themselves one in the title or
+# by the "swappable module" formula the rules directory uses as a header convention.
+#
+# Keyed off that self-declaration rather than a list of filenames, deliberately: a
+# hardcoded list passes the day a fourth lens is added and nobody edits this script,
+# which is the exact failure feat-0048 was filed for. `autonomy.md` called itself the
+# third lens for ten days while no skill composed it, and every gate passed.
+LENS_DECLARATION_RE = re.compile(r"\*\*swappable module\*\*|\blens\b", re.IGNORECASE)
+
+# How far into a rules file the self-declaration has to appear. See
+# `declares_itself_a_lens` for why the window exists and why it is this size.
+LENS_DECLARATION_LINES = 10
 
 
 def parse_frontmatter(text: str):
@@ -116,9 +148,78 @@ def _rel(path: Path) -> str:
         return path.as_posix()
 
 
+def code_span_ranges(text):
+    """Character ranges `(start, end)` of the inline code spans in `text`.
+
+    A span opens with a run of backticks and closes with a run of the same length, so
+    both the single and the double form are spans, and a check that knows only the first
+    fixes half the occurrences it meets.
+
+    Scanned one line at a time, deliberately, and an unmatched run opens nothing:
+    pairing runs across the whole file means one stray backtick swallows everything up
+    to the next stray one, and a caller that skips those ranges then reports success
+    while checking nothing. See `code_span_ranges()` in .tasks/validate.py, the original.
+    """
+    ranges = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        runs = [(m.start(), m.end()) for m in BACKTICK_RUN_RE.finditer(line)]
+        i = 0
+        while i < len(runs):
+            opener = runs[i]
+            width = opener[1] - opener[0]
+            closer = next((j for j in range(i + 1, len(runs))
+                           if runs[j][1] - runs[j][0] == width), None)
+            if closer is None:
+                i += 1
+                continue
+            ranges.append((offset + opener[0], offset + runs[closer][1]))
+            i = closer + 1
+        offset += len(line)
+    return ranges
+
+
+def fenced_block_ranges(text):
+    """Character ranges `(start, end)` of the fenced code blocks in `text`.
+
+    A fence is a line-level construct where an inline code span is a character-level
+    one. Its delimiters sit alone on lines of their own, so code_span_ranges() pairs
+    them with nothing: the two rules compose by union rather than by replacement.
+
+    An unterminated opening fence yields no range at all, the same trade
+    code_span_ranges() makes for an unmatched run and for the same reason: a detector
+    that ran an unclosed fence to end of file would switch the caller's link check off
+    for everything below it and report success while doing so. See
+    `fenced_block_ranges()` in .tasks/validate.py, the original.
+    """
+    ranges = []
+    offset = 0
+    start = None
+    width = 0
+    for line in text.splitlines(keepends=True):
+        match = FENCE_RE.match(line.rstrip("\r\n"))
+        if match:
+            if start is None:
+                start, width = offset, len(match.group(1))
+            elif len(match.group(1)) >= width and not match.group(2).strip():
+                ranges.append((start, offset + len(line)))
+                start = None
+        offset += len(line)
+    return ranges
+
+
 def _link_targets(text: str):
-    """Yield the raw target of every inline markdown link found in text."""
+    """Yield the raw target of every inline markdown link found in text.
+
+    A link whose opening bracket falls inside an inline code span or a fenced code
+    block is skipped: it renders as literal text, so it opens nothing and there is no
+    reader to strand. Without this a skill body could not *show* an example markdown
+    link, which is exactly what the documentation skills want to do (bug-0027).
+    """
+    spans = code_span_ranges(text) + fenced_block_ranges(text)
     for m in LINK_RE.finditer(text):
+        if any(start <= m.start() < end for start, end in spans):
+            continue
         target = m.group(1).strip()
         # Drop an optional "title" suffix, e.g. (path "some title").
         target = target.split(" ", 1)[0]
@@ -133,6 +234,13 @@ def check_links(skill_md: Path, text: str, skill_names: set, rel: str, errors: l
     `portable_root` is the highest directory a skill link may reach: the `.agents/`
     tree that install.py ships (the skills plus the rules module beside them). A link
     above it resolves in this repository and dangles once the skill is installed.
+
+    A link inside an inline code span or a fenced code block is not checked at all, by
+    any of the three rules here, because it is not a link: it renders as literal text.
+    That includes the escape rule, which protects a reader who follows a link that
+    dangles once the skill is installed, and there is no such reader for an example
+    (bug-0027). Outside a span or a fence the escape rule is unchanged, and an absolute
+    or `file://` link is still an error here even though the backlog validator skips one.
     """
     for target in _link_targets(text):
         if target.lower().startswith(EXTERNAL_LINK_PREFIXES):
@@ -195,6 +303,89 @@ def check_frontmatter_is_parseable(text: str, rel: str, errors: list) -> None:
             )
 
 
+def declares_itself_a_lens(text: str) -> bool:
+    """True when a rules file's opening presents it as a lens skills compose.
+
+    Bounded to the first `LENS_DECLARATION_LINES` lines because the declaration is a
+    header convention, not a fact stated anywhere in the body: all three shipped lenses
+    make it by line 3 (a title ending in "lens", or "This file is a **swappable
+    module**"). Without the bound the patterns are broad enough to match any rules file
+    that merely *mentions* a lens further down, for instance a directory README
+    describing what the other files are, and a check that fires on a document nobody
+    intended as a lens gets switched off rather than satisfied.
+    """
+    opening = "\n".join(text.splitlines()[:LENS_DECLARATION_LINES])
+    return bool(LENS_DECLARATION_RE.search(opening))
+
+
+def _names_file_outside_fences(text: str, filename: str) -> bool:
+    """True when `filename` appears in `text` somewhere other than a fenced code block.
+
+    A fence is the body *showing* what a reference looks like rather than making one. In
+    a skill that is usually sample text some other agent is being told to write, so it
+    points no reader at the file and composes nothing, which is the failure the lens rule
+    exists to catch rather than a lesser form of compliance (`bug-0040`).
+
+    Inline code spans are deliberately **not** excluded, which is where this parts company
+    with the link rules and their S-022 exception. A link inside a span is not a link at
+    all: its brackets render as literal text, so there is nothing to follow and no reader
+    to strand. A filename inside a span is still prose naming the file, and backticks are
+    how the house style writes such a mention, so excluding spans here would reject the
+    exact form S-023 protects and push an author to drop the backticks to satisfy a
+    validator.
+
+    An unterminated opening fence yields no range at all, inherited from
+    `fenced_block_ranges()`, so one stray fence cannot suppress every mention below it and
+    report a wired lens as unwired.
+    """
+    fences = fenced_block_ranges(text)
+    start = text.find(filename)
+    while start != -1:
+        if not any(lo <= start < hi for lo, hi in fences):
+            return True
+        start = text.find(filename, start + len(filename))
+    return False
+
+
+def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) -> None:
+    """Flag a self-declared lens under `.agents/rules/` that no skill references.
+
+    A lens is composed, not run: it reaches an agent only through the skill that points
+    at it. One nobody points at is inert, and the failure is silent, because the module
+    still reads correctly on its own and its claim to govern anything is never tested.
+    The swappability promise fails with it: an adopter who rewrites the module changes
+    nothing, which is the same class of defect the link-escape rule catches.
+
+    A reference is the lens's filename appearing in a `SKILL.md` outside every fenced
+    code block, which counts both the usual relative link and a prose mention that names
+    the file. The bare word (`autonomy`) is deliberately not enough, or any skill
+    discussing the subject would satisfy the rule without giving a reader a way to reach
+    the module. A mention inside a fence is not enough either, for the same reason: it
+    shows what a reference looks like instead of making one. See
+    `_names_file_outside_fences()` for why inline code spans still count.
+
+    Skipped entirely when there is no sibling `rules/` directory, since a skills tree
+    without one has no lens to leave unwired.
+    """
+    if not rules_dir.is_dir():
+        return
+    for rules_file in sorted(rules_dir.glob("*.md")):
+        text = rules_file.read_text(encoding="utf-8")
+        if not declares_itself_a_lens(text):
+            continue
+        if any(_names_file_outside_fences(skill_text, rules_file.name)
+               for skill_text in skill_texts.values()):
+            continue
+        errors.append(
+            f"{_rel(rules_file)}: declares itself a lens but no skill references it, so "
+            f"nothing composes it and an adopter who rewrites it changes nothing. Point at "
+            f"it from the skills whose rules it holds (one line in a `## Conventions` "
+            f"section is the usual shape), or drop the self-declaration from its opening. "
+            f"Naming the file only inside a fenced code block does not count: that shows "
+            f"what a reference looks like rather than making one."
+        )
+
+
 def check_status_contradiction(text: str, rel: str, warnings: list) -> None:
     """Warn when a skill asserts both draft and shipped status."""
     if DRAFT_STATUS_RE.search(text) and SHIPPED_STATUS_RE.search(text):
@@ -218,6 +409,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     skill_names = {d.name for d in skills}
     # Everything install.py ships: the skills plus the sibling rules module.
     portable_root = skills_dir.parent.resolve()
+    skill_texts: dict = {}
 
     for d in skills:
         rel = _rel(d)
@@ -226,6 +418,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             errors.append(f"{rel}: no SKILL.md")
             continue
         text = skill_md.read_text(encoding="utf-8")
+        skill_texts[d.name] = text
         fm, body_lines = parse_frontmatter(text)
         if fm is None:
             errors.append(f"{rel}/SKILL.md: no YAML frontmatter")
@@ -262,6 +455,11 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         check_links(skill_md, text, skill_names, rel, errors, portable_root)
         check_frontmatter_is_parseable(text, rel, errors)
         check_status_contradiction(text, rel, warnings)
+
+    # Checked once over the whole tree rather than per skill: "no skill references this
+    # lens" is a fact about every skill together, and it is the one rule here that reads
+    # outside .agents/skills/.
+    check_lenses_are_composed(portable_root / "rules", skill_texts, errors)
 
     for w in warnings:
         print(f"WARN  {w}")

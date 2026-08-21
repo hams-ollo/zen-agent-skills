@@ -43,7 +43,8 @@ counting requires the stable signature that `feat-0040` introduces.
 - Define the repeat trigger in terms of the stable signature from `feat-0040`: N failed fix attempts
   on the same signature, or M observations of it. Pick the thresholds deliberately and state the
   reasoning; upstream's 2 and 3 are a starting point, not a finding.
-- Define the three classifications and the required response to each.
+- Consume the three verdicts the `systematic-debugging` contract defines, and define the required
+  response to each. Do not introduce a second vocabulary; see the decisions section.
 - State where the classification is recorded, and make it reference `feat-0037`'s decision log
   rather than inventing a second place for an agent to write down why it gave up.
 - Wire the trigger into `fix-batch`'s review-fix path and into `house-review`'s reporting, so a
@@ -59,6 +60,21 @@ counting requires the stable signature that `feat-0040` introduces.
   counting across runs needs storage the kit has not designed and should not design speculatively.
 - Automatic re-scoping or automatic task creation. The classification decides; a human or a
   subsequent `new-task` run acts.
+
+## Decisions
+
+- **2026-08-18, author: the classification vocabulary is owned by `systematic-debugging`, and this
+  task consumes it.** Retargeted after the 2026-08-18 review pass, which found that this task was
+  about to define `false_positive`, `core_issue` and `futility` while a diagnosis contract was being
+  drafted with three verdicts drawing the same distinction. The correspondence is exact enough to make
+  two sets a translation layer rather than a distinction: `false_positive` is `not_reproducible`
+  reached from the reviewing side, `core_issue` is `root_cause_found`, and `futility` is
+  `architectural` triggered by a repeat count rather than a hypothesis count. Naming is now settled in
+  [`systematic-debugging.md`](../docs/spec/systematic-debugging.md); the counted trigger, the
+  thresholds, and the deferral path remain this task's own work and are unaffected.
+- **Consequence for sequencing.** This task should not be dispatched until that contract is
+  `approved`, because implementing against a `draft` is what `new-task` and `verifier-agent` both
+  refuse. It is not recorded as a `depends_on` because the implementing task does not exist yet.
 
 ## Implementation notes
 
@@ -80,7 +96,8 @@ cost for nothing and should be reconsidered rather than kept by default.
     python scripts/validate-skills.py && python .tasks/validate.py --strict && python -m unittest discover -s tests -p "test_*.py" -v
 
 - [ ] The repeat trigger is stated with explicit thresholds and the reasoning for those numbers.
-- [ ] The three classifications are defined, each with its required response.
+- [ ] Each of the three verdicts named in the `systematic-debugging` contract has a required response
+      defined here, and no fourth classification name is introduced anywhere in the change.
 - [ ] The futility path produces a task file rather than a silent drop.
 - [ ] `fix-batch` and `house-review` both reference the trigger, and neither restates the other's
       definition of it.

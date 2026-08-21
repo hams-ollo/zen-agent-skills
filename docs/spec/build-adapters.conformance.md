@@ -2,7 +2,7 @@
 title: build-adapters conformance
 spec: docs/spec/build-adapters.md
 audited: 2026-07-27
-re_audited: 2026-07-27 (chore-0015), 2026-08-06 (feat-0034)
+re_audited: 2026-07-27 (chore-0015), 2026-08-06 (feat-0034), 2026-08-19 (chore-0043)
 ---
 
 # build-adapters conformance matrix
@@ -19,6 +19,25 @@ Re-audited 2026-08-06 after `feat-0034` amended the contract with the `plugin` t
 S-017. That amendment is itself **pending the author's re-approval**, which is stated in the spec's
 header and repeated here so this matrix is not read as auditing an approved contract in full: the
 three new rows audit code against paragraphs the author has authorized but not yet re-approved.
+
+Re-audited 2026-08-19 after `chore-0043` amended the contract with S-018, the code-span and fence
+exception `bug-0028` had already given `rewrite_links()` on 2026-08-18. That amendment is likewise
+**pending the author's re-approval**, stated in the spec's header and repeated here for the same
+reason. The six rewrite rows S-003 through S-008 were re-audited against the current function in the
+same pass and all six remain `Conformed`: none of their branches changed, and each is now reached
+only for a link the span and fence guard let through.
+
+The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
+the twenty shipped `SKILL.md` bodies, `bug-0028` measured 131 links matched by `LINK_RE` and 0 newly
+suppressed by the guard, so every generated adapter is byte-identical before and after the fix.
+Re-measured against this commit on 2026-08-19: 20 bodies, 133 links matched, 0 of them inside a code
+span or a fence. The count moved from 131 because `bug-0032` added two links to
+`test-author/SKILL.md` when it wrote the spec-approval gate, measured per body across
+`e492b10..b950c9e`; `feat-0048` is still open and no skill references `autonomy.md`. And the second number is the load-bearing one: the exception currently fires on
+nothing in this kit. It is a guard against a body that shows a link as an example, which the
+documentation skills are the likeliest to want, rather than a rule with live occurrences today. A
+matrix row asserting "conformed" without that number would not distinguish a working guard from a
+dead one.
 
 S-002 re-audited 2026-07-28 (`bug-0006`) and found diverged, the first divergence this contract has
 recorded. It is worth reading the row for how it hid: `bug-0001` had already fixed a defect in the same
@@ -39,12 +58,13 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 |---|---|---|---|---|
 | Scenarios | S-001 one adapter per skill per requested target | Conformed | `main()` / the `for d in skills` loop over `targets`, with the summary print and `return 0` | only requested targets are dispatched, via `EMITTERS[t]` |
 | Scenarios | S-002 harness frontmatter and do-not-edit banner | Conformed | `emit_cursor()` and `emit_vscode()` content strings, with `BANNER`, and `split_frontmatter()` / `BLOCK_SCALAR_RE.sub("", value, count=1)` | cursor gets `description` plus `alwaysApply: false`, vscode gets `mode: agent` plus `description`; both prepend the banner naming the source `SKILL.md`. **Diverged when re-audited 2026-07-28 and fixed the same day (`bug-0006`)**: `split_frontmatter()` captured a YAML block-scalar indicator as part of the value, so the four skills writing `description: >-` emitted `description: ">- Turns ..."`, eight of the 38 files a full run produces. The scenario says the adapter opens with the skill's `description`, and that string is the scalar's serialisation rather than its value, so the contract already covered it and no amendment was needed |
-| Scenarios | S-003 sibling link points at the adapter beside it | Conformed | `rewrite_links()` / `SIBLING_RE` branch | emits `<sibling><ext>`, a same-directory reference |
-| Scenarios | S-004 anchor survives the rewrite | Conformed | `rewrite_links()` / `SIBLING_RE` branch, `sibling.group(2)` | the captured anchor is reattached |
-| Scenarios | S-005 link title survives the rewrite | Conformed | `rewrite_links()` / `LINK_RE` group 2, reattached by the inner `out()` | the title is carried through every rewrite path, not just the sibling one |
-| Scenarios | S-006 rules-module link points at the shared location | Conformed | `rewrite_links()` / `RULES_RE` branch, with the `SHARED` prefix | |
-| Scenarios | S-007 skill-local asset points at the shared location | Conformed | `rewrite_links()` / the final return, `SHARED/skills/<name>/<target>` | reached only after the external, anchor, sibling, rules and escaping branches |
-| Scenarios | S-008 external and same-page links unchanged | Conformed | `rewrite_links()` / the `target.startswith("#")` and `EXTERNAL_PREFIXES` guard returning `m.group(0)` | returns the original match object's text, so the link is byte-for-byte preserved |
+| Scenarios | S-003 sibling link points at the adapter beside it | Conformed | `rewrite_links()` / `SIBLING_RE` branch | emits `<sibling><ext>`, a same-directory reference. Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only for a link outside every code span and fence (S-018) |
+| Scenarios | S-004 anchor survives the rewrite | Conformed | `rewrite_links()` / `SIBLING_RE` branch, `sibling.group(2)` | the captured anchor is reattached. Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only outside a code span or fence (S-018) |
+| Scenarios | S-005 link title survives the rewrite | Conformed | `rewrite_links()` / `LINK_RE` group 2, reattached by the inner `out()` | the title is carried through every rewrite path, not just the sibling one. Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only outside a code span or fence (S-018) |
+| Scenarios | S-006 rules-module link points at the shared location | Conformed | `rewrite_links()` / `RULES_RE` branch, with the `SHARED` prefix | Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only outside a code span or fence (S-018) |
+| Scenarios | S-007 skill-local asset points at the shared location | Conformed | `rewrite_links()` / the final return, `SHARED/skills/<name>/<target>` | reached only after the span and fence guard (S-018) and then the external, anchor, sibling, rules and escaping branches. Re-audited 2026-08-19 (`chore-0043`): unchanged, with the guard now first in that order |
+| Scenarios | S-008 external and same-page links unchanged | Conformed | `rewrite_links()` / the `target.startswith("#")` and `EXTERNAL_PREFIXES` guard returning `m.group(0)` | returns the original match object's text, so the link is byte-for-byte preserved. Re-audited 2026-08-19 (`chore-0043`): unchanged. S-018 now sits ahead of it and governs a different question, whether the text is a link at all, where this row governs the link's kind |
+| Scenarios | S-018 a link that renders as literal text is not a link | Conformed | `rewrite_links()` / `spans = code_span_ranges(body) + fenced_block_ranges(body)` and the `any(start <= m.start() < end ...)` guard at the top of `repl`, returning `m.group(0)`; the two helpers `code_span_ranges()` and `fenced_block_ranges()` above it | added by `chore-0043`, writing down what `bug-0028` built. The guard is keyed to the position of `](`, the bracket closing the link *text*, so a link whose text is itself a code span is still rewritten, which is how nearly every link in this kit is written. The ranges are computed once per body rather than once per match, because `re.sub()` calls the replacement for every match. An unterminated fence yields no range, so it suppresses nothing below it. Confirmed by measurement against this commit: 20 shipped bodies, 133 links matched, 0 inside a span or fence, so no adapter changes today and the row is a guard rather than a live rewrite |
 | Scenarios | S-009 the material the links point at is emitted | Conformed | `emit_shared_assets()` / both copy loops, called per skill from `main()` | rules module and each skill's non-`SKILL.md` files |
 | Scenarios | S-010 an existing rules file is never overwritten | Conformed | `emit_shared_assets()` / `or dest.exists(): continue` in the rules loop | confirmed by execution: an edited rules file survives a re-run unchanged |
 | Scenarios | S-014 a re-run refreshes derived assets and preserves adopted ones | Conformed | `emit_shared_assets()` / the rules loop's `or dest.exists(): continue`, contrasted with the skill-asset loop which has no such guard | added by `chore-0015`. Confirmed by execution: after editing both and re-running, the rules file kept its content and the skill template was replaced by the kit's version |
@@ -63,8 +83,9 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 
 ## Coverage proof
 
-- **audited**: S-001 through S-017, and all six Proposed Surface elements. Every spec item was
-  checked.
+- **audited**: S-001 through S-018, and all six Proposed Surface elements. Every spec item was
+  checked. S-018 is numbered after S-017 and placed beside S-008 in both documents, because it is the
+  exception those rewrite rows are read against.
 - **unreconciled**: none. No item diverged and none is unbuilt.
 
 ## Test coverage of spec invariants
@@ -85,9 +106,11 @@ lacks one. Against [`tests/test_build_adapters.py`](../../tests/test_build_adapt
 | S-015 | present | added by `feat-0034`. Asserts the emitted skill count, the absence of any inlined adapter, and the manifest *values* (source, and the marketplace entry's name and version matching the plugin manifest), not that the keys exist |
 | S-016 | present | added by `feat-0034`, two tests: one resolving every relative link in every emitted skill on disk and asserting none is broken and none escapes the plugin root, one on `house-review` reaching its rubric and finding `blocker` in the file it lands on, with exactly one copy of the module in the tree. This is the invariant `claude plugin validate` cannot check, so these tests are the only thing holding it |
 | S-017 | present | added by `feat-0034`. Asserts both halves, since asserting the absence alone would pass against a target that emitted nothing |
+| S-018 | present | added by `bug-0028`, five tests in `TestRewriteLinksInsideCodeSpansAndFences`, each run against both inlining extensions. Two positives use whole-string equality rather than a substring, because "emitted unchanged" is a claim about the whole body. The negatives carry the weight, since the cheap way to remove a false rewrite is to stop rewriting: a real link beside a *closed* fence and one below an *unterminated* fence must both still be repointed. The fenced case holds all three rewritten classes at once (S-003, S-006, S-007), because one surviving proves nothing about the other two. A fifth test asserts the plugin target copies a body byte for byte, so the criterion "unchanged in every target" is asserted rather than assumed. **The tests predate the id**: written when no scenario stated the rule, they are tagged with the scenarios they refine and their docstring says an `S-018` is the author's call. That call is now made, so the tags are stale in one direction only, naming less than they cover |
 
 Every scenario has a covering test, including the shared-asset re-run behavior that had neither a
-scenario nor a test when this matrix was first written.
+scenario nor a test when this matrix was first written, and the code-span rule that had tests before
+it had a scenario.
 
 The S-015 through S-017 tests were each confirmed to fail against a mutation of the decision they
 protect: pointing the plugin layout at the inlining targets' `.agents/rules` (which dangles all 28

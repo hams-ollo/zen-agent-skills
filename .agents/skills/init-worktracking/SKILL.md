@@ -40,7 +40,7 @@ Do not dump the whole system on a 200-line project. Ask which tier fits, or infe
 | **standard** | lite + `ROADMAP.md` + `CHANGELOG.md` | most repos; the full altitude model |
 | **team** | standard + a CI/pre-commit invocation of the validator + optional Cursor/Copilot pointers | repos with many contributors or agents, where drift must be caught mechanically |
 
-`validate.py` ships at every tier. It is one stdlib-only file with no dependencies, so the "do not bury a small repo" argument does not apply to it, and three sibling skills (`new-task`, `fix-batch`, `reconcile-worktrees`) instruct agents to run it unconditionally. Withholding it at lite made those instructions dead references. What **team** adds is not the file but its mechanical enforcement in CI or a pre-commit hook.
+`validate.py` ships at every tier. It is one stdlib-only file with no dependencies, so the "do not bury a small repo" argument does not apply to it, and three sibling skills (`new-task`, `reconcile-worktrees`, `doc-sync`) instruct agents to run it unconditionally. Withholding it at lite made those instructions dead references. What **team** adds is not the file but its mechanical enforcement in CI or a pre-commit hook.
 
 ### Tier stripping at lite
 
@@ -48,7 +48,7 @@ At **lite** there is no `ROADMAP.md` and no `CHANGELOG.md`, so strike every refe
 
 - **`AGENTS.md`**: the header links and task-lifecycle steps 4 and 5. The work-altitude-model section and the lifecycle still describe the model; they just stop pointing at absent files.
 - **`.tasks/README.md`**: the strategy/ledger sentence in the opening paragraph, and the `CHANGELOG.md` and `ROADMAP.md` clauses in its lifecycle section.
-- **`.tasks/_TEMPLATE.md`**: the definition-of-done checkbox that requires a dated `CHANGELOG.md` line. Drop that clause, or the template propagates an unsatisfiable step into every task file the repo will ever create.
+- **`.tasks/_TEMPLATE.md`**: two edits, because this is the file every task the repo ever writes is copied from. First, the definition-of-done checkbox that requires a dated `CHANGELOG.md` line. Drop that clause, or the template propagates an unsatisfiable step into every task file. Second, the `parent` comment and its seed value. Strike the `ROADMAP#N feature-slug` form from the comment, leaving the free-text form, and replace the seed with a plain example of it (`parent: "one line naming the goal this serves"`). `parent` stays required at lite: what changes is what it names, not whether it is answered.
 
 ## Procedure
 
@@ -150,7 +150,12 @@ If Step 1.4 found a tracker, do not silently create a parallel system. Present t
 
 ### Step 8: report and offer a first task
 
-Summarize what was created and what was skipped because it existed. Then offer, but do not automatically do, the natural next step: author one or two real task files for this repo. Prefer handing off to the `new-task` skill, which authors them at the gold-standard bar (honest `touched_files`, a real acceptance command, collision-safe ids). If `new-task` is not available, copy `_TEMPLATE.md` and fill it for a known bug or feature so the user sees the format applied to their actual work. Run `python .tasks/validate.py` to confirm the seed is clean.
+Summarize what was created and what was skipped because it existed. Then offer, but do not automatically do, the natural next step. There are two, and which one applies is the user's call rather than yours, so ask:
+
+- **The contract-driven path**: hand off to the `spec-author` skill, which turns the first real piece of work into a behavioral spec for a human to approve, and `new-task` decomposes that spec into task files afterwards. This is the path the scaffold is shaped for, since a task file's `parent` up-link and its acceptance criteria both want a contract above them.
+- **The direct path**: hand off to the `new-task` skill straight away, which authors one or two real task files for this repo at the gold-standard bar (honest `touched_files`, a real acceptance command, collision-safe ids). Correct for a repo that does not want a spec layer.
+
+If neither skill is available, copy `_TEMPLATE.md` and fill it for a known bug or feature so the user sees the format applied to their actual work. Run `python .tasks/validate.py` to confirm the seed is clean.
 
 ## Notes
 
@@ -158,6 +163,7 @@ Summarize what was created and what was skipped because it existed. Then offer, 
 - It pairs with `new-task` (author task files upstream), `fix-batch` (spin up parallel agents over a batch of task files), and `reconcile-worktrees` (merge their results back). Mention these if the user's goal is parallel execution.
 - Everything is markdown and file-based, plus one stdlib-only Python checker. No database, no service dependency: that portability is the whole point.
 - The `AGENTS.md` conventions section is deliberately labeled "edit freely" so an adopter is never saddled with rules they did not choose. Do not hardcode your own house style into a scaffolded repo.
+- It is the second step of the kit spine, and it names only its own end of it: `project-bootstrap` opens the door and hands the repo here, and this skill hands on to `spec-author` when the repository takes the contract-driven path, or to `new-task` directly when it does not. Every skill along the spine names just its own neighbours, so no body restates the whole chain and the statements cannot drift apart from each other.
 
 ## Conventions
 

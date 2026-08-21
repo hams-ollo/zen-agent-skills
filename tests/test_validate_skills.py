@@ -30,6 +30,11 @@ _spec = importlib.util.spec_from_file_location("validate_skills", MODULE_PATH)
 vs = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vs)
 
+# The upper end of the lens-declaration window, asserted rather than assumed. The real
+# lenses are 30 to 300 lines long, so a window at or above this stops distinguishing an
+# opening from a body and the "declares itself" test becomes "mentions a lens anywhere".
+MAX_LENS_WINDOW = 25
+
 GOOD_FM = "---\nname: {name}\ndescription: {desc}\n---\n"
 LONG_DESC = ("Use this skill when you need a thorough action whose description states both what it "
              "does and when to use it.")
@@ -426,6 +431,125 @@ class TestLinkChecks(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
 
+class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
+    """Scenario S-009 refined: a link that renders as literal text is not a link.
+
+    The bug population is a skill body that *shows* an example markdown link, which the
+    documentation skills are the likeliest to want. `check_links()` matched every link
+    with a bare regex and resolved each one on disk, so the example failed the lint and
+    the error message never named a fence as the cause (bug-0027).
+
+    The negative cases carry the weight here, because the cheap way to remove a false
+    positive is to switch the check off: a genuine broken link outside any span, and one
+    below an unterminated fence, must both still be reported.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_link_inside_a_fenced_block_is_not_reported(self):
+        # Scenario S-009: the exact reproduction recorded in bug-0027, a `markdown`
+        # fenced block holding one ordinary link to a target that does not exist.
+        body = (
+            "Write the reference like this:\n\n"
+            "```markdown\n"
+            "See [the notes](references/does-not-exist.md) for details.\n"
+            "```\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, f"a fenced link is not a link\n{out}")
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_link_inside_an_inline_code_span_is_not_reported(self):
+        # Scenario S-009: markdown opens a span with a backtick run of any length and
+        # closes it with a run of the same length, so knowing only the single form fixes
+        # half the occurrences. The double form is what an author reaches for the moment
+        # the text being quoted contains a backtick of its own.
+        forms = {
+            "single backtick": "Write `[the notes](references/does-not-exist.md)` in the body.\n",
+            "double backtick": "Write ``[`notes`](references/does-not-exist.md)`` in the body.\n",
+        }
+        for label, body in forms.items():
+            with self.subTest(form=label):
+                _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                             body=body)
+                code, out = _run(self.root)
+                self.assertEqual(code, 0, f"{label}: a quoted link is not a link\n{out}")
+                self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_real_broken_link_beside_a_fence_is_still_reported(self):
+        # Scenario S-009 (negative): the exclusion must not switch the check off. The
+        # fence here is closed and the genuine link sits after it, so a scanner that ran
+        # the fence past its closing delimiter would pass this file for the wrong reason.
+        body = (
+            "```markdown\n"
+            "See [an example](references/does-not-exist.md).\n"
+            "```\n\n"
+            "See [the real target](really-missing.md) for details.\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("link target does not exist: really-missing.md", out)
+        self.assertNotIn("does-not-exist.md", out)
+
+    def test_an_unterminated_fence_does_not_swallow_the_body_below_it(self):
+        # Scenario S-009 (negative): an opening fence that is never closed yields no
+        # range at all. A detector that ran it to end of file would disable the link
+        # check for everything below and still exit clean, which is the one failure
+        # indistinguishable from success (the trade bug-0015 and bug-0017 chose).
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "See [the real target](really-missing.md) for details.\n"
+        )
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, f"an unterminated fence must not suppress what follows it\n{out}")
+        self.assertIn("link target does not exist: really-missing.md", out)
+
+    def test_a_link_escaping_the_shipped_tree_is_not_reported_inside_a_fence(self):
+        # Scenario S-011 against the same exclusion, and a recorded decision rather than
+        # an accident: a fenced link is skipped by every branch of check_links(), the
+        # escape branch included. The portability rule protects a reader who clicks a
+        # link that dangles once the skill is installed, and a link rendered as literal
+        # text is clicked by nobody. Splitting the rule so existence is skipped inside a
+        # fence while the escape check still fires would leave an author unable to show
+        # the very example the escape rule exists to teach. Outside a fence the rule is
+        # unchanged: test_link_escaping_the_shipped_tree_errors above still holds.
+        agents = self.root / "agents"
+        skills = agents / "skills"
+        (self.root / "AGENTS.md").write_text("real file\n", encoding="utf-8")
+        body = (
+            "Never write a link like this one:\n\n"
+            "```markdown\n"
+            "Read [`AGENTS.md`](../../../AGENTS.md) before dispatching.\n"
+            "```\n"
+        )
+        _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("escapes the shipped skill tree", out)
+
+    def test_every_shipped_skill_still_passes_the_link_check(self):
+        # Scenario S-009 against the real tree: the assertion that the exclusion did not
+        # change what the kit's own skills report. Every real skill still lints clean.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        skills = sorted(p for p in skills_dir.iterdir() if p.is_dir())
+        names = {d.name for d in skills}
+        errors = []
+        for d in skills:
+            skill_md = d / "SKILL.md"
+            vs.check_links(skill_md, skill_md.read_text(encoding="utf-8"), names, d.name,
+                           errors, skills_dir.parent.resolve())
+        self.assertEqual(errors, [])
+
+
 class TestStatusContradictionCheck(unittest.TestCase):
     """Scenario S-014: a skill asserting both draft and shipped warns but does not fail.
 
@@ -513,6 +637,208 @@ class TestSkillsDirectoryPreconditions(unittest.TestCase):
             code, out = _run(Path(tmp))
         self.assertEqual(code, 0)
         self.assertIn("No skills found", out)
+
+
+class TestLensComposition(unittest.TestCase):
+    """A self-declared lens under `.agents/rules/` that no skill references fails (feat-0048).
+
+    The bug population is a lens that reads perfectly and reaches nobody. `autonomy.md`
+    shipped calling itself "the third beside house-style.md and review-quality.md" while
+    no skill composed it, and every gate passed, because nothing here read the rules
+    directory at all. A lens is composed rather than run, so an uncomposed one is inert
+    and the swappability promise fails with it: an adopter rewrites the ceiling and
+    nothing changes.
+
+    The negative cases carry the weight, as they do for the link checks above. This rule
+    reads files nobody asked it to lint, so a false positive lands on a document whose
+    author never opted into being a lens, and the cheap response to that is to delete the
+    rule. A plain rules document with no inbound reference must pass.
+    """
+
+    LENS_OPENING = (
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**, the fourth beside the other three.\n\n"
+        "It governs something.\n"
+    )
+    PLAIN_RULES_DOC = (
+        "# What lives in this directory\n\n"
+        "One file per swappable module the skills compose. Replace any of them.\n"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "agents" / "skills"
+        self.rules = self.root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_rules(self, name: str, text: str) -> None:
+        (self.rules / name).write_text(text, encoding="utf-8")
+
+    def test_a_self_declared_lens_with_no_inbound_reference_errors(self):
+        # The feat-0048 condition itself: the lens declares, no skill points back.
+        self._write_rules("example.md", self.LENS_OPENING)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1)
+        self.assertIn("declares itself a lens but no skill references it", out)
+        self.assertIn("agents/rules/example.md", out)
+
+    def test_a_referenced_lens_does_not_error(self):
+        # The wiring this task performs, in miniature: one skill points at the lens the
+        # way the five real ones now do, and the rule is satisfied.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_non_lens_rules_file_without_references_passes(self):
+        # The other direction, and the one that keeps the rule from being deleted: a
+        # rules-directory document that never presents itself as a lens is not required
+        # to be composed, even though it mentions swappable modules in its body.
+        self._write_rules("README.md", self.PLAIN_RULES_DOC)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("declares itself a lens", out)
+
+    def test_the_bare_subject_word_is_not_a_reference(self):
+        # A skill that merely discusses the topic gives a reader no way to reach the
+        # module, so the reference has to name the file. Without this the rule would be
+        # satisfied by prose and stop protecting anything.
+        self._write_rules("autonomy.md", self.LENS_OPENING)
+        body = "Respect the autonomy ceiling when running unattended.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("declares itself a lens but no skill references it", out)
+
+    def test_a_prose_mention_naming_the_file_counts_as_a_reference(self):
+        # The portability contract in AGENTS.md tells a skill to name some files in prose
+        # rather than link to them, so requiring a markdown link specifically would push
+        # authors to break one rule to satisfy another.
+        #
+        # The mention here sits inside an inline code span, because backticks are how the
+        # house style writes a filename in prose. bug-0040 excluded fenced blocks from this
+        # rule and deliberately left spans counting, so this fixture is also the pin on
+        # that decision: the span exclusion S-022 applies to links would fail the exact
+        # form S-023 protects.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = "The ceiling is stated in `example.md` beside this skill.\n"
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_mention_only_inside_a_fenced_block_is_not_a_reference(self):
+        # Scenario S-023 (bug-0040): a fenced block is the body *showing* what a reference
+        # looks like, most often sample text a skill tells some other agent to write, so it
+        # points no reader at the module and composes nothing. The filename appears nowhere
+        # else in this fixture on purpose: a body that also named it in prose would pass
+        # either way and prove nothing.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "Give the delegate a line shaped like this one:\n\n"
+            "```markdown\n"
+            "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+            "```\n"
+        )
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("declares itself a lens but no skill references it", out)
+
+    def test_a_real_reference_beside_a_fenced_example_still_counts(self):
+        # Scenario S-023 (negative): the exclusion must not switch the rule off. The fence
+        # here is closed and the genuine reference sits after it, so a scanner that ran the
+        # fence past its closing delimiter would fail this skill for the wrong reason.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "Give the delegate a line shaped like this one:\n\n"
+            "```markdown\n"
+            "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+            "```\n\n"
+            "This skill itself follows [`example.md`](../../rules/example.md).\n"
+        )
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_an_unterminated_fence_does_not_hide_the_reference_below_it(self):
+        # Scenario S-023 (negative): an opening fence that is never closed yields no range
+        # at all, so the real reference below it still counts. The opposite trade would let
+        # one stray fence suppress every mention under it and report the lens as unwired.
+        self._write_rules("example.md", self.LENS_OPENING)
+        body = (
+            "```markdown\n"
+            "a fence that is never closed\n\n"
+            "This skill follows [`example.md`](../../rules/example.md).\n"
+        )
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_declaration_below_the_opening_window_is_not_a_declaration(self):
+        # Why the window is bounded at all: LENS_DECLARATION_RE matches the bare word
+        # "lens", which any rules document may use when describing its neighbours. Only
+        # the opening is a declaration about *this* file, so a mention further down must
+        # not conscript a document into being a lens.
+        deep = self.PLAIN_RULES_DOC + "\n" * 40 + "This file is a **swappable module**.\n"
+        self._write_rules("README.md", deep)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_the_opening_window_clears_every_shipped_lens_with_margin(self):
+        # Why the bound is 10 lines and not smaller: it must hold every real lens, with
+        # room for a longer title block, and it must stay well short of a whole body.
+        # Bounded in both directions rather than asserted as a bare number, matching how
+        # bug-0026 asks a drift assertion to be bounded: if a future lens declares itself
+        # later than this, the constant is what moves, and this test says so.
+        rules_dir = REPO_ROOT / ".agents" / "rules"
+        for path in sorted(rules_dir.glob("*.md")):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            declaring = [i + 1 for i, line in enumerate(lines)
+                         if vs.LENS_DECLARATION_RE.search(line)]
+            with self.subTest(lens=path.name):
+                self.assertTrue(declaring, f"{path.name} no longer declares itself a lens")
+                self.assertLessEqual(
+                    declaring[0], vs.LENS_DECLARATION_LINES,
+                    f"{path.name} declares itself on line {declaring[0]}, past the "
+                    f"{vs.LENS_DECLARATION_LINES}-line opening window",
+                )
+        self.assertLess(vs.LENS_DECLARATION_LINES, MAX_LENS_WINDOW,
+                        "a window this wide stops being an opening and reads the body")
+
+    def test_every_shipped_lens_is_composed_by_at_least_one_skill(self):
+        # The rule against the real tree: the assertion that would have caught
+        # autonomy.md, and that catches the next lens added without wiring.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        skill_texts = {d.name: (d / "SKILL.md").read_text(encoding="utf-8")
+                       for d in sorted(skills_dir.iterdir()) if d.is_dir()}
+        errors = []
+        vs.check_lenses_are_composed(skills_dir.parent / "rules", skill_texts, errors)
+        self.assertEqual(errors, [])
+
+    def test_autonomy_is_composed_by_exactly_the_five_skills_it_cites(self):
+        # feat-0048's own acceptance criterion, kept as a test because the wiring list is
+        # the lens's outbound links: a skill gets a reference if and only if the lens
+        # claims one of its rules. A sixth reference would make the lens look composed
+        # somewhere it is not load-bearing, and a fifth missing one leaves a cited skill
+        # unable to reach the module.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        referencing = sorted(d.name for d in skills_dir.iterdir()
+                             if d.is_dir()
+                             and "autonomy.md" in (d / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual(
+            referencing,
+            ["doc-sync", "fix-batch", "pr-describe", "spec-conformance", "verifier-agent"],
+        )
 
 
 if __name__ == "__main__":

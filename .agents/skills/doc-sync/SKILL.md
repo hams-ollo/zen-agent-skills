@@ -209,9 +209,11 @@ Then:
   The composed editing discipline verifies links after a structural change, and correcting a stale
   claim is usually not one, so this check belongs here and is unconditional: every applied edit gets
   it. Name the mechanism rather than the intention. Run the repository's own link checker over the
-  edited document (in this kit, `python .tasks/validate.py --strict`, which resolves every relative
-  link against the directory the file actually lives in, alongside the CI docs link step that does
-  the same for the root, `.github/`, and `docs/` trees). Where the repository has no such checker,
+  edited document (in this kit, `python .tasks/validate.py --links <path>`, naming the document you
+  just edited, which resolves every relative link against the directory the file actually lives in;
+  it is the same rule the CI docs link step applies to the root, `.github/`, and `docs/` trees). The
+  mode matters: this checker's other modes walk the tracker directory only, so they report clean
+  without having read the edited document at all. Where the repository has no such checker,
   resolve each relative link in the edited document from that document's own directory and confirm
   the target exists. **A link the edit broke is repaired in the same pass, or the edit is reverted.**
   It is never left dangling and never recorded as applied: an applied entry claiming a correction
@@ -299,3 +301,10 @@ Rules:
 Follow the repo's house-style module (in this kit, [`.agents/rules/house-style.md`](../../rules/house-style.md)):
 sentence-case headings, clickable relative links, named sources, no em-dashes. That file is a
 swappable default; a downstream adopter may replace it without touching this skill.
+
+When this runs unattended, follow the repo's autonomy module too (in this kit,
+[`.agents/rules/autonomy.md`](../../rules/autonomy.md)), whose governing principle this skill is
+cited for stating outright: detect and report, never rewrite, and the failure mode must be inaction.
+That is why dry run is the default here, why detection never changes a file, and why a contract
+document is reported rather than edited. That file is a swappable default; a downstream adopter may
+raise or lower the ceiling without touching this skill.

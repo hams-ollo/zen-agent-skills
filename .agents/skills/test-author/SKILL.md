@@ -1,6 +1,6 @@
 ---
 name: test-author
-description: Use after an implementation to derive runnable tests from an approved spec's Given/When/Then scenarios and a task's acceptance criteria, one faithful test per scenario tagged with its S-NNN id. Discovers and matches the repo's existing test framework, composes the test-quality lens to choose the lowest faithful layer and an exact-outcome oracle, supports characterization tests for legacy code with no coverage, and reports coverage gaps instead of writing low-value passing tests. Distinct from test-quality (the lens it composes, which judges test design), spec-conformance (audits code against a spec), and fix-batch (runs tests). It writes tests; it never edits production code.
+description: Use after an implementation to derive runnable tests from an approved spec's Given/When/Then scenarios and a task's acceptance criteria, one faithful test per scenario tagged with its S-NNN id. Stops rather than deriving tests from a spec whose status is not approved. Discovers and matches the repo's existing test framework, composes the test-quality lens to choose the lowest faithful layer and an exact-outcome oracle, supports characterization tests for legacy code with no coverage, and reports coverage gaps instead of writing low-value passing tests. Distinct from test-quality (the lens it composes, which judges test design), spec-conformance (audits code against a spec), and fix-batch (runs tests). It writes tests; it never edits production code.
 license: MIT
 ---
 
@@ -32,7 +32,7 @@ governs every layer and oracle choice.
 
 ## Modes
 
-- **Acceptance** (a spec is present): derive tests from the spec's scenarios.
+- **Acceptance** (an approved spec is present): derive tests from the spec's scenarios.
 - **Characterization** (legacy code, no spec): assert the current observable behavior to pin it
   before a change, and label the tests as characterization in the name or an adjacent comment.
 
@@ -42,7 +42,8 @@ Infer the mode from the inputs, and let the user override it.
 
 Required (acceptance mode):
 
-- **Approved spec**: a readable spec with Given/When/Then scenarios carrying stable `S-NNN` ids.
+- **Approved spec**: a readable spec with `status: approved` and Given/When/Then scenarios
+  carrying stable `S-NNN` ids.
 
 Required (characterization mode):
 
@@ -55,16 +56,25 @@ Optional:
 
 ## Procedure
 
-### 1. Read the spec and gate it with spec-quality
+### 1. Read the spec, refuse it if it is not approved, and gate it with spec-quality
 
-Read the spec. Apply the [`spec-quality`](../spec-quality/SKILL.md) lens to it. If the verdict would
-be `needs_revision`, stop without writing tests and report the exact spec gaps that must be fixed
+Read the spec. **Refuse an unapproved spec.** If `status` is not `approved`, stop and say so. Tests
+are the most durable form an unapproved contract can take: a draft spec can still be edited or
+abandoned, while a suite derived from it becomes what later work is measured against, and
+[`spec-conformance`](../spec-conformance/SKILL.md) and [`verifier-agent`](../verifier-agent/SKILL.md)
+will cite those tests as evidence. Well-formedness is not approval, so the next check does not stand
+in for this one: `spec-quality` returns `ready` for a draft that is answerable, which is exactly the
+state a spec sits in while it waits for a human.
+
+Then apply the [`spec-quality`](../spec-quality/SKILL.md) lens to it. If the verdict would be
+`needs_revision`, stop without writing tests and report the exact spec gaps that must be fixed
 first: you cannot derive faithful tests from an untestable contract. Then extract every scenario
 (each `S-NNN`), the Proposed Surface (what you test against), and the Constraints that affect test
 design (data format, naming, thresholds). If the spec has no scenarios, stop and say so.
 
-In characterization mode there is no spec to gate; skip to Step 2 and derive the oracle from the
-code's current observable behavior instead.
+Both gates are acceptance-mode gates. Characterization mode is exempt from both, because it exists
+for code with no contract at all: there is no spec to gate and none to approve, so skip to Step 2 and
+derive the oracle from the code's current observable behavior instead.
 
 ### 2. Discover the repository's test infrastructure, and match it
 

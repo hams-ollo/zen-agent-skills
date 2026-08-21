@@ -10,6 +10,8 @@ also produces.
 
 The defect each group protects against:
   reports      - a session starts with nothing loaded and is never told (S-008)
+  foreign      - somebody else's skill library is counted as this kit's, so the hook is
+                 silent in the exact state S-008 says it must speak in (bug-0021)
   stays quiet  - the hook speaks on every start and becomes a line agents skip (S-010)
   source       - it repeats itself on resume, clear, compact, and fork (S-013)
   writes       - a hook that never writes starts writing a cache or marker (S-014)
@@ -68,12 +70,28 @@ def _attribute_chains(path: Path):
             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
 
 
-def place_skill(root: Path, subpath: Path, name="alpha"):
-    """Create one discoverable skill under root/subpath."""
+# A library that is genuinely somebody else's. These are the names a stock cloud
+# container ships at ~/.claude/skills, taken from the live session recorded in bug-0021,
+# where 24 of them silenced the hook with none of this kit installed.
+FOREIGN_SKILL_NAMES = ("brand-guidelines", "canvas-design", "docx", "pdf", "pptx", "xlsx")
+
+
+def place_skill(root: Path, subpath: Path, name="doc-sync"):
+    """Create one discoverable skill under root/subpath.
+
+    The default name is a real skill of this kit, because reachability is a question
+    about THIS kit's skills and a synthetic `alpha` answers it no. Pass a foreign name
+    (or use `place_foreign_library`) for the other side of that question.
+    """
     skill = root / subpath / name
     skill.mkdir(parents=True, exist_ok=True)
-    (skill / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+    (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
     return skill
+
+
+def place_foreign_library(root: Path, subpath: Path, names=FOREIGN_SKILL_NAMES):
+    """Create a whole skill library that belongs to somebody else."""
+    return [place_skill(root, subpath, name=name) for name in names]
 
 
 def payload(source="startup", cwd=None, event="SessionStart"):
@@ -174,6 +192,97 @@ class ReachabilityTests(unittest.TestCase):
         self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
 
 
+class ForeignLibraryTests(unittest.TestCase):
+    """bug-0021: whose skills were found, not merely whether any were.
+
+    `S-008`'s Given is "a clone where no KIT SKILL is present at project scope or at any
+    user-scope discovery directory", and the Proposed Surface defines Reachable as "at
+    least one KIT SKILL directory present". Counting any directory holding a SKILL.md
+    answers a wider question than the contract asks, and the difference is not
+    hypothetical: a stock cloud container ships its own ~/.claude/skills, so the hook was
+    silent in a live session with none of this kit installed, which is the exact state
+    S-008 says it must speak in.
+
+    The risk running the other way is a recognition so narrow it cries wolf at an adopter
+    who installed a subset. `--profile core` is three seeds, so that case has a test here
+    too; a reminder that fires on a correct install gets uninstalled within a week, which
+    costs more than the miss it fixes.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.project = self.root / "project"
+        self.home = self.root / "home"
+        self.project.mkdir()
+        self.home.mkdir()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_foreign_library_at_user_scope_is_not_reachability(self):
+        # S-008, reproduced from the live cloud run in bug-0021. This is the case the
+        # hook shipped wrong: 24 skills at ~/.claude/skills, not one of them from this
+        # kit, and the session proceeded with the report suppressed.
+        place_foreign_library(self.home, Path(".claude") / "skills")
+        out = srr.evaluate(payload(cwd=self.project), home=self.home)
+        self.assertIsNotNone(
+            out,
+            "a home full of somebody else's skills is not this kit installed; the "
+            "contract asks whether a KIT skill is reachable and the answer here is no")
+        self.assertIn("REACHABLE",
+                      out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_foreign_library_at_the_opencode_user_scope_is_not_reachability(self):
+        # Both user-scope directories install.py targets, so a fix that only narrows one
+        # of them does not pass.
+        place_foreign_library(self.home, Path(".agents") / "skills")
+        self.assertIsNotNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_a_foreign_library_at_project_scope_is_not_reachability(self):
+        place_foreign_library(self.project, Path(".claude") / "skills")
+        self.assertIsNotNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_one_kit_skill_beside_a_foreign_library_is_silence(self):
+        # S-010 still holds, and this is the property not to trade away: the foreign
+        # library is irrelevant once a kit skill is actually there.
+        place_foreign_library(self.home, Path(".claude") / "skills")
+        place_skill(self.home, Path(".claude") / "skills", name="fix-batch")
+        self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_kit_skills_at_project_scope_only_are_silence(self):
+        # S-009, with a foreign library at user scope to prove the two scopes are read
+        # independently rather than one masking the other.
+        place_foreign_library(self.home, Path(".claude") / "skills")
+        place_skill(self.project, Path(".claude") / "skills", name="house-review")
+        self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_a_partial_install_is_reachable(self):
+        # The cries-wolf risk, from the task's Risks section. `--profile core` seeds
+        # three skills, so an adopter can legitimately have a handful and no more.
+        # Reporting "nothing reachable" at them is the false positive that gets a
+        # reminder uninstalled.
+        for name in ("project-bootstrap", "init-worktracking", "pr-describe"):
+            place_skill(self.home, Path(".claude") / "skills", name=name)
+        self.assertIsNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_a_kit_named_directory_without_skill_md_does_not_count(self):
+        # Recognition is by name AND by the structural fact every harness agrees on. An
+        # empty `doc-sync/` left behind by a half-finished copy is not a loaded skill.
+        (self.home / ".claude" / "skills" / "doc-sync").mkdir(parents=True)
+        self.assertIsNotNone(srr.evaluate(payload(cwd=self.project), home=self.home))
+
+    def test_the_report_says_whose_skills_are_missing(self):
+        # The old wording ("no skill directory found") is false in front of 24 foreign
+        # skills, and a report an agent can see is wrong is a report it discounts.
+        place_foreign_library(self.home, Path(".claude") / "skills")
+        out = srr.evaluate(payload(cwd=self.project), home=self.home)
+        context = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("kit", context.lower(),
+                      "the report must say WHOSE skills are absent, since other skills "
+                      "may well be present and loaded")
+
+
 class ThisRepositoryTests(unittest.TestCase):
     """The hook, run against this repository itself.
 
@@ -205,16 +314,40 @@ class ThisRepositoryTests(unittest.TestCase):
         self.assertTrue(any((d / "SKILL.md").is_file() for d in sources.iterdir()),
                         "the premise of the test above is that these exist")
 
+    def test_the_recognised_names_are_exactly_the_skills_this_kit_ships(self):
+        # The standing objection to recognising a kit skill by name is that the list goes
+        # stale the moment the catalog changes, and a hook cannot derive it at runtime
+        # without importing from this repository, which the hooks module contract forbids.
+        # It cannot derive it, but this repository can CHECK it, and that is what makes
+        # the objection survivable: rename or drop a skill and this fails by name.
+        #
+        # Equality rather than a subset, in both directions. A shipped skill missing from
+        # the constant is a false alarm waiting for whoever installs only that skill; a
+        # constant naming a skill this kit no longer ships is a foreign directory that
+        # could silence the hook by collision.
+        shipped = {d.name for d in (REPO_ROOT / ".agents" / "skills").iterdir()
+                   if (d / "SKILL.md").is_file()}
+        self.assertTrue(shipped, "the premise of this test is that skills exist here")
+        self.assertEqual(
+            shipped, set(srr.KIT_SKILL_NAMES),
+            "KIT_SKILL_NAMES in the hook and the skills under .agents/skills/ have "
+            "diverged. Adding, renaming, or removing a skill means editing the constant "
+            "in the same commit; that edit is the price of a hook that cannot import "
+            "from this repository.")
+
     def test_a_real_project_scope_install_here_is_reachable(self):
         # The other direction, so the fix cannot be "always report". Placing a skill where
         # Claude Code actually discovers project skills must silence it, even though the
         # home is empty.
         target = REPO_ROOT / ".claude" / "skills"
         created = not target.exists()
-        skill = target / "_reachability_probe"
+        # Named after a real skill of this kit, not `_reachability_probe`: since bug-0021
+        # the hook recognises a kit skill by directory name, so a probe named anything
+        # else would prove the opposite of what this test claims.
+        skill = target / "doc-sync"
         try:
             skill.mkdir(parents=True, exist_ok=True)
-            (skill / "SKILL.md").write_text("---\nname: probe\n---\n", encoding="utf-8")
+            (skill / "SKILL.md").write_text("---\nname: doc-sync\n---\n", encoding="utf-8")
             with tempfile.TemporaryDirectory() as empty_home:
                 self.assertIsNone(srr.evaluate(payload(cwd=REPO_ROOT),
                                                home=Path(empty_home)))

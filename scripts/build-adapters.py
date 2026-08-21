@@ -23,6 +23,10 @@ outside its own file, and all three are rewritten and their targets emitted:
     ../../rules/<file>     ->  ../../.agents/rules/<file>, emitted once
     templates/<file>       ->  ../../.agents/skills/<name>/templates/<file>
 
+A link inside an inline code span or a fenced code block is left alone, because it
+renders as literal text: the skill is showing an example link rather than making
+one, and repointing it would change what the body says (bug-0028).
+
 Both adapter directories are two levels below <out>, so `../../` reaches the
 project root from either, and the shared material has one location rather than
 one per target. An existing <out>/.agents/rules/ file is never overwritten: that
@@ -106,11 +110,111 @@ EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
 # that have drifted apart are worse, and this defect had to be found twice already.
 BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 
+# A run of one or more backticks, and a fenced code block delimiter: a whole line whose
+# content is a run of three or more backticks, optionally followed by an info string.
+# Up to three spaces of indentation, per CommonMark. The info string may not contain a
+# backtick, because a run followed by a backtick is simply a longer run.
+#
+# These two patterns and the two helpers below are REPRODUCED from validate-skills.py,
+# which took them from `.tasks/validate.py`, where bug-0015 and bug-0017 taught the
+# backlog validator that a link rendered as literal text is not a link. This is the
+# third copy, and copying rather than importing is the decision bug-0027 recorded: the
+# three tools have separate lifecycles and `validate.py` also ships as a template into
+# other repositories, so none of them may depend on another. The regexes are kept
+# character-identical to the originals so a later reader can diff the copies when the
+# rule next changes.
+BACKTICK_RUN_RE = re.compile(r"`+")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
+
+
+def code_span_ranges(text):
+    """Character ranges `(start, end)` of the inline code spans in `text`.
+
+    A span opens with a run of backticks and closes with a run of the same length, so
+    both the single and the double form are spans, and a check that knows only the first
+    fixes half the occurrences it meets.
+
+    Scanned one line at a time, deliberately, and an unmatched run opens nothing:
+    pairing runs across the whole file means one stray backtick swallows everything up
+    to the next stray one, and a caller that skips those ranges then reports success
+    while checking nothing. See `code_span_ranges()` in .tasks/validate.py, the original.
+    """
+    ranges = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        runs = [(m.start(), m.end()) for m in BACKTICK_RUN_RE.finditer(line)]
+        i = 0
+        while i < len(runs):
+            opener = runs[i]
+            width = opener[1] - opener[0]
+            closer = next((j for j in range(i + 1, len(runs))
+                           if runs[j][1] - runs[j][0] == width), None)
+            if closer is None:
+                i += 1
+                continue
+            ranges.append((offset + opener[0], offset + runs[closer][1]))
+            i = closer + 1
+        offset += len(line)
+    return ranges
+
+
+def fenced_block_ranges(text):
+    """Character ranges `(start, end)` of the fenced code blocks in `text`.
+
+    A fence is a line-level construct where an inline code span is a character-level
+    one. Its delimiters sit alone on lines of their own, so code_span_ranges() pairs
+    them with nothing: the two rules compose by union rather than by replacement.
+
+    An unterminated opening fence yields no range at all, the same trade
+    code_span_ranges() makes for an unmatched run and for the same reason: a detector
+    that ran an unclosed fence to end of file would switch the caller off for
+    everything below it and report success while doing so. See `fenced_block_ranges()`
+    in .tasks/validate.py, the original.
+    """
+    ranges = []
+    offset = 0
+    start = None
+    width = 0
+    for line in text.splitlines(keepends=True):
+        match = FENCE_RE.match(line.rstrip("\r\n"))
+        if match:
+            if start is None:
+                start, width = offset, len(match.group(1))
+            elif len(match.group(1)) >= width and not match.group(2).strip():
+                ranges.append((start, offset + len(line)))
+                start = None
+        offset += len(line)
+    return ranges
+
 
 def rewrite_links(body: str, skill_name: str, ext: str) -> str:
-    """Repoint a skill body's relative links so they resolve from the adapter."""
+    """Repoint a skill body's relative links so they resolve from the adapter.
+
+    A link inside an inline code span or a fenced code block is emitted unchanged,
+    exactly as an anchor or an external URL already is. It renders as literal text
+    rather than as a link, so it is a skill *showing* an example rather than making
+    one, and repointing it rewrites what the body says instead of where it points:
+    the kit reads one way and every generated adapter reads another (bug-0028).
+    Nothing fails when that happens. The adapter renders, the run reports success,
+    and the only reader who finds out is one following a documented example in
+    another repository.
+
+    The excluded ranges are computed once for the whole body rather than once per
+    link, because `re.sub()` calls the replacement for every match and the natural
+    placement inside `repl` would rescan the body each time. That is the note
+    bug-0023 left when it made the same change in `broken_links()`.
+    """
+    spans = code_span_ranges(body) + fenced_block_ranges(body)
 
     def repl(m: re.Match) -> str:
+        # LINK_RE here anchors on `](` rather than on the link text's opening bracket,
+        # so `m.start()` is the bracket that closes the text. It falls inside the same
+        # span or fence as the opening one for any link a span or fence contains, and
+        # keying on it leaves a link whose *text* is a code span (which is how most
+        # links in this kit are written) correctly rewritten.
+        if any(start <= m.start() < end for start, end in spans):
+            return m.group(0)  # rendered as literal text, so it is an example, not a link
+
         target, title = m.group(1), m.group(2)
 
         def out(new: str) -> str:
@@ -139,40 +243,75 @@ def rewrite_links(body: str, skill_name: str, ext: str) -> str:
     return LINK_RE.sub(repl, body)
 
 
-def emit_shared_assets(skill_dir: Path, out: Path, dry: bool,
-                       layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
-    """Place the material an emitted body points at. Returns what was written.
+def emit_rules_module(out: Path, dry: bool,
+                      layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
+    """Place the rules module every emitted body shares. Returns what was written.
 
-    `layout` says where that material lands for the requesting target. The rule
-    each kind is treated by does not vary with the layout, only its destination.
+    Once per layout, which is what the module is: one copy shared by every skill,
+    so that swapping it is one edit rather than one per skill. `layout` says where
+    it lands for the requesting target; the rule it is treated by does not vary
+    with the layout, only its destination.
+
+    Once per layout is also what a real run has always produced, but it used to
+    get there by accident. This loop ran once per skill and the second and later
+    passes short-circuited on `dest.exists()`. A preview writes nothing, so that
+    guard never became true and the preview counted the module once per skill: 74
+    shared assets reported against the 17 a real run writes (bug-0025). Emitting
+    it where it belongs removes the divergence instead of compensating for it, and
+    matches what this docstring already claimed.
+
+    A copy already in the target project is never overwritten (S-010, S-014). The
+    module is swappable by design, so the project's own copy outranks the kit's.
     """
     written = []
+    if not RULES_DIR.is_dir():
+        return written
+    for src in sorted(RULES_DIR.rglob("*")):
+        if not src.is_file():
+            continue
+        dest = out / layout.rules_dir / src.relative_to(RULES_DIR)
+        if dest.resolve() == src.resolve() or dest.exists():
+            continue  # same file, or the project already has its own
+        if not dry:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+        written.append(dest)
+    return written
 
-    # The rules module, once per run, never clobbering a project's own copy.
-    if RULES_DIR.is_dir():
-        for src in sorted(RULES_DIR.rglob("*")):
-            if not src.is_file():
-                continue
-            dest = out / layout.rules_dir / src.relative_to(RULES_DIR)
-            if dest.resolve() == src.resolve() or dest.exists():
-                continue  # same file, or the project already has its own
-            if not dry:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
-            written.append(dest)
 
-    # This skill's own supporting files (everything but the SKILL.md itself).
+def emit_skill_assets(skill_dir: Path, out: Path, dry: bool,
+                      layout: Layout = LAYOUTS["cursor"]) -> list[Path]:
+    """Place one skill's own supporting files. Returns what was written.
+
+    Everything but the SKILL.md itself: the templates, references, and scripts an
+    emitted body points at. Per skill, unlike the rules module beside it, and
+    unconditionally: these are derived from the kit rather than adopted, so a
+    re-run refreshes them (S-014).
+
+    Byte-caches are excluded, by the same rule `install.py` filters them with
+    (`_digestable`, and the ignore list `_copy` places with). A skill directory
+    grows a `templates/__pycache__/` as soon as anything imports what is in it,
+    which the test suite does, and the payload this places is meant to be a
+    portable human-readable skill rather than one checkout's compiled bytecode
+    (bug-0036). The directory half of the rule stands on its own: a future
+    artefact inside `__pycache__` with some other suffix is still not part of the
+    skill. Real `.py` files under `templates/`, such as the validator
+    `init-worktracking` scaffolds, are unaffected and still emit.
+    """
+    written = []
     for src in sorted(skill_dir.rglob("*")):
         if not src.is_file() or src.name == "SKILL.md":
             continue
-        dest = out / layout.assets_dir / skill_dir.name / src.relative_to(skill_dir)
+        rel = src.relative_to(skill_dir)
+        if src.suffix == ".pyc" or "__pycache__" in rel.parts:
+            continue
+        dest = out / layout.assets_dir / skill_dir.name / rel
         if dest.resolve() == src.resolve():
             continue  # building into the kit itself; the file is already there
         if not dry:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
         written.append(dest)
-
     return written
 
 
@@ -285,7 +424,12 @@ def _write(dest: Path, content: str, dry: bool):
     if dry:
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(content, encoding="utf-8")
+    # `newline=""` disables newline translation, so the bytes on disk are exactly the
+    # newlines in `content` (LF) rather than the platform default, which is CRLF on
+    # Windows. Emitted adapters are untracked, so nothing is broken today; the point is
+    # that a writer whose line endings vary by platform is the shape that makes a
+    # digest comparison answer differently on Windows than on Linux.
+    dest.write_text(content, encoding="utf-8", newline="")
 
 
 EMITTERS = {"cursor": emit_cursor, "vscode": emit_vscode, "plugin": emit_plugin}
@@ -324,7 +468,11 @@ def main(argv=None) -> int:
 
     tag = "[dry-run] " if args.dry_run else ""
     n = 0
-    assets = 0
+    # The rules module is one copy shared by every skill, so it is emitted per
+    # layout and outside the per-skill loop. Inside it, a preview counted it once
+    # per skill (bug-0025); see emit_rules_module().
+    assets = sum(len(emit_rules_module(out, args.dry_run, layout))
+                 for layout in layouts)
     for d in skills:
         fm, body = split_frontmatter((d / "SKILL.md").read_text(encoding="utf-8"))
         name = fm.get("name", d.name)
@@ -335,7 +483,7 @@ def main(argv=None) -> int:
             n += 1
         # The emitted bodies point at these; without them the links dangle.
         for layout in layouts:
-            assets += len(emit_shared_assets(d, out, args.dry_run, layout))
+            assets += len(emit_skill_assets(d, out, args.dry_run, layout))
 
     manifests = emit_plugin_manifests(out, args.dry_run) if "plugin" in targets else []
     for dest in manifests:

@@ -23,16 +23,28 @@ The defect each group protects against:
                   would pressure the next author into guessing a URL instead of recording
                   the truth: the exact failure the convention exists to prevent
   malformed     - a record missing its digest, or carrying a placeholder one, passes silently
+  https only    - a record pins a plaintext http:// source, so the digest is taken over bytes
+                  nobody authenticated, and the check quietly certifies them
+  read bound    - a hostile or merely enormous URL is read into memory whole, or a truncated
+                  read is compared and reported as drift, which is the wrong word for the
+                  wrong reason
   blank line    - one blank line inside a block deletes the record from the run entirely,
                   and the checker reports a clean count nobody has reason to doubt
+  unreadable    - a file the process cannot read drops every record it carries, is named
+                  nowhere, and leaves a narrowed count that reads exactly like a clean one
+  misspelled    - one mistyped field name after `source:` deletes the whole block from the
+                  run, at exit 0, and the fix for it goes too far the other way and starts
+                  reporting a template's own `source:` field as a broken fold-in
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
+import contextlib
 import hashlib
 import importlib.util
 import io
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -91,6 +103,53 @@ def run(body, fetcher, argv=()):
         tmp.cleanup()
 
 
+LOCKED_URL = URL.replace("skills/x/", "skills/locked/")
+
+_REAL_READ_TEXT = Path.read_text
+
+
+def deny_reads(*skills):
+    """Make `read_text` raise for the named skills, and read every other file normally.
+
+    A stubbed failure rather than a real lock. An exclusive handle (`dwShareMode=0`) is a
+    Windows-only trick, and the property under test is what the checker does with an
+    OSError, not how an operating system produces one.
+    """
+
+    def read_text(self, *args, **kwargs):
+        if self.parent.name in skills:
+            raise PermissionError(13, "Permission denied")
+        return _REAL_READ_TEXT(self, *args, **kwargs)
+
+    return unittest.mock.patch.object(Path, "read_text", read_text)
+
+
+def make_pair_root():
+    """A root with two adapted files, each carrying one record, under separate skills."""
+    tmp = tempfile.TemporaryDirectory()
+    root = Path(tmp.name)
+    for name, url in (("locked", LOCKED_URL), ("readable", URL)):
+        skill = root / ".agents" / "skills" / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_bytes(
+            (f"---\nname: {name}\n---\n\n# {name}\n\nAdapted, so it differs from upstream.\n\n"
+             + block(url=url)).encode("utf-8")
+        )
+    return tmp, root
+
+
+def run_pair(fetcher, argv=(), denied=("locked",)):
+    """Run against that pair with the named skills' files made unreadable."""
+    tmp, root = make_pair_root()
+    try:
+        out = io.StringIO()
+        with deny_reads(*denied) if denied else contextlib.nullcontext():
+            code = cp.main(argv=list(argv), root=root, fetcher=fetcher, out=out)
+        return code, out.getvalue()
+    finally:
+        tmp.cleanup()
+
+
 def serve(content):
     def fetcher(url, timeout=30):
         return content
@@ -101,6 +160,48 @@ def unreachable(exc):
     def fetcher(url, timeout=30):
         raise exc
     return fetcher
+
+
+class _FakeResponse:
+    """The parts of an HTTP response `fetch()` uses, counting the bytes it hands over."""
+
+    def __init__(self, payload):
+        self._buffer = io.BytesIO(payload)
+        self.bytes_read = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def read(self, amount=None):
+        chunk = self._buffer.read() if amount is None else self._buffer.read(amount)
+        self.bytes_read += len(chunk)
+        return chunk
+
+
+class _fake_urlopen:
+    """Serve `payload` to `fetch()` without a socket, and expose the response it served.
+
+    `fetch()` is the one function with no injection seam, because the seam the rest of this
+    file uses replaces it. Its read bound therefore has to be exercised against a stand-in
+    response rather than a stand-in fetcher, and still without a socket.
+    """
+
+    def __init__(self, payload):
+        self.response = _FakeResponse(payload)
+        self._patch = unittest.mock.patch.object(
+            cp.urllib.request, "urlopen", lambda request, timeout=None: self.response
+        )
+
+    def __enter__(self):
+        self._patch.start()
+        return self.response
+
+    def __exit__(self, *exc_info):
+        self._patch.stop()
+        return False
 
 
 class MatchPath(unittest.TestCase):
@@ -244,12 +345,136 @@ class MalformedRecordPath(unittest.TestCase):
     def test_non_url_source_exits_two(self):
         code, output = run(block(url="somewhere upstream"), serve(UPSTREAM))
         self.assertEqual(code, 2)
-        self.assertIn("source is not an absolute http(s) URL", output)
+        self.assertIn("source is not an absolute https:// URL", output)
 
     def test_malformed_retrieval_date_exits_two(self):
         code, output = run(block(retrieved="last week"), serve(UPSTREAM))
         self.assertEqual(code, 2)
         self.assertIn("retrieved is not an ISO date", output)
+
+
+class HttpsOnlySourceTest(unittest.TestCase):
+    """chore-0035: a source must be https://, because the digest authenticates nothing else.
+
+    A plaintext source digests bytes that anyone on the path could have written, and the
+    record then reads as verified provenance. Rejected for its own reason rather than
+    silently upgraded to https://, because a silent upgrade makes the recorded `source:`
+    differ from what was fetched, and the record is meant to be reproducible by hand.
+    """
+
+    HTTP_URL = URL.replace("https://", "http://")
+
+    def test_an_http_source_is_reported_as_malformed(self):
+        code, output = run(block(url=self.HTTP_URL), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_http_message_names_the_field_and_the_offending_url(self):
+        # A rejection that does not say which field to edit costs the reader the search.
+        code, output = run(block(url=self.HTTP_URL), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("source", output)
+        self.assertIn("http://", output)
+        self.assertIn(self.HTTP_URL, output)
+
+    def test_an_http_source_is_never_fetched(self):
+        def never(url, timeout=30):
+            raise AssertionError("a rejected record must not be fetched")
+
+        code, _ = run(block(url=self.HTTP_URL), never)
+        self.assertEqual(code, 2)
+
+    def test_an_https_source_still_validates(self):
+        code, output = run(block(), serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_the_scheme_is_matched_case_insensitively(self):
+        # A scheme is case-insensitive per RFC 3986. Rejecting `HTTPS://` would be a new
+        # failure introduced by the tightening rather than the one it was aimed at.
+        self.assertIsNone(cp.validate({
+            "source": URL.replace("https://", "HTTPS://"),
+            "author": "Balarama Bosch",
+            "license": "MIT",
+            "retrieved": "2026-08-06",
+            "sha256": UPSTREAM_SHA,
+        }))
+
+    def test_every_source_recorded_in_this_repository_is_https(self):
+        # The real records, not fixtures. All eight were https:// before this tightening,
+        # so it breaks nothing; this is the test that says so rather than a claim in a
+        # commit message that nobody can re-run.
+        found, _ = cp.collect(REPO_ROOT)
+        self.assertEqual(len(found), 8)
+        for rel, record in found:
+            with self.subTest(path=rel, line=record["line"]):
+                self.assertTrue(
+                    record["source"].lower().startswith("https://"),
+                    f"{rel}:{record['line']} pins a non-https source: {record['source']}",
+                )
+                self.assertIsNone(cp.validate(record), f"{rel}:{record['line']}")
+
+
+class ReadBoundTest(unittest.TestCase):
+    """chore-0035: the response body is read under a bound, and exceeding it is an error.
+
+    `response.read()` with no argument reads whatever the far end sends. The bound is
+    generous enough that no real source file could hit it, so hitting it means something is
+    wrong with the source rather than with the record: the run must say `error`, never
+    `drift`. Reporting drift would name a truncated digest as evidence upstream moved, which
+    is the wrong word for the wrong reason and would invite someone to update the record.
+    """
+
+    def test_the_bound_is_documented_and_generous(self):
+        # A bound nobody can name is a magic number, and one a real source could hit would
+        # turn the check into a source of false errors.
+        self.assertGreaterEqual(cp.MAX_FETCH_BYTES, 1024 * 1024)
+
+    def test_fetch_returns_a_response_at_the_bound(self):
+        payload = b"x" * 64
+        with _fake_urlopen(payload):
+            self.assertEqual(cp.fetch(URL, max_bytes=64), payload)
+
+    def test_fetch_raises_when_the_response_exceeds_the_bound(self):
+        with _fake_urlopen(b"x" * 65):
+            with self.assertRaises(ValueError) as caught:
+                cp.fetch(URL, max_bytes=64)
+        self.assertIn("64", str(caught.exception))
+
+    def test_fetch_does_not_read_the_whole_oversized_body(self):
+        # The point of the bound is memory, so a fetch that reads it all and then complains
+        # would satisfy the message and not the requirement.
+        payload = b"x" * 4096
+        with _fake_urlopen(payload) as response:
+            with self.assertRaises(ValueError):
+                cp.fetch(URL, max_bytes=64)
+        self.assertLessEqual(response.bytes_read, 65)
+
+    def test_an_oversized_fetch_is_reported_as_an_error_not_as_drift(self):
+        oversized = b"x" * (cp.MAX_FETCH_BYTES + 1)
+        code, output = run(block(), serve(oversized))
+        self.assertEqual(code, 2)
+        self.assertNotIn("DRIFT", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_oversize_message_names_the_source_and_the_bound(self):
+        oversized = b"x" * (cp.MAX_FETCH_BYTES + 1)
+        code, output = run(block(), serve(oversized))
+        self.assertEqual(code, 2)
+        self.assertIn(URL, output)
+        self.assertIn(str(cp.MAX_FETCH_BYTES), output)
+
+    def test_the_size_error_raised_by_fetch_reaches_the_report_as_an_error(self):
+        # The real fetch() signals the bound by raising, so the path a live run takes has
+        # to land in the same bucket as the one the injected fetcher exercises.
+        def oversized(url, timeout=30):
+            raise cp.ResponseTooLarge("response exceeds the 10485760 byte read bound")
+
+        code, output = run(block(), oversized)
+        self.assertEqual(code, 2)
+        self.assertNotIn("DRIFT", output)
+        self.assertIn("could not fetch", output)
+        self.assertIn(URL, output)
 
 
 class ParsingTest(unittest.TestCase):
@@ -367,18 +592,237 @@ class BlankLineInsideABlockTest(unittest.TestCase):
         self.assertEqual(cp.parse_records(text), [])
 
 
+class UnreadableFileTest(unittest.TestCase):
+    """bug-0019: an unreadable file dropped every record it carried, at exit 0.
+
+    `collect()` wrapped its read in `except OSError: continue`, so a file another process
+    held open contributed no records, was named nowhere, and left a smaller count that is
+    indistinguishable from a clean result. Demonstrated on 2026-08-06 by holding a Windows
+    exclusive handle on one provenance-carrying file: 9 records readable, 8 records locked,
+    exit 0 either way.
+
+    So the oracles here assert the path is named and the exit code moved. "Does not crash"
+    and "the other records were still checked" both passed against the bug. The fixture
+    carries a second, readable file for the opposite reason: a fix that aborted on the
+    first bad file would hide the state of everything after it, and a fix that failed every
+    run would too.
+    """
+
+    LOCKED = ".agents/skills/locked/SKILL.md"
+    READABLE = ".agents/skills/readable/SKILL.md"
+
+    def test_the_unreadable_file_is_named_in_the_output(self):
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertIn(self.LOCKED, output)
+        self.assertIn("could not be read", output)
+
+    def test_the_run_exits_non_zero_when_a_file_cannot_be_read(self):
+        code, _ = run_pair(serve(UPSTREAM))
+        self.assertEqual(code, 2)
+
+    def test_the_readable_files_are_still_checked_and_reported(self):
+        # One unreadable file must not hide the state of the others, so the readable
+        # record is genuinely fetched and compared rather than merely counted.
+        seen = []
+
+        def fetcher(url, timeout=30):
+            seen.append(url)
+            return UPSTREAM
+
+        code, output = run_pair(fetcher)
+        self.assertEqual(code, 2)
+        self.assertEqual(seen, [URL])
+        self.assertIn(f"{self.READABLE}:", output)
+        self.assertIn("up to date", output)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_the_failure_is_a_clear_message_not_a_traceback(self):
+        # Matching the unreachable-source path: a traceback reads as a defect in this
+        # script rather than as a file somebody else has open.
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertNotIn("Traceback", output)
+        self.assertIn("Permission denied", output)
+
+    def test_the_report_says_the_counts_are_incomplete(self):
+        # The count is the only number reported and nothing else states what it should
+        # have been, so the run has to say the number it printed is short.
+        code, output = run_pair(serve(UPSTREAM))
+        self.assertIn("counts above are incomplete", output)
+
+    def test_an_unreadable_file_is_not_reported_as_nothing_recorded(self):
+        # The worst variant: when every file in scope is unreadable, the old code printed
+        # the line a repository with no fold-ins prints, and exited 0.
+        code, output = run_pair(serve(UPSTREAM), denied=("locked", "readable"))
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn(self.LOCKED, output)
+        self.assertIn(self.READABLE, output)
+
+    def test_list_mode_names_the_unreadable_file_and_exits_non_zero(self):
+        # --list claims to print every URL a run would contact, so an unread file makes
+        # that list short in the same silent way.
+        def never(url, timeout=30):
+            raise AssertionError("--list must fetch nothing")
+
+        code, output = run_pair(never, argv=["--list"])
+        self.assertEqual(code, 2)
+        self.assertIn(self.LOCKED, output)
+        self.assertIn("could not be read", output)
+        self.assertIn("1 record(s).", output)
+
+    def test_a_clean_run_still_succeeds(self):
+        # The other direction. A check that failed whenever it was run would satisfy
+        # every assertion above and be worthless.
+        code, output = run_pair(serve(UPSTREAM), denied=())
+        self.assertEqual(code, 0)
+        self.assertIn("2 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+        self.assertNotIn("could not be read", output)
+
+    def test_collect_returns_the_failures_alongside_the_records(self):
+        # At the unit layer, because this is where the records were dropped: a caller
+        # cannot report what the helper never handed it.
+        tmp, root = make_pair_root()
+        try:
+            with deny_reads("locked"):
+                found, unreadable = cp.collect(root)
+        finally:
+            tmp.cleanup()
+        self.assertEqual([rel for rel, _ in found], [self.READABLE])
+        self.assertEqual([rel for rel, _ in unreadable], [self.LOCKED])
+        self.assertIn("Permission denied", unreadable[0][1])
+
+
+DOCSTRING_BLOCK = (
+    '"""A hook.\n'
+    "\n"
+    "Provenance\n"
+    "----------\n"
+    f"source: {URL}\n"
+    "author: Balarama Bosch\n"
+    "license: MIT\n"
+    "retrieved: 2026-08-06\n"
+    f"sha256: {UPSTREAM_SHA}\n"
+    '"""\n'
+)
+
+
+class MisspelledFieldTest(unittest.TestCase):
+    """bug-0041: a typo on the field after `source:` deleted the whole block, at exit 0.
+
+    The run ended on the mistyped line with only `source` collected, which failed the same
+    "at least one other recognised key" test that keeps `review-depth`'s unrelated `source:`
+    field out of the record set. So the block did not become malformed, it stopped existing:
+    no line in the output, no count, exit 0, and the upstream it credits never re-fetched
+    again. Asserting "the well-formed block still parses" would have passed against that,
+    because the well-formed block always did. The oracle has to be the mistyped one.
+
+    The opposite failure is live and is why the fix keys on placement rather than on the
+    field name: `review-depth`'s output template really does carry a `source:` line, inside
+    a ```text fence, and any rule that turns every bare `source:` run into a record makes
+    the checker fail on a skill nobody touched. Both directions are tested here.
+    """
+
+    def test_the_record_survives_a_misspelled_field(self):
+        records = cp.parse_records(block().replace("author:", "authr:"))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["source"], URL)
+
+    def test_the_run_names_the_file_and_the_misspelled_field(self):
+        code, output = run(block().replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn(".agents/skills/x/SKILL.md", output)
+        self.assertIn("authr", output)
+
+    def test_the_misspelled_block_is_counted_as_an_error_not_as_nothing(self):
+        # The bug's signature is a count that looks clean, so the count is the oracle.
+        code, output = run(block().replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_a_malformed_block_is_never_fetched(self):
+        def never(url, timeout=30):
+            raise AssertionError("a record that cannot be checked must not be fetched")
+
+        code, _ = run(block().replace("author:", "authr:"), never)
+        self.assertEqual(code, 2)
+
+    def test_a_typo_on_the_last_field_is_reported_too(self):
+        # `note:` is optional, so the run had already collected every required field. The
+        # block is still mistyped, and a checker that shrugs at it teaches the next author
+        # that some field names are approximate.
+        body = block()[:-4] + "notes: backfilled baseline\n```\n"
+        code, output = run(body, serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("notes", output)
+
+    def test_the_docstring_placement_reports_a_misspelled_field_the_same_way(self):
+        # The convention names two placements and the hooks use this one. A fix that only
+        # understood markdown fences would leave half the tree exactly as it was.
+        code, output = run(DOCSTRING_BLOCK.replace("author:", "authr:"), serve(UPSTREAM))
+        self.assertEqual(code, 2)
+        self.assertIn("authr", output)
+
+    def test_the_docstring_placement_still_parses_when_it_is_well_formed(self):
+        code, output = run(DOCSTRING_BLOCK, serve(UPSTREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_an_unlocatable_record_is_not_made_malformed_by_the_placement_rule(self):
+        # The same family in the opposite direction: `status: unlocatable` legitimately
+        # omits `retrieved` and `sha256`, so a placement rule paired with a naive
+        # required-keys check would report every honest unlocatable record as broken.
+        def never(url, timeout=30):
+            raise AssertionError("an unlocatable record must not be fetched")
+
+        code, output = run(UnlocatablePath.BLOCK, never)
+        self.assertEqual(code, 0)
+        self.assertIn("0 up to date, 0 drifted, 1 unlocatable, 0 error(s).", output)
+
+    def test_a_source_field_in_someone_elses_fence_is_still_ignored(self):
+        # The review-depth shape as a fixture: a `source:` line inside a ```text fence,
+        # followed by field names this parser does not recognise. Before the placement
+        # rule it was dropped for want of a second recognised key, which is the same
+        # reason a mistyped block was dropped. Now it is dropped for being somewhere else.
+        text = (
+            "```text\n"
+            "depth: quick | standard | deep\n"
+            "source: detected | user\n"
+            "changeset: the range the signals were computed over\n"
+            "changeset_source: resolved | supplied\n"
+            "```\n"
+        )
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_source_field_in_open_prose_is_still_ignored(self):
+        # And outside any fence, where the content rule is the only one that applies.
+        text = "source: detected | user\nchangeset: working tree\n"
+        self.assertEqual(cp.parse_records(text), [])
+
+    def test_a_whole_run_of_that_shape_exits_zero_with_nothing_recorded(self):
+        def never(url, timeout=30):
+            raise AssertionError("nothing here should be fetched")
+
+        code, output = run(
+            "```text\nsource: detected | user\nchangeset: working tree\n```\n", never
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("No provenance records found", output)
+
+
 class RepositoryRecordsTest(unittest.TestCase):
     """Every block actually recorded in this repository is well formed. No network."""
 
     def test_all_seven_backfilled_targets_carry_a_valid_record(self):
-        found = cp.collect(REPO_ROOT)
+        found, _ = cp.collect(REPO_ROOT)
         self.assertTrue(found, "no provenance records found in this repository")
         for rel, record in found:
             with self.subTest(path=rel, line=record["line"]):
                 self.assertIsNone(cp.validate(record), f"{rel}:{record['line']}")
 
     def test_the_backfilled_files_are_the_expected_set(self):
-        recorded = {rel for rel, _ in cp.collect(REPO_ROOT)}
+        recorded = {rel for rel, _ in cp.collect(REPO_ROOT)[0]}
         for expected in (
             ".agents/skills/spec-quality/SKILL.md",
             ".agents/skills/spec-plan-readiness/SKILL.md",
@@ -394,9 +838,12 @@ class RepositoryRecordsTest(unittest.TestCase):
         # Pins the count in both directions. A grammar widened until it collects unrelated
         # `source:` lines raises it; one narrowed until a real block drops out lowers it,
         # and the second failure is the silent one.
-        found = cp.collect(REPO_ROOT)
+        found, unreadable = cp.collect(REPO_ROOT)
         self.assertEqual(len(found), 8)
         self.assertEqual(len({rel for rel, _ in found}), 7)
+        # And the count is a full one rather than a narrowed one: if any file in scope
+        # could not be read, 8 would be what survived rather than what is there.
+        self.assertEqual(unreadable, [])
 
     def test_the_review_depth_output_template_contributes_no_records(self):
         # The real file, not a fixture. `source: detected | user` in review-depth's output

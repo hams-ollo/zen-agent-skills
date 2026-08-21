@@ -4,12 +4,13 @@
 
 ## How this was verified
 
-<!-- Check what you ran. All four are standard-library only, so there is nothing to install. -->
+<!-- One command runs every gate. It is standard-library only, so there is nothing to install. -->
 
-- [ ] `python scripts/validate-skills.py`
-- [ ] `python -m unittest discover -s tests -p "test_*.py"`
-- [ ] `python .tasks/validate.py --strict`
-- [ ] `python scripts/build-adapters.py --dry-run`
+- [ ] `python scripts/run-checks.py` exited 0
+
+If it did not exit 0, say so here and name the gates it reported. `1` means a gate ran and failed.
+`2` means a gate could not run at all, which outranks `1` because the report is then incomplete
+rather than negative, so it needs saying rather than retrying quietly.
 
 For anything a command cannot prove, say what you did and what you saw. If this adds or changes a
 skill, that means naming the real work you ran it on: no skill ships cold, and no command can

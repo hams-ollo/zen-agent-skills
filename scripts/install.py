@@ -8,7 +8,9 @@ reported CONFLICT and skipped for you to resolve.
 In copy mode, re-run recognition relies on scripts/.install-manifest.json to
 know which targets this tool created. If that manifest is deleted, previously
 copied targets are treated as unmanaged and reported CONFLICT (symlink mode
-recognizes its own links directly and does not have this dependency).
+recognizes its own links directly and does not have this dependency). If it is
+present but structurally damaged, every command stops at exit 2 naming the file
+and the offending entry, rather than acting on a record it cannot read.
 
     python scripts/install.py --dry-run          # preview
     python scripts/install.py                     # install (copy on Windows, symlink on POSIX)
@@ -32,7 +34,9 @@ deliberately, and an overwrite destroys that without asking.
 The baseline is per entry, not per manifest, so a manifest written before this change
 degrades one entry at a time. Such an entry reports `unknown`, never `ok`: a clean
 result for a state nobody recorded is the same silent failure --check exists to
-remove, one level up. Re-install to establish a baseline.
+remove, one level up. Re-install to establish a baseline, except for the adopted
+rules module: re-installing that one preserves your files and records nothing, so
+--replace-adopted is the only route to a baseline there (bug-0020).
 
 A --profile selects which skills to place, and defaults to less than all of them
 because every installed description is loaded so an agent can route to it. A profile
@@ -107,6 +111,12 @@ PROFILE_SEEDS = {
 }
 DEFAULT_PROFILE = "spine"
 
+# The one syntax that makes a skill a profile edge: a markdown link from one skill body
+# to a sibling SKILL.md. The same skill named in backticks is prose and creates no edge,
+# which is the form for stating chain position. Authors trip this by writing the readable
+# link form for a neighbour they only meant to name (chore-0040), so the rule is stated
+# for skill authors in AGENTS.md's portability contract, not only here where they will
+# never read it.
 SIBLING_REF_RE = re.compile(r"\]\(\.\./([^/)]+)/SKILL\.md")
 # Narrow readers for one frontmatter field, deliberately not a YAML parser. The block
 # scalar case matters here for the same reason it does in validate-skills.py: without
@@ -264,19 +274,126 @@ def profile_budgets(skills):
             for name in PROFILE_SEEDS}
 
 
+class ManifestError(Exception):
+    """The manifest parsed as JSON but is not a record this tool can read.
+
+    Raised by `load_manifest()` and caught by each of its three callers, which is the
+    shape the callers dictate: `install`, `uninstall`, and `check` all need to stop, but
+    they stop with different words, and a sentinel return value would have every caller
+    re-deriving the reason from a value that cannot carry one.
+    """
+
+
+# What a reader here actually dereferences, and nothing beyond it (bug-0024). Every key
+# below is read by `install`, `uninstall`, `check`, or `_check_entry`; a key none of them
+# reads is not validated, because a validator strict enough to reject a record written by
+# a later version of this tool turns an upgrade into what looks like corruption. An
+# unrecognised key is ignored in both directions, deliberately.
+#
+# `target` is the one required key: `install`, `uninstall`, and `check` each subscript it
+# directly, so an entry without it is not a record of anything. The rest are optional and
+# faulted on only when present and of the wrong type, since each has a reader that already
+# tolerates its absence.
+_OPTIONAL_ENTRY_TYPES = {
+    "source": (str, "a string"),      # _check_entry: Path(entry.get("source", ""))
+    "tool": (str, "a string"),        # check(): sort key and printed column
+    "name": (str, "a string"),        # check(): sort key, and the ADOPTED_ENTRY_NAMES test
+    "digests": (dict, "an object"),   # _compare(): iterated as a mapping
+}
+
+
+def _describe(value) -> str:
+    """Name a JSON value's shape the way the file that holds it spells it."""
+    return {type(None): "null", bool: "a boolean", int: "a number", float: "a number",
+            str: "a string", list: "a list", dict: "an object"}.get(type(value),
+                                                                    repr(value))
+
+
+def _validate_manifest(data) -> None:
+    """Raise `ManifestError` naming the first structural fault, or return.
+
+    The message is half the fix. A manifest is per-machine and gitignored, so the reader
+    of this message is the only person who can see the file: naming the entry and the key
+    is the difference between a one-line repair and an investigation this report exists to
+    save. The caller adds the path and the remedy.
+    """
+    if not isinstance(data, dict):
+        raise ManifestError(f'its top-level value is {_describe(data)}, not an object '
+                            f'with an "entries" list')
+    entries = data.get("entries")
+    if entries is None:
+        raise ManifestError('it has no "entries" list')
+    if not isinstance(entries, list):
+        raise ManifestError(f'its "entries" is {_describe(entries)}, not a list')
+
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ManifestError(f"entry {i} is {_describe(entry)}, not an object")
+        where = f"entry {i}"
+        if isinstance(entry.get("name"), str):
+            where += f" ({entry['name']!r})"
+        if "target" not in entry:
+            raise ManifestError(f'{where} has no "target", so it records no installed '
+                                f"path")
+        target = entry["target"]
+        if not isinstance(target, str) or not target:
+            raise ManifestError(f'{where} has a "target" that is {_describe(target)}, '
+                                f"not a path")
+        for key, (want, described) in _OPTIONAL_ENTRY_TYPES.items():
+            if key in entry and not isinstance(entry[key], want):
+                raise ManifestError(f'{where} has a "{key}" that is '
+                                    f"{_describe(entry[key])}, not {described}")
+
+
 def load_manifest():
+    """The recorded install, or `{"entries": []}` when there is nothing readable.
+
+    Raises `ManifestError` when the file parses as JSON but is not shaped like a manifest.
+
+    Corrupt bytes and a wrong shape are treated differently on purpose. Bytes that do not
+    parse carry no recoverable information and never did name an install, so an empty
+    record is a truthful reading of them. A file that parses does carry a record, possibly
+    of targets under homes this run is not even looking at, and reading it as empty would
+    quietly authorise placing over them or reporting them absent. So the wrong shape stops
+    the run instead, at exit 2 (could not run) rather than exit 1 (diverged), because a
+    caller scripting around `--check` treats 1 as an answer and 2 as the absence of one.
+    """
     if MANIFEST.is_file():
         try:
-            return json.loads(MANIFEST.read_text(encoding="utf-8"))
+            data = json.loads(MANIFEST.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return {"entries": []}
+        _validate_manifest(data)
+        return data
     return {"entries": []}
+
+
+def report_unreadable_manifest(exc: ManifestError, consequence: str) -> int:
+    """Print the stated exit-2 report for an unreadable manifest and return 2.
+
+    One helper rather than three copies, so the path and the remedy cannot drift apart
+    between the three commands that can hit this.
+    """
+    print(f"Cannot read the install record at {MANIFEST}: {exc}.")
+    print(f"{consequence}")
+    print("The record is written per machine and is not in version control, so an "
+          "interrupted write, a full disk, or a partly synced home produces exactly "
+          "this. Nothing here repairs it: re-install to establish a fresh record "
+          "(python scripts/install.py), or delete the file and re-install, which is "
+          "the same thing with the damaged copy gone.")
+    return 2
 
 
 def save_manifest(entries, dry):
     if dry:
         return
-    MANIFEST.write_text(json.dumps({"entries": entries}, indent=2), encoding="utf-8")
+    # `newline=""` disables newline translation, so the manifest holds exactly the
+    # newlines in the string rather than the platform default, which is CRLF on Windows.
+    # The manifest is gitignored, so nothing is broken today; the point is that `--check`
+    # compares digests of bytes read off disk, and a writer whose line endings vary by
+    # platform is the shape that makes such a comparison answer differently per platform.
+    MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                        encoding="utf-8", newline="")
 
 
 def is_managed(target: Path, manifest) -> bool:
@@ -348,6 +465,10 @@ HOOK_REGISTRATIONS = [
      "^Edit$|^Write$|^MultiEdit$|^NotebookEdit$|apply_patch"),
     # `startup` only. The other sources continue a session already told.
     ("skill-reachability-reminder.py", "SessionStart", "startup"),
+    # Same event and the same reasoning, and deliberately a second hook rather than a
+    # branch inside the first: reachability is a directory-name match, currency reads and
+    # digests files, and the reachability reminder's own message disclaims this question.
+    ("install-currency-reminder.py", "SessionStart", "startup"),
 ]
 
 
@@ -441,7 +562,19 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
               f"{len(added)} skill(s) added ({', '.join(added)}). A skill that composes a "
               f"sibling is broken without it.\n")
 
-    manifest = load_manifest()
+    # Refusing to place anything is the stated choice for a damaged record (bug-0024).
+    # The alternative, reading it as empty, is the documented behaviour for a *deleted*
+    # manifest and would report CONFLICT for every target already there, which is a
+    # defensible answer only when the tool genuinely knows nothing. Here it knows the
+    # record exists and cannot be trusted, and proceeding would write a fresh manifest
+    # over it, discarding whatever targets it recorded under other homes. That is the one
+    # irreversible outcome available, so it is the one not taken.
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was placed: this run would have written a fresh record over "
+                 "the damaged one, losing whatever it still records.")
     entries = {e["target"]: e for e in manifest["entries"]}
     conflicts = 0
     preserved_adopted = False
@@ -675,7 +808,22 @@ def _place_adopted(src: Path, target: Path, mode: str, dry: bool, manifest,
             digests[rel] = want
             placed.append(rel)
         elif have is None:
-            preserved.append((rel, "you removed it, so it is not restored"))
+            # The digest goes with the file (bug-0022). Keeping it left the record asserting
+            # a baseline for a file this very run has just said is gone, and nothing ever
+            # reconciled the two, which is what let `--check` read that baseline forever. It
+            # is not the "preserved file keeps its old baseline" property bug-0018 pinned:
+            # that one is about a file the adopter *edited*, which is still on disk and
+            # still has a baseline worth keeping.
+            #
+            # The seam this leaves open is stated rather than hidden: with no record of the
+            # removal, a later run cannot tell this lens from one the adopter has never been
+            # sent, so it places it. Remembering instead would need a tombstone in the
+            # manifest, and the alternative is a deliberate deletion reported as divergence
+            # on every check forever, which is noise aimed at exactly the people this
+            # exemption was written for. Nothing of theirs is destroyed either way.
+            preserved.append((rel, "you removed it, so this run does not restore it, and "
+                                   "the record no longer claims it"))
+            digests.pop(rel, None)
         elif base is None:
             preserved.append((rel, "yours, and the kit now ships a file of that name"))
         else:
@@ -774,7 +922,13 @@ def _beneath(target: str, home: Path) -> bool:
 
 
 def uninstall(home: Path, dry: bool) -> int:
-    manifest = load_manifest()
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was removed: the record names what this tool placed, and "
+                 "removing files on the strength of a record it cannot read is exactly "
+                 "the mistake to avoid.")
     if not manifest["entries"]:
         print("Nothing recorded as installed.")
         return 0
@@ -842,6 +996,8 @@ def _check_entry(entry) -> tuple:
       entry could be compared anyway, and deliberately is not: the adopted half cannot be
       answered without a baseline, and a per-entry verdict that reads `ok` while half of it
       is unanswerable is the clean-looking-but-partial result this check exists to remove.
+      The status is one word, the remedy is not: an adopted entry is told to run
+      `--replace-adopted`, because re-installing that one preserves it and records nothing.
     - **`linked`** for a target that is a symlink to its own source. It cannot be stale,
       because it *is* the source. Read from the filesystem rather than from the recorded
       `mode`, since a copy can replace a link between runs.
@@ -860,6 +1016,18 @@ def _check_entry(entry) -> tuple:
     # baseline than a missing one, and treating it as valid let a hand-edited manifest
     # report `revised` at exit 0 for an entry nothing had been recorded for.
     if not recorded:
+        # The remedy differs by kind, and only here (bug-0020). Re-installing a derived
+        # entry does establish a baseline; re-installing an unrecorded adopted one
+        # deliberately preserves every file and records nothing (bug-0018), so the adopter
+        # follows the instruction, nothing changes, and the next run prints it again.
+        # `--replace-adopted` is the one route to a baseline there. Asked of the entry name
+        # for the reason the `revised` branch below asks it: the classification travels in
+        # the record rather than being re-derived from a path.
+        if entry.get("name") in ADOPTED_ENTRY_NAMES:
+            return "unknown", ("installed before digests were recorded, so whether it is "
+                               "current is unknown. A re-install preserves this module and "
+                               "records nothing; run --replace-adopted to take the kit's "
+                               "copy and establish a baseline.")
         return "unknown", ("installed before digests were recorded, so whether it is "
                            "current is unknown. Re-install to establish a baseline.")
     if not (target.exists() or target.is_symlink()):
@@ -881,12 +1049,52 @@ def _check_entry(entry) -> tuple:
         return "error", (f"the kit's source could not be read, so nothing can be compared "
                          f"against it: {exc}")
     if entry.get("name") in ADOPTED_ENTRY_NAMES:
+        # Two independent questions, kept separable (bug-0022). The first is "has the kit's
+        # copy moved since you installed", answerable only from the baseline. The second is
+        # "is every file we placed still there", which needs the installed tree and which
+        # nothing asked before: the comparison below ran the record against the source and
+        # never opened the install, so whole-directory absence was caught a branch earlier
+        # and per-file absence was caught by nothing at all. `_place_adopted` already names
+        # a removed lens in plain words on the very next run, which is what makes the
+        # silence here a defect rather than the exemption working as designed.
+        #
         # The baseline, not the installed tree: naming it "installed" printed a digest
         # matching no file on disk (reported on this pull request).
         moved = _compare(recorded, current, "recorded", "source now")
+        try:
+            installed = digest_tree(target)
+        except OSError as exc:
+            return "error", (f"the installed copy could not be read, so whether every "
+                             f"file this install placed is still there is unanswerable: "
+                             f"{exc}")
+        # Absence only, never a digest mismatch. Reporting a changed file here would undo
+        # the whole reason this branch exists: an adopter is invited to rewrite a lens, and
+        # a file they edited is theirs. A missing file is a different claim, and it is the
+        # only one being added. A file they *added* is absent from the baseline and so is
+        # ignored in both directions, exactly as `_place_adopted` ignores it.
+        missing = [rel for rel in sorted(recorded) if rel not in installed]
+        if missing:
+            # `diverged` rather than a new word, so the vocabulary stays one vocabulary:
+            # this is the same claim the derived path already makes for a file it cannot
+            # find, and it carries the exit code that claim already means. What is local to
+            # the adopted module is the remedy, because re-installing does not bring the
+            # file back, so the message says so rather than leaving the summary's generic
+            # advice to mislead the one reader it is aimed at.
+            lines = [f"      {rel}: this install placed it, and it is gone from the "
+                     f"installed module" for rel in missing]
+            if moved:
+                lines.append("      and, separately, the kit's copy has moved since this "
+                             "install:")
+                lines.extend(f"      {p}" for p in moved)
+            return "diverged", (
+                "a file this install placed is missing from the adopted module:\n"
+                + "\n".join(lines)
+                + "\n      Deleting a lens is yours to do and nothing here restores it. "
+                  "Re-install to have the removal recorded, after which this stops being "
+                  "reported, or `--replace-adopted` to take the kit's copy back.")
         if not moved:
-            return "ok", f"the kit's copy is unchanged since this install "\
-                         f"({len(recorded)} file(s))"
+            return "ok", f"every file this install placed is still there, and the kit's "\
+                         f"copy is unchanged since this install ({len(recorded)} file(s))"
         return "revised", ("the kit's copy has changed since this install; yours is yours "
                            "to keep:\n" + "\n".join(f"      {p}" for p in moved))
 
@@ -913,9 +1121,15 @@ def check(home: Path) -> int:
 
     0   every entry beneath this home matches its source, or cannot be stale
     1   at least one installed target has diverged from its source
-    2   at least one entry has no baseline, or could not be compared at all
+    2   at least one entry has no baseline, or could not be compared at all, or the
+        record itself could not be read
     """
-    manifest = load_manifest()
+    try:
+        manifest = load_manifest()
+    except ManifestError as exc:
+        return report_unreadable_manifest(
+            exc, "Nothing was checked, so this run makes no claim either way about "
+                 "whether the installed skills are current.")
     scoped = [e for e in manifest["entries"] if _beneath(e["target"], home)]
     if not scoped:
         # Deliberately not zero. Nothing recorded is indistinguishable from a record that
@@ -927,9 +1141,16 @@ def check(home: Path) -> int:
         return 2
 
     counts = {"ok": 0, "linked": 0, "revised": 0, "diverged": 0, "unknown": 0, "error": 0}
+    # `counts` is keyed by status, and the unknown remedy is decided by kind (bug-0020).
+    # Tracked in this loop rather than re-derived from the manifest afterwards, so the two
+    # answers cannot drift apart.
+    unknown_kinds = set()
     for entry in sorted(scoped, key=lambda e: (e.get("tool", ""), e.get("name", ""))):
         status, message = _check_entry(entry)
         counts[status] += 1
+        if status == "unknown":
+            unknown_kinds.add("adopted" if entry.get("name") in ADOPTED_ENTRY_NAMES
+                              else "derived")
         print(f"{status:9} {entry.get('tool', ''):8} {entry.get('name', '')}  {message}")
 
     print(f"\n{counts['ok']} current, {counts['diverged']} diverged, "
@@ -943,7 +1164,13 @@ def check(home: Path) -> int:
               "alone; merge the kit's change only if you want it.")
     if counts["unknown"]:
         print("An entry predates the digest baseline, so its state is unknown rather than "
-              "current. Re-install to establish one.")
+              "current.")
+        if "derived" in unknown_kinds:
+            print("Re-install to establish one.")
+        if "adopted" in unknown_kinds:
+            print("The adopted rules module is among them, and re-installing it preserves "
+                  "your files and records nothing: run --replace-adopted to establish a "
+                  "baseline there.")
     if counts["error"] or counts["unknown"]:
         return 2
     return 1 if counts["diverged"] else 0

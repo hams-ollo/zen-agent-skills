@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Reminder hook: tell a session at startup when no skills are reachable.
+"""Reminder hook: tell a session at startup when none of this kit's skills is reachable.
 
-Fires on SessionStart with source `startup`. If at least one skill is reachable at
-project or user scope, it emits nothing at all. If none is, it says so once and names
-the way out. It never blocks and it never writes.
+Fires on SessionStart with source `startup`. If at least one skill OF THIS KIT is
+reachable at project or user scope, it emits nothing at all. If none is, it says so once
+and names the way out. It never blocks and it never writes.
 
 Why this exists
 ---------------
@@ -34,9 +34,42 @@ currency, and it is deliberately not called here: walking a digest of every inst
 would put a per-file read in front of every session start, and would make a portable hook
 depend on one repository's script layout.
 
-It also cannot tell whose skills it found. Distinguishing one library's skills from an
-adopter's own needs the install manifest, which is `--check`'s business and not this
-hook's. Reported honestly in the message rather than overclaimed.
+Whose skills it found
+---------------------
+It answers that one, by name, and the first version did not. `_has_skill()` counted ANY
+directory holding a `SKILL.md`, while `cloud-executable.md` defines reachability over
+"kit skill" directories, so a machine carrying somebody else's library satisfied the code
+and not the contract. That is not an edge case on the platform this hook was written for:
+a stock cloud container ships its own populated `~/.claude/skills`, and a live session on
+2026-08-08 found 24 skills there, none of them from this kit, with this hook silent
+(`bug-0021`). The one state the hook exists to report was the state it could not report.
+
+The recognition is a name list, `KIT_SKILL_NAMES` below, and the choice is worth the
+paragraph because the next reader will ask. Two alternatives were rejected:
+
+- **Read `install.py`'s manifest.** Authoritative, and it makes a portable hook depend on
+  one repository's script layout, which the currency section above already rejects for the
+  same reason. Worse here: the manifest lives in the checkout that ran the installer, so a
+  cloud clone has none, which is exactly the case being answered.
+- **Have the installer place a marker and look for that.** Retroactively wrong. Every
+  install that already exists has no marker, so the hook would cry wolf at each of them
+  until it was re-run, and a reminder that fires on a correct install is uninstalled inside
+  a week.
+
+A name list goes stale, which is the standing objection to it. A hook cannot derive the
+catalog at runtime without importing from this repository, forbidden by the hooks module
+contract, but the repository CAN check the constant against what it ships, and
+`tests/test_hooks_reachability.py` asserts the two are equal. Renaming or dropping a skill
+fails that test by name. The objection is real and it is answered at test time, which is
+the only place a standalone hook could ever have it answered.
+
+What the name list buys is bounded, and honestly: it recognises a NAME, not a provenance.
+A foreign library shipping a skill called `doc-sync` would silence this hook. That is the
+cheap direction to be wrong in for a reminder, per the hooks module contract: the cost is
+one missing paragraph, against a false alarm that costs the adopter their trust in it.
+
+It still cannot tell whether the kit skill it found is the kit's copy or a fork of it.
+That needs the manifest, which is `--check`'s business, and the message says so.
 
 No environment detection
 ------------------------
@@ -97,31 +130,74 @@ USER_SKILL_SUBPATHS = (
     Path(".agents") / "skills",
 )
 
+# The skills this kit ships, which is what "kit skill" in the contract means. Every one
+# of them installs under its own directory name, so a name match at a discovery directory
+# is the reachability question answered.
+#
+# Kept in sync by a test rather than by discipline: see the docstring above, and
+# `test_the_recognised_names_are_exactly_the_skills_this_kit_ships`. Adding, renaming, or
+# removing a skill means editing this constant in the same commit, and the test suite says
+# so by name when you do not. ONE match is enough, so an adopter running `--profile core`
+# with three skills installed is reachable and hears nothing.
+KIT_SKILL_NAMES = frozenset({
+    "agent-handoff",
+    "doc-author",
+    "doc-revise",
+    "doc-sync",
+    "fix-batch",
+    "house-review",
+    "human-handoff",
+    "init-worktracking",
+    "new-task",
+    "pr-describe",
+    "project-bootstrap",
+    "reconcile-worktrees",
+    "review-depth",
+    "spec-author",
+    "spec-conformance",
+    "spec-plan-readiness",
+    "spec-quality",
+    "test-author",
+    "test-quality",
+    "verifier-agent",
+})
+
+# The banner keeps the exact words `NO SKILLS REACHABLE` at its head on purpose, and the
+# qualifier follows them. `cloud-executable.runbook.md` tells a person to look for a
+# message beginning with that phrase, and the proof run it governs has not happened yet, so
+# narrowing the check must not quietly retarget the string that run is waiting for.
 REPORT = (
-    "NO SKILLS REACHABLE: this session started with no skill directory found at either "
-    "project scope or user scope, so any skill-driven workflow this repository documents "
-    "is unavailable right now and nothing else will say so. Work that assumes a skill is "
-    "loaded will silently proceed without it. If skills are expected here, install them "
-    "(for this kit: `python scripts/install.py`) and start a new session. If you are "
-    "working deliberately without them, ignore this. Note the limits of this check: it "
-    "confirms that skill directories exist, not that they are current or that they are "
-    "the ones you expect. Run `python scripts/install.py --check` for that."
+    "NO SKILLS REACHABLE FROM THIS KIT: this session started with none of this kit's "
+    "skills found at either project scope or user scope, so any skill-driven workflow "
+    "this repository documents is unavailable right now and nothing else will say so. "
+    "Other skills may "
+    "well be loaded; none of them is one of these. Work that assumes a skill is loaded "
+    "will silently proceed without it. If skills are expected here, install them (for "
+    "this kit: `python scripts/install.py`) and start a new session. If you are working "
+    "deliberately without them, ignore this. Note the limits of this check: it matches "
+    "skill directories by name, so it confirms they exist, not that they are current or "
+    "that they are this kit's copies. Run `python scripts/install.py --check` for that."
 )
 
 
-def _has_skill(directory: Path) -> bool:
-    """True when `directory` holds at least one skill.
+def _has_kit_skill(directory: Path) -> bool:
+    """True when `directory` holds at least one skill belonging to this kit.
 
     A skill is a directory containing SKILL.md, which is the one structural fact every
-    harness in scope agrees on. An empty discovery directory does not count: `--uninstall`
-    leaves the parent behind, so treating its existence as reachability would report
-    success for a home whose skills were just removed.
+    harness in scope agrees on. A KIT skill is one of those whose directory name is in
+    `KIT_SKILL_NAMES`: counting any SKILL.md at all is the wider question the contract
+    does not ask, and answering it made this hook silent in front of a foreign library.
+
+    An empty discovery directory does not count, and neither does an empty directory
+    carrying a kit skill's name: `--uninstall` leaves the parent behind, so treating mere
+    existence as reachability would report success for a home whose skills were just
+    removed.
     """
     try:
         if not directory.is_dir():
             return False
         for child in directory.iterdir():
-            if (child / "SKILL.md").is_file():
+            if child.name in KIT_SKILL_NAMES and (child / "SKILL.md").is_file():
                 return True
     except OSError:
         # An unreadable directory is not a reachable one, and is not worth crashing over.
@@ -130,16 +206,16 @@ def _has_skill(directory: Path) -> bool:
 
 
 def reachable(project_root: Path, home: Path) -> bool:
-    """Whether any skill is reachable from either scope.
+    """Whether any of this kit's skills is reachable from either scope.
 
     The two scopes are checked against different directory sets on purpose; see the
     constants above for why collapsing them is the defect this hook shipped with.
     """
     for sub in PROJECT_SKILL_SUBPATHS:
-        if _has_skill(project_root / sub):
+        if _has_kit_skill(project_root / sub):
             return True
     for sub in USER_SKILL_SUBPATHS:
-        if _has_skill(home / sub):
+        if _has_kit_skill(home / sub):
             return True
     return False
 

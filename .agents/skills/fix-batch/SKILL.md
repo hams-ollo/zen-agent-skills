@@ -7,9 +7,10 @@ description: >-
   bugs", "work through the backlog", "spin up agents to fix X, Y, Z", or "parallelize these
   fixes", especially when there are 2 or more distinct, independently-fixable items and the user
   wants them actioned rather than just discussed. It is the parallel-execution step of the kit
-  spine: new-task authors the task files, fix-batch dispatches them, reconcile-worktrees lands
-  them. Do not use it for a single fix (just do it directly) or for changes that are inherently
-  sequential or interdependent (one agent's output feeds the next's input), since worktree
+  spine: new-task authors the task files, fix-batch dispatches them, verifier-agent proves them,
+  reconcile-worktrees lands them. Do not use it for a single fix (just do it directly) or for
+  changes that are inherently sequential or interdependent (one agent's output feeds the next's
+  input), since worktree
   isolation assumes the items do not need to see each other's work in progress.
 license: MIT
 ---
@@ -23,11 +24,12 @@ The value here is specifically in catching what unsupervised agents get wrong, b
 and their own summaries will not tell you.
 
 This is the parallel-execution step of the kit spine: [`new-task`](../new-task/SKILL.md) authors
-the atomic task files, `fix-batch` dispatches them to isolated agents, and
-[`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the verified results into the main
-working tree. Read the target repository's `AGENTS.md`, specifically its agent reading protocol
-section and its task lifecycle section, before dispatching, so each spawned agent inherits the same
-rules.
+the atomic task files, `fix-batch` dispatches them to isolated agents,
+[`test-author`](../test-author/SKILL.md) and [`verifier-agent`](../verifier-agent/SKILL.md) prove
+each result at Step 6, and [`reconcile-worktrees`](../reconcile-worktrees/SKILL.md) lands the
+verified ones into the main working tree. Read the target repository's `AGENTS.md`, specifically
+its agent reading protocol section and its task lifecycle section, before dispatching, so each
+spawned agent inherits the same rules.
 
 ## Why this exists
 
@@ -145,6 +147,70 @@ run in parallel. The concrete tool mechanics are harness-specific, see
 base every worktree's changes should be read against, and it is the one piece of state that cannot
 be recovered afterwards: `git worktree list` reports current `HEAD`, not the creation point.
 
+**Then cut every worktree at that sha yourself.** For a same-repo batch this is the primary path,
+not a special case:
+
+```
+git worktree add -b agent/<id> <path> <dispatch-sha>
+```
+
+Dispatch ordinary background agents whose prompts name the absolute worktree path. See
+[Running this in Claude Code](#running-this-in-claude-code) for the harness mechanics and for the
+cross-repository variant of the same command. A harness that creates the worktree for you may ignore
+the branch you are standing on, and naming the sha in the command is the only fix that does not
+depend on someone noticing afterwards.
+
+**Then check, and read the result as a lower bound rather than a verdict:**
+
+```
+git worktree list
+```
+
+Compare each line's commit against the recorded sha, remembering (per the note above) that the
+column is current `HEAD`. A mismatch proves the batch was mis-cut. **A clean result proves
+nothing**, because the check races the agents' own recovery: an agent whose first instruction is to
+verify its base repairs itself within seconds, and `git worktree list` a moment later reports the
+repaired state rather than the cut. Run it anyway, since it costs one command and catches the slow
+agents, but never conclude from a clean run that the cut was right.
+
+Three occurrences, so this carries its evidence rather than reading as caution:
+
+- **2026-08-05.** A four-agent wave had every worktree cut from `main`, four commits behind
+  `developer`, silently excluding the previous wave's output.
+- **2026-08-18, six agents dispatched from `developer` at `e492b10`.** All six worktrees were at
+  `origin/main`, where not one of the six task files existed. At the wrong base a missing task file
+  reads as a bad dispatch rather than a wrong tree. Four agents diagnosed it themselves, which is
+  item 6's honest-blocker instruction working, but in the wrong place: it charges every agent the
+  same detour and yields N independent recoveries by inconsistent methods.
+- **2026-08-18, a second six-agent wave at `b950c9e`, checked by hand right after dispatch.** The
+  check reported five of six on the dispatch commit. It was wrong. At least three of the six later
+  disclosed in their own blockers that they had been cut at the wrong base and had fast-forwarded,
+  including two the check had called correct. This is the occurrence that makes the check a lower
+  bound.
+
+**Recovery for an agent already running at the wrong base.** Both preconditions are checked before
+the command, because the command is valid only when both hold:
+
+1. The old base is a strict ancestor of the dispatch sha:
+   `git merge-base --is-ancestor HEAD <dispatch-sha>`.
+2. The branch has no commits of its own: `git log --oneline <dispatch-sha>..HEAD` is empty.
+
+Only then:
+
+```
+git merge --ff-only <dispatch-sha>
+```
+
+which is lossless and keeps uncommitted work. **Do not reach for `git reset --hard`**, which an
+agent in the 2026-08-18 batch used for this without saying whether it had checked anything: it is
+not equivalent, and it discards uncommitted work, which in a `fix-batch` worktree is the entire
+deliverable and the only copy of it. If either precondition fails, that is a blocker to report, not
+something to force.
+
+An agent that recovers this way **owes a staleness disclosure**: anything it read at the old base
+may be stale. A file identical across both commits is fine, one the fast-forward touched is not, so
+it names what it read before the fast-forward rather than asserting the recovery was clean.
+
 Keep the batch to a size you can actually verify. Every item costs a full verification pass in
 Step 6, and that is your time, not the agents'. If a batch is large enough that verification will
 be skimmed, it is too large, and skimmed verification is the exact failure this skill exists to
@@ -171,9 +237,15 @@ Every prompt must include, in substance:
 5. **How to produce the test the acceptance command runs**, when the task's criteria name a test
    that does not exist yet. Point the agent at [`test-author`](../test-author/SKILL.md): derive the
    test from the scenario it protects, tag it with that `S-NNN` id, and pick the layer and oracle
-   through the [`test-quality`](../test-quality/SKILL.md) lens. Without this the agent writes
-   whatever test makes its own change pass, which is the failure mode the whole verification stage
-   exists to catch, arriving one step earlier than the stage that would catch it.
+   through the [`test-quality`](../test-quality/SKILL.md) lens. **Say which of that skill's two
+   modes the agent is in**, because the mode is not obvious from where it is standing: most
+   dispatched agents hold a single bug or chore task and no approved spec, and `test-author`'s
+   acceptance mode requires one. That case is its **characterization** mode, which is exempt from
+   the spec gates and pins the code's current observable behavior instead. Only a task that
+   actually carries an approved spec and `S-NNN` ids is the acceptance-mode case. Without this the
+   agent writes whatever test makes its own change pass, which is the failure mode the whole
+   verification stage exists to catch, arriving one step earlier than the stage that would catch
+   it.
 6. **A request for an honest blocker report** over a confident-sounding improvisation: "If
    something about this task's premise turns out to be wrong, or you hit a blocker you are not
    sure how to resolve within your own worktree, stop and report it clearly rather than guessing."
@@ -358,13 +430,18 @@ This section is Claude Code specific. Other harnesses provide the same capabilit
 isolated, resumable agents) through their own mechanisms; the doctrine above is what matters, the
 tool names below are the local implementation.
 
-- **Dispatch (Step 3), same-repo batch:** use the `Agent` tool with `isolation: "worktree"` and
-  `run_in_background: true`, one call per item, all in the same message so they run in parallel.
-  Each `Agent` call gets its own worktree; the `prompt` carries the hardened prompt from Step 3.
+- **Dispatch (Step 3), same-repo batch:** create the worktrees yourself at the recorded dispatch sha
+  (`git worktree add -b agent/<id> <path> <dispatch-sha>`), then dispatch ordinary background agents,
+  all in the same message so they run in parallel, each `prompt` carrying the hardened prompt from
+  Step 3 and the absolute worktree path. The `Agent` tool's `isolation: "worktree"` is the
+  convenience path and it is the one that has repeatedly gone wrong: it has cut worktrees from
+  `origin/main` while the dispatch branch was `developer`, three times on record, and it gives you
+  no place to name a base. If you use it anyway, the post-dispatch check in Step 3 is the only
+  signal you get, and it is a lower bound.
 - **Dispatch, batch against a *different* repository:** `isolation: "worktree"` worktrees the
-  **current** project, so it does nothing useful when the work lives in another repo. Create the
-  worktrees yourself first (`git -C <target-repo> worktree add -b agent/<id> <path> <dispatch-sha>`),
-  then dispatch ordinary background agents whose prompts name the absolute worktree path. The
+  **current** project, so it does nothing useful when the work lives in another repo. It is the same
+  explicit-sha command as above with a `-C`
+  (`git -C <target-repo> worktree add -b agent/<id> <path> <dispatch-sha>`). The
   sandbox rule in Step 3 carries the full weight here, since there is no harness-level isolation at
   all, which is a difference worth stating in the prompt rather than assuming the agent infers it.
 - **Do not poll (Step 4):** background agents re-invoke you on completion. There is no need to
@@ -394,3 +471,9 @@ follows the repo's house-style module (in this kit,
 [`.agents/rules/house-style.md`](../../rules/house-style.md)): sentence-case headings, clickable
 relative links, named sources, no em-dashes. That file is a swappable default; a downstream adopter
 may replace it without touching this skill.
+
+**What a dispatched agent may do unattended** follows the repo's autonomy module (in this kit,
+[`.agents/rules/autonomy.md`](../../rules/autonomy.md)), which consolidates four of the rules stated
+above: `A1` sandbox containment, `A2` scope discipline, and `A4` and `A5`, the verbatim-result and
+disclosure halves of the delegate evidence contract. That file is a swappable default too; a
+downstream adopter may raise or lower the ceiling without touching this skill.

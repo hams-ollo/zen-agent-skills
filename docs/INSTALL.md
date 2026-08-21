@@ -63,17 +63,19 @@ Pass the same `--home` you installed with. The check reads the manifest, re-read
 
 | Report | Meaning |
 |---|---|
-| `ok` | Every placed file still matches the kit |
-| `diverged` | At least one file no longer matches, named individually, with the installed and source digests |
+| `ok` | For a skill, every placed file still matches the kit. For the rules module the claim is narrower, because that module is yours: every file the install placed is still there, and the kit's own copy of it has not moved since. A lens you edited is not checked against anything and is never counted against this |
+| `diverged` | At least one file no longer matches, named individually, with the installed and source digests. For the rules module this is absence only: a file the install placed is gone. Editing a lens there is never divergence |
 | `linked` | The target is a symlink to its source, so it cannot go stale |
 | `revised` | The kit's copy of an adopter-owned file (the rules module) changed since you installed. Your copy is left alone |
-| `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one |
+| `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one, or `--replace-adopted` for the rules module, where a re-install preserves your files and records nothing |
 
 Exit codes are `0` when everything current, `1` when something diverged, and `2` when the check could not answer (an entry with no baseline, or a source the kit no longer has). Nothing recorded beneath the given home is also a `2`, not a clean result: a check that never saw your install has learned nothing about it.
 
 Run it when a skill behaves like an older version of itself, after pulling changes into this repository, and before trusting an installed skill for anything consequential. The fix for a diverged entry is to re-install: this command deliberately does not do it for you.
 
 The rules module is handled differently on purpose. [`.agents/rules/`](../.agents/rules/) is swappable, and rewriting a lens is something the kit invites you to do, so your edits there are never reported as divergence. What you are told instead is when the kit's own copy of that lens has moved since you installed, which is news you can act on rather than a warning that fires forever.
+
+Deleting a lens is the one thing there the check does report. A file the installer placed and that is no longer on disk is named individually and exits `1`, because a missing lens is a different claim from an edited one: `house-review` reads its entire rubric and severity scheme out of that module, and an install missing it behaves like a skill that never had one. The check still writes nothing, so the file is not restored. Re-install to have the removal recorded, after which the check stops reporting it, or run `--replace-adopted` to take the kit's copy back.
 
 ## Your edits to the rules module survive a re-install
 
@@ -127,7 +129,7 @@ That places the module and then prints a registration block. **Nothing fires unt
 
 Today the module ships three hooks, two reminders and one gate:
 
-- **`skill-reachability-reminder`** says so, once, when a session starts with no skill reachable at either project or user scope. It stays completely silent when skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
+- **`skill-reachability-reminder`** says so, once, when a session starts with none of this kit's skills reachable at either project or user scope. It recognises them by directory name, so a library of somebody else's skills is not counted as this kit installed. It stays completely silent when the kit's skills are reachable, and it reports reachability only: not whether what it found is current, which is what `--check` below answers. It never blocks and never writes.
 - **`delegation-reminder`** notes, after a delegated agent reports back, that its summary is a claim rather than evidence. It never blocks.
 - **`spec-conformance-gate`** blocks when work a contract governs is closed and nothing records whether the implementation actually matches that contract. Every block names its escape: run `spec-conformance`, or add a `conformance:` key to the frontmatter declaring the audit lives elsewhere.
 
@@ -181,39 +183,19 @@ Ask the installed harness to use a skill by name, or select the generated rule o
 
 ## Validate changes
 
-Run the skill linter from the repository root:
+One command decides whether a change to the kit is acceptable, and it takes no flags:
 
 ```bash
-python scripts/validate-skills.py
+python scripts/run-checks.py
 ```
 
-It checks skill frontmatter, names, descriptions, and body length, plus unresolved relative links, references to sibling skills that do not exist, links that escape the shipped skill tree, and skills that claim both draft and shipped status. It also enforces the parts of the skill schema that fail at the consumer rather than here: a description over 1024 characters or containing an angle bracket, a frontmatter property outside the six the schema permits, and frontmatter written in a form no real YAML parser can read. All four have shipped as real defects, and the shipped skills pass Anthropic's own `quick_validate.py` as well as this one.
+[`run-checks.py`](../scripts/run-checks.py) runs every gate in a single pass, including the ones that cover the installer this page documents. [`AGENTS.md`](../AGENTS.md) names what those gates are, and this page deliberately does not restate the list: a second copy of it is a second thing to go stale. CI calls the same script, so the gate set cannot drift between your machine and the pipeline either.
 
-Run the kit's own test suite:
+It exits `0` when every gate passed, `1` when a gate ran and failed, and `2` when a gate could not run at all. A `2` outranks a `1`, for the same reason `--check` above uses that precedence: an incomplete report is a different claim from a bad change. Every gate runs even after one fails, so a single run tells you everything that is wrong rather than only the first thing. CI runs Linux, macOS, and Windows across the supported Python range, so passing locally is necessary but not sufficient.
 
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
+The gates that place files use a throwaway home under `./.tmp/`, so a real installation of your own is never touched. While you are iterating, running one gate directly is a faster loop, for instance `python scripts/install.py --dry-run --home ./.tmp/zen-home` while you are reworking the installer. That is a convenience and not a substitute, because the acceptance command is what decides.
 
-Check the work-tracking backlog for structural integrity:
-
-```bash
-python .tasks/validate.py --strict
-```
-
-Preview adapter generation without writing files:
-
-```bash
-python scripts/build-adapters.py --dry-run
-```
-
-Preview installation for a specific test home without touching your normal tool directories:
-
-```bash
-python scripts/install.py --dry-run --home ./.tmp/zen-home
-```
-
-The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](../tests/) covers the kit's own tooling, derived from the specifications in [`spec/`](spec/); the kit has no runtime application to test.
+The scripts and the test suite use only the Python standard library, so there is no package installation step. The suite under [`tests/`](../tests/) covers the kit's own tooling, derived from the specifications in [`spec/`](spec/); the kit has no runtime application to test. The contribution rules themselves, including what the skill schema requires of a skill's frontmatter, live in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Uninstall
 

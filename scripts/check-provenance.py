@@ -27,10 +27,34 @@ Exit codes
 ----------
 0   every fetchable record matches its recorded digest
 1   at least one recorded source has drifted
-2   an error: a source could not be fetched, or a record is malformed
+2   an error: a source could not be fetched, a file in scope could not be read, or a
+    record is malformed
+
+What it contacts, and under what limits
+---------------------------------------
+This is the only script in the kit that opens a network connection, so SECURITY.md names
+it and the limits are stated here rather than left to be read out of the code. It contacts
+exactly the URLs recorded in the repository's own provenance blocks, over `https://` only,
+with a plain GET, and it digests what comes back. Nothing fetched is executed, stored, or
+written anywhere. `--list` prints every URL a run would contact and fetches nothing, so the
+set is reviewable before any connection is made. A response is read under MAX_FETCH_BYTES
+and exceeding it is an error rather than a truncated digest.
 
 Drift and errors both name the offending source and the file that records it, because a
 non-zero exit whose output does not say what moved costs the reader the whole investigation.
+
+A file in scope that cannot be read is reported the same way and exits 2, rather than being
+skipped. Skipping it dropped every record that file carried, named the file nowhere, and left
+a smaller count that reads exactly like a clean result (bug-0019). On Windows the trigger is
+ordinary: another process holding an exclusive handle, a scanner mid-scan, an editor lock.
+The other files are still checked, because one unreadable file should not hide the state of
+the rest.
+
+A block sitting in one of the placements the convention names, and failing to parse into a
+complete record, is reported the same way for the same reason. One mistyped field name used
+to end the run after `source:` alone, which left too little to qualify as a record, so a
+whole fold-in disappeared from the run at exit 0 (bug-0041). See parse_records for how a
+declared placement is told apart from a `source:` line that was never provenance.
 
 The convention itself, including the field list and where a block lives in each file type,
 is in the conventions section of AGENTS.md. Standard library only, per that same section.
@@ -61,7 +85,67 @@ _KEY_RE = re.compile(r"^[ \t]*([a-z0-9_]+):[ \t]*(.*?)[ \t]*$")
 _SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 _DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
 
+# The two placements the convention in AGENTS.md names, recognised positively rather than
+# guessed at: a fenced block whose info string is `provenance` (markdown), and an underlined
+# `Provenance` section of a module docstring (Python).
+_FENCE_RE = re.compile(r"^[ \t]*(?:`{3,}|~{3,})[ \t]*([A-Za-z0-9_+-]*)[ \t]*$")
+_SECTION_RE = re.compile(r"^[ \t]*Provenance[ \t]*$")
+_UNDERLINE_RE = re.compile(r"^[ \t]*[-=]{2,}[ \t]*$")
+
 USER_AGENT = "zen-agent-skills-check-provenance"
+
+# The most a single source may return. Every recorded source is one upstream text file, the
+# largest in the tree today being a few tens of kilobytes, so 10 MiB could not plausibly
+# refuse a real one. It exists so a hostile or merely enormous URL cannot be read into
+# memory whole, and exceeding it is an error rather than a truncated digest, because a
+# truncated digest would compare unequal and be reported as drift: the wrong word for the
+# wrong reason, and an invitation to update a record that never moved.
+MAX_FETCH_BYTES = 10 * 1024 * 1024
+
+
+class ResponseTooLarge(ValueError):
+    """A source returned more than MAX_FETCH_BYTES.
+
+    A ValueError, because check_record() already treats that as an unfetchable source, which
+    is what this is: the bytes exist but were never read, so there is nothing to digest.
+    """
+
+
+def declared_lines(lines):
+    """One bool per line: is this line inside a placement the convention declares?
+
+    The convention in AGENTS.md says where a provenance block lives, and this reads that
+    statement rather than inferring intent from the block's contents. A markdown fence
+    tagged `provenance` opens a region and the matching close ends it; an underlined
+    `Provenance` heading opens one and the first line that is neither blank nor a
+    `key: value` line ends it, which in a module docstring is the docstring terminator.
+
+    Fences are tracked generically, not only the `provenance` ones, so a `source:` field in
+    somebody else's fenced example is known to be inside a ```text block rather than merely
+    failing to look like provenance.
+    """
+    inside = [False] * len(lines)
+    fence = None  # the info string of the currently open fence, or None
+    section = False
+    for index, line in enumerate(lines):
+        fence_match = _FENCE_RE.match(line)
+        if fence_match:
+            # Markdown fences do not nest: the first one opens, the next one closes.
+            fence = fence_match.group(1).lower() if fence is None else None
+            section = False
+            continue
+        if fence is not None:
+            inside[index] = fence == "provenance"
+            continue
+        if section:
+            if line.strip() and not _KEY_RE.match(line):
+                section = False
+            else:
+                inside[index] = True
+                continue
+        if index and _UNDERLINE_RE.match(line) and _SECTION_RE.match(lines[index - 1]):
+            section = True
+    return inside
 
 
 def parse_records(text):
@@ -81,16 +165,38 @@ def parse_records(text):
     is a field that was literally written, and any prose between two halves of a would-be
     block still ends the run rather than being read across.
 
-    A bare `source:` line is not enough to qualify, because `source:` is an ordinary word
-    that other templates use: the `review-depth` skill's output block has a `source:` field
+    A run qualifies as a record in either of two ways.
+
+    **Placement.** A run whose `source:` line sits inside a placement the convention in
+    AGENTS.md declares, a markdown fence tagged `provenance` or an underlined `Provenance`
+    docstring section, always qualifies, whatever it managed to collect. Somebody wrote the
+    block down there on purpose, so the run is a fold-in record and any shortfall in it is
+    the record's problem, reported by validate(), rather than a reason to disbelieve the
+    block exists. The unrecognised `key: value` line that ended such a run is kept under
+    `unrecognised`, because it is almost always the cause of everything else validate() is
+    about to report and naming it saves the reader the diff.
+
+    **Content, anywhere else.** A run outside any declared placement qualifies only if it
+    carries at least one other recognised key, because `source:` is an ordinary word that
+    other templates use: the `review-depth` skill's output block has a `source:` field
     meaning "detected or user", and an earlier draft of this parser reported it as a fold-in
-    with a missing digest. So a run qualifies only if it carries at least one other
-    recognised key. A run that carries one but is missing a required field is still a
-    record, and is reported as malformed rather than skipped, so a typo cannot hide a
-    fold-in from the check.
+    with a missing digest.
+
+    Content alone used to be the whole rule, and it made a one-character typo silent: a
+    misspelled field immediately after `source:` ended the run with only `source` collected,
+    which failed the same content test that keeps review-depth out, so the entire block
+    vanished from the run at exit 0 (bug-0041). Placement is what tells the two apart, and
+    it is the convention's own answer: review-depth's field is inside a ```text fence, and
+    every real block in this repository is inside one of the two declared placements.
+
+    Near-miss detection on the key name was the alternative, and it was not taken: it would
+    have judged `hash:` for `sha256:` to be a different field entirely while judging a
+    template's genuine `notes:` field to be a typo of `note:`, on a threshold with nothing
+    behind it. Placement asks where the block is, which the convention already answers.
     """
     records = []
     lines = (text or "").splitlines()
+    declared = declared_lines(lines)
     index = 0
     while index < len(lines):
         match = _KEY_RE.match(lines[index])
@@ -98,6 +204,7 @@ def parse_records(text):
             index += 1
             continue
         record = {"line": index + 1}
+        placed = declared[index]
         cursor = index
         while cursor < len(lines):
             line = lines[cursor]
@@ -106,6 +213,8 @@ def parse_records(text):
                 continue  # a blank line carries no field, so it terminates nothing
             match = _KEY_RE.match(line)
             if not match or match.group(1) not in RECORD_KEYS:
+                if placed and match and declared[cursor]:
+                    record["unrecognised"] = (match.group(1), cursor + 1)
                 break
             key, value = match.group(1), match.group(2)
             if key in record:
@@ -115,7 +224,7 @@ def parse_records(text):
         # The source line itself is always consumed, so cursor > index and the outer scan
         # always advances. It resumes on the terminator, which may itself start a record.
         index = cursor
-        if set(record) - {"line", "source"}:
+        if placed or set(record) - {"line", "source"}:
             records.append(record)
     return records
 
@@ -132,21 +241,51 @@ def iter_provenance_files(root):
 
 
 def collect(root):
-    """Every (relative path, record) pair recorded under `root`."""
+    """The records recorded under `root`, and the files that could not be read.
+
+    Returns `(found, unreadable)`: `found` is a list of (relative path, record) pairs, and
+    `unreadable` a list of (relative path, reason) pairs for every file in scope whose read
+    raised OSError.
+
+    Both halves are returned rather than only the first, because this read used to be wrapped
+    in a bare `except OSError: continue` (bug-0019). That dropped every record the file
+    carried, named the file nowhere, and left the run reporting a smaller count that looks
+    exactly like a clean result. Returning the failures alongside the records puts them where
+    a caller cannot fail to see them, which a helper that swallowed them could not.
+
+    Reading continues past a failure. One unreadable file must not hide the state of the
+    others, so the caller reports them all and lets the exit code carry the verdict.
+    """
     found = []
+    unreadable = []
     for path in iter_provenance_files(root):
+        rel = path.relative_to(root).as_posix()
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
+            unreadable.append((rel, str(exc)))
             continue
-        rel = path.relative_to(root).as_posix()
         for record in parse_records(text):
             found.append((rel, record))
-    return found
+    return found, unreadable
 
 
 def validate(record):
-    """The reason this record is malformed, or None when it is well formed."""
+    """The reason this record is malformed, or None when it is well formed.
+
+    The unrecognised field is reported ahead of the missing ones, because it is what caused
+    them: a block reported as missing four fields that are visibly written down reads as a
+    defect in this script, and the field name that ended the run is the one thing a reader
+    needs. Remaining shortfalls surface on the next run, which is how validate() already
+    treats every other problem it finds.
+    """
+    unrecognised = record.get("unrecognised")
+    if unrecognised:
+        key, line = unrecognised
+        return (
+            f"unrecognised field '{key}' on line {line} ended the block early; "
+            f"the recognised fields are: {', '.join(RECORD_KEYS)}"
+        )
     if record.get("status", "").lower() == "unlocatable":
         missing = [k for k in UNLOCATABLE_REQUIRED_KEYS if not record.get(k)]
         if missing:
@@ -155,8 +294,16 @@ def validate(record):
     missing = [k for k in REQUIRED_KEYS if not record.get(k)]
     if missing:
         return f"missing required field(s): {', '.join(missing)}"
-    if not record["source"].lower().startswith(("http://", "https://")):
-        return f"source is not an absolute http(s) URL: {record['source']}"
+    source = record["source"]
+    if source.lower().startswith("http://"):
+        # Rejected rather than silently upgraded: an upgrade would make the recorded
+        # `source:` differ from what was fetched, and the record is meant to be
+        # reproducible by hand. Over plaintext the digest authenticates nothing, so the
+        # record would read as verified provenance for bytes anyone on the path could
+        # have written.
+        return f"source must be an https:// URL, not http://: {source}"
+    if not source.lower().startswith("https://"):
+        return f"source is not an absolute https:// URL: {source}"
     if not _SHA256_RE.match(record["sha256"]):
         return f"sha256 is not 64 lowercase hex characters: {record['sha256']}"
     if not _DATE_RE.match(record["retrieved"]):
@@ -164,11 +311,19 @@ def validate(record):
     return None
 
 
-def fetch(url, timeout=30):
-    """The exact bytes a plain HTTP GET returns. Raises on any failure."""
+def fetch(url, timeout=30, max_bytes=MAX_FETCH_BYTES):
+    """The exact bytes a plain GET returns, up to `max_bytes`. Raises on any failure.
+
+    Reads one byte past the bound rather than the whole body, so an enormous response is
+    refused instead of held in memory, and raises ResponseTooLarge rather than returning
+    what it managed to read.
+    """
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+        content = response.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise ResponseTooLarge(f"response exceeds the {max_bytes} byte read bound")
+    return content
 
 
 def check_record(record, fetcher):
@@ -190,6 +345,13 @@ def check_record(record, fetcher):
         return "error", f"could not fetch {url}: {exc}"
     if not isinstance(content, (bytes, bytearray)):
         return "error", f"fetch of {url} returned {type(content).__name__}, expected bytes"
+    if len(content) > MAX_FETCH_BYTES:
+        # The bound is enforced again here rather than only in fetch(), because the fetcher
+        # is an injected seam and the comparison is what must never see an unbounded body.
+        return "error", (
+            f"fetch of {url} returned {len(content)} bytes, over the "
+            f"{MAX_FETCH_BYTES} byte read bound"
+        )
     digest = hashlib.sha256(content).hexdigest()
     if digest == record["sha256"]:
         return "ok", f"up to date ({digest[:12]}) {url}"
@@ -200,14 +362,26 @@ def check_record(record, fetcher):
     )
 
 
+def unreadable_note(count):
+    """The paragraph that says what an unreadable file did to this run's counts."""
+    noun = "file" if count == 1 else "files"
+    return (
+        f"{count} {noun} in scope could not be read, so every provenance record they\n"
+        "carry went unchecked and the counts above are incomplete. This is reported\n"
+        "rather than skipped because a narrowed count is indistinguishable from a clean\n"
+        "one. A file held open by another process is the usual cause on Windows; re-run\n"
+        "once it is readable.\n"
+    )
+
+
 def main(argv=None, root=None, fetcher=None, out=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     out = sys.stdout if out is None else out
     root = REPO_ROOT if root is None else Path(root)
     fetcher = fetch if fetcher is None else fetcher
 
-    records = collect(root)
-    if not records:
+    records, unreadable = collect(root)
+    if not records and not unreadable:
         out.write("No provenance records found. Nothing folded in is recorded, which is\n"
                   "either correct or a sign a fold-in skipped the convention in AGENTS.md.\n")
         return 0
@@ -216,7 +390,14 @@ def main(argv=None, root=None, fetcher=None, out=None):
         for rel, record in records:
             state = record.get("status", "recorded")
             out.write(f"{rel}:{record['line']}  [{state}]  {record.get('source', '(no source)')}\n")
+        for rel, reason in unreadable:
+            out.write(f"{rel}  could not be read: {reason}\n")
         out.write(f"\n{len(records)} record(s).\n")
+        if unreadable:
+            # --list claims to print everything a run would contact. A file it could not
+            # read may record a source that is now missing from that list.
+            out.write(unreadable_note(len(unreadable)))
+            return 2
         return 0
 
     counts = {"ok": 0, "unlocatable": 0, "drift": 0, "error": 0}
@@ -225,10 +406,18 @@ def main(argv=None, root=None, fetcher=None, out=None):
         counts[status] += 1
         out.write(f"{rel}:{record['line']}  {message}\n")
 
+    # An unreadable file counts in the bucket that already means "this run could not answer
+    # the question", which is what it produces, and which already exits 2.
+    for rel, reason in unreadable:
+        counts["error"] += 1
+        out.write(f"{rel}  could not be read: {reason}\n")
+
     out.write(
         f"\n{counts['ok']} up to date, {counts['drift']} drifted, "
         f"{counts['unlocatable']} unlocatable, {counts['error']} error(s).\n"
     )
+    if unreadable:
+        out.write(unreadable_note(len(unreadable)))
     if counts["error"]:
         return 2
     if counts["drift"]:
