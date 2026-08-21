@@ -519,17 +519,27 @@ class CommittedRegistrationTests(unittest.TestCase):
     """The one registration this kit commits rather than prints.
 
     It had no test at all, which independent verification found by noticing that the
-    interpreter was wrong for the only environment the file exists to serve. `.claude/
-    settings.json` said `python`, while `install.py`'s hook_interpreter() returns `python3`
-    off Windows, `.codex/hooks.json` uses `python3`, and the opencode adapter probes both
-    and says in a comment that most platforms ship `python3`. Cloud sessions run on Linux,
-    where many distributions ship no `python`, and macOS has not since 12.3.
+    interpreter disagreed with every other wiring in the kit. `.claude/settings.json` said
+    `python`, while `install.py`'s hook_interpreter() returns `python3` off Windows,
+    `.codex/hooks.json` uses `python3`, and the opencode adapter probes both and says in a
+    comment that most platforms ship `python3`. `python3` is the portable default: cloud
+    sessions run on Linux, where many distributions ship no `python`, and macOS has not
+    since 12.3.
 
-    The failure would have been silent in the worst available way: the interpreter does not
-    resolve, the hook never launches, nothing is emitted, and the session proceeds looking
-    exactly as it would if skills were reachable. That is the registered-and-inert failure
-    feat-0038 hit from the opposite direction, in the exact environment the committed-
-    settings exception was granted for.
+    The class of failure being guarded against is registered-and-inert, which is silent in
+    the worst available way: the interpreter does not resolve, the hook never launches,
+    nothing is emitted, and the session proceeds looking exactly as it would if skills were
+    reachable. That is observed rather than argued, from the opposite direction, in
+    feat-0038's Windows Store-alias failure on `python3`.
+
+    What is deliberately not claimed here is that the first draft would have failed in the
+    environment this file exists to serve. That counterfactual was falsified the first time
+    anyone measured: observation 3 of the 2026-08-21 reachability run found
+    /usr/local/bin/python3 and /usr/local/bin/python both present in a cloud container
+    reporting Linux and Python 3.11.15, so `python` would have launched there, on that date.
+    One container on one day is not a claim about every environment, which is why `python3`
+    stays and why these assertions are unchanged: the reason is the portable default across
+    environments nobody here has measured, not a proven break in a measured one.
     """
 
     SETTINGS = REPO_ROOT / ".claude" / "settings.json"
