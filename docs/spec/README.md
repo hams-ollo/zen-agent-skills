@@ -69,9 +69,9 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-20, seven specs are approved and carry an amendment the author has not re-read. Three
-of them carry two: `install`, `build-adapters` since `chore-0043`, and `validate-skills` since
-`chore-0047`.
+As of 2026-08-21, seven specs are approved and carry an amendment the author has not re-read. Three
+of them carry more than one: `install` and `build-adapters` carry two, the latter since `chore-0043`,
+and `validate-skills` carries three, since `chore-0047` and again since `chore-0054`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
@@ -81,7 +81,7 @@ of them carry two: `install`, `build-adapters` since `chore-0043`, and `validate
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
-| [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`); `S-023` and the "what it reads" surface entry, the lens-composition rule (`chore-0047`) | 2026-08-19, 2026-08-20 |
+| [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`); `S-023` and the "what it reads" surface entry, the lens-composition rule (`chore-0047`); `S-024` and the `Output` and "what it reads" surface entries, the supporting-file link rule (`chore-0054`) | 2026-08-19, 2026-08-20, 2026-08-21 |
 
 The fifth row was missed when this table was first written, and how it was missed is the argument
 for eventually replacing this table with a marker key. `house-review`'s note says its frontmatter is
@@ -140,11 +140,12 @@ something else today.
 | [`systematic-debugging`](systematic-debugging.md) | approved | 13 | none yet, conformance owed at closeout |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
-| [`validate-skills`](validate-skills.md) | approved | 23 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
+| [`validate-skills`](validate-skills.md) | approved | 24 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 156 scenarios, all approved. Ten carry a conformance matrix between them, holding 143
-of those scenarios, recomputed from the files on 2026-08-20 rather than incremented.
+Eleven specs, 157 scenarios, all approved. Ten carry a conformance matrix between them, holding 144
+of those scenarios, recomputed from the files on 2026-08-21 rather than incremented: the eleven counts
+in the column above sum to 157, and the one spec without a matrix carries 13, so 157 - 13 = 144.
 
 Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
 `bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And
