@@ -56,6 +56,12 @@ to end the run after `source:` alone, which left too little to qualify as a reco
 whole fold-in disappeared from the run at exit 0 (bug-0041). See parse_records for how a
 declared placement is told apart from a `source:` line that was never provenance.
 
+A placement that produced no record at all is reported the same way, because the scan used
+to begin only at a `source:` line: a typo on the key itself (`sorce:`), or a fence nobody
+ever put a source in, was examined by nothing and printed as nothing at exit 0 (bug-0042).
+A placement that is *empty* is named rather than counted, because it records nothing to
+re-fetch and is most often a fold-in in progress; see unsourced_placements for that call.
+
 The convention itself, including the field list and where a block lives in each file type,
 is in the conventions section of AGENTS.md. Standard library only, per that same section.
 """
@@ -120,6 +126,10 @@ def declared_lines(lines):
     `Provenance` heading opens one and the first line that is neither blank nor a
     `key: value` line ends it, which in a module docstring is the docstring terminator.
 
+    The opening marker itself counts as inside: the fence line, or the heading's underline.
+    Nothing reads a field off it, and it is what makes a placement holding nothing at all
+    still a region rather than nothing, which is the shape bug-0042 needed to see.
+
     Fences are tracked generically, not only the `provenance` ones, so a `source:` field in
     somebody else's fenced example is known to be inside a ```text block rather than merely
     failing to look like provenance.
@@ -132,6 +142,9 @@ def declared_lines(lines):
         if fence_match:
             # Markdown fences do not nest: the first one opens, the next one closes.
             fence = fence_match.group(1).lower() if fence is None else None
+            # Closing sets `fence` back to None, so a closing line is outside and two
+            # adjacent placements never run together into one region.
+            inside[index] = fence == "provenance"
             section = False
             continue
         if fence is not None:
@@ -145,7 +158,73 @@ def declared_lines(lines):
                 continue
         if index and _UNDERLINE_RE.match(line) and _SECTION_RE.match(lines[index - 1]):
             section = True
+            inside[index] = True  # the underline opens the placement, as a fence line does
     return inside
+
+
+def placement_regions(declared):
+    """Every contiguous run of declared lines, as 0-based half-open (start, end) pairs.
+
+    A regrouping of what declared_lines() already computed, not a second scan of the text.
+    One region is one placement, because a placement's closing marker is not itself
+    declared and so always separates it from the next.
+    """
+    regions = []
+    start = None
+    for index, flag in enumerate(declared):
+        if flag and start is None:
+            start = index
+        elif not flag and start is not None:
+            regions.append((start, index))
+            start = None
+    if start is not None:
+        regions.append((start, len(declared)))
+    return regions
+
+
+def unsourced_placements(lines, declared, records):
+    """A record for every declared placement that `records` never reached.
+
+    parse_records() begins a run only at a line whose key is exactly `source`, so a
+    placement that never produces that token was examined by nothing at all: a typo on the
+    key itself (`sorce:`), and a fence carrying every other field but that one, both left
+    the run reporting the clean empty state of a file with nothing folded in (bug-0042).
+    This reads the placements bug-0041's declared_lines() already marks and asks the
+    question from the other end, which of them yielded no record. Same scanner, regrouped.
+
+    Two outcomes, because the two shapes are not the same mistake.
+
+    **`no-source`**, a placement holding `key: value` lines but no `source:` one. Somebody
+    wrote a block there, so a fold-in is claimed and nothing will ever re-fetch it. That is
+    exactly the silence this file keeps producing, so it is a malformed record: reported by
+    validate(), counted as an error, exit 2.
+
+    **`empty`**, a placement holding nothing yet. Named in the output, and deliberately not
+    counted and not fetched, so it does not change the exit code. An empty block claims no
+    provenance and records no digest, so nothing can silently drift behind it, and the
+    usual author is a skill that opened a fence it has not filled in. *Rejected: failing
+    the run on it.* That reading is not free, because the run is also how an author checks
+    the records that are finished, and it would stop on a file whose defect is already
+    plain to anyone who opens it. Naming it keeps the property this family of bugs is
+    actually about, that the tool never passes over part of its input without saying so.
+    """
+    started = {record["line"] - 1 for record in records}
+    unsourced = []
+    for start, end in placement_regions(declared):
+        if any(start <= index < end for index in started):
+            continue
+        # The region's first line is its opening marker, which carries no field.
+        content = [index for index in range(start + 1, end) if lines[index].strip()]
+        if not content:
+            unsourced.append({"line": start + 1, "placement": "empty"})
+            continue
+        keys = []
+        for index in content:
+            match = _KEY_RE.match(lines[index])
+            if match:
+                keys.append(match.group(1))
+        unsourced.append({"line": content[0] + 1, "placement": "no-source", "keys": tuple(keys)})
+    return unsourced
 
 
 def parse_records(text):
@@ -189,6 +268,11 @@ def parse_records(text):
     it is the convention's own answer: review-depth's field is inside a ```text fence, and
     every real block in this repository is inside one of the two declared placements.
 
+    A declared placement that produced no run at all is a record too, carrying `placement`
+    in place of any field, because the scan starts only at a `source:` line and so could not
+    see one (bug-0042). unsourced_placements() builds those, off the same declared_lines()
+    rather than a second scanner, and records how the two shapes differ.
+
     Near-miss detection on the key name was the alternative, and it was not taken: it would
     have judged `hash:` for `sha256:` to be a different field entirely while judging a
     template's genuine `notes:` field to be a typo of `note:`, on a threshold with nothing
@@ -226,6 +310,8 @@ def parse_records(text):
         index = cursor
         if placed or set(record) - {"line", "source"}:
             records.append(record)
+    records.extend(unsourced_placements(lines, declared, records))
+    records.sort(key=lambda record: record["line"])
     return records
 
 
@@ -279,6 +365,16 @@ def validate(record):
     needs. Remaining shortfalls surface on the next run, which is how validate() already
     treats every other problem it finds.
     """
+    placement = record.get("placement")
+    if placement == "empty":
+        return None  # nothing was claimed, so there is nothing to be short of
+    if placement == "no-source":
+        keys = record.get("keys") or ()
+        held = f"it holds: {', '.join(keys)}" if keys else "it holds no 'key: value' line"
+        return (
+            f"declared provenance placement with no 'source:' line, {held}; "
+            "a misspelled 'source' key is the usual cause"
+        )
     unrecognised = record.get("unrecognised")
     if unrecognised:
         key, line = unrecognised
@@ -329,8 +425,10 @@ def fetch(url, timeout=30, max_bytes=MAX_FETCH_BYTES):
 def check_record(record, fetcher):
     """Classify one record. Returns (status, message).
 
-    status is one of `ok`, `unlocatable`, `drift`, `error`.
+    status is one of `ok`, `unlocatable`, `drift`, `error`, `empty`.
     """
+    if record.get("placement") == "empty":
+        return "empty", "declared provenance placement is empty, so nothing was checked"
     problem = validate(record)
     if problem:
         return "error", problem
@@ -374,6 +472,23 @@ def unreadable_note(count):
     )
 
 
+def empty_placement_note(count):
+    """The paragraph that names an empty placement without failing the run.
+
+    It sits outside the four counted buckets on purpose. An empty block records no digest,
+    so it can neither be up to date nor have drifted, and calling it an error would fail a
+    whole run over a fence somebody had not finished writing. See unsourced_placements().
+    """
+    noun = "placement" if count == 1 else "placements"
+    verb = "is" if count == 1 else "are"
+    return (
+        f"{count} declared provenance {noun} above {verb} empty, named rather than\n"
+        "counted: an empty block records nothing to re-fetch, so it is most often a\n"
+        "fold-in in progress rather than a defect. Fill it in per the convention in\n"
+        "AGENTS.md, or remove the placement.\n"
+    )
+
+
 def main(argv=None, root=None, fetcher=None, out=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     out = sys.stdout if out is None else out
@@ -388,7 +503,7 @@ def main(argv=None, root=None, fetcher=None, out=None):
 
     if "--list" in argv:
         for rel, record in records:
-            state = record.get("status", "recorded")
+            state = record.get("placement") or record.get("status", "recorded")
             out.write(f"{rel}:{record['line']}  [{state}]  {record.get('source', '(no source)')}\n")
         for rel, reason in unreadable:
             out.write(f"{rel}  could not be read: {reason}\n")
@@ -400,7 +515,7 @@ def main(argv=None, root=None, fetcher=None, out=None):
             return 2
         return 0
 
-    counts = {"ok": 0, "unlocatable": 0, "drift": 0, "error": 0}
+    counts = {"ok": 0, "unlocatable": 0, "drift": 0, "error": 0, "empty": 0}
     for rel, record in records:
         status, message = check_record(record, fetcher)
         counts[status] += 1
@@ -418,6 +533,8 @@ def main(argv=None, root=None, fetcher=None, out=None):
     )
     if unreadable:
         out.write(unreadable_note(len(unreadable)))
+    if counts["empty"]:
+        out.write(empty_placement_note(counts["empty"]))
     if counts["error"]:
         return 2
     if counts["drift"]:

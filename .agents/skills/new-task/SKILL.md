@@ -122,11 +122,12 @@ Follow the repo's own conventions from the conventions section of `AGENTS.md` (d
 
 Summarize the task file(s) written with their ids and one-line titles. Then offer, but do not automatically run, the next step: dispatch the batch to `fix-batch` (parallel worktree-isolated agents), noting that only tasks whose `depends_on` are already in `done/` are safe to dispatch immediately. Do not commit anything unless the user asks.
 
-When the tasks came from an approved spec, the next step is not `fix-batch`: it is
-[`spec-plan-readiness`](../spec-plan-readiness/SKILL.md) over the spec plus this task set. That gate
-decides whether implementation may begin at all, and it runs before dispatch, not after. Report the
-scenario coverage you produced (which scenarios map to which tasks, and any deliberately not
-implemented) so the gate has something to check rather than something to reconstruct.
+When the tasks came from an approved spec, the handoff to offer is
+[`spec-plan-readiness`](../spec-plan-readiness/SKILL.md): it takes the spec and its task
+decomposition together, so it runs on the set you just wrote, and dispatch waits on its verdict. That
+gate decides whether implementation may begin at all. Report the scenario coverage you produced
+(which scenarios map to which tasks, and any deliberately not implemented) so the gate has something
+to check rather than something to reconstruct.
 
 ## Notes
 

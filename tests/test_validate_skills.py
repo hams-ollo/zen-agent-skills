@@ -841,5 +841,224 @@ class TestLensComposition(unittest.TestCase):
         )
 
 
+class TestSupportingFileLinkChecks(unittest.TestCase):
+    """Characterization tests for chore-0036: the files a skill ships beside its SKILL.md.
+
+    **Characterization, not acceptance.** `chore-0036` declares `scenarios: []`, so no
+    scenario in docs/spec/validate-skills.md states this rule and these tests carry no
+    S-NNN tag. They pin observable behavior that the contract does not yet describe, and
+    the divergence is recorded in docs/spec/validate-skills.conformance.md rather than
+    papered over with an id these tests would not actually be derived from.
+
+    The bug population is a coverage hole rather than a live defect: `check_links()` ran
+    only on `SKILL.md`, the CI `--links` globs never reach `.agents/`, and the templates
+    carry a `.tmpl` suffix no `.md` glob would match. So the one tree that installs into
+    an adopter's repository was the only tree nothing link-checked.
+
+    The exclusion carries as much weight here as the check. A template's links are
+    authored for the repository it is written into, so resolving them where the template
+    currently sits would report every one of them as broken and the rule would be
+    switched off rather than satisfied. `test_a_template_suffix_file_is_not_checked` is
+    the pin on that bound, and the counting test is what keeps the exclusion from
+    quietly becoming the whole rule.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_supporting(self, skill: str, relpath: str, text: str) -> Path:
+        path = self.root / skill / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return path
+
+    def test_unresolved_link_in_a_supporting_file_errors_and_names_the_file(self):
+        # The headline gap. This fails against the pre-chore-0036 script, which read no
+        # file but SKILL.md, and the message must name the supporting file rather than
+        # the skill: an error pointing at SKILL.md for a link that is not in it sends the
+        # reader to the wrong file.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "references/notes.md",
+                               "See [the missing file](nonexistent-file.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 1)
+        self.assertIn("alpha/references/notes.md: link target does not exist: "
+                      "nonexistent-file.md", out)
+
+    def test_a_supporting_file_whose_links_resolve_passes(self):
+        # The negative that keeps the rule usable. Both forms a real supporting file
+        # uses: a link within its own directory, and one reaching back up into the skill.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "references/glossary.md", "# terms\n")
+        self._write_supporting(
+            "alpha", "references/notes.md",
+            "See [the glossary](glossary.md) and [the body](../SKILL.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+
+    def test_a_link_escaping_the_shipped_tree_from_a_supporting_file_errors(self):
+        # The portability rule S-011 carries over unchanged. The target exists on disk,
+        # which is the whole bug population: an existence-only check passes it, and the
+        # link dangles the moment the skill is installed without this repository around
+        # it. A supporting file is one directory deeper than a SKILL.md, so the escaping
+        # path has one more `..` than S-011's fixture does.
+        agents = self.root / "agents"
+        skills = agents / "skills"
+        (self.root / "AGENTS.md").write_text("real file\n", encoding="utf-8", newline="\n")
+        _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        path = skills / "alpha" / "references" / "notes.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("Read [`AGENTS.md`](../../../../AGENTS.md) first.\n",
+                        encoding="utf-8", newline="\n")
+        code, out = _run(skills)
+        self.assertEqual(code, 1)
+        self.assertIn("alpha/references/notes.md: link escapes the shipped skill tree: "
+                      "../../../../AGENTS.md", out)
+
+    def test_a_template_suffix_file_is_not_checked(self):
+        # The stated exclusion, pinned. `AGENTS.md.tmpl` is written into an adopter's
+        # repository root, where `.tasks/` and `ROADMAP.md` resolve; here they resolve
+        # nowhere, and reporting them would make the rule unusable. Both a plain relative
+        # target and one that escapes the shipped tree are covered, because the exclusion
+        # is at the file level and not per-rule.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting(
+            "alpha", "templates/AGENTS.md.tmpl",
+            "Work lives in [`.tasks/`](.tasks/) and history in "
+            "[the log](../../../../CHANGELOG.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("AGENTS.md.tmpl", out)
+
+    def test_the_exclusion_is_by_suffix_and_not_by_directory_name(self):
+        # The decision recorded in chore-0036, stated as a test so it cannot drift into
+        # folklore. `project-bootstrap/templates/house-code-style.md` is a real file that
+        # documents the directory it sits in, is read in place, and is linked from its
+        # SKILL.md; a rule that excluded `templates/` wholesale would stop checking it
+        # for a reason that has nothing to do with where its links resolve.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "templates/readme.md",
+                               "See [the missing file](nonexistent-file.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("alpha/templates/readme.md: link target does not exist", out)
+
+    def test_a_non_markdown_supporting_file_is_not_read(self):
+        # Markdown link syntax inside a Python or TOML file is not a link, and reading
+        # one would report a defect against a file whose format has no such construct.
+        # `init-worktracking` ships a `validate.py`, so this is the shipped case.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "templates/validate.py",
+                               '"""See [the notes](nonexistent-file.md)."""\n')
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("nonexistent-file.md", out)
+
+    def test_a_sibling_skill_shortcut_is_not_applied_to_a_supporting_file(self):
+        # The false negative the `sibling_shortcut` flag removes. `../beta/SKILL.md` from
+        # a SKILL.md names the sibling skill `beta` and is legal (S-010); from a
+        # supporting file one level deeper it names a subdirectory of *this* skill, which
+        # does not exist. Reading it as a skill name would clear a broken link precisely
+        # when a skill of that name happens to exist, so the fixture ships a real `beta`.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        _write_skill(self.root, "beta", GOOD_FM.format(name="beta", desc=LONG_DESC))
+        self._write_supporting("alpha", "references/notes.md",
+                               "See [`beta`](../beta/SKILL.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("alpha/references/notes.md: link target does not exist: "
+                      "../beta/SKILL.md", out)
+        self.assertNotIn("no such skill exists in this kit", out)
+
+    def test_a_link_inside_a_fence_in_a_supporting_file_is_not_reported(self):
+        # chore-0036 depends on bug-0027 for correctness and not only for ordering: a
+        # reference file full of fenced examples would light up the moment the checked
+        # set widened. The guard lives in `_link_targets()`, which every caller of
+        # `check_links()` goes through, so it reaches a supporting file too. The genuine
+        # broken link after the closed fence is the half that must still be reported.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting(
+            "alpha", "references/notes.md",
+            "```markdown\nSee [an example](does-not-exist.md).\n```\n\n"
+            "See [the real target](really-missing.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("link target does not exist: really-missing.md", out)
+        self.assertNotIn("does-not-exist.md", out)
+
+    def test_the_run_reports_how_many_supporting_files_it_checked_and_skipped(self):
+        # A coverage number that cannot be compared across runs is the gap this rule
+        # closes rather than a report of it. All three counts are asserted together:
+        # "0 checked" reads the same whether the exclusion is correct or the walk is
+        # broken, until the number of files it declined to read sits beside it.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "references/notes.md", "no links here\n")
+        self._write_supporting("alpha", "templates/AGENTS.md.tmpl", "a template\n")
+        self._write_supporting("alpha", "templates/ruff.toml", "line-length = 100\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Link-checked 1 supporting file(s) beside them; skipped 1 "
+                      "template(s) whose links are written for another repository and "
+                      "1 non-markdown file(s).", out)
+
+    def test_a_skill_with_no_supporting_files_reports_zero(self):
+        # The floor of the same line, so the count is present on every run rather than
+        # only when there is something to say.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Link-checked 0 supporting file(s) beside them; skipped 0 "
+                      "template(s)", out)
+
+    def test_classification_of_the_real_shipped_supporting_files(self):
+        # The shipped inventory, counted rather than described. chore-0036 was written
+        # from a survey claiming 14 files across two skills with nine in
+        # `init-worktracking`; the numbers are pinned here so the next reader gets the
+        # count from the tree instead of from prose. Asserted as the classification
+        # rather than as bare totals, because the totals move whenever a skill is added
+        # and the split between checked and excluded is the part the rule is about.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        names = {d.name for d in skills_dir.iterdir() if d.is_dir()}
+        counts = {"markdown": 0, "template": 0, "other": 0}
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            for kind, n in vs.check_supporting_files(
+                    d, names, d.name, [], skills_dir.parent.resolve()).items():
+                counts[kind] += n
+        self.assertEqual(counts, {"markdown": 1, "template": 8, "other": 5})
+
+    def test_a_byte_cache_is_not_counted_as_a_supporting_file(self):
+        # The count has to be a fact about the kit and not about whether the tests have
+        # run yet. `init-worktracking/templates/validate.py` grows a `__pycache__` the
+        # moment the suite imports it, which made the assertion above report six
+        # non-markdown files on a second run and five on a clean checkout. install.py
+        # copies a skill with `ignore_patterns("__pycache__", "*.pyc")`, so a byte cache
+        # is in no installed skill; `_is_shipped` mirrors that list and this pins it.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "templates/validate.py", "# a template script\n")
+        cache = self.root / "alpha" / "templates" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "validate.cpython-311.pyc").write_bytes(b"\x00compiled\x00")
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("and 1 non-markdown file(s).", out)
+
+    def test_every_shipped_supporting_file_passes_the_link_check(self):
+        # The rule against the real tree. chore-0036 recorded a hand simulation on
+        # 2026-08-08 finding 0 dangling links, which is what makes this a coverage gap
+        # and not a live defect; this is that simulation made mechanical.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        names = {d.name for d in skills_dir.iterdir() if d.is_dir()}
+        errors = []
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            vs.check_supporting_files(d, names, d.name, errors,
+                                      skills_dir.parent.resolve())
+        self.assertEqual(errors, [])
+
+
 if __name__ == "__main__":
     unittest.main()
