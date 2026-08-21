@@ -131,6 +131,24 @@ The reason is mechanical rather than a preference. A user-level `~/.claude/setti
 
 The exception is kept as small as it can be: one hook, in the reminder shape, which never blocks and never writes, firing only on a genuinely new session. Its worst case is one injected paragraph. **Adding a second hook to that file, or any hook that blocks, is a new decision and not covered by this one.**
 
+### Commit messages: no co-author trailer
+
+**Do not add a `Co-Authored-By` trailer naming an AI model to any commit here.** This overrides the
+default some harnesses apply, including Claude Code's, and it applies to every agent that commits in
+this repository: an interactive session, a worktree agent dispatched by `fix-batch`, and a cloud
+session alike. All three have added it. Authorship of the work is already recorded where it belongs,
+in the task file, the `CHANGELOG.md` line, and the pull request body.
+
+The reason is mechanical rather than stylistic. The `main protection` ruleset sets
+`require_extra_approval_for_unattributed_changes`, so a commit trailer naming an identity with no
+GitHub account marks the change unattributed and demands an extra approving review. The only human
+here is also the author of every pull request, and **GitHub does not let a pull request author approve
+their own pull request**, so the requirement cannot be satisfied as configured. On 2026-08-21 that
+deadlocked the `developer` to `main` sync, 68 commits of which 44 carried the trailer, and it took an
+admin bypass to land. The bypass stays available to the repository owner and the rule stays enforced
+for everyone else; dropping the trailer is what keeps the rule from firing on work that is not
+actually unattributed.
+
 ### Other conventions
 
 - **Cross-platform**: target Windows, macOS, and Linux. Prefer `pathlib`; never assume POSIX symlinks are available.
