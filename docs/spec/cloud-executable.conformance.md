@@ -132,6 +132,29 @@ unit tests plus a run against a synthetic empty home. The Phase 4 run is what wo
 prediction 1 in the verification record is exactly that observation. Until then, S-008 is Conformed
 against the contract and unobserved in the wild, and those are not the same statement.
 
+**Closed 2026-08-21. The gap above is no longer a gap.** An observation-only cloud session on
+`9bc32ac`, whose base gate printed `BASE_OK`, reported the message present in context at session
+start before any tool call, and the hook run by hand in the same session returned the identical text.
+`yes` plus `reports` is the top row of the runbook's reading table: **`S-008` confirmed live**, in a
+real cloud container, fourteen days after the contract was written for exactly this. Prediction 1 in
+the verification record is met. Independently checked here rather than read from the report: the same
+hook run against a cloud-like home with none of the kit's skills produces output **byte-identical** to
+what the session pasted, and the base claim resolves (`9bc32ac` was `developer`'s tip and carries
+`7703632`). What this closes is the whole committed-registration exception in `AGENTS.md`: a
+project-scope `.claude/settings.json` **does** reach a cloud session, the hook launches there, and it
+speaks when it should. That was the argument for bending the opt-in rule, and it was reasoning until
+this run.
+
+**One claim the same run falsified, recorded because it was load-bearing (`chore-0052`).**
+`.claude/settings.json` justifies its `python3` interpreter by asserting that the first draft's
+`python` "would have failed to launch in the exact environment the exception was granted for".
+Observation 3 of the 2026-08-21 run reports `/usr/local/bin/python3` **and** `/usr/local/bin/python`
+both present on that platform, so `python` would have launched. The choice of `python3` stands, since
+it is the safer default across environments and the `feat-0038` Store-alias hazard on Windows is real;
+the counterfactual defending it does not. The comment closes "Found by independent verification before
+any cloud run, not after", which is the tell: it was verified against reasoning rather than against
+the environment, and this is the first evidence ever gathered on it.
+
 **Why `bug-0018` landing on a `claude/` branch is not evidence for S-017.** It is the nearest thing
 in the repository's history to the proof run, and it is not one. `bug-0018` is the task S-017 names,
 it was implemented with agent authorship on `claude/bug-0018-preserve-adopter-edited-lens`, and it
