@@ -66,8 +66,8 @@ audited against text a human agreed to.
 | Scenarios | S-014 the bootstrap writes nothing, in every case | Conformed | `skill-reachability-reminder.py` / no write call exists in the module; the bodies of `_has_kit_skill()` and `main()` are read-only, with `try`/`except` around them | Four tests: `test_the_reporting_path_writes_nothing`, `test_the_silent_path_writes_nothing`, `test_main_writes_nothing_including_into_the_home_it_resolves`, `test_the_source_performs_no_write_of_any_kind`. The fourth parses the source with `ast` rather than substring-matching it, after the first snapshot version was defeated by a write into `tempfile.gettempdir()` and by a write from `main()` rather than `evaluate()` |
 | Scenarios | S-015 an unreadable payload leaves the session unchanged | Conformed | `skill-reachability-reminder.py` / `main()`'s first `try`, where a failed `json.load` returns 0 silently; its second `try`, where any exception inside `evaluate()` returns 0 silently; `evaluate()`'s `if not isinstance(payload, dict): return None` | Tests `test_malformed_json_is_silent_and_exits_zero`, `test_empty_stdin_is_silent_and_exits_zero`, `test_a_non_object_payload_is_silent`, `test_a_payload_missing_every_field_is_silent`, `test_main_emits_exactly_one_json_object_when_it_fires` |
 | Scenarios | S-016 the bootstrap does not vary by where it runs | Conformed | Nothing in the module imports `os`, `platform`, `socket`, or reads an environment variable; the only inputs are the payload and two filesystem paths | Tests `test_output_is_byte_identical_across_differing_environments` and `test_the_source_reads_no_environment`, the second an `ast` walk over imports, calls, and attribute chains. It is parsed rather than substring-matched because the first widened version fired on the word "subprocess" inside a docstring explaining why the hook does not spawn one, and a guard that fires on its own documentation gets loosened until it catches nothing |
-| Scenarios | S-017 the proof run lands as a draft pull request carrying its evidence | **Not-built** | None. [`cloud-executable.verification.md`](cloud-executable.verification.md) records the 2026-08-07 attempt with verdict `blocked`, two independent blockers, and `evidence_produced: none` | The run has not happened as of 2026-08-19. What exists is the surrounding apparatus, not the scenario: rule **A8** in [`autonomy.md`](../../.agents/rules/autonomy.md) states the ceiling, [`cloud-executable.runbook.md`](cloud-executable.runbook.md) tells a person how to start it, and the verification record carries the exact dispatch command. See the observations below on why `bug-0018` having landed on a `claude/` branch is not evidence for this row, and on the 2026-08-20 repointing to `bug-0020` |
-| Scenarios | S-018 the proof's evidence is a test that failed before the change | **Not-built** | None. Same record, `evidence_owed: S-017, S-018, S-019` | This is the row that carries the actual proof, per prediction 6 in the verification record: the other predictions can be satisfied by an agent that followed instructions, and only a test failing before the change and passing after demonstrates work a plausible-sounding report could not have faked. Nothing has produced it |
+| Scenarios | S-017 the proof run lands as a draft pull request carrying its evidence | **Conformed** | The 2026-08-20 run of `bug-0020` (`chore-0051` repointed the Given to it): branch `claude/bug-0020-unknown-remedy-lcqb52`, pull request #41 opened **draft** against `developer` and not merged, body carrying all nine fields including `run-checks.py`'s verbatim output and exit 0. Independently verified by a session that did not write it, per `A7`: diff confined to the task's three `touched_files` (109+/3-), zero existing tests edited, `docs/spec/install.md` untouched, acceptance re-run. Superseded evidence: [`cloud-executable.verification.md`](cloud-executable.verification.md) records the 2026-08-07 attempt with verdict `blocked`, two independent blockers, and `evidence_produced: none` | The run has not happened as of 2026-08-19. What exists is the surrounding apparatus, not the scenario: rule **A8** in [`autonomy.md`](../../.agents/rules/autonomy.md) states the ceiling, [`cloud-executable.runbook.md`](cloud-executable.runbook.md) tells a person how to start it, and the verification record carries the exact dispatch command. See the observations below on why `bug-0018` having landed on a `claude/` branch is not evidence for this row, and on the 2026-08-20 repointing to `bug-0020` |
+| Scenarios | S-018 the proof's evidence is a test that failed before the change | **Conformed** | `test_an_unrecorded_rules_entry_names_replace_adopted_rather_than_re_install` and `test_the_run_summary_names_both_remedies_when_the_unknown_entries_are_a_mix` fail against `developer`'s `install.py` and pass against the fixed one. **Reproduced independently rather than read from the report**: restoring `install.py` to `developer`'s copy with the new tests in place yields the same two failures with the same assertion text, and the third test is green in both directions by design as the scope guard. Superseded evidence: Same record, `evidence_owed: S-017, S-018, S-019` | This is the row that carries the actual proof, per prediction 6 in the verification record: the other predictions can be satisfied by an agent that followed instructions, and only a test failing before the change and passing after demonstrates work a plausible-sounding report could not have faked. Nothing has produced it |
 | Scenarios | S-019 a proof run whose gates fail still reports | **Not-built** | None. Same record | Unreachable until S-017 runs at all, since its Given is the same dispatched session. Recorded separately rather than folded into S-017, because it specifies the failure path and a successful run would leave it still unproved |
 | Proposed Surface | Acceptance command `python scripts/run-checks.py`, no flags | Conformed | `run-checks.py` / `main()` takes `argv` only in order to refuse it, returning 2 with a message | Test `test_any_argument_is_refused`. Exit 2 rather than 1 for a refused argument is consistent with the scenario's own precedence: the command did not run the gates, so it did not answer |
 | Proposed Surface | Gate set, the seven from `checks.yml` | Conformed | `run-checks.py` / the list `gates()` returns: lint skills, test suite, backlog, adapters dry run, install dry run, install cycle, doc links | Test `test_the_seven_gates_are_present_ordered_and_complete`, plus `test_every_real_gate_names_a_script_that_exists`. The install cycle runs `install.py` twice, which is the idempotence proof; a test pins that after verification found deleting the second run went uncaught |
@@ -80,23 +80,27 @@ audited against text a human agreed to.
 | Proposed Surface | Bootstrap registration committed in `.claude/settings.json` | Conformed | `.claude/settings.json`, `hooks.SessionStart` with `matcher: "startup"` and command `python3 .agents/hooks/skill-reachability-reminder.py` | Six tests in `CommittedRegistrationTests`, including one asserting the interpreter and one asserting the `AGENTS.md` bound of exactly one hook. **The interpreter is the finding this row exists to carry**: the first draft said `python`, which does not exist on many Linux distributions or on macOS since 12.3, so the hook would not have launched in the exact environment the committed-settings exception was granted for. Caught by independent verification before any cloud run |
 | Proposed Surface | Bootstrap output: nothing when reachable, else one context object | Conformed | `skill-reachability-reminder.py` / `evaluate()`'s two returns, `None` when reachable and the one context object otherwise; `main()` writes only a non-`None` result | Test `test_main_emits_exactly_one_json_object_when_it_fires`, plus the four silent-path tests. Both halves of the row are asserted, which matters because a test covering only the fire path would pass against a hook that speaks on every start |
 | Proposed Surface | Reachable: one kit skill at the project-scope directory, or at any user-scope directory `install.py` targets | Conformed | `skill-reachability-reminder.py` / `PROJECT_SKILL_SUBPATHS` project scope, `USER_SKILL_SUBPATHS` user scope, `KIT_SKILL_NAMES`, `_has_kit_skill()` the name-and-`SKILL.md` test, `reachable()` the two-scope check | **Diverged until `bug-0021` landed 2026-08-08**, on both halves of the sentence: any `SKILL.md` counted rather than a kit skill's, and project scope was checked against `.agents/skills` as well. Both are now the sentence the spec wrote. `test_the_recognised_names_are_exactly_the_skills_this_kit_ships` asserts the name list equals what the kit ships in both directions, which is the only place a standalone hook forbidden from importing this repository can have the staleness objection answered |
-| Proposed Surface | Unattended branch and pull request: `claude/` prefix, draft, nine-field report | **Not-built** | None produced by a proof run. The governing rule exists in `autonomy.md` under "Landing: what you may do with the result" (rule **A8**) and the nine-field contract exists in `fix-batch`'s body | The rule is written; the artifact this row describes has never been produced by the run that would prove it. Classified with S-017 rather than separately, since it is that scenario's surface |
+| Proposed Surface | Unattended branch and pull request: `claude/` prefix, draft, nine-field report | **Conformed** | Pull request #41 and #43, both on `claude/` branches, both opened draft, neither merged by the session. #41's body carries the nine fields. Superseded: The governing rule exists in `autonomy.md` under "Landing: what you may do with the result" (rule **A8**) and the nine-field contract exists in `fix-batch`'s body | The rule is written; the artifact this row describes has never been produced by the run that would prove it. Classified with S-017 rather than separately, since it is that scenario's surface |
 
 ## Coverage proof
 
 - **audited**: all 19 scenarios, S-001 through S-019, and all 12 Proposed Surface rows. 19 + 12 = **31
   items**, which is every auditable item the spec contains. Nothing was sampled and nothing was
   skipped.
-- **unreconciled**: **4 of 31**. S-017, S-018, S-019, and the `Unattended branch and pull request`
-  surface row. All four are **Not-built**; none is Diverged.
-- **conformed**: 27 of 31, being S-001 through S-016 and 11 of the 12 surface rows.
-- **disposition of every unreconciled item**: accepted-with-reason, one reason for all four. They are
-  the Phase 4 cloud proof run, recorded `blocked` in
-  [`cloud-executable.verification.md`](cloud-executable.verification.md) for two independent reasons,
-  either sufficient on its own, and neither fixable from inside this repository. `chore-0034` placed
-  the proof run explicitly out of its own scope. **Nothing here is to-fix by an agent**, because the
-  run has to be started by a person from an interactive terminal or a browser;
-  [`cloud-executable.runbook.md`](cloud-executable.runbook.md) is the instruction sheet.
+- **unreconciled**: **1 of 31**, as re-audited 2026-08-20. S-019 alone, and it is **Not-built**;
+  none is Diverged. It was 4 of 31 until the proof run of 2026-08-20 moved S-017, S-018, and the
+  `Unattended branch and pull request` surface row to Conformed. The arithmetic: 4 minus 3 is 1.
+- **conformed**: 30 of 31, being S-001 through S-018 and all 12 surface rows. 30 + 1 = 31.
+- **disposition of the one unreconciled item**: accepted-with-reason. S-019's Given is a session whose
+  acceptance command exits non-zero, and the 2026-08-20 run's exited 0 with all seven gates passing,
+  so the failure path was never entered. It cannot be closed by wanting it: it needs a proof run that
+  genuinely fails, which is not something to manufacture. **Not to-fix by an agent**, because the run
+  has to be started by a person; [`cloud-executable.runbook.md`](cloud-executable.runbook.md) is the
+  instruction sheet, now gated on the base per `bug-0043`.
+- **audited but not closed by this run**: S-008 stays Conformed on tests and **unobserved in a real
+  cloud session**, which is the same state it held before. The 2026-08-20 run reported no startup
+  message, and that is not evidence against the hook, because the session was staged on a commit
+  without the fix. See the observation below.
 
 The audited range stops at S-019 and claims nothing wider. The spec has 19 scenarios and this matrix
 has 19 scenario rows.
@@ -147,7 +151,7 @@ went on carrying a prompt that told a session to implement a finished task. This
 it, and could not have with the question it was asking: every row here compares one document against
 the code it describes, and the defect lived between three documents that were each individually
 correct. `S-017` and `S-018` now name
-[`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), which is
+[`bug-0020`](../../.tasks/done/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), which is
 open, is a defect in `scripts/install.py` so `S-018`'s wording stays literally true, and whose first
 acceptance criterion already requires a test failing against the current message. **The three rows
 stay Not-built.** The amendment makes the run specifiable; only the run moves them.
@@ -170,3 +174,25 @@ not registered in the one settings file that runs in the harness this repository
 `chore-0034` records both options, registering the gate or writing the step into the lifecycle, as an
 open question for the author and deliberately decides neither. This matrix removes the instance and
 leaves the general question open.
+
+**The 2026-08-20 proof run, and what it did and did not establish (`bug-0043`).** `S-017`, `S-018`,
+and the unattended-branch surface row move to Conformed on this run. **`S-019` does not, and neither
+does `S-008`.**
+
+`S-019`'s Given is a session whose acceptance command exits non-zero. The run's exited 0 with all
+seven gates passing, so the failure path was never entered. It stays **Not-built** rather than being
+folded into `S-017`, which is exactly why it was recorded separately in the first place.
+
+`S-008` stays **Conformed on tests and unobserved in a real cloud session**, unchanged by this run.
+The session reported no startup message, and the cause is not the hook: it was staged on a branch cut
+from `main`, 99 files behind `developer`, so the hook that would have fired was the pre-`bug-0021`
+copy, which counts any `SKILL.md` and is silenced by a populated foreign `~/.claude/skills`.
+Reproduced independently against both copies in the same environment: `main`'s runs, exits 0, and is
+silent; `developer`'s reports. **A "no" from a stale base is not evidence against the fix**, and the
+runbook's reading table would have read it as exactly that, which `bug-0043` fixed by gating the
+table on the base.
+
+One property of this audit is worth stating plainly, since it recurs: the run that produced the
+Conformed rows above also produced a false finding, rediscovering `bug-0021` and offering it as new,
+because it was reading superseded code. The rows above are Conformed on evidence re-derived after the
+rebase and re-verified by a second session, not on the report as first written.

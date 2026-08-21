@@ -16,7 +16,7 @@ amendment is **pending the author's re-approval**. The contract specified a proo
 be performed, and nothing reported it: all seven gates pass, and `validate.py --strict` passes because
 the runbook's link to that task resolves correctly into `done/`, so the move made the link more valid
 rather than less. The substitute is
-[`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen
+[`bug-0020`](../../.tasks/done/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md), chosen
 because `S-018`'s "the unfixed `install.py`" stays literally true of it and its first acceptance
 criterion already requires a test failing against the current message. `status` is left reading
 `approved` per the convention in [`README.md`](README.md), for the reason that file gives. Nothing
@@ -255,7 +255,7 @@ have caught, and then has no command to catch it with either.
 
 ### Scenario S-017: the proof run lands as a draft pull request carrying its evidence
 
-- **Given** [`bug-0020`](../../.tasks/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md)
+- **Given** [`bug-0020`](../../.tasks/done/bug-0020-check-unknown-remedy-is-wrong-for-the-adopted-lens.md)
   dispatched to a cloud session under the autonomy rules module
 - **When** the session completes its work
 - **Then** the work is on a branch whose name carries the `claude/` prefix, a pull request exists in

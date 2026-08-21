@@ -67,7 +67,7 @@ Pass the same `--home` you installed with. The check reads the manifest, re-read
 | `diverged` | At least one file no longer matches, named individually, with the installed and source digests. For the rules module this is absence only: a file the install placed is gone. Editing a lens there is never divergence |
 | `linked` | The target is a symlink to its source, so it cannot go stale |
 | `revised` | The kit's copy of an adopter-owned file (the rules module) changed since you installed. Your copy is left alone |
-| `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one |
+| `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one, or `--replace-adopted` for the rules module, where a re-install preserves your files and records nothing |
 
 Exit codes are `0` when everything current, `1` when something diverged, and `2` when the check could not answer (an entry with no baseline, or a source the kit no longer has). Nothing recorded beneath the given home is also a `2`, not a clean result: a check that never saw your install has learned nothing about it.
 

@@ -1054,6 +1054,37 @@ class StalenessCheckTests(unittest.TestCase):
                 return parts[0]
         return None
 
+    @staticmethod
+    def _message(out, name):
+        """The message the check reported for one entry, or None if it reported none.
+
+        The sibling of `_status`, over the same `<status> <tool> <name>  <message>` line,
+        and load-bearing for the same reason (bug-0020). A run whose unknown entries are a
+        mix prints one remedy per entry, so an `assertIn` over the whole report is answered
+        by whichever entry happens to carry the wanted sentence and says nothing at all
+        about the entry under test.
+        """
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == name:
+                return " ".join(parts[3:])
+        return None
+
+    @staticmethod
+    def _summary(out):
+        """Everything the check printed after its per-entry lines, or "" if it printed none.
+
+        Bounded to the tail on purpose, for `_message`'s reason one level up: the per-entry
+        lines carry remedies of their own, so an assertion over the whole report cannot
+        tell a summary that names the right remedy from an entry line that happens to.
+        The counts line is the boundary, and it is the one line that always ends the report.
+        """
+        lines = out.splitlines()
+        for i, line in enumerate(lines):
+            if "error(s)." in line:
+                return "\n".join(lines[i + 1:])
+        return ""
+
     def test_an_install_records_a_digest_for_every_file_it_places(self):
         # The baseline, at the lowest layer, and the reason it is per file rather than per
         # skill: a skill is a directory, and a stale `templates/report.md` is exactly as
@@ -1121,6 +1152,52 @@ class StalenessCheckTests(unittest.TestCase):
                          {"unknown"},
                          "no entry may read as current without a recorded baseline")
         self.assertIn("re-install to establish a baseline", out.lower())
+
+    def _unknown_run(self):
+        """A check over a manifest carrying no digests at all, as bug-0020 describes it.
+
+        Staged exactly like the test above, by stripping the key from a real manifest, so
+        every entry is unknown and the rules entry among them is the adopted one.
+        """
+        self._install()
+        older = {"entries": [{k: v for k, v in e.items() if k != "digests"}
+                             for e in self._entries()]}
+        inst.MANIFEST.write_bytes(json.dumps(older, indent=2).encode("utf-8"))
+        return self._check()
+
+    def test_an_unrecorded_rules_entry_names_replace_adopted_rather_than_re_install(self):
+        # bug-0020. Re-install is the right remedy for a derived entry and, since bug-0018,
+        # a no-op for this one: a re-install of an unrecorded rules module preserves every
+        # file and records nothing, so the adopter follows the instruction, nothing changes,
+        # and the same instruction prints again. `--replace-adopted` is the one route that
+        # establishes a baseline here, and the message that has to name it is this entry's
+        # own, read per entry: the derived entries in this very run print the old sentence.
+        code, out = self._unknown_run()
+        self.assertEqual(code, 2, "the state is still unanswerable, so the exit code holds")
+        self.assertEqual(self._status(out, "rules"), "unknown")
+        self.assertIn("--replace-adopted", self._message(out, "rules"))
+
+    def test_an_unrecorded_derived_entry_still_says_re_install(self):
+        # The other half, and the reason the fix is name-scoped rather than a rewrite of the
+        # shared sentence: re-installing a skill directory does establish a baseline, so
+        # swapping this remedy for the adopted one would trade one wrong instruction for
+        # another. Read per entry for the same reason as above, in the opposite direction.
+        code, out = self._unknown_run()
+        self.assertEqual(self._status(out, "alpha"), "unknown")
+        message = self._message(out, "alpha")
+        self.assertIn("Re-install to establish a baseline", message)
+        self.assertNotIn("--replace-adopted", message)
+
+    def test_the_run_summary_names_both_remedies_when_the_unknown_entries_are_a_mix(self):
+        # The summary prints one line per status, not per kind, so a run whose unknown
+        # entries include the rules module has to say both things or mis-advise half of
+        # them. Bounded to the tail after the counts line, because the per-entry lines above
+        # it already name both remedies and would answer either assertion on their own.
+        code, out = self._unknown_run()
+        summary = self._summary(out)
+        self.assertIn("Re-install to establish one.", summary)
+        self.assertIn("--replace-adopted", summary)
+        self.assertEqual(code, 2)
 
     def test_an_adopter_edited_rules_file_is_not_reported_as_divergence(self):
         # The noise case, and the reason it is decided rather than mechanical. A lens is the
