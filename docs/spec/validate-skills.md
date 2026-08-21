@@ -15,6 +15,19 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-08-21 (`chore-0054`) to state the supporting-file link rule: the markdown a skill
+ships beside its `SKILL.md` is link-checked from where it sits, and a file authored to be written
+into another repository is excluded. Scenario S-024, plus the `Output` and `What it reads` surface
+entries it moves.** This amendment is **pending the author's re-approval**. It writes down the
+behaviour `chore-0036` gave the validator on 2026-08-21, which this contract did not mention at all:
+it described a validator that reads one file per skill and ends its run at a single summary line. No
+goal is added, because Goal 4 already reads "a skill's cross-references" rather than a `SKILL.md`'s,
+and the constraint below that a skill is distributed as a directory already carries the reason a file
+beside the body is in scope at all. `status` is left reading `approved` per the convention in
+[`README.md`](README.md), for the reason the notes below give. This is the fourth time the
+implementation has grown past this contract, after `feat-0023`, `bug-0027` and `feat-0048`, and every
+one of the four was found at a later task's closeout rather than by any gate.
+
 **Amended 2026-08-20 (`chore-0047`) to state the lens-composition rule: a file under the sibling
 rules module that declares itself a lens must be referenced by at least one skill. Scenario S-023,
 plus the Proposed Surface entry admitting that the tool reads `.agents/rules/` and not only
@@ -232,6 +245,60 @@ validator is the kit-level lint that enforces that bar.
   trade is the one `bug-0015`, `bug-0017`, `bug-0023` and `bug-0028` each settled in the other
   checkers carrying this rule, and this contract restates it rather than inheriting it silently.
 
+### Scenario S-024: a markdown file shipped beside a SKILL.md is link-checked where it sits
+
+- **Given** a skill directory holding, beside its `SKILL.md`, a markdown file that carries a relative
+  link which does not resolve, or which resolves above the distributed skill tree
+- **When** the validator runs
+- **Then** it records the finding that link would earn in a `SKILL.md` under S-009 or S-011, naming
+  the supporting file rather than the `SKILL.md`, and exits non-zero.
+
+  The subject of the constraint above is a **directory**, not a file: a skill is distributed as a
+  directory alongside its sibling skills and the rules module. A markdown file read in place inside
+  that installed directory strands exactly the reader a broken `SKILL.md` link strands, so the link
+  rules reach it unchanged, resolved from where that file sits rather than from the `SKILL.md`.
+
+  **A file authored to be written into another repository is excluded, and that limit is part of the
+  contract rather than an implementation detail.** Its links are written for the destination and are
+  meant not to resolve where the file currently sits, so checking them here would report every one of
+  them as broken and make the rule unusable. The marker is the `.tmpl` suffix on the file's name,
+  which this kit already puts on exactly the files it writes elsewhere. The marker being a property
+  of the file is the load-bearing part: a table of destinations declared in a skill body or in the
+  tool would be a second source of truth that drifts from the skill silently, and silent drift is the
+  failure this whole rule exists to catch, so buying coverage with it would be a bad trade
+  (`chore-0036`). Neither is the exclusion drawn by directory name: a document that describes the
+  directory it sits in is checked wherever it sits, including inside a `templates/` directory.
+
+  **The cost is stated rather than hidden.** A destination-bound markdown file added *without* the
+  marker is checked against this repository and reports links written for somewhere else. That
+  failure is loud, and the fix is a rename that also makes the file read as a template to every
+  human, where the failure of a directory-name rule would be silent.
+
+  **The sibling-skill shortcut S-010 does not apply to a supporting file.** That rule reads
+  `../<name>/SKILL.md` as a skill *name* rather than as a path, which is true only one directory
+  level up from a sibling skill, where a `SKILL.md` sits. From a file one level deeper the same text
+  names a subdirectory of its own skill, so the shortcut would clear a genuinely broken link whenever
+  a real skill happened to share that name. Resolved on disk like any other link, it earns the
+  ordinary S-009 message instead. S-011, S-012, S-013 and S-022 apply here unchanged.
+
+  **A non-markdown file is counted and not read**, because markdown link syntax inside a `.py` or a
+  `.json` is not a link. **A file the kit does not distribute, such as a byte cache, is neither read
+  nor counted**, so two runs over the same tree report the same numbers whether or not the test suite
+  has run in between. A count that moved with the state of the working tree could not be compared
+  across runs, which is the only thing it is for.
+
+  **What a skill ships beside its body is a fact about the directory**, so this rule is not
+  conditional on the `SKILL.md` being there or being readable. A directory that earns the S-001 or
+  S-002 error still has its supporting files checked and counted, rather than dropping out of both at
+  the moment its body became unreadable.
+
+  **What the run reports is both what it read and what it declined to read**, which is what makes the
+  bound checkable: "0 supporting files checked" reads identically whether the rule is working or the
+  walk is broken, until the count of the skipped sits beside it. **No coverage figure is a clause of
+  this contract.** What the tree holds changes, a stated limit is worth more than a coverage number
+  nobody can trust, and the measurement belongs in the conformance matrix beside the date it was
+  taken.
+
 ### Scenario S-014: contradictory status claim warns but does not fail
 
 - **Given** a `SKILL.md` that asserts it is a draft and also records that it shipped
@@ -340,9 +407,9 @@ validator is the kit-level lint that enforces that bar.
 | Element | Detail |
 |---|---|
 | Invocation | `python scripts/validate-skills.py` |
-| What it reads | every skill directory under the target skills directory, and the sibling rules module beside it (`.agents/skills/` and `.agents/rules/` for the default target). The rules module is read only for S-023; no rule above it inspects a rules file's contents, and nothing outside that pair is read. |
+| What it reads | every skill directory under the target skills directory, in full rather than its `SKILL.md` alone: the body, plus the files the kit distributes beside it, of which the markdown is read for S-024 and the rest is counted without being opened. Plus the sibling rules module beside that directory (`.agents/skills/` and `.agents/rules/` for the default target). The rules module is read only for S-023; no rule above it inspects a rules file's contents, and nothing outside that pair is read. |
 | Exit code | non-zero when any error is recorded, zero otherwise (warnings do not fail) |
-| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary. When the skills directory is absent, a missing-directory error instead of the summary; when it is present but empty, a no-skills-found line instead of the summary. The count `N` is of skills, so an S-023 error raises the error count without changing it. |
+| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary, then a second line reporting how many supporting files were link-checked and how many were skipped, by reason (S-024). When the skills directory is absent, a missing-directory error instead of both summary lines; when it is present but empty, a no-skills-found line instead of both. The count `N` is of skills, so an S-023 or S-024 error raises the error count without changing it. |
 
 ## Open Questions
 

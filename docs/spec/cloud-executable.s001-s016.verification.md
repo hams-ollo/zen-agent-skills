@@ -82,6 +82,28 @@ Three things make this worth recording beyond the fix:
 - **No test read `.claude/settings.json` at all.** The file was reviewed, documented in `AGENTS.md`,
   and unguarded.
 
+### The counterfactual in this section, falsified 2026-08-21
+
+Appended rather than applied to the text above, for the reason this record opens with: what the
+2026-08-07 session found is evidence of that run, and a record edited to match a later measurement
+stops being evidence of anything. The same annotate-rather-than-rewrite move is already used above
+for the cross-platform limitation, and by the conformance matrix for this same finding.
+
+Two of this section's claims were counterfactual rather than observed: that under the first draft's
+`python` the hook "would not have launched", and that it "would have struck **in the exact
+environment the committed-settings exception was granted for**". The first measurement ever taken of
+that environment contradicts both. Observation 3 of the 2026-08-21 reachability run, in a cloud
+container reporting Linux and Python 3.11.15, found `command -v python3` returning
+`/usr/local/bin/python3` and `command -v python` returning `/usr/local/bin/python`. On that platform,
+on that date, `python` would have launched.
+
+That is one container on one day and not a claim about every environment, and the lost scope is what
+the two sentences got wrong. What stands unchanged is the rest of this section: the first draft
+disagreed with every other interpreter wiring in the kit, this verification caught it before any
+cloud run, and no test read the file at all. The interpreter stays `python3` as the portable default,
+and the comment in `.claude/settings.json` was corrected by `chore-0052` to defend it on that ground
+instead of the counterfactual. The verdict, the scope, and the disposition table below are unaffected.
+
 ## Weaker guards, found but not blocking
 
 | # | Guard | Defeated by |
