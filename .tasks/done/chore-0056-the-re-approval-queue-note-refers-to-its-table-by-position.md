@@ -2,7 +2,7 @@
 id: chore-0056
 title: The re-approval queue's note refers to its own table by row position, and both numbers drifted when rows were inserted
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -13,7 +13,7 @@ created: 2026-08-21
 
 ## Problem
 
-The paragraph under the re-approval queue in [`docs/spec/README.md`](../docs/spec/README.md) refers to
+The paragraph under the re-approval queue in [`docs/spec/README.md`](../../docs/spec/README.md) refers to
 its own table by **position**, twice, and both references have drifted:
 
 ```text
@@ -76,6 +76,21 @@ Prefer removing the count to correcting it. "The other four" corrected to "the o
 defect with a fresh number, and it will drift again the next time a spec is amended, which happens
 roughly weekly here.
 
+## Decisions
+
+- **Rejected: correcting the numbers.** "The fifth row" to "the fourth row" and "the other four" to
+  "the other six" would be the same defect with fresh numbers, and would drift again at the
+  next amendment. Both references now name the row (`house-review`) or the table ("the rest of this
+  table") instead of counting it.
+- **Rejected: dropping the contrast with the other rows.** "So a search does not find it" would have
+  been the most drift-proof wording, but the argument is that a search *does* find every other row
+  and passes over this one. "The rest of this table" keeps the contrast without a count.
+- **Seam left open deliberately:** the same defect sits two paragraphs above, in the marker-key
+  section, which still says four specs are in this state and that retrofitting means editing four
+  approved contracts. The table below it now lists seven. That text is from `chore-0030` and was not
+  among the counts `chore-0054` recomputed, so it is stale rather than correct, and it is left alone
+  because this task's scope excludes the other counts in the file.
+
 ## Risks and rollback
 
 One file, prose only, so the more-than-one-module rule does not fire and this section is short.
@@ -90,18 +105,18 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] The paragraph contains no ordinal or count referring to rows of the table it sits under, verified
+- [x] The paragraph contains no ordinal or count referring to rows of the table it sits under, verified
       by reading it rather than by grep.
-- [ ] It still names `house-review` and still states why that note is invisible to a search.
-- [ ] The argument for eventually replacing the table with a marker key survives.
-- [ ] No table row, `status` field, or spec is modified.
-- [ ] The premise was checked: the closeout states whether `house-review`'s note still carries the
+- [x] It still names `house-review` and still states why that note is invisible to a search.
+- [x] The argument for eventually replacing the table with a marker key survives.
+- [x] No table row, `status` field, or spec is modified.
+- [x] The premise was checked: the closeout states whether `house-review`'s note still carries the
       wording the paragraph attributes to it.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

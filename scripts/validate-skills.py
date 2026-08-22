@@ -69,6 +69,8 @@ EXTERNAL_LINK_PREFIXES = ("http://", "https://", "mailto:")
 
 # The two file kinds a skill ships beside its SKILL.md, and the marker that tells them
 # apart. See `classify_supporting_file` for the argument; these are the constants it reads.
+# Both are written lowercase and both are matched against a lowered name, because the case
+# an author typed is not a fact about where a file's links resolve (chore-0055).
 TEMPLATE_SUFFIX = ".tmpl"
 SUPPORTING_MARKDOWN_SUFFIXES = frozenset({".md", ".mdc"})
 
@@ -323,8 +325,19 @@ def classify_supporting_file(path: Path) -> str:
 
     `other` covers the non-markdown files (a `.py`, a `.toml`, a `.json`). Markdown link
     syntax in those is not a link, so they are counted and not read.
+
+    **Both suffix tests are case-insensitive, and they have to agree** (chore-0055). They
+    did not until then: the marker was matched exactly while the markdown suffixes were
+    lowered first, so `AGENTS.md.TMPL` was neither a template nor markdown and fell to
+    `other`. The direction is the one the markdown line already took, so an author's
+    shift key changes no classification: `.TMPL` names a destination-bound file as plainly
+    as `.tmpl` does, and the two spellings are the same file to a case-insensitive
+    filesystem. Widening the marker can only move a file out of the checked set, never
+    into it, since a name ending in `.tmpl` in any case has `.tmpl` as its suffix and so
+    can never also be `.md` or `.mdc`. What it moves is one skipped count into the other.
     """
-    if path.name.endswith(TEMPLATE_SUFFIX):
+    name = path.name.lower()
+    if name.endswith(TEMPLATE_SUFFIX):
         return "template"
     if path.suffix.lower() in SUPPORTING_MARKDOWN_SUFFIXES:
         return "markdown"
