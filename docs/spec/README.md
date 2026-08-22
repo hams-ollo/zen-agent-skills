@@ -61,10 +61,13 @@ today, and would let a check answer "which approved specs carry an unreviewed am
 consumer of `status` changing behaviour.
 
 It is deliberately not introduced yet, for one reason. Such a key earns its keep only through that
-check, and the check is honest only once every spec already in this state carries the key. Four do,
-listed below, and each states its pending state in different words and two of them at the foot of
-the document rather than the header. Retrofitting them means editing four approved contracts, which
-is the author's pass and not an agent's. Until it happens, this state lives in prose, and prose is
+check, and the check is honest only once every spec already in this state carries the key. Every spec
+listed below is already in it, and each states its pending state in different words. Most say
+*pending the author's re-approval*; `house-review` says its frontmatter is left at `approved` for the
+author to confirm at closeout; `doc-sync` and `spec-author` say the amendment needs a maintainer's
+re-approval, and those two keep the note at the foot of the document rather than in the header.
+Retrofitting means editing every one of those approved contracts, which is the author's pass and not
+an agent's. Until it happens, this state lives in prose, and prose is
 not machine-readable: that is the known cost of this convention, not an oversight in it.
 
 ### The author's re-approval queue
