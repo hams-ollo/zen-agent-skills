@@ -2,7 +2,7 @@
 id: bug-0046
 title: The provenance scan matches file suffixes case-sensitively, so a file named .MD drops every record it carries and the run says nothing
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: []
@@ -41,10 +41,10 @@ $ python scripts/check-provenance.py --list | tail -1
 Exit 0 both times. Two records vanished, no line named the file, and the second run reads exactly
 like a repository with six fold-ins instead of eight. That is the class this script has now been
 fixed for four times:
-[bug-0016](done/bug-0016-provenance-block-blank-line-silent-skip.md),
-[bug-0019](done/bug-0019-provenance-check-drops-unreadable-files-silently.md),
-[bug-0041](done/bug-0041-a-typo-after-source-drops-a-whole-provenance-block.md), and
-[bug-0042](done/bug-0042-a-typo-on-the-source-key-itself-still-deletes-the-block.md). Each of those
+[bug-0016](bug-0016-provenance-block-blank-line-silent-skip.md),
+[bug-0019](bug-0019-provenance-check-drops-unreadable-files-silently.md),
+[bug-0041](bug-0041-a-typo-after-source-drops-a-whole-provenance-block.md), and
+[bug-0042](bug-0042-a-typo-on-the-source-key-itself-still-deletes-the-block.md). Each of those
 four fixed a layer inside a file that was read. This is the layer above them: which files get read
 at all, which no task has looked at.
 
@@ -53,7 +53,7 @@ point of that family of fixes is "that the tool never passes over part of its in
 so".
 
 The same defect was closed one directory over on 2026-08-21.
-[chore-0055](done/chore-0055-tmpl-matching-is-case-sensitive-while-markdown-matching-is-not.md)
+[chore-0055](chore-0055-tmpl-matching-is-case-sensitive-while-markdown-matching-is-not.md)
 made `validate-skills.py`'s two suffix tests case-insensitive, and its argument transfers verbatim:
 "the case an author typed is not a fact about where a file's links resolve". The case an author
 typed is not a fact about whether a file carries a fold-in either. The consequence here is worse
@@ -99,21 +99,37 @@ in `.md` in any case has `.md` as its lowered suffix. So the current 8 records a
 count changes on the real tree after the fix, a file was being skipped and that is a finding to
 report.
 
+## Decisions
+
+**Chosen: case-insensitive, agreeing with `chore-0055`. Rejected: case-sensitive, and rejected
+making a case-variant suffix a loud error.** `chore-0055`'s argument transfers without modification
+and its rejected alternative fails harder here than it did there: a case-sensitive rule leaves
+`review-quality.MD` unscanned exactly as today, so the symptom survives the fix that was supposed to
+make it loud. Making a case-variant suffix an explicit error would be loud, but it is a new rule
+rather than an agreement between two existing ones, and `bug-0028`'s deliberate-seam rule points at
+agreeing with the sibling script rather than inventing a third convention one file away.
+
+**Seam left open deliberately: `_SECTION_RE` still matches `Provenance` case-sensitively, while the
+markdown fence info string beside it is lowered before comparison.** So a Python docstring headed
+`provenance` is not recognised as a declared placement. That is the same disagreement one layer in,
+but closing it would change **which blocks qualify** rather than which files are read, which this
+task's bounds exclude. Recorded as a finding for the batch owner rather than fixed here.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] A test builds a fixture tree holding one provenance record in a file whose suffix is
+- [x] A test builds a fixture tree holding one provenance record in a file whose suffix is
       uppercase, and asserts the record is collected.
-- [ ] That test fails against the current `iter_provenance_files()`, proven by running it before
+- [x] That test fails against the current `iter_provenance_files()`, proven by running it before
       the fix and recording the verbatim output in the closeout.
-- [ ] `python scripts/check-provenance.py --list` over the real tree still reports 8 records, and
+- [x] `python scripts/check-provenance.py --list` over the real tree still reports 8 records, and
       that output is recorded, so the widening is shown to have changed nothing here.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

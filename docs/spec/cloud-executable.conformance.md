@@ -73,7 +73,7 @@ audited against text a human agreed to.
 | Proposed Surface | Gate set, the seven from `checks.yml` | Conformed | `run-checks.py` / the list `gates()` returns: lint skills, test suite, backlog, adapters dry run, install dry run, install cycle, doc links | Test `test_the_seven_gates_are_present_ordered_and_complete`, plus `test_every_real_gate_names_a_script_that_exists`. The install cycle runs `install.py` twice, which is the idempotence proof; a test pins that after verification found deleting the second run went uncaught |
 | Proposed Surface | Throwaway home `./.tmp/zen-home` | Conformed | `run-checks.py` / `THROWAWAY_HOME`, used through `gates()`'s `install_home` for all three install gates | The literal the spec names, matching what the CI steps already used, and gitignored via `.tmp/` |
 | Proposed Surface | Exit code 0 / 1 / 2, with 2 outranking 1 | Conformed | `run-checks.py` / `run_all()`'s closing branches: the unrunnable counter is tested first and returns 2 unconditionally | Proved end to end against real gates in [the S-001 to S-016 verification](cloud-executable.s001-s016.verification.md): three failed plus one unrunnable returned 2, and the same run with only failures returned 1 |
-| Proposed Surface | Output: one line per gate, the failing gate's output, then a summary with counts and platform | Conformed | `run-checks.py` / `run_all()`: the per-gate line, then the `----- {name}: {status} -----` output block, then the counts followed by the platform and Python version | Mirrors `install.py`'s `check()` report shape rather than inventing a second format, as `feat-0045` required. A passing gate whose cleanup failed still gets its output shown (`run_all()`'s `if status != "ok" or not cleanup_ok` guard), so leftover files are never announced in one word and explained nowhere |
+| Proposed Surface | Output: one line per gate, the failing gate's output, then a summary with counts and platform | Conformed | `run-checks.py` / `run_all()`: the per-gate line, then the `----- {name}: {status} -----` output block, then the counts followed by the platform and Python version | Mirrors `install.py`'s `check()` report shape rather than inventing a second format, as `feat-0045` required. A passing gate whose cleanup failed still gets its output shown (`run_all()`'s `if status != "ok" or not cleanup_ok` guard), so leftover files are never announced in one word and explained nowhere. **Still Conformed after `bug-0045`, and the contract now owes an amendment**: `run_all()` also writes one indented coverage line beneath every gate, which this row neither requires nor forbids. See "An amendment this contract owes" below |
 | Proposed Surface | CI wiring: one step invoking the command | Conformed | `checks.yml` / a single `Run every acceptance gate` step | The seven steps it replaced are gone rather than commented out, which is what makes the S-005 restatement test meaningful |
 | Proposed Surface | `AGENTS.md` names the command and states the bound | Conformed | `AGENTS.md` / the section "The acceptance command": the command in a fenced block, the exit codes in the `run-checks.py` paragraph below it, and the bound in the spec's exact words, "**Passing it is necessary but not sufficient**" | |
 | Proposed Surface | Bootstrap hook: reminder shape, `SessionStart`, `startup` matcher | Conformed | `skill-reachability-reminder.py` / the module docstring declares the shape, and its "Contract" section states stdin, stdout, and exit; `FIRING_SOURCES` the matcher value; the injectable `main(stdin, stdout)`; listed in the module table in `.agents/hooks/README.md` | Satisfies the hooks module contract the spec's Constraints section imports: exit 0 always, at most one JSON object, no import from this repository, injectable entry point |
@@ -104,6 +104,43 @@ audited against text a human agreed to.
 
 The audited range stops at S-019 and claims nothing wider. The spec has 19 scenarios and this matrix
 has 19 scenario rows.
+
+## An amendment this contract owes
+
+**Unreconciled, and against the contract rather than against the code.** Recorded by `bug-0045` on
+2026-08-22, which changed `run-checks.py` to write one indented coverage line beneath every gate's
+status line, passing gates included. Before that change the aggregator captured each gate's output
+and printed it only `if status != "ok"`, so seven gates passing over this repository and six gates
+passing over a copy with the skills, the tests, and the task files removed produced byte-identical
+reports.
+
+**This is a debt of the spec, not a divergence in the implementation, and the arithmetic above is
+deliberately unchanged.** Nothing the contract requires is missing: S-001 still gets every gate named
+with its own outcome, S-002 still gets a failing gate named with its output, and the `Output` surface
+row still gets its per-gate line, its failure block, and its summary. What is missing is the other
+direction. The contract does not say what a **passing** gate carries, so the silence the defect
+depended on was contract-compliant, and the coverage line the fix adds is contract-silent too. Both
+states satisfy the same three items, which is the property worth amending away.
+
+What the amendment owes, for whoever files it:
+
+- **S-001** says each gate "is named in the output with its own outcome" and stops there. It is the
+  natural home for a clause requiring a passing gate to carry its own account of what it covered.
+- The **`Output`** surface row describes three elements and should describe four.
+- The property to state is the falsifiable one `bug-0045` asserts in
+  `tests/test_run_checks.py`, `CoverageReportTests`: a run over an empty scope must not be
+  byte-identical to a run over a full one. Stating a required wording instead would pin the aggregator
+  to whatever the gates print today.
+
+Not filed here, deliberately. `docs/spec/cloud-executable.md` and
+[`README.md`](README.md) are both untouched by `bug-0045`, whose `touched_files` are
+`scripts/run-checks.py` and `tests/test_run_checks.py`, and two agents adding re-approval rows to one
+shared file collided on 2026-08-19. The amendment is a separate task, in the shape of the one
+`chore-0047` took.
+
+**This section is a targeted note, not a re-audit.** Only the `Output` row and S-001 were re-read for
+it. The frontmatter's `audited` and `re_audited` dates are left alone, and the coverage proof's 1 of
+31 still refers to S-019 alone, which nothing here changes.
 
 ## Observations
 

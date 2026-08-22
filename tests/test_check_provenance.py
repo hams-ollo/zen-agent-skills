@@ -38,6 +38,8 @@ The defect each group protects against:
   unsourced     - a placement whose `source:` key is mistyped, or that carries no source
                   line at all, yields no record at all, so the run prints the clean empty
                   state of a repository with nothing folded in
+  suffix case   - a file whose suffix an author typed uppercase is never selected, so
+                  every record it carries leaves the run and no count records the file
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
@@ -91,26 +93,30 @@ def provenance_fence(*lines):
     return f"## Provenance\n\n{FENCE}provenance\n{body}{FENCE}\n"
 
 
-def make_root(body):
+def make_root(body, filename="SKILL.md"):
     """A throwaway repository root carrying one adapted file under a scanned directory.
 
     The local body is deliberately unlike UPSTREAM: the digest must be compared against the
     fetched bytes, not against the adapted file, and a fixture where the two matched would
     hide a checker that digested the wrong thing.
+
+    `filename` exists for bug-0046, where the question is which files get read at all rather
+    than what is inside them. One file per root, because a case-insensitive filesystem cannot
+    hold `SKILL.md` and `SKILL.MD` side by side.
     """
     tmp = tempfile.TemporaryDirectory()
     root = Path(tmp.name)
     skill = root / ".agents" / "skills" / "x"
     skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_bytes(
+    (skill / filename).write_bytes(
         ("---\nname: x\n---\n\n# X\n\nHouse-styled and retargeted, so it differs from upstream.\n\n"
          + body).encode("utf-8")
     )
     return tmp, root
 
 
-def run(body, fetcher, argv=()):
-    tmp, root = make_root(body)
+def run(body, fetcher, argv=(), filename="SKILL.md"):
+    tmp, root = make_root(body, filename=filename)
     try:
         out = io.StringIO()
         code = cp.main(argv=list(argv), root=root, fetcher=fetcher, out=out)
@@ -957,6 +963,89 @@ class UnsourcedPlacementTest(unittest.TestCase):
         code, output = run(f"{FENCE}text\nsorce: detected | user\n{FENCE}\n", never)
         self.assertEqual(code, 0)
         self.assertIn("No provenance records found", output)
+
+
+class SuffixCaseTest(unittest.TestCase):
+    """bug-0046: a file whose suffix an author typed uppercase was never read at all.
+
+    `iter_provenance_files` selected with `path.suffix in SCAN_SUFFIXES`, an exact match
+    against a lowercase tuple. Demonstrated on 2026-08-22 by renaming one real file:
+    `.agents/rules/review-quality.md` to `.MD` took `--list` from 8 records to 6, at exit
+    0, with no line naming the file.
+
+    This is the layer above bug-0016, bug-0019, bug-0041 and bug-0042. Each of those fixed
+    a way a record was lost inside a file that was read; this one loses the file. So the
+    oracles assert the record is collected and counted, never that the run survives: a run
+    over a tree it never opened also exits 0 and also prints a clean summary.
+
+    The opposite direction is pinned too. Lowering only widens the scanned set, so the two
+    tests at the end hold the boundary where it was: a lowercase suffix still scanned, and
+    a suffix in neither family still ignored.
+    """
+
+    def collect_one(self, filename, body=None):
+        tmp, root = make_root(block() if body is None else body, filename=filename)
+        try:
+            return cp.collect(root)
+        finally:
+            tmp.cleanup()
+
+    def test_an_uppercase_markdown_suffix_is_still_scanned(self):
+        found, unreadable = self.collect_one("SKILL.MD")
+        self.assertEqual([rel for rel, _ in found], [".agents/skills/x/SKILL.MD"])
+        self.assertEqual(unreadable, [])
+
+    def test_a_mixed_case_markdown_suffix_is_still_scanned(self):
+        found, _ = self.collect_one("SKILL.Md")
+        self.assertEqual([rel for rel, _ in found], [".agents/skills/x/SKILL.Md"])
+
+    def test_an_uppercase_python_suffix_is_still_scanned(self):
+        # Both entries of SCAN_SUFFIXES, because the convention names two placements and a
+        # fix that only reached the markdown one would leave half the tree as it was.
+        found, _ = self.collect_one("hook.PY", body=DOCSTRING_BLOCK)
+        self.assertEqual([rel for rel, _ in found], [".agents/skills/x/hook.PY"])
+
+    def test_the_record_in_an_uppercase_file_is_fetched_and_counted(self):
+        # End to end, because the count is what a reader acts on: the bug's whole symptom
+        # was a summary line that reads exactly like a smaller repository.
+        seen = []
+
+        def fetcher(url, timeout=30):
+            seen.append(url)
+            return UPSTREAM
+
+        code, output = run(block(), fetcher, filename="SKILL.MD")
+        self.assertEqual(code, 0)
+        self.assertEqual(seen, [URL])
+        self.assertIn(".agents/skills/x/SKILL.MD:", output)
+        self.assertIn("1 up to date, 0 drifted, 0 unlocatable, 0 error(s).", output)
+
+    def test_an_uppercase_file_is_not_reported_as_nothing_recorded(self):
+        # The exact silent state the bug produced: the line a repository with no fold-ins
+        # prints, at exit 0, over a tree that has one.
+        def never(url, timeout=30):
+            raise AssertionError("--list must fetch nothing")
+
+        code, output = run(block(), never, argv=("--list",), filename="SKILL.MD")
+        self.assertEqual(code, 0)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("1 record(s).", output)
+
+    def test_a_lowercase_suffix_is_scanned_exactly_as_before(self):
+        found, _ = self.collect_one("SKILL.md")
+        self.assertEqual([rel for rel, _ in found], [".agents/skills/x/SKILL.md"])
+
+    def test_a_suffix_in_neither_family_is_still_ignored(self):
+        # Lowering must widen the set by case alone. A fix that started reading every file
+        # would satisfy every assertion above and change what the tool is for.
+        for filename in ("NOTES.txt", "notes.txt"):
+            with self.subTest(filename=filename):
+                found, _ = self.collect_one(filename)
+                self.assertEqual(found, [])
+
+    def test_the_constant_stays_lowercase_so_the_comparison_stays_honest(self):
+        # The comparison lowers one side only, so an uppercase entry here would be dead.
+        self.assertEqual(list(cp.SCAN_SUFFIXES), [s.lower() for s in cp.SCAN_SUFFIXES])
 
 
 class RepositoryRecordsTest(unittest.TestCase):

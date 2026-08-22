@@ -13,6 +13,7 @@ instead: S-004's filesystem claim, and S-005's claim about a checked-in workflow
 import importlib.util
 import io
 import platform
+import re
 import unittest
 from pathlib import Path
 
@@ -199,6 +200,167 @@ class AggregationTests(unittest.TestCase):
         code = rc.run_all([gate("cycle", "install", cleanup_tail="uninstall")], stub, buf)
         self.assertEqual(0, code, "a cleanup failure says nothing about the change")
         self.assertIn("cleanup did not complete", buf.getvalue())
+
+
+class CoverageReportTests(unittest.TestCase):
+    """S-001 and S-002, the passing half (bug-0045): a gate reports what it covered.
+
+    S-001 requires every gate to be "named in the output with its own outcome" and S-002
+    requires a failing gate to be "named with its output". Neither says what a *passing*
+    gate carries, and the answer used to be one status word: `run_all()` collected every
+    gate's output and appended it only `if status != "ok"`. Measured 2026-08-22 over a
+    copy of this repository with the skills, the tests, and the task files removed, six
+    of the seven gates exited 0 having examined nothing and the report was byte-identical
+    to a full clean run.
+
+    The tests below assert the *property* rather than any gate's current wording, as
+    bug-0045 required, so a gate rewording its summary line does not break them.
+    """
+
+    @staticmethod
+    def _runner(outputs):
+        """A subprocess.run stand-in returning a chosen (returncode, stdout) per tail."""
+        def run(command, cwd=None, capture_output=False, text=False):
+            code, text_out = outputs[command[-1]]
+            return _Done(code, stdout=text_out)
+        return run
+
+    def _report(self, gates_, outputs):
+        buf = io.StringIO()
+        code = rc.run_all(gates_, self._runner(outputs), buf)
+        return code, buf.getvalue()
+
+    @staticmethod
+    def _coverage_of(report, name):
+        """The line the report puts directly beneath a named gate's status line."""
+        pattern = re.compile(
+            r"^(ok|failed|unrunnable)\s+" + re.escape(name) + r"(\s+\(cleanup.*)?$")
+        lines = report.splitlines()
+        for index, line in enumerate(lines):
+            if pattern.match(line):
+                return lines[index + 1].strip()
+        raise AssertionError(f"{name} is not named in the report:\n{report}")
+
+    def test_a_passing_run_differs_when_a_gate_reports_different_coverage(self):
+        # The property, with two injected gates whose outputs differ only in the count.
+        # Asserted by comparing the two coverage lines to each other rather than to a
+        # fixed string, so nothing here has to be edited when a gate rewords its summary.
+        full = "walking the tree\nChecked 20 skill(s): 0 error(s), 0 warning(s)."
+        empty = "walking the tree\nChecked 0 skill(s): 0 error(s), 0 warning(s)."
+        code, report = self._report(
+            [gate("full scope", "one"), gate("empty scope", "two")],
+            {"one": (0, full), "two": (0, empty)})
+        self.assertEqual(0, code, "both gates passed, so the exit code is unchanged")
+        self.assertNotEqual(self._coverage_of(report, "full scope"),
+                            self._coverage_of(report, "empty scope"),
+                            "two gates that covered different amounts must not read alike")
+
+    def test_two_passing_runs_over_different_scopes_are_not_byte_identical(self):
+        # The same property stated end to end over the whole report, which is the form
+        # the defect took: a run over an empty tree printed the bytes of a clean run.
+        gates_ = [gate("a", "one")]
+        _, full = self._report(gates_, {"one": (0, "Checked 155 task files.")})
+        _, empty = self._report(gates_, {"one": (0, "Checked 0 task files.")})
+        self.assertNotEqual(full, empty)
+
+    def test_a_passing_gate_carries_a_coverage_line_at_all(self):
+        # The branch the old code excluded outright, named directly so its removal is
+        # not something a wording change could quietly undo.
+        _, report = self._report([gate("a", "one")], {"one": (0, "Checked 9 documents.")})
+        self.assertEqual("Checked 9 documents.", self._coverage_of(report, "a"))
+
+    def test_a_gate_that_examined_nothing_says_so_instead_of_only_ok(self):
+        # `validate-skills.py`, `install.py`, and `build-adapters.py` all print this
+        # sentence over an empty tree and exit 0. It carries no digit, so it is the
+        # fallback rather than the count rule that has to surface it.
+        _, report = self._report([gate("a", "one")],
+                                 {"one": (0, "No skills found under /x/skills.")})
+        self.assertEqual("No skills found under /x/skills.",
+                         self._coverage_of(report, "a"))
+
+    def test_a_trailing_status_word_does_not_displace_the_count_before_it(self):
+        # unittest's own output shape, and the reason the rule is not simply "the last
+        # non-blank line": its final line is a bare `OK`, byte-identical over 482 tests
+        # and over zero, which is the exact failure this whole class exists to remove.
+        output = ("-" * 70 + "\nRan 482 tests in 8.395s\n\nOK\n")
+        _, report = self._report([gate("a", "one")], {"one": (0, output)})
+        self.assertEqual("Ran 482 tests in 8.395s", self._coverage_of(report, "a"))
+
+    def test_the_addition_is_one_line_per_gate_not_the_whole_output(self):
+        # bug-0045's stated risk: a report so long that the tally at the bottom stops
+        # being read would be a worse outcome than the terseness it replaced.
+        output = "\n".join(f"detail line {n}" for n in range(50)) + "\nChecked 7 things."
+        _, report = self._report([gate("a", "one")], {"one": (0, output)})
+        self.assertNotIn("detail line 0", report,
+                         "a passing gate's whole output must not be dumped")
+        head = report.split("\n\n")[0].splitlines()
+        self.assertEqual(2, len(head),
+                         "a gate contributes its status line and exactly one more")
+
+    def test_a_multi_command_gate_reports_its_last_commands_count(self):
+        # The `install cycle` gate runs `install.py` twice, so "the last count" there is
+        # the re-install's. That is the right one to show: the second run is the
+        # idempotence proof, the one that has to recognise its own targets rather than
+        # report a conflict against its own work. The stated limitation is that one line
+        # cannot show the two runs disagreeing, which the exit code would not catch
+        # either, since both runs returning 0 is the whole of the gate's verdict.
+        two_runs = rc.Gate("cycle", [["py", "-c", "first"], ["py", "-c", "second"]])
+        _, report = self._report(
+            [two_runs],
+            {"first": (0, "Done: placed 18 skill(s)."),
+             "second": (0, "Done: re-placed 18 skill(s).")})
+        self.assertEqual("Done: re-placed 18 skill(s).",
+                         self._coverage_of(report, "cycle"))
+
+    def test_the_failure_branch_still_shows_the_gates_full_output(self):
+        # Unchanged by bug-0045, and pinned here because the coverage line is a summary
+        # and a failing gate's detail is the thing that gets acted on.
+        output = "first\nsecond\nChecked 3 things.\nfourth"
+        code, report = self._report([gate("a", "one")], {"one": (1, output)})
+        self.assertEqual(1, code)
+        self.assertIn("----- a: failed -----", report)
+        for line in output.splitlines():
+            self.assertIn(line, report)
+
+    def test_the_could_not_run_branch_still_shows_its_full_output(self):
+        # Run for real rather than stubbed, for the reason RealSubprocessTests gives:
+        # subprocess does not raise for a missing script, so a stub of this branch tests
+        # the assumption instead of the behaviour.
+        missing = rc.Gate("missing", [[rc.PY, "scripts/does-not-exist.py"]])
+        buf = io.StringIO()
+        code = rc.run_all([missing], out=buf)
+        report = buf.getvalue()
+        self.assertEqual(2, code)
+        self.assertIn("----- missing: unrunnable -----", report)
+        self.assertIn("scripts/does-not-exist.py does not exist",
+                      self._coverage_of(report, "missing"))
+
+
+class CoverageLineRuleTests(unittest.TestCase):
+    """`coverage_line()` on its own: which line, and what happens when there is none."""
+
+    def test_the_last_line_carrying_a_count_is_chosen(self):
+        self.assertEqual(
+            "Checked 155 task files: 0 error(s), 0 warning(s).",
+            rc.coverage_line("reading .tasks\n"
+                             "Checked 155 task files: 0 error(s), 0 warning(s).\n"))
+
+    def test_a_later_line_without_a_count_does_not_win(self):
+        # Both install gates end on `install.py`'s "Run ... --check" advice, which says
+        # nothing about what was placed.
+        output = ("Done: profile 'spine', 18 of 20 skill(s) x 2 tool(s).\n"
+                  "Run `python scripts/install.py --check` to compare an installed set.\n")
+        self.assertEqual("Done: profile 'spine', 18 of 20 skill(s) x 2 tool(s).",
+                         rc.coverage_line(output))
+
+    def test_output_with_no_digits_anywhere_falls_back_to_its_last_line(self):
+        self.assertEqual("No skills found under /x/skills.",
+                         rc.coverage_line("scanning\nNo skills found under /x/skills.\n"))
+
+    def test_a_silent_gate_is_named_as_silent_rather_than_left_blank(self):
+        # A blank second line would read as a formatting glitch; this reads as a fact.
+        self.assertEqual("(no output)", rc.coverage_line(""))
+        self.assertEqual("(no output)", rc.coverage_line("   \n\n\t\n"))
 
 
 class RealSubprocessTests(unittest.TestCase):
