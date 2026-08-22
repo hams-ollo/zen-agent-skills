@@ -74,7 +74,7 @@ next to it.
 The four files resolve cleanly today. Every relative link in all four was resolved on disk during
 this review and none dangles, so this is a missing gate rather than a live break. The live break of
 the same class in the emitted adapter trees is
-[bug-0044](bug-0044-rules-module-links-dangle-in-the-inlining-adapter-trees.md).
+[bug-0044](done/bug-0044-rules-module-links-dangle-in-the-inlining-adapter-trees.md).
 
 ## Scope
 

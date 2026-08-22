@@ -2,7 +2,7 @@
 id: bug-0045
 title: The acceptance command prints one status word per gate and discards every coverage count, so a clean run and a run over nothing produce identical output
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #2: make this repository cloud-executable"
 depends_on: []
@@ -109,7 +109,7 @@ times in its checkers, one level up, in the tool that reports on them.
   policy decision about what each gate's minimum input is, and it belongs in its own task. The
   survey above is recorded here so whoever writes it does not have to redo it. Note that the
   `--links` half of that policy is already filed as
-  [chore-0032](chore-0032-links-guard-fires-per-run-not-per-pattern.md).
+  [chore-0032](../chore-0032-links-guard-fires-per-run-not-per-pattern.md).
 - Adding an eighth gate. `run-checks.py`'s summary arithmetic is pinned by
   `tests/test_run_checks.py` and a count change is a separate deliberate edit.
 - Parsing a gate's output for anything but display. The aggregator must not start deciding a
@@ -120,7 +120,7 @@ coverage line. `S-001` requires only that each gate "is named in the output with
 and `S-002` requires a failing gate to be "named with its output", which is where the passing
 case's silence comes from. Amending `docs/spec/cloud-executable.md` to state what a passing gate
 must carry is a separate chore, in the shape of
-[chore-0047](done/chore-0047-validate-skills-contract-lacks-the-lens-composition-rule.md). File it
+[chore-0047](chore-0047-validate-skills-contract-lacks-the-lens-composition-rule.md). File it
 at closeout.
 
 ## Implementation notes
@@ -138,6 +138,56 @@ Two gates run more than one command. The `install cycle` gate runs `install.py` 
 cleanup, so "the last line" there is the second install's line; decide whether that is the right
 one to show and say why in the closeout rather than leaving it to be inferred.
 
+## Decisions
+
+**Rejected: making a gate fail when it examined nothing.** The stronger fix, and the wrong one here.
+The floor is genuinely non-zero for this repository (zero skills, zero tests, or zero task files here
+means something is broken) and genuinely zero for a repository this kit scaffolds: a standard-tier
+scaffold built from `init-worktracking`'s own templates and run on day one prints `Checked 0 task
+files: 0 error(s), 0 warning(s).` and exits 0, which is correct, because the scaffold ships the
+tracker before any task exists. Measured 2026-08-22 rather than argued. Since the two floors differ
+per repository, and `.tasks/validate.py` ships into both, "zero is an error" cannot be a property of
+the gate. It is already out of scope in this task for a second reason, that it is six edits across
+five files.
+
+**Rejected: letting each gate declare its own floor to the aggregator.** The third shape considered:
+a table in `run-checks.py` saying zero skills is an error while zero tasks is fine. Rejected because
+it puts a claim about a gate's minimum input somewhere other than the gate, which is the second
+source of truth this task's implementation notes rule out, and because the aggregator would then be
+deciding a verdict from a gate's text, which the scope forbids outright. A floor belongs in the tool
+that knows what it is checking, and the aggregator's job is to stop hiding what the tool said.
+
+**Chosen: surface, do not fail.** The defect is that the aggregator captures every gate's coverage
+line and prints it only when the gate did not pass, so the fix is to stop discarding it. The exit
+code stays the gates' own, so nothing that currently passes starts failing, which is what keeps a
+freshly scaffolded repository and this repository correct under one rule.
+
+**A premise of this task turned out false, and it changes the display rule.** The scope section
+suggests "the last non-blank line of most of these gates is already the summary line". Measured
+against all seven real gates on 2026-08-22, it is the summary line for three of them (backlog,
+adapters dry run, doc links) and useless for three more: the test suite's last line is unittest's
+bare `OK`, byte-identical over 494 tests and over zero, and both install gates end on `install.py`'s
+"Run ... --check" advice line, which says nothing about what was placed. The cheap rule would have
+left the single most important gate exactly as silent as the defect found it. The rule implemented
+instead is the last non-blank line **carrying a digit**, falling back to the last non-blank line and
+then to `(no output)`. It still needs no per-gate knowledge and no name-to-regex table, and the
+fallback is what surfaces `No skills found under <dir>.`, the digit-free sentence three gates print
+over an empty tree.
+
+**Seam left open deliberately: the rule shows a gate's last count, not its best one.** For `lint
+skills` that is the supporting-file line rather than `Checked 20 skill(s)`, and for both install
+gates it is the description budget rather than `Done: profile 'spine', 18 of 20 skill(s)`. Every one
+of those is a count this task names as load-bearing, so no gate is left uncovered, but a gate that
+wants a different line shown should print that line last rather than have the aggregator learn its
+shape. Keeping the knowledge in the gate is the point.
+
+**Seam left open deliberately: the `install cycle` gate shows its second run's count.** `run_gate()`
+joins both `install.py` runs in order and the rule scans from the end, so the line displayed is the
+re-install's. That is the right one, because the second run is the idempotence proof and the one that
+has to recognise its own targets. One line cannot show the two runs disagreeing, which the exit code
+would not catch either, since both returning 0 is the whole of the gate's verdict. Pinned by
+`test_a_multi_command_gate_reports_its_last_commands_count`.
+
 ## Risks and rollback
 
 Required: this changes the format of the one report an unattended agent produces, and the format is
@@ -154,20 +204,20 @@ Reversible by reverting one commit. Nothing is persisted and no other tool reads
 
     python scripts/run-checks.py
 
-- [ ] A test asserts that a passing run's output differs when a gate reports different coverage,
+- [x] A test asserts that a passing run's output differs when a gate reports different coverage,
       using two injected gates whose outputs differ only in their count line.
-- [ ] A test asserts the per-gate coverage line appears for a gate whose status is `ok`, which is
+- [x] A test asserts the per-gate coverage line appears for a gate whose status is `ok`, which is
       the case the current code excludes.
-- [ ] The failure and could-not-run branches still show the gate's full output, unchanged.
+- [x] The failure and could-not-run branches still show the gate's full output, unchanged.
 - [ ] A real `python scripts/run-checks.py` run is recorded verbatim in the closeout, so the new
       shape is on the record rather than described.
-- [ ] Existing tests still pass, updated only where they pin the old format, and each such update
+- [x] Existing tests still pass, updated only where they pin the old format, and each such update
       named in the closeout.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `cloud-executable` conformance matrix updated over `S-004` and `S-005`, or the deferral recorded with what is owed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `cloud-executable` conformance matrix updated over `S-001` and `S-002`, or the deferral recorded with what is owed. (Corrected at closeout from `S-004` and `S-005`, which contradicted this file's own `scenarios:` frontmatter and its body; the agent found the mismatch and correctly left the box alone.)
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

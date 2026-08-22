@@ -2,7 +2,7 @@
 id: bug-0044
 title: Six links in the rules module dangle in every cursor and vscode adapter tree, because the lenses are copied verbatim while only skill bodies are rewritten
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: distribution tooling"
 depends_on: []
@@ -18,7 +18,7 @@ created: 2026-08-22
 
 ## Problem
 
-[`build-adapters.py`](../scripts/build-adapters.py) rewrites a skill body's relative links so they
+[`build-adapters.py`](../../scripts/build-adapters.py) rewrites a skill body's relative links so they
 resolve from wherever the adapter lands. It does not rewrite the rules module, which it copies byte
 for byte. Six links in that module therefore resolve in this repository and dangle in every
 `cursor` and `vscode` tree the tool emits.
@@ -129,16 +129,16 @@ tree is outside it than that file currently assumes.
 
 - Amending `docs/spec/build-adapters.md`. No scenario covers a rules file's own outbound links, and
   writing one is a separate chore in the shape of
-  [chore-0043](done/chore-0043-amend-build-adapters-spec-for-the-code-span-exception.md). Record
+  [chore-0043](chore-0043-amend-build-adapters-spec-for-the-code-span-exception.md). Record
   what is owed at closeout.
 - The repository-side lint gap that let this through, which is a different fix in a different tool.
-  See [chore-0058](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md).
+  See [chore-0058](../chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md).
 - `install.py`'s layout and the plugin layout, both of which already resolve these links. Do not
   change either to accommodate a fix for the other two.
 
 ## Implementation notes
 
-`SIBLING_REF_RE` in [`install.py`](../scripts/install.py) reads the same `](../<name>/SKILL.md`
+`SIBLING_REF_RE` in [`install.py`](../../scripts/install.py) reads the same `](../../<name>/SKILL.md`
 syntax as a profile edge, so route 2 raises the question of whether removing these links changes an
 install profile. It does not: `resolve_profile()` expands over `sibling_refs(skill_dir)`, which
 reads only `<skill_dir>/SKILL.md`, and the rules module is not a skill directory and is never
@@ -151,6 +151,45 @@ two deep as well, so the mirror-image constant is derivable rather than guessed.
 The new test belongs beside the two that already exist, and must walk the emitted rules directory
 rather than the adapters, so the new walk cannot be satisfied by the old one. Assert on the named
 files as well as on a count: a count over an empty glob passes.
+
+## Decisions
+
+**Rejected: route 1, rewriting the links in `emit_rules_module()`.** Not a preference, a structural
+impossibility. `LAYOUTS["cursor"] == LAYOUTS["vscode"]` as namedtuples, `main()` dedupes layouts, and
+`emit_rules_module()` receives a `Layout` rather than a target, so a default run emits **one**
+`.agents/rules/autonomy.md` for both targets while their adapters sit at `.cursor/rules/<name>.mdc`
+and `.github/prompts/<name>.prompt.md`. Measured: a `--target cursor,vscode` run emits one copy of
+`autonomy.md` and two `doc-sync` adapters. No single rewritten link text resolves for both, and
+whichever was chosen would dangle for anyone building the other target alone. The task's suggested
+constant `SHARED` mirror is derivable but has nothing to point at.
+
+**Rejected: emitting a `SKILL.md` per skill into the inlining trees** so the existing link form
+resolves. It contradicts the reason those layouts inline at all, and doubles the emitted footprint to
+make six citations clickable.
+
+**Chosen: route 2, naming the skills in prose.** Seven links, not six, replaced with backticked
+names. It costs clickable citations in this repository, the plugin tree, and an `install.py` tree,
+and it buys one rule with no per-layout case: a lens may link what sits beside it in every layout
+(its sibling lenses) and names anything else. `autonomy.md` already stated that rule about itself
+seven lines above the first violation of it, so this is the file being made to follow its own
+citation convention rather than a new constraint.
+
+**Premise corrected: there are seven dangling link instances, not six.** The task body lists six
+line numbers and omits `autonomy.md:189`, a second `fix-batch` link inside the fourth held-candidate
+bullet. The pre-fix test run reports 7 per inlining target.
+
+**Confirmed, not assumed: de-linking changes no install profile.** Two independent reasons.
+`SIBLING_REF_RE` is `\]\(\.\./([^/)]+)/SKILL\.md`, which does not match `](../../skills/<name>/SKILL.md`
+at all, since the captured segment is `skills` and the next characters are `/<name>/` rather than
+`/SKILL.md`. And `sibling_refs()` reads only `<skill_dir>/SKILL.md` for directories from
+`discover_skills()`, which never walks `.agents/rules/`. `resolve_profile()` after the change still
+returns core 3, spine 18, all 20.
+
+**Seam left open deliberately: the contract still says nothing about a lens's outbound links.** The
+behavior is now held by `TestEmittedRulesModuleResolves` and by nothing in
+`docs/spec/build-adapters.md`. Amending the spec is out of scope here by the task's own scope
+section; what is owed is written into the conformance matrix's unreconciled set, which moves from
+`none` to one item.
 
 ## Risks and rollback
 
@@ -169,19 +208,19 @@ runs, so nothing persists to migrate back.
 
     python scripts/run-checks.py
 
-- [ ] A new test resolves every relative link inside every emitted `.agents/rules/*.md` file, for
+- [x] A new test resolves every relative link inside every emitted `.agents/rules/*.md` file, for
       both the cursor and the vscode target, and asserts none dangles.
-- [ ] That test fails against the current `emit_rules_module()`, proven by running it before the
+- [x] That test fails against the current `emit_rules_module()`, proven by running it before the
       fix and recording the verbatim output in the closeout.
-- [ ] The plugin target's six links still resolve, so the fix did not trade one layout for another.
-- [ ] `python scripts/build-adapters.py --out <tmp> --target cursor`, followed by resolving every
+- [x] The plugin target's six links still resolve, so the fix did not trade one layout for another.
+- [x] `python scripts/build-adapters.py --out <tmp> --target cursor`, followed by resolving every
       link under `<tmp>/.agents/rules/`, reports zero broken links, and that run is recorded.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `build-adapters` conformance matrix updated over `S-009` and `S-016`, or the deferral recorded with what is owed.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `build-adapters` conformance matrix updated over `S-009` and `S-016`, or the deferral recorded with what is owed.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

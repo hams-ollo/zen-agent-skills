@@ -35,6 +35,19 @@ Every gate runs, even after one fails
 Deliberately not fail-fast. An unattended agent gets one round trip, and a report naming
 only the first failure spends another one to find the second.
 
+What the report carries per gate
+--------------------------------
+A status word, the gate's name, and then one indented line of the gate's own output
+saying what it covered. The coverage line is there because without it a status word is
+not falsifiable: measured 2026-08-22 over a copy of this repository with the skills,
+the tests, and the task files removed, six of the seven gates exited 0 having examined
+nothing, and the report was byte-for-byte the report of a full clean run (bug-0045).
+Only `doc links` noticed, and only incidentally.
+
+The counts themselves are not new. Every gate already prints one, each added by a task
+that had just been burned by its absence; this command captured them and threw them away
+on any gate that passed. See `coverage_line()` for which line is chosen and why.
+
 Standard library only.
 """
 from __future__ import annotations
@@ -170,6 +183,47 @@ def run_gate(gate, runner=None):
     return status, "\n".join(c for c in collected if c.strip()), cleanup_ok
 
 
+def coverage_line(output):
+    """The one line of a gate's own output to show beside its status. Display only.
+
+    Every gate here already prints what it covered, and each of those counts was added
+    by a task that had just been burned by its absence: `validate-skills.py`'s skill and
+    supporting-file counts, `.tasks/validate.py`'s `Checked N task files`, `install.py`'s
+    placed count and description budget, and `--links`'s document count. Until bug-0045
+    this aggregator captured all of them and printed none, so seven gates passing over a
+    full tree and seven gates passing over an empty one were byte-identical reports.
+
+    The rule is the last non-blank line that contains a digit, falling back to the last
+    non-blank line when no line has one, and to `(no output)` when a gate said nothing.
+
+    Why a digit and not simply the last line, which is the cheaper rule bug-0045
+    suggested trying first: it was measured against all seven real gates on 2026-08-22
+    and it is uninformative for three of them. The test suite's last line is unittest's
+    bare `OK`, which is identical over 482 tests and over zero, that being the exact
+    failure this function exists to remove; both install gates end on `install.py`'s
+    "Run ... --check" advice line, which says nothing about what was placed. The digit
+    rule picks `Ran 482 tests in 8.395s` and `Description budget: ...` instead. It needs
+    no per-gate knowledge and no name-to-regex table, which the task's implementation
+    notes rule out as a second source of truth that drifts the first time a gate rewords
+    its summary (the failure `chore-0029` recorded for a copied link rule).
+
+    The fallback matters as much as the rule. A gate declining to look says so in words
+    and no digits: `validate-skills.py`, `install.py`, and `build-adapters.py` all print
+    "No skills found under <dir>." over an empty tree, so the fallback surfaces that
+    sentence verbatim, which is the whole finding of bug-0045.
+
+    This is display, never a verdict. The exit code stays the gates' own, and nothing
+    here parses the text for anything but which line to echo.
+    """
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        return "(no output)"
+    for line in reversed(lines):
+        if any(character.isdigit() for character in line):
+            return line
+    return lines[-1]
+
+
 def run_all(the_gates=None, runner=None, out=None):
     """Run every gate and report. Returns the exit code.
 
@@ -187,6 +241,11 @@ def run_all(the_gates=None, runner=None, out=None):
         counts[status] += 1
         suffix = "" if cleanup_ok else "  (cleanup did not complete)"
         out.write(f"{status:11} {gate.name}{suffix}\n")
+        # Every gate, passing or not, carries its own account of what it covered on an
+        # indented second line. Unconditional on purpose: the passing case is the one
+        # bug-0045 found silent, and a status word alone cannot distinguish a gate that
+        # checked the whole tree from one that found nothing to check and said so.
+        out.write(f"{'':11} {coverage_line(output)}\n")
         # A passing gate whose cleanup failed still needs its output shown, or the
         # leftover files are announced in one word and explained nowhere.
         if status != "ok" or not cleanup_ok:
