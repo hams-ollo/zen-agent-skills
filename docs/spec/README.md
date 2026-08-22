@@ -83,11 +83,12 @@ and `validate-skills` carries three, since `chore-0047` and again since `chore-0
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
 | [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`); `S-023` and the "what it reads" surface entry, the lens-composition rule (`chore-0047`); `S-024` and the `Output` and "what it reads" surface entries, the supporting-file link rule (`chore-0054`) | 2026-08-19, 2026-08-20, 2026-08-21 |
 
-The fifth row was missed when this table was first written, and how it was missed is the argument
-for eventually replacing this table with a marker key. `house-review`'s note says its frontmatter is
-"left at `approved` for the author to confirm at closeout" rather than using the words *pending* or
-*re-approval*, so it is invisible to the search that finds the other four. A convention carried in
-prose can only be found by a reader who already knows every phrasing it has ever taken.
+The `house-review` row was missed when this table was first written, and how it was missed is the
+argument for eventually replacing this table with a marker key. That spec's note says its
+frontmatter is "left at `approved` for the author to confirm at closeout" rather than using the
+words *pending* or *re-approval*, so it is invisible to the search that finds the rest of this
+table. A convention carried in prose can only be found by a reader who already knows every
+phrasing it has ever taken.
 
 ## One file kind per question asked
 

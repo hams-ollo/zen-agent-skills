@@ -1060,5 +1060,93 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class TestSupportingFileSuffixCase(unittest.TestCase):
+    """Scenario S-024: the two suffix families that sort a supporting file agree about case.
+
+    `classify_supporting_file` answers one question with two adjacent tests, and until
+    `chore-0055` they disagreed: the `.tmpl` marker was matched exactly while the markdown
+    suffixes were lowered first, so `AGENTS.md.TMPL` was neither a template nor markdown
+    and fell to `other`. S-024 names the marker as "the `.tmpl` suffix on the file's name"
+    and says nothing about case, so both readings satisfy the contract and the choice is
+    `chore-0055`'s, argued in that task's `## Decisions`.
+
+    The direction chosen is case-insensitive for both, agreeing with the markdown line
+    already in the function rather than inventing a third convention beside it. What it
+    moves is one skipped count into the other: a `.TMPL` file was counted among the
+    non-markdown skipped and is now counted among the templates skipped. Nothing moves
+    into the checked set, and the two end-to-end tests below pin both ends of that: a
+    case-variant template is still not read, and a case-variant markdown file still is.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_supporting(self, skill: str, relpath: str, text: str) -> Path:
+        path = self.root / skill / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return path
+
+    def test_the_template_marker_is_matched_case_insensitively(self):
+        # The half that fails against the pre-chore-0055 function: `.TMPL` and `.Tmpl`
+        # returned `other`. Every variant is asserted rather than one, because a fix that
+        # special-cased the all-caps spelling would pass a single-variant test.
+        for name in ("AGENTS.md.tmpl", "AGENTS.md.TMPL", "AGENTS.md.Tmpl",
+                     "cursor-rule.mdc.TMPL"):
+            with self.subTest(name=name):
+                self.assertEqual(vs.classify_supporting_file(Path(name)), "template")
+
+    def test_the_markdown_suffixes_are_matched_case_insensitively(self):
+        # The other half of the same rule, pinned so the two cannot drift apart again in
+        # the direction they drifted last time. This passes against the pre-chore-0055
+        # function; it is here because the defect was a disagreement between two lines,
+        # and a test covering only the line that changed would not catch the reverse.
+        for name in ("notes.md", "notes.MD", "notes.Md", "rule.mdc", "rule.MDC"):
+            with self.subTest(name=name):
+                self.assertEqual(vs.classify_supporting_file(Path(name)), "markdown")
+
+    def test_a_case_variant_template_is_still_not_link_checked(self):
+        # The bound, proven rather than asserted. The stated risk of widening the marker
+        # is that a destination-bound file could become link-checked; it cannot, because
+        # the marker test runs first and only ever takes files out of the checked set.
+        # The fixture carries the two link shapes a real template carries, a relative
+        # target that resolves nowhere here and one that escapes the shipped tree, and
+        # the run must stay silent about both. The summary is asserted in the same test
+        # because "not reported" and "counted as a template" are the pair that says the
+        # file was excluded for the right reason rather than missed by the walk.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting(
+            "alpha", "templates/AGENTS.md.TMPL",
+            "Work lives in [`.tasks/`](.tasks/) and history in "
+            "[the log](../../../../CHANGELOG.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("AGENTS.md.TMPL", out)
+        self.assertIn("Link-checked 0 supporting file(s) beside them; skipped 1 "
+                      "template(s) whose links are written for another repository and "
+                      "0 non-markdown file(s).", out)
+
+    def test_a_case_variant_markdown_file_is_still_link_checked(self):
+        # The other end of the bound: widening the marker must not swallow a file that
+        # was being checked. It cannot, since a name ending in `.tmpl` in any case has
+        # `.tmpl` as its suffix and so can never also be `.md` or `.mdc`, but the
+        # argument is worth a test rather than a comment. The oracle is the error text,
+        # not the exit code, so the file is proven to have been read rather than merely
+        # counted.
+        _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+        self._write_supporting("alpha", "references/notes.MD",
+                               "See [the missing file](nonexistent-file.md).\n")
+        code, out = _run(self.root)
+        self.assertEqual(code, 1, out)
+        self.assertIn("alpha/references/notes.MD: link target does not exist: "
+                      "nonexistent-file.md", out)
+        self.assertIn("Link-checked 1 supporting file(s) beside them; skipped 0 "
+                      "template(s)", out)
+
+
 if __name__ == "__main__":
     unittest.main()
