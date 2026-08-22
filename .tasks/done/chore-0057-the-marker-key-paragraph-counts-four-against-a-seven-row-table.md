@@ -2,7 +2,7 @@
 id: chore-0057
 title: The marker-key paragraph counts four specs against a table that now lists seven, and carries a second positional claim nobody has checked
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: [chore-0056]
@@ -13,7 +13,7 @@ created: 2026-08-22
 
 ## Problem
 
-The paragraph in [`docs/spec/README.md`](../docs/spec/README.md) explaining why the re-approval
+The paragraph in [`docs/spec/README.md`](../../docs/spec/README.md) explaining why the re-approval
 convention has no marker key states:
 
 ```text
@@ -27,12 +27,12 @@ The table below it now lists **seven** rows. Both counts are stale.
 `git log -S "editing four approved contracts" -- docs/spec/README.md` puts the last change to that
 text at `81b2591` (`chore-0030`, 2026-08-06), so it was **not** among the counts `chore-0054`
 recomputed on 2026-08-21. A dispatch note asserted it had been, and that assertion was wrong; the
-agent working [`chore-0056`](done/chore-0056-the-re-approval-queue-note-refers-to-its-table-by-position.md)
+agent working [`chore-0056`](chore-0056-the-re-approval-queue-note-refers-to-its-table-by-position.md)
 obeyed the bound, left the paragraph alone, and reported the bound as false, which is why this exists.
 
 **It is the same defect `chore-0056` fixed two paragraphs below**, and the fifth instance of the class
 overall. The convention against it is now written into
-[`house-style.md`](../.agents/rules/house-style.md): never count the rows of a table in prose beside
+[`house-style.md`](../../.agents/rules/house-style.md): never count the rows of a table in prose beside
 it, name the row instead. This task is the last known instance predating that rule.
 
 **A second claim in the same sentence has never been checked.** "Two of them at the foot of the
@@ -79,6 +79,34 @@ not merely its arithmetic. Establish which specs it is actually about before rew
 sentence that says "all of them" when it means "the ones that do" would be a new error wearing the
 fix's clothes.
 
+## Decisions
+
+**A premise that turned out true, recorded because it was unverified when the task was written.**
+"Two of them at the foot of the document rather than the header" holds, and the two are `doc-sync`
+and `spec-author`. Measured across all seven queued specs: `doc-sync`'s note is the last line of a
+243-line file and `spec-author`'s the last line of a 118-line file, while `build-adapters`,
+`cloud-executable`, `house-review`, `install`, and `validate-skills` all carry theirs within the
+first 35 lines. The claim was carried unchecked for sixteen days beside two counts that had gone
+stale, which is worth noting: staleness is not contagious, and the fix was to verify each clause
+rather than distrust the sentence.
+
+**The "different words" claim is now specific rather than gestured at.** Three variants exist, and the
+paragraph names them: *pending the author's re-approval* (four specs), `house-review`'s frontmatter
+"left at `approved` for the author to confirm at closeout", and `doc-sync` and `spec-author`'s "needs
+a maintainer's re-approval". Naming them costs three clauses and makes the argument for a marker key
+checkable instead of asserted, which is the whole point of the paragraph.
+
+**Rejected: correcting "four" to "seven".** It is the smaller edit and it is the defect restated with
+a fresh number. The queue gains a row roughly weekly, so a corrected count is wrong again within
+days. `house-style.md` now forbids it outright, and this task is the last known instance predating
+that rule; fixing it by the very method the rule exists to prevent would have been a poor first
+application.
+
+**Rejected: dropping the "foot of the document" clause as another count.** It is a count of specs and
+therefore in the rule's class, but the information it carries is real and load-bearing for the
+argument: a marker key has to find notes that are not where a reader would look. Naming `doc-sync`
+and `spec-author` keeps the fact and drops the arithmetic, which is what the rule actually asks for.
+
 ## Risks and rollback
 
 One file, prose only, so this section is short.
@@ -93,17 +121,17 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] The paragraph states no count of rows of the table below it, per the `house-style.md` rule.
-- [ ] The claim about where specs keep their pending note is verified against all seven, and the
+- [x] The paragraph states no count of rows of the table below it, per the `house-style.md` rule.
+- [x] The claim about where specs keep their pending note is verified against all seven, and the
       closeout states what the check found.
-- [ ] The argument for why a marker key is not introduced yet survives.
-- [ ] No table row, `status` field, or spec is modified.
-- [ ] The paragraph `chore-0056` rewrote is unchanged, proven by diff.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The argument for why a marker key is not introduced yet survives.
+- [x] No table row, `status` field, or spec is modified.
+- [x] The paragraph `chore-0056` rewrote is unchanged, proven by diff.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
