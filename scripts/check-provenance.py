@@ -79,6 +79,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # contain illustrative blocks that are documentation rather than records of a real fold-in.
 # Scanning them would make the script chase example URLs and fail on its own documentation.
 SCAN_DIRS = (".agents", "scripts")
+# The file kinds scanned inside those directories. Written lowercase and matched against a
+# lowered suffix in `iter_provenance_files`, so do not add `.MD` or `.PY` here: the case an
+# author typed is not a fact about whether a file carries a fold-in. Agreeing with
+# `classify_supporting_file` in validate-skills.py, which lowers both sides (chore-0055).
 SCAN_SUFFIXES = (".md", ".py")
 
 # Recognised block fields. `origin` and `note` are prose and are never fetched; `status`
@@ -316,13 +320,21 @@ def parse_records(text):
 
 
 def iter_provenance_files(root):
-    """Every scannable file under `root`, sorted, so output order is stable."""
+    """Every scannable file under `root`, sorted, so output order is stable.
+
+    The suffix is lowered before the membership test. An exact match dropped a file named
+    `.MD` or `.PY` out of the run entirely, taking every record it carried with it and
+    naming it nowhere, which is the same silence as bug-0016, bug-0019, bug-0041 and
+    bug-0042 one layer up: those lost a record inside a file that was read, this lost the
+    file (bug-0046). Widening by case can only add a file to the scanned set, never remove
+    one, since a name ending in `.md` in any case already lowers to `.md`.
+    """
     for directory in SCAN_DIRS:
         base = Path(root) / directory
         if not base.is_dir():
             continue
         for path in sorted(base.rglob("*")):
-            if path.is_file() and path.suffix in SCAN_SUFFIXES:
+            if path.is_file() and path.suffix.lower() in SCAN_SUFFIXES:
                 yield path
 
 

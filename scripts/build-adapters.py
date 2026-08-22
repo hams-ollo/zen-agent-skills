@@ -262,6 +262,17 @@ def emit_rules_module(out: Path, dry: bool,
 
     A copy already in the target project is never overwritten (S-010, S-014). The
     module is swappable by design, so the project's own copy outranks the kit's.
+
+    The module is copied and never passed through `rewrite_links()`, and that is a
+    decision rather than an omission (bug-0044). A lens may link its sibling lenses,
+    which sit beside it in every layout and therefore resolve everywhere unchanged.
+    It may not link a skill: cursor and vscode share one Layout and one emitted copy
+    of this module, while their adapters land at `.cursor/rules/<name>.mdc` and
+    `.github/prompts/<name>.prompt.md` respectively, so no single rewritten target
+    resolves for both, and a default run emits exactly one file that would have to
+    serve them both. The lenses name skills in prose instead, which is the rule
+    `autonomy.md` states about itself, and the walk in
+    `TestEmittedRulesModuleResolves` is what keeps a link from creeping back in.
     """
     written = []
     if not RULES_DIR.is_dir():

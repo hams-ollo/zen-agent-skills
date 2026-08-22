@@ -308,6 +308,63 @@ class TestEmittedTreeResolves(unittest.TestCase):
                          "a derived file must be refreshed from the kit")
 
 
+class TestEmittedRulesModuleResolves(unittest.TestCase):
+    """Scenarios S-009 and S-016, read from inside the rules module (bug-0044).
+
+    test-quality notes: the defect is the mirror image of the one
+    `TestEmittedTreeResolves` guards. That class walks the emitted *adapters*, this
+    one walks the emitted *lenses*, because both existing filesystem walks exclude
+    the rules module by construction: `_adapters()` globs `.cursor/rules/*.mdc` and
+    `.github/prompts/*.prompt.md`, and the plugin walk globs `skills/*/SKILL.md`. A
+    lens is neither, so seven `../skills/<name>/SKILL.md` links shipped dangling in
+    every cursor and vscode tree while both walks reported clean.
+
+    Each target is emitted into a directory of its own rather than read out of one
+    combined run, because cursor and vscode share a Layout and therefore one copy of
+    the module. A link form that resolves only because the other target's adapters
+    happen to sit in the same tree is not a link that resolves for an adopter who
+    built one target. The plugin target is walked here too, so a fix for the two
+    inlining layouts cannot be paid for out of the layout that already worked.
+
+    The named-file assertion is not decoration. The oracle is "nothing dangles",
+    which an empty glob satisfies, so the walk asserts what it walked before it
+    asserts what it found.
+    """
+
+    LENSES = ("autonomy.md", "house-style.md", "review-quality.md")
+
+    def _emitted_rules_dir(self, target):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name)
+        code, _ = _run(["--out", str(out), "--target", target])
+        self.assertEqual(code, 0, f"the {target} build did not exit 0")
+        return out / ba.LAYOUTS[target].rules_dir
+
+    def test_every_relative_link_in_every_emitted_rules_file_resolves(self):
+        for target in ("cursor", "vscode", "plugin"):
+            with self.subTest(target=target):
+                rules = self._emitted_rules_dir(target)
+                emitted = sorted(p.name for p in rules.glob("*.md"))
+                for lens in self.LENSES:
+                    self.assertIn(lens, emitted, f"{lens} was not emitted for {target}")
+
+                broken, checked = [], 0
+                for f in sorted(rules.glob("*.md")):
+                    for link in LINK.findall(f.read_text(encoding="utf-8")):
+                        if link.lower().startswith(SKIP_PREFIXES):
+                            continue
+                        checked += 1
+                        if not (f.parent / link.split("#")[0]).exists():
+                            broken.append(f"{f.name} -> {link}")
+                self.assertGreaterEqual(
+                    checked, 3, "expected the module's own cross-lens links")
+                self.assertEqual(
+                    broken, [],
+                    f"{target}: {len(broken)} dangling link(s) in the emitted "
+                    f"rules module: {broken}")
+
+
 class TestInvocationContract(unittest.TestCase):
     """Scenarios S-001, S-011, S-012, S-013: what each way of invoking it does."""
 

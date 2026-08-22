@@ -25,7 +25,7 @@ of them:
 
 | Where | How it shows up |
 |---|---|
-| [`doc-sync`](../skills/doc-sync/SKILL.md) | States it outright: dry run is the default, detection never changes a file, and a contract document is never edited because a disagreement there means the code is wrong. |
+| `doc-sync` | States it outright: dry run is the default, detection never changes a file, and a contract document is never edited because a disagreement there means the code is wrong. |
 | [`review-quality.md`](review-quality.md), protocol rule 6 | "Report only. State the findings and the suggested fixes. Do not edit or commit anything." |
 | `scripts/install.py`, the `check()` docstring | Carries the sentence verbatim: "Detect and report, never rewrite. Re-installing is a person's decision." |
 | `scripts/check-provenance.py` | Reports drift and never syncs, deliberately declining upstream's in-place rewrite, because every fold-in here was adapted and an overwrite would destroy the adaptation. |
@@ -48,6 +48,15 @@ References to files outside the installed skill tree are named in prose rather t
 portability contract in `AGENTS.md`: this module ships to adopters without this repository around it,
 so a link that escapes the tree would resolve here and dangle everywhere it actually runs.
 
+A skill is named in prose too, for the same reason one layer further in. A lens ships beside the
+skills, and where the skills sit relative to it is not one answer: the plugin tree and an
+`install.py` tree keep a `SKILL.md` per skill directory, while the cursor and vscode trees inline
+every body into `.cursor/rules/` or `.github/prompts/` and leave no `SKILL.md` to point at. No one
+link text resolves in all four, and `build-adapters.py` copies this module rather than rewriting it,
+because the module is swappable and its text is the adopter's. `bug-0044` is what that cost: seven
+links to a sibling skill's `SKILL.md`, correct here and dangling in every cursor and vscode tree the
+kit had ever emitted.
+
 ## Scope: what you may touch
 
 **A1. Stay inside your sandbox, and treat the boundary as a runtime rule, not a starting state.**
@@ -56,12 +65,11 @@ reason: not to sync your changes, not to work around a missing file, not to chec
 main checkout. If you believe you need to reach outside it, that is a blocker to report, not a
 problem to solve.
 
-*Cited:* [`fix-batch`](../skills/fix-batch/SKILL.md), the dispatch-prompt section, states this
-verbatim and says why: worktree isolation is a starting-state guarantee, not a runtime sandbox, and
-nothing stops a shell call from going wherever it wants unless you say so directly. *The incident:*
-an agent in an isolated worktree used a shell to reach outside it and overwrite a file in the main
-checkout with a stale copy, destroying unrelated uncommitted work that had nothing to do with its
-task.
+*Cited:* `fix-batch`, the dispatch-prompt section, states this verbatim and says why: worktree
+isolation is a starting-state guarantee, not a runtime sandbox, and nothing stops a shell call from
+going wherever it wants unless you say so directly. *The incident:* an agent in an isolated worktree
+used a shell to reach outside it and overwrite a file in the main checkout with a stale copy,
+destroying unrelated uncommitted work that had nothing to do with its task.
 
 **A2. Change only what your task scoped. Anything extra is a finding, not a bonus.**
 Work outside your declared scope is not a favor to the reviewer, because they cannot tell the
@@ -113,20 +121,20 @@ disclosure would have cost the agent one sentence.
 State what you checked and what you did not. A clean result over a subset is not a clean result, and
 the difference is invisible to anyone reading only your conclusion.
 
-*Cited:* [`spec-conformance`](../skills/spec-conformance/SKILL.md) requires a coverage proof and says
-an empty result is valid only alongside the audited set, because "no divergence" requires positive
-evidence that the whole spec was checked. *The incident:* a conformance matrix asserted it had
-audited "S-001 through S-014, every spec item" beside a spec carrying fifteen scenarios, recorded in
-task `feat-0036`'s closeout and named again in `chore-0033` as the reason to state both counts and
-the arithmetic rather than the claim.
+*Cited:* `spec-conformance` requires a coverage proof and says an empty result is valid only
+alongside the audited set, because "no divergence" requires positive evidence that the whole spec
+was checked. *The incident:* a conformance matrix asserted it had audited "S-001 through S-014,
+every spec item" beside a spec carrying fifteen scenarios, recorded in task `feat-0036`'s closeout
+and named again in `chore-0033` as the reason to state both counts and the arithmetic rather than
+the claim.
 
 **A7. Verification is run by someone other than the agent whose work is verified.**
 Do not verify your own implementation and record the result as independent evidence. Where the
 harness allows the separation, take it; where it does not, say which agent produced the verdict.
 
-*Cited:* [`verifier-agent`](../skills/verifier-agent/SKILL.md): "Independence is the point. Where the
-harness allows the separation, the agent that verifies should not be the agent that wrote the
-implementation. Self-verification is the failure mode this skill exists to remove."
+*Cited:* `verifier-agent`: "Independence is the point. Where the harness allows the separation, the
+agent that verifies should not be the agent that wrote the implementation. Self-verification is the
+failure mode this skill exists to remove."
 
 **A9. Verify the commit you are working from before trusting anything you read, and disclose the
 result.** (Ids are assigned in order of addition and rules are grouped by topic, so `A9` sits here,
@@ -158,13 +166,13 @@ end to put the check on. Recorded as `bug-0043`.
 The ceiling for any unattended run. Carry the evidence report in the pull request body. Landing it is
 a person's decision, and an unattended agent never makes it.
 
-*Cited, with one honest qualification.* The shape is exercised:
-[`pr-describe`](../skills/pr-describe/SKILL.md) is "draft text only, never touches GitHub", printing
-both artifacts and surfacing the command rather than running it, so the agent prepares and a person
-dispatches. **The specific ceiling, a `claude/` branch and a draft pull request that is never merged,
-is a decision recorded in `ROADMAP.md` Epic E rather than a rule this kit has already run under.** It
-is the only rule in v1 in that position, it is named as such rather than dressed up as consolidated,
-and confirming or amending it against a real unattended run is the first job of v2.
+*Cited, with one honest qualification.* The shape is exercised: `pr-describe` is "draft text only,
+never touches GitHub", printing both artifacts and surfacing the command rather than running it, so
+the agent prepares and a person dispatches. **The specific ceiling, a `claude/` branch and a draft
+pull request that is never merged, is a decision recorded in `ROADMAP.md` Epic E rather than a rule
+this kit has already run under.** It is the only rule in v1 in that position, it is named as such
+rather than dressed up as consolidated, and confirming or amending it against a real unattended run
+is the first job of v2.
 
 ## Considered for v1 and held, for want of a citation
 
@@ -186,9 +194,9 @@ run into them yet and a plausible number is not evidence:
   about it. **Held because the search for a citation came back empty, not because the class was
   judged small.** On 2026-08-08 a search of every skill and lens, all 94 completed task files, the
   specification documents, and the whole 102-commit history found no occasion where content a skill
-  read changed what an agent did. The nearest doctrine, [`fix-batch`](../skills/fix-batch/SKILL.md)'s
-  "a delegated agent's report is a claim, not evidence", guards against an optimistic report rather
-  than an embedded instruction, and every incident behind it is an accuracy failure. The gap looks
+  read changed what an agent did. The nearest doctrine, `fix-batch`'s "a delegated agent's report is
+  a claim, not evidence", guards against an optimistic report rather than an embedded instruction,
+  and every incident behind it is an accuracy failure. The gap looks
   structural rather than lucky: everything this kit has read so far was written by its own maintainer
   or its own agents, so no skill here has yet been pointed at text by someone with a reason to steer
   it. *Trigger:* the first run where a skill reads material from outside the maintainer's control (a
