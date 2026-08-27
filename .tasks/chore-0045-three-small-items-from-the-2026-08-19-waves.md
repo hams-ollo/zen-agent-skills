@@ -10,6 +10,8 @@ touched_files:
   - tests/test_build_adapters.py
   - tests/test_validate_skills.py
   - docs/spec/README.md
+  - docs/spec/build-adapters.conformance.md
+  - docs/spec/validate-skills.conformance.md
   - .agents/skills/init-worktracking/templates/tasks-README.md.tmpl
 created: 2026-08-19
 ---
@@ -57,6 +59,21 @@ the schema is told about eight fields and handed a template with nine.
 - Item 4, added 2026-08-19 once its blocker cleared: retag `bug-0027`'s docstrings in
   `tests/test_validate_skills.py` to `S-022`, the same correction item 1 makes for `S-018`.
 
+- **Item 5, added 2026-08-27 at dispatch: reconcile the two conformance matrix rows this task's own
+  retag falsifies.** Both matrices anticipate this task and one names it. The `S-018` test-coverage row
+  in [`build-adapters.conformance.md`](../docs/spec/build-adapters.conformance.md) says the tests are
+  "tagged with the scenarios they refine" and that "their docstring says an `S-018` is the author's
+  call". The `S-022` row in
+  [`validate-skills.conformance.md`](../docs/spec/validate-skills.conformance.md) quotes the tag
+  `Scenario S-009 refined` verbatim, says the docstrings "describe the amendment as the author's open
+  call", and closes "retagging them is `chore-0045`'s follow-up and deliberately not done here".
+  Items 1 and 4 make all of that false. Landing the retag without the rows leaves two matrices
+  asserting a state the same commit removed, and a quoted phrase that resolves nowhere.
+  **Re-audit each row rather than find-and-replacing its quote**, per the disposition `chore-0062` and
+  `chore-0068` both recorded: repairing a citation without re-deriving the verdict asserts a freshness
+  the repair did not establish. Record the re-audit in each matrix and in `re_audited`, crediting only
+  this pass.
+
 **Out of scope:**
 
 - Nothing about `bug-0027`'s tests any more. They were held out while the id they needed did not
@@ -92,6 +109,9 @@ id reference are stale.
 - [ ] `tasks-README.md.tmpl`'s field table has a `title` row.
 - [ ] `bug-0027`'s test docstrings in `tests/test_validate_skills.py` cite `S-022`, and none
       describes that decision as still open.
+- [ ] The `S-018` and `S-022` test-coverage rows in the two matrices are re-audited to match the
+      retagged docstrings, `re_audited` credits only this pass, and no dated measurement elsewhere in
+      either matrix is rewritten.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
