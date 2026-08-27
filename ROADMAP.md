@@ -62,6 +62,7 @@ Ordered by effort-to-value. Each item is one skill (a Feature). Strike through w
     - ~~**Phase 1: the `.agents/hooks/` module.** A portable stdlib-Python guardrail protocol with two shapes, a *reminder* that injects context and never blocks and a *gate* that blocks only when the condition is decidable from the payload rather than interpreted from prose.~~ **Shipped** (`feat-0038` established the module, its contract, three-harness wiring and opt-in installation, seeded with `delegation-reminder`; `feat-0039` added `spec-conformance-gate`, the first gate. Both adapted from `repoprompt-workflows` (Balarama Bosch, MIT). Two findings worth carrying forward: the dogfood caught the hook silently inert on `Agent` delegations and a `python3` registration that on Windows resolves to the Store alias and fails forever without surfacing, both being the same failure shape, installed and correct-looking and doing nothing; and the faithful port of the gate would have been inert here, since this kit's spec lifecycle is `draft` then `approved` and stops, so it gained a second trigger on task closure. A guardrail that cannot fire in the repository that ships it is one nobody has ever seen work).
     - **Phase 2: telemetry and bounds** (not built; **absorbed 2026-08-07 by [Epic E](#epic-e-delegated-execution-cloud-and-unattended-work) item 7**). Structured lifecycle events, retry and implementor/verifier-cycle limits, time or optional compute budgets, repeated-work detection, and a clear stop signal on a bound violation. Phase 1 deliberately shipped none of it, because none is needed to make a reminder fire or a gate block, and the repeated-work half now has its own item below (`feat-0042`) since it depends on a finding signature rather than on run state. The reason it stayed unbuilt is the reason it moves: telemetry has no consumer while a human is watching every run, and Epic E item 5 is what first creates batches nobody is watching. It is held behind that item there rather than sequenced here.
     - **Deferred within phase 1: `test-quality-reminder`.** Upstream's Stop-gate hook, which blocks stopping when a test file was edited without both a suite run and a `test-quality` invocation after it. The edit-run-vet-stop ordering is worth having. Its implementation carries several hundred lines of shell-command parsing to decide whether a `Bash` call was a test run, with wrapper-word stripping and package-manager subcommand exclusion, and that heuristic pile is not worth importing before the module has proven itself. Revisit once a gate has run unattended for a while.
+    - **Deferred within phase 1: the lifecycle coverage gaps** (audited 2026-08-27, none built). A stage-by-stage audit found that of ten lifecycle stages, exactly one has a hook firing at it, and that the module's only *gate* is registered for Codex and OpenCode and not in this repository's own [`.claude/settings.json`](.claude/settings.json). Four candidates came out of it and **all four are held deliberately, because a module with one gate that has never fired in anger here does not need four more at once**: registering the existing `spec-conformance` gate for Claude Code (no new code, and reserved to the author by the committed-hook exception in `AGENTS.md`); a `PreToolUse` **gate** on a destructive `git reset --hard` or `git checkout --` inside an agent worktree, decidable from the payload, with the `merge --ff-only` recovery as its stated escape; a `PreToolUse` **gate** on a commit message carrying a `Co-Authored-By` trailer, the one rule here with a measured cost in hours; and a dispatch-time **reminder** injecting the nine-field report contract, which must be a reminder because whether a prompt carries the contract is not decidable from the payload. **Trigger to revisit:** the first of these registered and run for several real waves, measured rather than assumed. Coverage of the path that ships them is [`chore-0067`](.tasks/chore-0067-the-with-hooks-placement-path-is-covered-by-no-test-and-no-gate.md).
 14. **`context-sync`** (hold until used against one real integration). Ground an agent in a narrowly defined live source, such as a schema or API contract, with recorded source, version or timestamp, authority level, failure behavior, and reproducible provenance for verification. Do not ship a generic MCP wrapper without field iteration.
 15. ~~**Evidence gate and stable finding signature.** Require every review finding to carry a resolvable citation (path, line range, symbol, and an exact quote of the cited code), and drop any finding whose quote does not resolve against the file on disk. Give each finding a stable signature (severity, normalized path, summary, area id) so findings can be deduplicated across lenses and counted across runs.~~ **Shipped** ([`feat-0040`](.tasks/done/feat-0040-evidence-gate-and-finding-signature.md); 2026-08-05, in a four-item parallel batch). The evidence shape, the gate's five-branch disposition table, and the signature live in the `review-quality` lens; `house-review` applies them as a named step and `verifier-agent` cites code the same way. Two design points were forced by the work rather than planned: a quote found at a shifted line is **re-anchored and reported, not dropped**, since the finding is real and only the pointer moved, and a finding whose evidence is an **absence** (a missing test, an unhandled branch) has its own citable form, or the gate would have silently suppressed the whole test-coverage category. Dogfooded against `b50cc76`, a commit the implementing agent did not write: 3 candidates, 1 dropped for a quote resolving nowhere, 1 re-anchored 49 to 74, 1 absence finding kept. Building it also exposed that the `review-depth` composition was one-directional, since `house-review` had never named it back. Not speculative: `verifier-agent`'s own dogfood found a conformance matrix whose classifications were correct and whose line citations had drifted eight lines after a refactor, caught only because a human looked. `review-quality` rule 2 already asks for validation before reporting; this makes it mechanical. Taken from `repoprompt-workflows`' Deep Review governance without taking the workflow.
 16. ~~**Delegate evidence contract for `fix-batch`.** Require a fixed field set from every worktree agent's report (task id, covered scenarios, files changed, tests, the validation command **and** its verbatim result, findings in the evidence shape above, recommended next step), and block acceptance when a field is missing. Reject transcript-style reports.~~ **Shipped** ([`feat-0041`](.tasks/done/feat-0041-delegate-evidence-contract-for-fix-batch.md); 2026-08-05, in a four-item parallel batch). Nine fields, each checkable by the orchestrator in one pass and answerable from inside a single worktree, enforced at both ends: `fix-batch` quotes the list into every dispatched prompt and gates Step 6 on it, and `reconcile-worktrees` refuses to land a worktree whose report does not meet it. The dogfood was unusually direct, since the batch that implemented this task was dispatched by the pre-contract `fix-batch` with a hand-rolled report shape: seven of that draft's nine fields survived verbatim, it had **missed** "tests added, changed, or run" and "blockers and assumptions" (both places where an agent's silence is indistinguishable from a clean result), and its `decisions` field was correctly refused as belonging to item 12's decision log rather than to the mechanical contract. The value is not the ceremony: "the validation command and its result" cannot be answered in prose without either running it or lying. Kept distinct from the decision log in item 12, which carries semantic continuity while this carries mechanical evidence. Taken from `repoprompt-workflows`' Loop workflow, without its ledger and budget machinery, which assumes a persistent orchestrator this kit does not have.
@@ -163,6 +164,80 @@ Compounding mechanisms in scope are the three above: the evaluation suite (6), r
 |---|---|
 | Devin-class agents | Unlike Codex and Cursor, it does not read `AGENTS.md`, so supporting it is a genuine new adapter rather than a free one, and it is not in the harness set this epic serves. **Revisit if** an adopter or client uses it. |
 | Agent teams and emergent multi-agent coordination | It contradicts a position this kit already holds. Anthropic's own multi-agent research finds coding has fewer parallelizable subtasks than research and that models coordinate poorly in real time, which is why structural fan-out through `fix-batch`, one isolated agent per pre-scoped task file, is the supported shape here. **Revisit if** a real batch fails in a way coordination would have fixed. |
+
+### Epic F: Sangha (multi-human, multi-agent workspaces)
+
+**Unscheduled**, and deliberately so. This epic records a destination to steer by and to check current
+work against. Nothing here is decomposed into task files, per the rule in the work-altitude section that
+a Feature is decomposed only when it is actually about to be built.
+
+The name: a **sangha** is a community practising under shared precepts, which is what a governed agent
+workspace is, and the **vinaya** is the code that governs one, which makes it the natural name for the
+compliance half if the two ever need separating.
+
+**The property this epic exists to establish.** No collaborator, human or agent, is silently missing a
+critical instruction, hook, or skill. Every item below is downstream of that sentence.
+
+**The bounding fact, audited 2026-08-27.** This kit is single-user by construction and knows it.
+Everything [`install.py`](scripts/install.py) places goes under `Path.home()`. The one record of what was
+placed, `scripts/.install-manifest.json`, is gitignored, holds absolute machine-local paths on both sides,
+and carries no timestamp and no identity, so committing it would not help. Every drift sensor answers only
+about the machine running it. What **is** shared is substantial: `AGENTS.md`, the lenses, `.tasks/`,
+`docs/spec/`, CI, three hook wirings, and the `eol=lf` policy that makes byte digests reproducible across
+machines. The gap sits exactly at the seam between the committed half and the per-person half.
+
+**The structural blocker, measured rather than assumed.** The only project-scope skill directory any
+Claude Code harness reads is `.claude/skills/`, and nothing in this kit ever writes there.
+[`install.py`](scripts/install.py) writes `~/.claude/skills` and `~/.agents/skills`;
+[`build-adapters.py`](scripts/build-adapters.py) writes `.cursor/rules/`, `.github/prompts/`, and a plugin
+tree. **So an adopting team has no supported path to share skills through their own repository**, and
+nothing anywhere detects that a teammate is missing one. Item 1 is that blocker, and most of the rest
+waits behind it.
+
+1. **A project-scope distribution path.** A team must be able to share skills through the repository they
+   already share, rather than through each person's home directory. This is the blocker above and the only
+   item here not held behind another.
+2. **Registration parity across harnesses.** Today a Codex or OpenCode collaborator gets four hooks
+   automatically and a Claude Code collaborator gets one. Whatever the right answer is, the asymmetry
+   should be a decision rather than an inheritance. Held behind the hook-coverage audit in Epic B item 13.
+3. **Shared currency: does a teammate have what I have?** Nothing detects a missing or stale skill or hook
+   on anyone else's machine, and `install-currency-reminder.py` states plainly that it cannot, because a
+   manifest entry carries no back-pointer from an installed skill to where it came from. Closing this needs
+   a new install-time surface, which is the same question Epic B item 19 holds. **Held until item 1 lands**,
+   since a shared distribution path changes what there is to be current about.
+4. **Ownership and review state in the work model.** `.tasks/validate.py`'s required fields carry no
+   `owner`, `assignee`, `reviewer`, or `approver`, and the lifecycle has no review state between
+   `in_progress` and `done`. **Held until more than one person works a backlog here**, on the same
+   reasoning that holds Slack and Claude Tag in Epic E.
+5. **Governance reproducible from a checkout.** There is no `CODEOWNERS` and no committed ruleset. The
+   `main` protection that deadlocked the 2026-08-21 sync exists only as prose in `AGENTS.md` and is not
+   reproducible from a clone. An enterprise story cannot have its controls live outside the repository.
+6. **Grounding in an organisation's own data and codebases.** The part of this vision with the least prior
+   art here, and the one that most needs a decision rather than a design. **It runs directly at a
+   constraint this kit holds on purpose**: the tracking model is deliberately local, works with no network
+   and no account, and `track-work` was declined for exactly that reason. Item 6 either inherits that
+   constraint and exports to external systems, or overturns it, and that is a decision to make on purpose
+   rather than to discover.
+
+**The environment this is aimed at, recorded so the design is not drawn against an imagined one** (stated
+by the maintainer 2026-08-27). Solo work: Claude Code with VS Code, GitHub, Cloudflare, GCP and Azure,
+Supabase. Corporate and client work: Azure DevOps for repositories and boards, Microsoft Teams, SharePoint
+and OneDrive, GitHub, Jira, ServiceNow, and a mixed agent surface of Codex, Cursor, Claude Code, Microsoft
+Copilot 365 and GitHub Copilot. **This is context, not an integration list.** What it establishes is the
+shape rather than the targets: work is tracked in more than one system, collaboration happens somewhere
+other than the repository, and the agent surface is already plural, which is why items 1 and 2 are about
+reaching every harness rather than the best one. Azure DevOps work-item linking already exists as Epic A
+item 10, held until a real board is used, so the first concrete integration is scoped and gated elsewhere.
+
+**A position to inherit or overturn deliberately.** The Epic E declined table rejects emergent multi-agent
+coordination, on the evidence that coding has fewer parallelizable subtasks than research and that models
+coordinate poorly in real time. The supported shape here is structural fan-out from one dispatcher, one
+isolated agent per pre-scoped task file. A multi-human multi-agent workspace either inherits that stance or
+overturns it, and doing so by accident is the failure mode worth naming now.
+
+**Design bar, inherited from Epic E and restated because it binds harder here:** this maintainer's real
+workflow first, generalize after. The contribution bar applies unchanged. No item here ships to the kit
+cold, and a governance feature nobody has governed anything with is exactly the cold ship it forbids.
 
 ---
 
