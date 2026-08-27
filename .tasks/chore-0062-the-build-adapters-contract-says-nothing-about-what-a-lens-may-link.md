@@ -63,7 +63,7 @@ This is that amendment.
   `bug-0044` recorded the residual risk plainly: an adopter who already took `autonomy.md` keeps their
   edited copy on re-install and therefore keeps the dangling links with no signal. That residual is
   real and is **not** closed by this amendment; say so rather than implying the contract fixes it.
-- [`chore-0058`](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), which
+- [`chore-0058`](done/chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), which
   owns the repository-side lint gap. This task is the contract; that one is the gate.
 - Granting the re-approval, which is the author's.
 

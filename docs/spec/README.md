@@ -72,14 +72,14 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 ### The author's re-approval queue
 
-As of 2026-08-21, seven specs are approved and carry an amendment the author has not re-read. Three
-of them carry more than one: `install` and `build-adapters` carry two, the latter since `chore-0043`,
-and `validate-skills` carries three, since `chore-0047` and again since `chore-0054`.
+Every spec listed below is approved and carries an amendment the author has not re-read. Some carry
+more than one: `install` carries two, `build-adapters` two since `chore-0043`, `cloud-executable` two
+since `chore-0061`, and `validate-skills` three, since `chore-0047` and again since `chore-0054`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
 | [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`) | 2026-08-06, 2026-08-19 |
-| [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`) | 2026-08-20 |
+| [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`); `S-020` and the `Output` surface element, what a passing gate's entry carries (`chore-0061`) | 2026-08-20, 2026-08-27 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
@@ -136,7 +136,7 @@ something else today.
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
 | [`build-adapters`](build-adapters.md) | approved | 18 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
-| [`cloud-executable`](cloud-executable.md) | approved | 19 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
+| [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
@@ -147,9 +147,9 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 24 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 157 scenarios, all approved. Ten carry a conformance matrix between them, holding 144
-of those scenarios, recomputed from the files on 2026-08-21 rather than incremented: the eleven counts
-in the column above sum to 157, and the one spec without a matrix carries 13, so 157 - 13 = 144.
+Eleven specs, 158 scenarios, all approved. Ten carry a conformance matrix between them, holding 145
+of those scenarios, recomputed from the files on 2026-08-27 rather than incremented: the eleven counts
+in the column above sum to 158, and the one spec without a matrix carries 13, so 158 - 13 = 145.
 
 Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
 `bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And
@@ -159,10 +159,11 @@ implementation rather than pinning one that already existed, so there is nothing
 and its matrix is owed at closeout.
 
 [`cloud-executable`](cloud-executable.md) was the first forward spec and stopped being the exception
-on 2026-08-19, when `chore-0034` audited it. That matrix is worth reading for what it declines to
-claim: four of its 31 items are recorded **Not-built**, S-017 to S-019 plus the unattended pull
-request surface, because the Phase 4 proof run they describe is still recorded `blocked` and has
-never run. A matrix that reported them any other way would have been worse than no matrix.
+on 2026-08-19, when `chore-0034` audited it. That matrix is worth reading for what it declined to
+claim: when it was written, S-017 to S-019 and the unattended pull request surface were all recorded
+**Not-built**, because the Phase 4 proof run they describe was still recorded `blocked` and had never
+run. A matrix that reported them any other way would have been worse than no matrix. The proof run of
+2026-08-20 moved all but S-019, whose Given is a run whose gates fail, and that run's did not.
 
 ## A limit worth knowing before reading any matrix
 
