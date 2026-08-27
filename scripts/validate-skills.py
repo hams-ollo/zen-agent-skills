@@ -707,9 +707,21 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     # Appending keeps every count in the one line that survives, which is what makes the
     # criterion "the run reports how many it checked" true of `validate-skills.py` and of
     # `run-checks.py` at once instead of only the first.
-    print(f"Link-checked {supporting['markdown']} supporting file(s) beside them; "
-          f"skipped {supporting['template']} template(s) whose links are written for "
-          f"another repository and {supporting['other']} non-markdown file(s). "
+    #
+    # The skill count is named here as well as on the line above, and that is the whole
+    # of chore-0064 (2026-08-27). The same rule that keeps this line is what discards the
+    # one before it, so until now the only line the acceptance command showed for this
+    # gate carried no count of the thing the gate is named after: two clean runs, one
+    # over 20 skills and one over 21, printed a byte-identical line. It also opened
+    # "beside them", whose antecedent was the discarded line, so a reader of
+    # `python scripts/run-checks.py` had none. Carrying the count into this line is the
+    # one fix of the three available that neither reorders the two lines nor merges
+    # them, both of which diverge from the `Output` surface element of
+    # docs/spec/validate-skills.md, which fixes their order and their shape.
+    print(f"Link-checked {supporting['markdown']} supporting file(s) beside the "
+          f"{len(skills)} skill(s) checked; skipped {supporting['template']} "
+          f"template(s) whose links are written for another repository and "
+          f"{supporting['other']} non-markdown file(s). "
           f"{portable_coverage(portable, portable_root, skills_dir)}")
     return 1 if errors else 0
 

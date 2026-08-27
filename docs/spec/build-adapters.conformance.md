@@ -3,7 +3,8 @@ title: build-adapters conformance
 spec: docs/spec/build-adapters.md
 audited: 2026-07-27
 re_audited: 2026-07-27 (chore-0015), 2026-08-06 (feat-0034), 2026-08-19 (chore-0043),
-  2026-08-22 (bug-0044, partial: S-009 and S-016 only)
+  2026-08-22 (bug-0044, partial: S-009 and S-016 only),
+  2026-08-27 (chore-0062, partial: S-019 only)
 ---
 
 # build-adapters conformance matrix
@@ -39,6 +40,16 @@ the defect survived a matrix that reports full coverage. The gap was in the cont
 the audit of it, and what is owed is recorded in the coverage proof below rather than fixed by
 amending the spec here, which `bug-0044` puts out of scope for the same reason `chore-0043` was a
 separate chore.
+
+Re-audited 2026-08-27 by `chore-0062`, and **partially**: only `S-019` was audited, because it is the
+one scenario that task adds and the only one it declares. Every other row below carries its previous
+audit date and was not looked at in this pass. That chore is the amendment `bug-0044` recorded as
+owed, so the unreconciled item below moves from one back to none: the gap was a missing contract
+sentence, and the sentence now exists as S-019. The behaviour it audits did not change in this pass
+and no file under `scripts/` or `tests/` was touched. That amendment is **pending the author's
+re-approval**, stated in the spec's header and repeated here for the same reason the paragraphs above
+give: the row for `S-019` audits code against a paragraph the author has authorized but not yet
+re-read.
 
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies, `bug-0028` measured 131 links matched by `LINK_RE` and 0 newly
@@ -79,6 +90,7 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 | Scenarios | S-008 external and same-page links unchanged | Conformed | `rewrite_links()` / the `target.startswith("#")` and `EXTERNAL_PREFIXES` guard returning `m.group(0)` | returns the original match object's text, so the link is byte-for-byte preserved. Re-audited 2026-08-19 (`chore-0043`): unchanged. S-018 now sits ahead of it and governs a different question, whether the text is a link at all, where this row governs the link's kind |
 | Scenarios | S-018 a link that renders as literal text is not a link | Conformed | `rewrite_links()` / `spans = code_span_ranges(body) + fenced_block_ranges(body)` and the `any(start <= m.start() < end ...)` guard at the top of `repl`, returning `m.group(0)`; the two helpers `code_span_ranges()` and `fenced_block_ranges()` above it | added by `chore-0043`, writing down what `bug-0028` built. The guard is keyed to the position of `](`, the bracket closing the link *text*, so a link whose text is itself a code span is still rewritten, which is how nearly every link in this kit is written. The ranges are computed once per body rather than once per match, because `re.sub()` calls the replacement for every match. An unterminated fence yields no range, so it suppresses nothing below it. Confirmed by measurement against this commit: 20 shipped bodies, 133 links matched, 0 inside a span or fence, so no adapter changes today and the row is a guard rather than a live rewrite |
 | Scenarios | S-009 the material the links point at is emitted | Conformed | `emit_shared_assets()` / both copy loops, called per skill from `main()` | rules module and each skill's non-`SKILL.md` files |
+| Scenarios | S-019 every relative link inside an emitted lens resolves | Conformed | `emit_rules_module()` / the `shutil.copy2(src, dest)` copy loop, which passes no body through `rewrite_links()`, and its docstring's `bug-0044` paragraph recording that as a decision; and the source lenses under `.agents/rules/`, whose only relative links are sibling-lens links resolving inside the module's own directory | added by `chore-0062`, writing down what `bug-0044` built on 2026-08-22. The layout, not a rewrite, is what makes these resolve, the same shape as S-016: a lens's siblings sit beside it in every layout, so one link text is correct in all of them and no per-target case exists. Confirmed by execution on 2026-08-27 across all four distribution paths, each emitted into a directory of its own: `--target cursor`, `--target vscode`, `--target plugin`, and an `install.py --home <tmp> --mode copy --profile all` run, which places the module twice, once per tool, at `.claude/rules/` and `.agents/rules/`. Five relative links per emitted module in every one of those five directories, three lenses walked each time, **0 dangling**. The adopter residual is not closed and is stated in the scenario: an existing rules file is preserved unread (S-010, S-014), so a copy taken before the links were corrected keeps them and no run says so |
 | Scenarios | S-010 an existing rules file is never overwritten | Conformed | `emit_shared_assets()` / `or dest.exists(): continue` in the rules loop | confirmed by execution: an edited rules file survives a re-run unchanged |
 | Scenarios | S-014 a re-run refreshes derived assets and preserves adopted ones | Conformed | `emit_shared_assets()` / the rules loop's `or dest.exists(): continue`, contrasted with the skill-asset loop which has no such guard | added by `chore-0015`. Confirmed by execution: after editing both and re-running, the rules file kept its content and the skill template was replaced by the kit's version |
 | Scenarios | S-011 generating into the kit is a no-op | Conformed | `emit_shared_assets()` / `dest.resolve() == src.resolve(): continue` in both loops | confirmed by execution: a run against the repo root reports `plus 0 shared asset file(s)` |
@@ -96,25 +108,30 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 
 ## Coverage proof
 
-- **audited**: S-001 through S-018, and all six Proposed Surface elements, as of the 2026-08-19
-  pass. Every spec item was checked then. S-018 is numbered after S-017 and placed beside S-008 in
-  both documents, because it is the exception those rewrite rows are read against. The 2026-08-22
-  pass re-audited **2 of those 18 scenarios**, `S-009` and `S-016`, and no Proposed Surface element;
-  the other 16 rows stand on the earlier pass and are not re-asserted by this one.
-- **unreconciled**: one, and it is an owed amendment rather than a divergence. **No scenario states
-  what a file in the rules module may link to.** Every link rule in this contract, `S-003` through
-  `S-008` and `S-018`, is about a *skill body* passing through `rewrite_links()`; `S-009` covers the
-  targets those rewritten links land on; `S-010` and `S-014` cover the module's placement and its
-  survival across a re-run; `S-016` covers escape, and only for the plugin target. A lens's own
-  outbound links are named by none of them, which is how seven `../skills/<name>/SKILL.md` links
-  shipped dangling in every emitted cursor and vscode tree while this matrix read `unreconciled:
-  none` (`bug-0044`). **What is owed**: a scenario stating that the rules module is emitted verbatim
-  and that a lens may therefore link only what sits beside it in every layout, its sibling lenses,
-  naming a skill in prose instead. The behavior now exists and is held by a test; only the contract
-  sentence is missing. `bug-0044` scopes writing it out, deliberately, in the shape of `chore-0043`,
-  which amended this same spec for `S-018` after `bug-0028` had already shipped the behavior. Until
-  that chore is filed and closed, the rule is enforced by
-  `TestEmittedRulesModuleResolves` alone.
+- **audited**: the spec now carries 19 scenarios and six Proposed Surface elements, and every one of
+  the 25 items has a row below. The arithmetic, stated rather than asserted: the 2026-08-19 pass
+  checked all 18 scenarios then in the spec plus all 6 surface elements, 24 items; `chore-0062` adds
+  `S-019` and this pass audits it; 18 + 1 = 19 scenarios, and 19 + 6 = 25 rows. S-018 is numbered
+  after S-017 and placed beside S-008 in both documents, because it is the exception those rewrite
+  rows are read against; `S-019` is numbered after S-018 and placed beside S-009 for the same kind of
+  reason, since it is the outbound half of the pair S-009 opens.
+- **not re-audited in this pass**: 18 of the 19 scenarios and all 6 surface elements. The 2026-08-27
+  pass audited **1 scenario, `S-019`**, and nothing else; the 2026-08-22 pass before it re-audited
+  **2**, `S-009` and `S-016`. Every other row stands on the date it carries and is not re-asserted
+  here. 1 audited now + 18 standing = 19, which is the whole scenario set and is the only sense in
+  which this document covers it.
+- **unreconciled**: none. The single item this section carried from 2026-08-22 is now closed rather
+  than dropped, and it is worth saying how, because it was a contract gap presenting as a clean
+  matrix. It read: **no scenario states what a file in the rules module may link to**, since every
+  link rule here, `S-003` through `S-008` and `S-018`, is about a *skill body* passing through
+  `rewrite_links()`, `S-009` covers the targets those rewritten links land on, `S-010` and `S-014`
+  cover the module's placement and its survival across a re-run, and `S-016` covers escape and only
+  for the plugin target. That is how seven `../skills/<name>/SKILL.md` links shipped dangling in every
+  emitted cursor and vscode tree while this matrix honestly read `unreconciled: none` (`bug-0044`).
+  `S-019` is the sentence that was owed. It is stated as a property, every relative link in an emitted
+  lens resolves where the lens landed, rather than as the fix `bug-0044` chose, so a future layout
+  that made more forms resolve would not have to amend the contract to use them. Between 2026-08-22
+  and this amendment the rule was held by `TestEmittedRulesModuleResolves` alone.
 
 ## Test coverage of spec invariants
 
@@ -132,14 +149,15 @@ lacks one. Against [`tests/test_build_adapters.py`](../../tests/test_build_adapt
 | S-012, S-013 | present | each asserts both the exit code and that no file was written |
 | S-014 | present | added by `chore-0015`. Asserts both halves in one test, because the contrast is the requirement. Confirmed to fail against the rejected symmetric alternative, so it distinguishes the chosen contract rather than merely restating current behavior |
 | S-015 | present | added by `feat-0034`. Asserts the emitted skill count, the absence of any inlined adapter, and the manifest *values* (source, and the marketplace entry's name and version matching the plugin manifest), not that the keys exist |
-| S-009, S-016 | present | added by `bug-0044`: `TestEmittedRulesModuleResolves` emits each target into a directory of its own and resolves every relative link inside every emitted `.agents/rules/*.md` (or `rules/*.md`) file, asserting the three lenses were walked before asserting nothing dangled. It covers the two scenarios only in the extended sense the unreconciled item above describes, since the rule it holds is not yet stated by either. Confirmed to **fail** against the pre-fix module, 7 dangling links per inlining target and none for the plugin, so it distinguishes the defect rather than restating the current tree. It walks the lenses because both older filesystem walks structurally cannot: one globs the adapters, the other globs `skills/*/SKILL.md`, and a lens is neither |
+| S-019 | present | added by `bug-0044`: `TestEmittedRulesModuleResolves` emits each target into a directory of its own and resolves every relative link inside every emitted `.agents/rules/*.md` (or `rules/*.md`) file, asserting the three lenses were walked before asserting nothing dangled. **The test predates the id**: `bug-0044` wrote it when no scenario stated the rule and tagged it `S-009` and `S-016` in the extended sense that pass's unreconciled item described. `chore-0062` states the rule as `S-019`, so the test is retagged to the scenario it actually holds and its two original tags name less than it covers rather than more. Confirmed to **fail** against the pre-fix module, 7 dangling links per inlining target and none for the plugin, so it distinguishes the defect rather than restating the current tree. It walks the lenses because both older filesystem walks structurally cannot: one globs the adapters, the other globs `skills/*/SKILL.md`, and a lens is neither. **It covers three of the four paths S-019 names**, the three targets this tool emits; the fourth, the sibling `<base>/../rules` that `install.py` places, is walked by no test here. `tests/test_install.py` asserts that the module lands where a *skill's* `../../rules/<file>` reference resolves and never reads a link out of a lens, and the only markdown-link regex in the suite is `tests/test_build_adapters.py`'s `LINK`. That gap is flagged rather than filled, per this section's non-goal, and the fourth path was resolved by hand on 2026-08-27 instead |
 | S-016 | present | added by `feat-0034`, two tests: one resolving every relative link in every emitted skill on disk and asserting none is broken and none escapes the plugin root, one on `house-review` reaching its rubric and finding `blocker` in the file it lands on, with exactly one copy of the module in the tree. This is the invariant `claude plugin validate` cannot check, so these tests are the only thing holding it |
 | S-017 | present | added by `feat-0034`. Asserts both halves, since asserting the absence alone would pass against a target that emitted nothing |
 | S-018 | present | added by `bug-0028`, five tests in `TestRewriteLinksInsideCodeSpansAndFences`, each run against both inlining extensions. Two positives use whole-string equality rather than a substring, because "emitted unchanged" is a claim about the whole body. The negatives carry the weight, since the cheap way to remove a false rewrite is to stop rewriting: a real link beside a *closed* fence and one below an *unterminated* fence must both still be repointed. The fenced case holds all three rewritten classes at once (S-003, S-006, S-007), because one surviving proves nothing about the other two. A fifth test asserts the plugin target copies a body byte for byte, so the criterion "unchanged in every target" is asserted rather than assumed. **The tests predate the id**: written when no scenario stated the rule, they are tagged with the scenarios they refine and their docstring says an `S-018` is the author's call. That call is now made, so the tags are stale in one direction only, naming less than they cover |
 
 Every scenario has a covering test, including the shared-asset re-run behavior that had neither a
 scenario nor a test when this matrix was first written, and the code-span rule that had tests before
-it had a scenario.
+it had a scenario. `S-019` is the third of that kind: a test held it from 2026-08-22, and the
+contract sentence arrived on 2026-08-27.
 
 The S-015 through S-017 tests were each confirmed to fail against a mutation of the decision they
 protect: pointing the plugin layout at the inlining targets' `.agents/rules` (which dangles all 28

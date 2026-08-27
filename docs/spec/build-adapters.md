@@ -28,6 +28,12 @@ link and is emitted unchanged: scenario S-018, an exception to the rewrite rules
 `rewrite_links()` on 2026-08-18, which the contract did not state at all; `status` is left reading
 `approved` for the reason the paragraph above gives.
 
+Amended 2026-08-27 (`chore-0062`) to state what a relative link written *inside* an emitted lens must
+satisfy: scenario S-019, the outbound counterpart to S-009. **This amendment is pending the author's
+re-approval.** It writes down the rule `bug-0044` enforced in the lenses and in
+`TestEmittedRulesModuleResolves` on 2026-08-22 while recording that the contract stated it nowhere;
+`status` is left reading `approved` for the reason the paragraphs above give.
+
 ## Problem
 
 Claude Code and OpenCode discover skills from a directory, so `install.py` can place a skill's own
@@ -174,6 +180,52 @@ every test still pass, because no test asserts the reason.
 - **When** the run completes
 - **Then** the rules module and each skill's supporting files exist under the output root at the
   shared locations S-006 and S-007 rewrite to, so every rewritten link resolves on disk.
+
+### Scenario S-019: every relative link inside an emitted lens resolves where the lens landed
+
+- **Given** a rules module whose lens files carry relative links, and any requested target
+- **When** the tool runs against an output root
+- **Then** every relative link in every emitted lens resolves, read from the directory that lens was
+  emitted into, to a file inside the tree the run produced.
+
+  This is the outbound counterpart to S-009 and is placed beside it, because the two halves are only
+  useful together: S-009 says the module a rewritten *skill* link points at is emitted, and this one
+  says what the module itself may point at once it is there. Every other link rule in this contract is
+  about a skill body. S-003 through S-008 and S-018 govern what `rewrite_links()` does to one, S-009
+  governs the targets those rewritten links land on, and S-016 governs escape and only for the plugin
+  target. A link written *inside* a lens is named by none of them, which is how seven
+  `../skills/<name>/SKILL.md` links shipped dangling in every emitted cursor and vscode tree while
+  this contract's conformance matrix honestly read `unreconciled: none` (`bug-0044`). The audit was
+  not careless; it had nothing to audit against.
+
+  **The requirement is that a link resolves, not that a lens has none.** Forbidding links outright
+  would be easier to check and would make the lenses worse: a lens that may not cite the material it
+  governs is the disconnection `AGENTS.md` warns about when it says a lens nobody points at is inert.
+  What is ruled out here is a dangling link, and which link form avoids one is the author's choice.
+
+  **It does not say how, and it does not require rewriting a lens's links on emit.** That route is
+  unavailable rather than merely unattractive: `cursor` and `vscode` share one `Layout`, a run emits
+  one copy of the module per distinct layout, and their adapters land at `.cursor/rules/<name>.mdc`
+  and `.github/prompts/<name>.prompt.md`, so the single emitted file would have to carry one link text
+  that resolves from both, and none does. Measured in `bug-0044`: a `--target cursor,vscode` run emits
+  one `autonomy.md` and two adapters per skill, so whichever target's path was written would dangle
+  for anyone building the other alone. Any form that satisfies the **Then** conforms.
+
+  **The property is over four distribution paths, not three.** This tool emits the module into
+  `.agents/rules/` for `cursor`, into that same `.agents/rules/` for `vscode` (one shared layout, one
+  copy), and into `rules/` for `plugin`. The same source lenses travel a fourth path, the sibling
+  `<base>/../rules` that `install.py` places, which is a Non-Goal here and has its own contract in
+  [`install.md`](install.md). It is named anyway, because the lenses are one set of files serving all
+  four, and a link form chosen to satisfy this tool's three layouts alone would still ship a dangling
+  link on the fourth. All four were resolved on disk on 2026-08-27 when this amendment was written,
+  and the counts are in the conformance matrix rather than here.
+
+  **What this scenario does not close.** It governs what a run emits, not what an adopter already has.
+  A rules file already present in the target project is preserved unread (S-010, S-014), so an adopter
+  carrying a copy taken before its links were corrected keeps that copy, keeps its dangling links, and
+  gets no signal from any run. `bug-0044` recorded that residual deliberately, and this amendment does
+  not remove it: the module is adopted rather than derived, and preserving the adopter's own file is
+  the stronger rule.
 
 ### Scenario S-010: a rules file already present in the target project is never overwritten
 

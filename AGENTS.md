@@ -121,6 +121,21 @@ python scripts/run-checks.py
 
 **Passing it is necessary but not sufficient.** CI runs three operating systems by two Python versions, so any single run of this command covers one of those six cells. A change that passes locally can still fail on a platform you did not run. The command says so in its own summary on every run, and it is repeated here because this is where an agent reads the rules before it starts working, rather than after a run has already happened.
 
+**The other insufficiency is the one more runs do not close.** The paragraph above is about coverage
+across the CI matrix, which a second platform closes. This one does not: every gate here decides a
+mechanical property, and the defects below all sat outside what any of them sees. `bug-0045` emptied
+`.agents/skills/`, `tests/`, and the `.tasks/` task files and reran this command; six of seven gates
+reported `ok` over a repository holding nothing. `bug-0044` found seven links that resolve here and
+dangle in every `cursor` and `vscode` tree the adapter builder ships, having "survived every gate".
+`bug-0037` found three of sixty-five citations in a conformance matrix pointing at something other
+than what they claimed, and why nothing could report it: the tests match on content and the link
+check resolves paths, so neither sees a line anchor. The gates are healthy and catch what they were
+built to catch; the claim is about what they cannot see, so read a green run as evidence about the
+mechanical layer and nothing else. Buy the rest by hand, cheapest first: **construct the empty or
+degenerate input and see what the tool actually says**, as `bug-0045` did by emptying the tree and
+`bug-0046` did by renaming one `.md` to `.MD`, which carried two of eight provenance records out of
+the run at exit 0. A check that cannot fail is unchecked, whatever it printed.
+
 ### The one committed hook registration, and why it is an exception
 
 The layout table above states that hook installation is opt-in and activation is the adopter's: `install.py --with-hooks` places the files and prints a registration rather than editing anyone's settings. That rule holds everywhere except one place in this repository, and the exception is written here rather than left to be discovered.

@@ -30,6 +30,18 @@ _spec = importlib.util.spec_from_file_location("validate_skills", MODULE_PATH)
 vs = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vs)
 
+# The acceptance command's aggregator, loaded the same way and for one function:
+# `coverage_line()`, the rule that decides which single line of this script's output a
+# reader of `python scripts/run-checks.py` ever sees. It is imported rather than restated
+# here on purpose. A copy of "the last non-blank line containing a digit" in this file
+# would be the second source of truth bug-0045's implementation notes rule out, and it
+# would drift silently: the tests below would keep passing against the copy while the
+# real report went back to showing a line that says nothing (chore-0064).
+_rc_spec = importlib.util.spec_from_file_location(
+    "run_checks", REPO_ROOT / "scripts" / "run-checks.py")
+rc = importlib.util.module_from_spec(_rc_spec)
+_rc_spec.loader.exec_module(rc)
+
 # The upper end of the lens-declaration window, asserted rather than assumed. The real
 # lenses are 30 to 300 lines long, so a window at or above this stops distinguishing an
 # opening from a body and the "declares itself" test becomes "mentions a lens anywhere".
@@ -1002,9 +1014,9 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
         self._write_supporting("alpha", "templates/ruff.toml", "line-length = 100\n")
         code, out = _run(self.root)
         self.assertEqual(code, 0, out)
-        self.assertIn("Link-checked 1 supporting file(s) beside them; skipped 1 "
-                      "template(s) whose links are written for another repository and "
-                      "1 non-markdown file(s).", out)
+        self.assertIn("Link-checked 1 supporting file(s) beside the 1 skill(s) checked; "
+                      "skipped 1 template(s) whose links are written for another "
+                      "repository and 1 non-markdown file(s).", out)
 
     def test_a_skill_with_no_supporting_files_reports_zero(self):
         # The floor of the same line, so the count is present on every run rather than
@@ -1012,8 +1024,8 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
         code, out = _run(self.root)
         self.assertEqual(code, 0, out)
-        self.assertIn("Link-checked 0 supporting file(s) beside them; skipped 0 "
-                      "template(s)", out)
+        self.assertIn("Link-checked 0 supporting file(s) beside the 1 skill(s) checked; "
+                      "skipped 0 template(s)", out)
 
     def test_classification_of_the_real_shipped_supporting_files(self):
         # The shipped inventory, counted rather than described. chore-0036 was written
@@ -1126,9 +1138,9 @@ class TestSupportingFileSuffixCase(unittest.TestCase):
         code, out = _run(self.root)
         self.assertEqual(code, 0, out)
         self.assertNotIn("AGENTS.md.TMPL", out)
-        self.assertIn("Link-checked 0 supporting file(s) beside them; skipped 1 "
-                      "template(s) whose links are written for another repository and "
-                      "0 non-markdown file(s).", out)
+        self.assertIn("Link-checked 0 supporting file(s) beside the 1 skill(s) checked; "
+                      "skipped 1 template(s) whose links are written for another "
+                      "repository and 0 non-markdown file(s).", out)
 
     def test_a_case_variant_markdown_file_is_still_link_checked(self):
         # The other end of the bound: widening the marker must not swallow a file that
@@ -1144,8 +1156,8 @@ class TestSupportingFileSuffixCase(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("alpha/references/notes.MD: link target does not exist: "
                       "nonexistent-file.md", out)
-        self.assertIn("Link-checked 1 supporting file(s) beside them; skipped 0 "
-                      "template(s)", out)
+        self.assertIn("Link-checked 1 supporting file(s) beside the 1 skill(s) checked; "
+                      "skipped 0 template(s)", out)
 
 
 class TestPortableMarkdownOutsideTheSkillsTree(unittest.TestCase):
@@ -1358,7 +1370,7 @@ class TestPortableMarkdownOutsideTheSkillsTree(unittest.TestCase):
         self._write_beside("rules/example.md", "none here either\n")
         code, out = _run(self.skills)
         self.assertEqual(code, 0, out)
-        self.assertIn("Link-checked 1 supporting file(s) beside them", out)
+        self.assertIn("Link-checked 1 supporting file(s) beside the 1 skill(s) checked", out)
         self.assertIn("Also link-checked 1 file(s) under ", out)
 
     def test_a_byte_cache_beside_the_skills_is_not_counted(self):
@@ -1403,6 +1415,157 @@ class TestPortableMarkdownOutsideTheSkillsTree(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertIsNotNone(counts, "the kit's own tree must be a shipped layout")
         self.assertGreaterEqual(counts["markdown"], len(self.SHIPPED_OUTSIDE_SKILLS))
+
+
+class TestTheCoverageLineTheAggregatorSelects(unittest.TestCase):
+    """The one line of this gate's output that `run-checks.py` shows (chore-0064).
+
+    **Characterization, not acceptance.** `chore-0064` declares no `spec` and carries no
+    `S-NNN` ids, and no scenario in docs/spec/validate-skills.md states the property
+    below. These tests pin observable behavior rather than a contract, in the same shape
+    the two classes above use for the same reason.
+
+    The bug population is a clean, passing run, which is what makes it easy to miss.
+    `coverage_line()` in scripts/run-checks.py shows one line per gate, the last non-blank
+    line of its output carrying a digit, so for `lint skills` it shows the second summary
+    line and discards the first. Until chore-0064 that second line named no skill count,
+    so two clean runs over a tree of N skills and of N plus one printed a **byte-identical**
+    line: the acceptance command's entire report of what this gate covered did not move
+    when the gate's own scope moved. It also opened "beside them", whose antecedent was
+    the line just discarded. That is the failure bug-0045 exists to remove, surviving
+    inside the gate bug-0045 fixed, and the seam that task disclosed in its `## Decisions`
+    rather than hid: "the rule shows a gate's last count, not its best one."
+
+    test-quality notes. The layer is the component layer, `main()` over fixture trees,
+    and it is the lowest faithful one: the defect is a property of which line the run
+    prints last and of what that line carries, so no unit test on a formatting helper can
+    fail for it. The oracle is the **selected** line rather than the whole output, because
+    every count involved is already somewhere in the output and a test reading all of it
+    passes against the defect untouched.
+
+    Two of the tests below deliberately assert no string. A line that is self-contained
+    and still frozen satisfies any exact-string assertion, so the property worth pinning
+    is that two trees differing only in skill count produce *different* selected lines.
+    The string is asserted once, separately, and for the opposite reason: every count that
+    reaches the report today must still reach it.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.agents = self.root / "agents"
+        self.skills = self.agents / "skills"
+        (self.agents / "rules").mkdir(parents=True)
+        (self.agents / "hooks").mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _add_skill(self, name: str) -> None:
+        _write_skill(self.skills, name, GOOD_FM.format(name=name, desc=LONG_DESC))
+
+    def _write_beside(self, relpath: str, text: str) -> Path:
+        path = self.agents / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return path
+
+    def _selected(self):
+        """Exit code, full output, and the one line the acceptance command would show."""
+        code, out = _run(self.skills)
+        return code, out, rc.coverage_line(out)
+
+    def test_the_aggregator_selects_the_second_summary_line_not_the_first(self):
+        # The constraint the fix was written under, pinned so a later reader does not have
+        # to rediscover it across two scripts. The skill count had to move onto the second
+        # line rather than the first being reordered onto the end, because the `Output`
+        # surface element of docs/spec/validate-skills.md fixes the order of the two and
+        # the aggregator's rule takes the last line carrying a digit.
+        self._add_skill("alpha")
+        code, out, selected = self._selected()
+        self.assertEqual(code, 0, out)
+        lines = [line for line in out.splitlines() if line.strip()]
+        self.assertEqual(selected, lines[-1])
+        self.assertTrue(lines[-2].startswith("Checked 1 skill(s): "), out)
+        self.assertNotIn("error(s)", selected)
+
+    def test_two_trees_differing_only_in_skill_count_select_different_lines(self):
+        # The property, asserted as a difference rather than as a string. An exact-string
+        # assertion passes against a line that is self-contained and still frozen, which
+        # is half of this defect and the easier half to fix by accident.
+        #
+        # One tree, run twice, with a single skill added between the runs. Every other
+        # input is byte-identical, including the temporary directory named in the line's
+        # own text, so a difference can come from nothing but the skill count.
+        for name in ("alpha", "beta", "gamma"):
+            self._add_skill(name)
+        code_before, out_before, before = self._selected()
+        self._add_skill("delta")
+        code_after, out_after, after = self._selected()
+
+        self.assertEqual((code_before, code_after), (0, 0), out_before + out_after)
+        self.assertNotEqual(out_before, out_after, "the fixture did not actually change")
+        self.assertNotEqual(before, after)
+        # And it differs for the right reason. Without these, a line that moved for some
+        # incidental reason would satisfy the assertion above.
+        self.assertIn("3 skill(s)", before)
+        self.assertIn("4 skill(s)", after)
+
+    def test_the_selected_line_names_the_skills_rather_than_pointing_at_them(self):
+        # The other half of the defect, and the half an exact-string test does catch. The
+        # line read "beside them", and the only antecedent was the line the aggregator had
+        # just thrown away, so a reader of `python scripts/run-checks.py` had none.
+        self._add_skill("alpha")
+        code, out, selected = self._selected()
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 skill(s)", selected)
+        self.assertNotIn("beside them", selected)
+
+    def test_the_selected_line_still_carries_every_count_it_carried_before(self):
+        # The guard on the trap. It is easy to write a cleaner line that quietly loses one
+        # of the counts already reaching the report, and each of those was put there by a
+        # task that had just been burned by its absence: chore-0036 for the supporting
+        # files, chore-0058 for the shipped tree beside them, bug-0045 for showing any of
+        # it at all. Every count in this fixture is a different number, so a line that
+        # transposes two fails as loudly as one that drops one.
+        self._add_skill("alpha")
+        self._add_skill("beta")
+        self._write_beside("skills/alpha/references/notes.md", "no links here\n")
+        for i in range(3):
+            self._write_beside(f"skills/alpha/templates/t{i}.md.tmpl", "a template\n")
+        for i in range(4):
+            self._write_beside(f"skills/alpha/templates/data{i}.toml", "x = 1\n")
+        for i in range(5):
+            self._write_beside(f"rules/r{i}.md.tmpl", "another template\n")
+        for i in range(6):
+            self._write_beside(f"hooks/h{i}.py", "# a hook\n")
+        for i in range(7):
+            self._write_beside(f"rules/note{i}.md", "no links here either\n")
+
+        code, out, selected = self._selected()
+        self.assertEqual(code, 0, out)
+        # Split at the sentence boundary rather than asserting one whole string: the
+        # second sentence names the directory, which is a temporary path here.
+        first, _, second = selected.partition(" Also link-checked ")
+        self.assertEqual(first,
+                         "Link-checked 1 supporting file(s) beside the 2 skill(s) "
+                         "checked; skipped 3 template(s) whose links are written for "
+                         "another repository and 4 non-markdown file(s).")
+        self.assertTrue(second.startswith("7 file(s) under "), selected)
+        self.assertTrue(
+            second.endswith(" outside the skills tree; skipped 5 template(s) and "
+                            "6 non-markdown file(s)."), selected)
+
+    def test_the_real_tree_reports_its_own_skill_count_on_the_selected_line(self):
+        # The fixtures above prove the property; this proves it of the tree the acceptance
+        # command actually runs over, which is the only one whose report anybody reads.
+        # The count is derived from the directory rather than written down, so adding a
+        # skill does not fail this test.
+        skills_dir = (REPO_ROOT / ".agents" / "skills").resolve()
+        expected = sum(1 for d in skills_dir.iterdir() if d.is_dir())
+        code, out = _run(skills_dir)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"{expected} skill(s)", rc.coverage_line(out))
 
 
 if __name__ == "__main__":
