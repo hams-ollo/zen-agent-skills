@@ -15,6 +15,24 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-08-27 (`chore-0065`) to state the non-skill `.agents/` markdown link rule: the
+markdown that ships in the tree the skills sit in, outside every skill directory, is link-checked
+from where it sits, and a link reaching above that tree is reported as non-portable rather than as
+merely broken. Scenario S-025, plus the `Output` and `What it reads` surface entries it moves.** This
+amendment is **pending the author's re-approval**. It writes down the behaviour `chore-0058` gave the
+validator on 2026-08-27, which this contract did not mention at all. S-024 covers a markdown file
+shipped beside a `SKILL.md`; nothing covered one shipped beside the skills *tree*, which is a
+different geometry: its links resolve one directory level higher, the sibling-skill shortcut is wrong
+there for a sharper reason, and the walk that finds those files does not always run. No goal is
+added, for the reason `chore-0054` gave and with one qualification worth stating: Goal 4 names a
+skill's cross-references, and a link in the rules module or the hooks README is not one, so the rule
+serves that goal's property (a reference that breaks once the tree is distributed) over a subject
+Goal 4's wording does not reach. Widening it is the author's call rather than an agent's, and S-023
+already set the precedent that a rule here may have a non-skill subject without a goal of its own.
+`status` is left reading `approved` per the convention in [`README.md`](README.md). This is the fifth
+time the implementation has grown past this contract, after `feat-0023`, `bug-0027`, `feat-0048` and
+`chore-0036`, and every one of the five was found at a later task's closeout rather than by any gate.
+
 **Amended 2026-08-21 (`chore-0054`) to state the supporting-file link rule: the markdown a skill
 ships beside its `SKILL.md` is link-checked from where it sits, and a file authored to be written
 into another repository is excluded. Scenario S-024, plus the `Output` and `What it reads` surface
@@ -299,6 +317,72 @@ validator is the kit-level lint that enforces that bar.
   nobody can trust, and the measurement belongs in the conformance matrix beside the date it was
   taken.
 
+### Scenario S-025: markdown shipped beside the skills tree is link-checked where it sits
+
+- **Given** a markdown file that ships inside the distributed tree but outside every skill directory,
+  carrying a relative link which does not resolve, or which resolves above that tree
+- **When** the validator runs
+- **Then** it records the finding that link would earn in a `SKILL.md` under S-009 or S-011, naming
+  that file, and exits non-zero.
+
+  **The subject is the tree, not a named pair of directories.** The constraint above says a skill is
+  distributed alongside its sibling skills and the rules module, and `install.py` places the optional
+  hooks module as a sibling of the skills directory too. Every one of those files travels to an
+  adopter exactly as a skill does, so a link in one is exactly as clickable and exactly as breakable.
+  The rule is therefore drawn by geometry, over whatever ships in that tree outside the skills
+  directory, rather than over a list of directory names. A list would be a second source of truth
+  that goes stale the first time the tree gains a third sibling, which is the same trade S-024
+  already refused when it declined to draw its exclusion by directory name. Today the rule reaches
+  the rules module and the hooks README; that inventory is a fact about the tree on a given date and
+  belongs in the conformance matrix, not in this clause.
+
+  **Both halves are reported, and they are different findings.** A link that resolves nowhere is
+  broken here and everywhere, and someone will notice. A link that reaches *above* the distributed
+  tree is the half worth having: it resolves in this repository, so it reads correctly to every
+  reader here, and it dangles in every installed tree, because nothing above that tree is placed
+  alongside it. Reporting the second merely as broken would lose the distinction, and reporting it
+  not at all is how the defect stays invisible until an adopter clicks it. The ceiling is the same
+  one S-011 applies to a `SKILL.md`, so a rules file reaching a sibling skill's `SKILL.md` stays
+  inside the tree and is legal, exactly as S-012 makes the reverse direction legal.
+
+  **The sibling-skill shortcut S-010 does not apply, for S-024's reason made sharper.** From a file
+  beside the skills tree, `../<name>/SKILL.md` names a sibling of *that* file's own directory, and
+  the skill of that name lives at `../skills/<name>/SKILL.md` instead. Read as a skill name the link
+  would be cleared whenever a real skill happened to share it, which is precisely the broken link
+  this rule exists to catch. Resolved on disk like any other link it earns the ordinary S-009
+  message. S-011, S-012, S-013 and S-022 apply here unchanged, as do S-024's exclusions: a file
+  authored to be written into another repository is skipped by the same `.tmpl` marker, a
+  non-markdown file is counted and not read, and a file the kit does not distribute is neither read
+  nor counted.
+
+  **The run must distinguish three outcomes from one another**, and that is the observable property
+  this contract fixes:
+
+  1. it declined to look at all, because the tree it was given is not a distributed layout;
+  2. it looked and nothing ships there;
+  3. it looked and link-checked none of what it found.
+
+  The third and the second both involve the number zero, and the first involves no number at all, so
+  a report that renders any two of them alike says nothing. This is S-024's "what it read and what it
+  declined to read" carried one level up, where it is load-bearing rather than merely tidy, because a
+  walk that never runs and a walk that finds nothing are the two ways this rule fails silently.
+
+  **The first outcome exists for a reason no reader will reconstruct from the behaviour alone.** The
+  validator's entry point is deliberately callable against any directory of skill folders, and for
+  such a caller whatever sits beside that directory is not a distributed tree but whatever the
+  filesystem happens to hold. `chore-0058` measured it rather than asserting it: roughly forty
+  existing fixtures pass a bare temporary directory, whose neighbour is the system temp directory,
+  holding 20,203 entries and 51 markdown files on the machine that ran the measurement. An
+  unconditional walk would have read unrelated markdown off that machine and reported its broken
+  links as this kit's. So declining is correct, and declining *audibly* is what this scenario
+  requires.
+
+  **How the run decides is deliberately not fixed here.** The implementation bounds the hazard by
+  requiring the skills directory to be named the way every layout `install.py` places names it, which
+  is a mechanism chosen for today's callers and will change if the walk root ever becomes an explicit
+  parameter. Writing it into the contract would leave this document asserting a decision nobody
+  revisited. What is contractual is that the run says which of the three things happened.
+
 ### Scenario S-014: contradictory status claim warns but does not fail
 
 - **Given** a `SKILL.md` that asserts it is a draft and also records that it shipped
@@ -407,9 +491,9 @@ validator is the kit-level lint that enforces that bar.
 | Element | Detail |
 |---|---|
 | Invocation | `python scripts/validate-skills.py` |
-| What it reads | every skill directory under the target skills directory, in full rather than its `SKILL.md` alone: the body, plus the files the kit distributes beside it, of which the markdown is read for S-024 and the rest is counted without being opened. Plus the sibling rules module beside that directory (`.agents/skills/` and `.agents/rules/` for the default target). The rules module is read only for S-023; no rule above it inspects a rules file's contents, and nothing outside that pair is read. |
+| What it reads | every skill directory under the target skills directory, in full rather than its `SKILL.md` alone: the body, plus the files the kit distributes beside it, of which the markdown is read for S-024 and the rest is counted without being opened. Plus the rest of the distributed tree that skills directory sits in (`.agents/` for the default target, holding the rules module and the hooks module): its markdown is read for S-025, and a rules file is read for S-023 as well, while the rest is counted without being opened. Nothing above that tree is read. The walk outside the skills directory does not always run, and S-025 requires the run to say when it did not. |
 | Exit code | non-zero when any error is recorded, zero otherwise (warnings do not fail) |
-| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary, then a second line reporting how many supporting files were link-checked and how many were skipped, by reason (S-024). When the skills directory is absent, a missing-directory error instead of both summary lines; when it is present but empty, a no-skills-found line instead of both. The count `N` is of skills, so an S-023 or S-024 error raises the error count without changing it. |
+| Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary, then a second line reporting how many supporting files were link-checked and how many were skipped, by reason (S-024), and on that same second line what the walk outside the skills directory covered (S-025). That second half must make the three outcomes S-025 names distinguishable from one another: a run that declined to look, a run that looked and found nothing shipped there, and a run that looked and link-checked none of what it found. What is fixed is that the three are told apart, not which words or numbers tell them apart. When the skills directory is absent, a missing-directory error instead of both summary lines; when it is present but empty, a no-skills-found line instead of both. The count `N` is of skills, so an S-023, S-024 or S-025 error raises the error count without changing it. |
 
 ## Open Questions
 
