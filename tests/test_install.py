@@ -1617,8 +1617,15 @@ class HookPlacementTests(unittest.TestCase):
         for entry in entries:
             with self.subTest(tool=entry["tool"]):
                 self.assertEqual(str(inst.HOOKS_DIR), entry["source"])
-                self.assertEqual(str(self.home / inst.HOOK_SUBPATHS[entry["tool"]]),
-                                 entry["target"])
+                # Resolved on both sides deliberately. install() resolves the home it
+                # is given, so the manifest always records a resolved absolute path,
+                # and comparing it against an unresolved composition is a string test
+                # that happens to hold only where the two spellings coincide. They do
+                # not on a macOS runner, where /var is a symlink to /private/var, nor
+                # on a Windows runner reached by its 8.3 short name.
+                self.assertEqual(
+                    str((self.home / inst.HOOK_SUBPATHS[entry["tool"]]).resolve()),
+                    entry["target"])
                 self.assertEqual(expected, entry["digests"],
                                  "every file in the module needs a recorded baseline; a "
                                  "file missing here is a later --check that cannot see it")
