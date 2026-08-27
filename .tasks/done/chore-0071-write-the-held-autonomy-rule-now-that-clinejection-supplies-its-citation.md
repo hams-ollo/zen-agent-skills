@@ -2,7 +2,7 @@
 id: chore-0071
 title: The autonomy candidate held for want of a citation now has one, and the kit is about to enter the conditions it describes
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #1: autonomy.md v1"
 depends_on: []
@@ -13,7 +13,7 @@ created: 2026-08-27
 
 ## Problem
 
-[`autonomy.md`](../.agents/rules/autonomy.md) closes with a section titled "Considered for v1 and held,
+[`autonomy.md`](../../.agents/rules/autonomy.md) closes with a section titled "Considered for v1 and held,
 for want of a citation". One entry there is **instructions embedded in material a skill was pointed at**:
 a diff, an issue body, a fetched page, or a file in a target repository, where an instruction inside the
 data is treated as a direction rather than as part of the data.
@@ -104,6 +104,29 @@ that gate, and say so in the module**, because the answer governs every future r
 Keep it short. The module's own failure mode is doctrine inflation, and `A1` to `A9` average a few
 sentences each.
 
+## Decisions
+
+- **Rejected: the detector form.** "Detect and refuse instructions found in data" was written and
+  discarded, because it is published as broken by name (Zhan et al., arXiv:2503.00061; "The Attacker
+  Moves Second", arXiv:2510.09023). `A10` follows the design-pattern formulation of Beurer-Kellner et
+  al. (arXiv:2506.08837) instead: a constraint on what an agent may do after ingesting untrusted
+  input, not a test applied to the input.
+- **Rejected: the id `A9`, and any renumbering to restore file order.** The ids in `autonomy.md` are
+  assigned in order of addition while the rules are grouped by topic, so `A9` already exists between
+  `A7` and `A8`, and `fix-batch`, `verifier-agent`, `spec-conformance`, `pr-describe`, and the cloud
+  runbook cite specific ids as stable references. The new rule is `A10`, placed at the end of the
+  scope section beside `A1`, which the held entry itself named as its spatial counterpart.
+- **Decided: an external incident satisfies the module's citation gate, if it is marked as one.**
+  Recorded in the module's own gate section rather than only here, because it governs every future
+  rule. `A8`'s precedent was followed: the widening is named, and `A10` says in its *Cited* line that
+  it rests on someone else's incident rather than on a run this kit made.
+- **Seam left open deliberately: nothing enforces `A10`.** No hook, no gate, no skill body was
+  touched, per the task's out-of-scope list and `AGENTS.md` reserving gate decisions to the author.
+  `A10` is prose that an agent reading the lens must apply itself.
+- **Seam left open deliberately: `ROADMAP.md` Epic E item 1 is now stale** ("Nine rules as of
+  2026-08-21, `A1` to `A9` ... plus four candidates named and held"). Left unedited because
+  `ROADMAP.md` is handled centrally in this batch, not because it was missed.
+
 ## Risks and rollback
 
 One file, prose only, in a swappable module an adopter is invited to rewrite.
@@ -121,19 +144,19 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] `autonomy.md` carries the new rule in the same shape as `A1` through `A9`, with a *Cited* line
+- [x] `autonomy.md` carries the new rule in the same shape as `A1` through `A9`, with a *Cited* line
       naming Clinejection and its date.
-- [ ] The rule is stated as a constraint on action after ingestion, not as detection of injected text,
+- [x] The rule is stated as a constraint on action after ingestion, not as detection of injected text,
       and the closeout says which published formulation it follows.
-- [ ] The rule names at least one concrete thing an agent does differently.
-- [ ] The held section no longer lists this candidate, and states that its stated trigger did not fire.
-- [ ] The module records whether an external incident satisfies its citation gate, as a stated decision.
-- [ ] No file under `.agents/hooks/`, `.agents/skills/`, or `scripts/` is modified.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] The rule names at least one concrete thing an agent does differently.
+- [x] The held section no longer lists this candidate, and states that its stated trigger did not fire.
+- [x] The module records whether an external incident satisfies its citation gate, as a stated decision.
+- [x] No file under `.agents/hooks/`, `.agents/skills/`, or `scripts/` is modified.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

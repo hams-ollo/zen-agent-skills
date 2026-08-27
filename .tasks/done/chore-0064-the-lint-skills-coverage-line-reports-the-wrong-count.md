@@ -90,7 +90,7 @@ contract**, not a fix. At least three shapes are available and none is obviously
 
 The third needs the amendment convention in [`docs/spec/README.md`](../../docs/spec/README.md), and an
 amendment is already owed against this same spec by
-[`chore-0065`](../chore-0065-amend-the-validate-skills-contract-for-the-non-skill-agents-markdown-rule.md).
+[`chore-0065`](chore-0065-amend-the-validate-skills-contract-for-the-non-skill-agents-markdown-rule.md).
 **Decide which shape, and record the two you rejected.** If the chosen shape needs a contract change,
 say so and stop rather than making one: that is `chore-0065`'s file to touch, and two tasks amending
 one spec in parallel is the collision this repository has already had once.
@@ -113,7 +113,7 @@ conformance matrix cite verbatim.
 
 **Rejected: shape 3, amending the contract and reordering.** Correct in principle, out of scope in
 fact. `docs/spec/` is not this task's to touch, an amendment against this same spec is already owed
-by [`chore-0065`](../chore-0065-amend-the-validate-skills-contract-for-the-non-skill-agents-markdown-rule.md),
+by [`chore-0065`](chore-0065-amend-the-validate-skills-contract-for-the-non-skill-agents-markdown-rule.md),
 and two tasks amending one spec in parallel is the collision this repository has already had once.
 It also aims at the wrong thing: the order of the two lines was never the defect, the content of the
 surviving one was.
