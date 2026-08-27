@@ -2,7 +2,7 @@
 id: chore-0063
 title: The finding this repository keeps making about itself is recorded nowhere durable, so every session rediscovers it or does not
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -91,6 +91,37 @@ Do not overstate it. The mechanical layer being healthy is a real and earned res
 what they were built to catch, and several of them have caught real regressions during these waves.
 The claim is about what they cannot see, not that they are worthless.
 
+## Decisions
+
+- **Rejected alternative: a new `AGENTS.md` section.** Checked rather than assumed: the existing
+  acceptance-command paragraph does not carry the finding. It shares the sentence "necessary but not
+  sufficient" and gives a different reason for it, sample coverage across the six-cell CI matrix,
+  whose implied remedy is running more cells. The finding is that a full six-cell green run is still
+  silent about the semantic layer, which no number of cells closes. So the paragraph does not merely
+  under-state the finding, it points away from it. The addition went in as a sibling paragraph
+  directly after it, inside `### The acceptance command`, for three reasons: that section already
+  defines `run-checks.py` as "every gate that decides whether a change here is acceptable", so it is
+  already the section about all the gates; putting the two reasons adjacent is what makes the
+  contrast legible, one insufficiency shrinking as you run more cells and the other not; and a new
+  `###` heading in a file every agent reads in full is the first step toward the page of doctrine
+  this task names as its failure mode. No existing word was changed; the diff is 15 insertions and 0
+  deletions.
+
+- **Premise false: this task's own evidence table overstates `bug-0037`.** The table says "Sixty-five
+  evidence citations, seven pointing at unrelated text". Sixty-five is right and is confirmed in that
+  task's closeout ("65 line pointers were re-derived, not 40"). Seven is not: its record names two
+  known-wrong rows plus one more found already stale during re-derivation, so three. The only "seven"
+  in `bug-0037` is "All seven gates pass", which looks like the source of the conflation. `AGENTS.md`
+  says three of sixty-five. The neighbouring row is the opposite case and was also checked:
+  `bug-0044`'s "seven links" contradicts its own title, which says six, and is correct, because its
+  closeout records "Premise corrected: there are seven dangling link instances, not six."
+
+- **Seam left open: the citations are bare backticked ids, not relative links.** `AGENTS.md` cites
+  task ids this way in all six places it already does so (`bug-0011`, `feat-0031`, `chore-0040`,
+  `bug-0041`, `bug-0042`, `chore-0029`) and links to none of them, unlike `ROADMAP.md`. The addition
+  follows the local convention rather than the house-style link rule, so a later agent does not read
+  the unlinked ids as an oversight and "fix" four of them into `.tasks/done/` links.
+
 ## Risks and rollback
 
 One file, prose only, so this section is short.
@@ -106,19 +137,19 @@ Reversible by reverting one commit.
 
     python scripts/run-checks.py
 
-- [ ] `AGENTS.md` states the finding, in a section or as an addition to the acceptance-command
+- [x] `AGENTS.md` states the finding, in a section or as an addition to the acceptance-command
       paragraph, with at least three citations to closed tasks.
-- [ ] It names at least one concrete thing an agent should do differently, and that thing is something
+- [x] It names at least one concrete thing an agent should do differently, and that thing is something
       this repository has actually exercised rather than invented.
-- [ ] The addition is under roughly fifteen lines, counted.
-- [ ] No gate is added and no existing `AGENTS.md` section is rewritten.
-- [ ] The closeout states whether the existing acceptance-command paragraph already carried the
+- [x] The addition is under roughly fifteen lines, counted.
+- [x] No gate is added and no existing `AGENTS.md` section is rewritten.
+- [x] The closeout states whether the existing acceptance-command paragraph already carried the
       finding, checked rather than assumed.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

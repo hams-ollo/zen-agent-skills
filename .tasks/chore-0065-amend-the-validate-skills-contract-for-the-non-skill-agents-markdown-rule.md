@@ -4,7 +4,7 @@ title: Amend the validate-skills contract for the non-skill .agents markdown lin
 type: chore
 status: open
 priority: P2
-parent: "ROADMAP Epic A: distribution tooling"
+parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [chore-0058]
 spec: "docs/spec/validate-skills.md"
 scenarios: []
@@ -61,13 +61,31 @@ measurement, 20,203 entries under the system temp directory on the machine it ra
 - Reconcile the matrix rows the amendment touches and restate the coverage-proof arithmetic with the
   numbers rather than asserting it.
 
+- **Two present-tense claims that [`chore-0064`](done/chore-0064-the-lint-skills-coverage-line-reports-the-wrong-count.md)
+  falsified on 2026-08-27, added to this task's scope at that wave's reconciliation.** That change
+  replaced the second summary line's `beside them` with the skill count, so two sentences written
+  about the old wording are now false and no gate reports it:
+  [`validate-skills.conformance.md`](../docs/spec/validate-skills.conformance.md), the `Output format`
+  Proposed Surface row, which says the element "now admits the second line" and then quotes the old
+  text as "printed on every run that reaches the summary"; and
+  [`cloud-executable.conformance.md`](../docs/spec/cloud-executable.conformance.md), the observation
+  recording what a passing gate's line carries, whose closing sentence says the line "does not move
+  with the gate's own scope", which is exactly what `chore-0064` changed.
+  **Re-audit those rows rather than find-and-replacing the quote**, for the reason `chore-0062`
+  declined the same move: repairing a citation without re-auditing the row asserts a freshness the
+  repair did not establish.
+  **Two neighbouring quotes of the same string are dated measurements and must not be touched**: the
+  `chore-0055` reach measurement in the same matrix, and the first half of the `cloud-executable`
+  observation. Both say what was measured on a stated date and are accurate records of that moment.
+  Rewriting either would falsify a record rather than refresh a citation.
+
 **Out of scope:**
 
 - **`scripts/validate-skills.py` and `tests/test_validate_skills.py`.** The implementation is
   `chore-0058`'s and is not reopened. If writing the scenario reveals the behaviour is wrong, that is a
   finding to report, not a code change to make.
 - The line-ordering question and the coverage line's contents, which are
-  [`chore-0064`](chore-0064-the-lint-skills-coverage-line-reports-the-wrong-count.md). That task may
+  [`chore-0064`](done/chore-0064-the-lint-skills-coverage-line-reports-the-wrong-count.md). That task may
   need this contract changed; if so it says so and stops, and the change lands here. **Do not amend the
   `Output` element's ordering clause on its behalf**, because that is a decision its work has not made
   yet.

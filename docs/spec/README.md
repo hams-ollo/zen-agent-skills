@@ -73,12 +73,13 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 ### The author's re-approval queue
 
 Every spec listed below is approved and carries an amendment the author has not re-read. Some carry
-more than one: `install` carries two, `build-adapters` two since `chore-0043`, `cloud-executable` two
-since `chore-0061`, and `validate-skills` three, since `chore-0047` and again since `chore-0054`.
+more than one: `install` carries two, `build-adapters` three, since `chore-0043` and again since
+`chore-0062`, `cloud-executable` two since `chore-0061`, and `validate-skills` three, since
+`chore-0047` and again since `chore-0054`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
-| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`) | 2026-08-06, 2026-08-19 |
+| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`); `S-019`, what a relative link inside an emitted lens must satisfy (`chore-0062`) | 2026-08-06, 2026-08-19, 2026-08-27 |
 | [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`); `S-020` and the `Output` surface element, what a passing gate's entry carries (`chore-0061`) | 2026-08-20, 2026-08-27 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
@@ -135,7 +136,7 @@ something else today.
 
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
-| [`build-adapters`](build-adapters.md) | approved | 18 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
+| [`build-adapters`](build-adapters.md) | approved | 19 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
@@ -147,9 +148,9 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 24 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 158 scenarios, all approved. Ten carry a conformance matrix between them, holding 145
+Eleven specs, 159 scenarios, all approved. Ten carry a conformance matrix between them, holding 146
 of those scenarios, recomputed from the files on 2026-08-27 rather than incremented: the eleven counts
-in the column above sum to 158, and the one spec without a matrix carries 13, so 158 - 13 = 145.
+in the column above sum to 159, and the one spec without a matrix carries 13, so 159 - 13 = 146.
 
 Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
 `bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And
