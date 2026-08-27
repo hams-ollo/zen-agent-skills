@@ -98,8 +98,24 @@ _DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
 # The two placements the convention in AGENTS.md names, recognised positively rather than
 # guessed at: a fenced block whose info string is `provenance` (markdown), and an underlined
 # `Provenance` section of a module docstring (Python).
+#
+# Both markers are matched case-insensitively, and that agreement is the point. The fence's
+# info string has always been lowered before comparison, so ```Provenance was a placement
+# while a docstring headed `provenance` was not: one concept, two answers on the same input.
+# The heading now carries IGNORECASE so the two spellings of the same marker are one marker
+# (bug-0047), agreeing with `SCAN_SUFFIXES` one layer out in this file (bug-0046) and with
+# `classify_supporting_file` in validate-skills.py (chore-0055) rather than inventing a third
+# convention. Narrowing the fence instead would have been the other way to agree, and it was
+# rejected: it removes coverage rather than adding it, so a malformed block inside a
+# ```Provenance fence that is reported today would go back to being dropped at exit 0, which
+# is the exact silence bug-0016, bug-0019, bug-0041, bug-0042 and bug-0046 were each filed for.
+#
+# Widening the heading stays small because the heading is only half of the marker: a
+# placement also needs the underline below it, and it must not be inside an open fence. So a
+# case variant of the bare word in prose is still not a placement, and the only shape this
+# newly admits is an underlined heading spelled some other way.
 _FENCE_RE = re.compile(r"^[ \t]*(?:`{3,}|~{3,})[ \t]*([A-Za-z0-9_+-]*)[ \t]*$")
-_SECTION_RE = re.compile(r"^[ \t]*Provenance[ \t]*$")
+_SECTION_RE = re.compile(r"^[ \t]*Provenance[ \t]*$", re.IGNORECASE)
 _UNDERLINE_RE = re.compile(r"^[ \t]*[-=]{2,}[ \t]*$")
 
 USER_AGENT = "zen-agent-skills-check-provenance"
@@ -137,6 +153,11 @@ def declared_lines(lines):
     Fences are tracked generically, not only the `provenance` ones, so a `source:` field in
     somebody else's fenced example is known to be inside a ```text block rather than merely
     failing to look like provenance.
+
+    Neither marker's case is load-bearing: the fence's info string is lowered before it is
+    compared and the heading is matched with IGNORECASE, so the same word in any spelling is
+    the same marker (bug-0047). The heading's underline is not optional, though, and it is
+    what keeps that widening narrow: a bare `provenance` line in prose opens nothing.
     """
     inside = [False] * len(lines)
     fence = None  # the info string of the currently open fence, or None

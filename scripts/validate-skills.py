@@ -27,6 +27,14 @@ them: the `--links` globs the CI gate passes never reach `.agents/` (chore-0036)
 A file whose name carries the `.tmpl` suffix is deliberately not checked; see
 `classify_supporting_file` for the rule and why it is drawn there.
 
+They run once more over the markdown that ships under `.agents/` *outside* any skill
+directory, which is the rules module and the hooks README (chore-0058). Those travel
+to an adopter exactly as a skill does, so a link in one is exactly as breakable, and
+until this rule nothing read a link out of them: `check_lenses_are_composed` opens the
+rules directory to ask a different question entirely, and the CI `--links` globs stop
+at `docs/`. See `check_portable_markdown` for the walk and the one geometry it
+declines to run over.
+
     python scripts/validate-skills.py
 """
 from __future__ import annotations
@@ -386,6 +394,92 @@ def check_supporting_files(skill_dir: Path, skill_names: set, rel: str, errors: 
     return counts
 
 
+def check_portable_markdown(portable_root: Path, skills_dir: Path, skill_names: set,
+                            errors: list) -> dict | None:
+    """Link-check the shipped markdown under `.agents/` that sits outside every skill.
+
+    The same three rules a supporting file gets, one directory level up: the rules
+    module and the hooks README ship to an adopter as surely as a skill does, so a link
+    in one of them is exactly as clickable and exactly as breakable (chore-0058). Both
+    existing link gates miss them by construction. `main` walks `SKILLS_DIR.iterdir()`,
+    which cannot reach a sibling of the skills tree, and the `--links` globs the CI gate
+    passes (`*.md`, `.github/**/*.md`, `docs/**/*.md`) never enter `.agents/` at all.
+
+    `sibling_shortcut` stays off for the same reason it is off for a supporting file, and
+    the reason is sharper here rather than weaker: from `.agents/rules/`,
+    `../skills/doc-sync/SKILL.md` is a path to resolve on disk, and a bare
+    `../doc-sync/SKILL.md` names a sibling of the *rules* directory that does not exist,
+    not the skill `doc-sync`. With the shortcut on, the second form would be cleared
+    whenever a real skill happened to share the name, which is the broken link this rule
+    is for.
+
+    The escape ceiling is `portable_root` unchanged. A rules file reaching
+    `../skills/y/SKILL.md` stays inside it, and one reaching `../../ROADMAP.md` does not.
+    That second form is the half worth having: it resolves in this repository, so it
+    reads correctly to everyone here, and it dangles in every installed tree, because
+    install.py places `rules/` beside `skills/` and nothing above.
+
+    Classification, the `.tmpl` skip, and the byte-cache exclusion are `classify_supporting_file`
+    and `_is_shipped` reused rather than reimplemented. Both decisions carry over unchanged:
+    a template's links are authored for its destination, and a `__pycache__` is in no
+    installed tree, so counting one would make the coverage number depend on whether the
+    test suite had already run.
+
+    Returns the counts, or `None` when the walk did not run. It runs only where the
+    skills directory is named the way every layout install.py places names it
+    (`<base>/skills`, with the rules module at `<base>/../rules`), because only then is
+    the parent directory a shipped tree. `main` is deliberately callable against any
+    directory of skill folders, and for such a caller the parent is whatever happens to
+    sit beside it: pointed at a scratch directory it would walk that directory's parent,
+    read unrelated markdown, and report someone else's broken links as this kit's. The
+    returned `None` is reported in words rather than as a count of zero, so a run that
+    declined to look never reads like a run that looked and found nothing.
+    """
+    if skills_dir.name != SKILLS_DIR.name:
+        return None
+    counts = {"markdown": 0, "template": 0, "other": 0}
+    for path in sorted(p for p in portable_root.rglob("*") if p.is_file()):
+        if path.is_relative_to(skills_dir):
+            continue
+        if not _is_shipped(path.relative_to(portable_root), path):
+            continue
+        kind = classify_supporting_file(path)
+        counts[kind] += 1
+        if kind != "markdown":
+            continue
+        check_links(path, path.read_text(encoding="utf-8"), skill_names, _rel(path),
+                    errors, portable_root, sibling_shortcut=False)
+    return counts
+
+
+def portable_coverage(counts: dict | None, portable_root: Path, skills_dir: Path) -> str:
+    """One sentence saying what the walk beside the skills tree actually covered.
+
+    Three renderings, because there are three different facts and a coverage line that
+    renders them identically is the failure bug-0045 exists to remove rather than a
+    report of it:
+
+    - It did not look, because the tree it was given is not a shipped layout.
+    - It looked and there is nothing there, said in words and naming the directory.
+    - It looked and found files, said as the checked count with both skipped counts
+      beside it, so "0 checked" is separable from "0 present".
+
+    Only the third has the shape `coverage_line()` in scripts/run-checks.py selects on,
+    which is why the words in the first two matter: that function shows the last line of
+    a gate's output containing a digit, and a gate declining to look must not be able to
+    borrow a number from somewhere else in the sentence and look busy.
+    """
+    if counts is None:
+        return (f"Did not look beside {_rel(skills_dir)}: a shipped skills tree is named "
+                f"{SKILLS_DIR.name!r} in every layout install.py places, so this one has "
+                f"no shipped tree around it to check.")
+    if not any(counts.values()):
+        return f"Nothing ships under {_rel(portable_root)} outside the skills tree."
+    return (f"Also link-checked {counts['markdown']} file(s) under {_rel(portable_root)} "
+            f"outside the skills tree; skipped {counts['template']} template(s) and "
+            f"{counts['other']} non-markdown file(s).")
+
+
 def check_frontmatter_is_parseable(text: str, rel: str, errors: list) -> None:
     """Flag a plain frontmatter scalar that a real YAML parser would reject.
 
@@ -583,8 +677,15 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
 
     # Checked once over the whole tree rather than per skill: "no skill references this
     # lens" is a fact about every skill together, and it is the one rule here that reads
-    # outside .agents/skills/.
+    # outside .agents/skills/ to ask that question.
     check_lenses_are_composed(portable_root / "rules", skill_texts, errors)
+    # And once over the markdown beside the skills tree, which is a different question
+    # about the same files: check_lenses_are_composed asks whether a skill points *at*
+    # a lens and never reads a link *out* of one (chore-0058). Deliberately not folded
+    # into that function, which skips whenever there is no rules directory, a branch that
+    # is correct for the lens rule and would silently drop `.agents/hooks/README.md` here.
+    portable = check_portable_markdown(portable_root, skills_dir.resolve(),
+                                       skill_names, errors)
 
     for w in warnings:
         print(f"WARN  {w}")
@@ -596,9 +697,20 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     # A second line rather than a longer first one: the summary above is the shape the
     # contract states and the tests assert, and the supporting-file coverage is a
     # different count answering a different question.
+    #
+    # The walk beside the skills tree lands on that same second line rather than on a
+    # third, and that is a decision rather than a layout preference (chore-0058).
+    # `coverage_line()` in scripts/run-checks.py shows one line per gate: the last line
+    # of its output containing a digit. For the `lint skills` gate that is already this
+    # line, so a third line would take its place and the acceptance command would stop
+    # reporting the supporting-file coverage that bug-0045 and chore-0036 put there.
+    # Appending keeps every count in the one line that survives, which is what makes the
+    # criterion "the run reports how many it checked" true of `validate-skills.py` and of
+    # `run-checks.py` at once instead of only the first.
     print(f"Link-checked {supporting['markdown']} supporting file(s) beside them; "
           f"skipped {supporting['template']} template(s) whose links are written for "
-          f"another repository and {supporting['other']} non-markdown file(s).")
+          f"another repository and {supporting['other']} non-markdown file(s). "
+          f"{portable_coverage(portable, portable_root, skills_dir)}")
     return 1 if errors else 0
 
 

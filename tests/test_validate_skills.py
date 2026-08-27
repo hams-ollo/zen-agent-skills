@@ -1148,5 +1148,262 @@ class TestSupportingFileSuffixCase(unittest.TestCase):
                       "template(s)", out)
 
 
+class TestPortableMarkdownOutsideTheSkillsTree(unittest.TestCase):
+    """The markdown that ships under `.agents/` outside every skill is link-checked (chore-0058).
+
+    Characterization rather than acceptance: chore-0058 declares no `spec`, because this
+    rule reaches outside `.agents/skills/` for the second time and no scenario in
+    docs/spec/validate-skills.md describes it. The contract amendment is owed as a
+    separate task, so these tests carry no S-NNN id and pin observed behavior instead.
+
+    The bug population is a lens or a hooks README whose link is wrong and which every
+    gate passes. Both existing link gates miss these files by construction: `main` walks
+    `SKILLS_DIR.iterdir()` and cannot reach a sibling of the skills tree, and the CI
+    `--links` globs stop at `docs/`. `check_lenses_are_composed` opens the rules directory
+    but asks only whether a skill points *at* a lens, never reading a link out of one.
+
+    test-quality notes: the component layer is the faithful one, as it is for the
+    supporting-file rules above, because the defect is a walk that never reaches a file
+    rather than a predicate that misjudges one, and a unit test on the predicate cannot
+    fail for a walk that never calls it. The fixture builds the real shipped geometry
+    (`agents/skills` beside `agents/rules` and `agents/hooks`) rather than a bare
+    directory of skill folders, matching what `TestLensComposition` and the two portable
+    link tests in `TestLinkChecks` already do deliberately: a fixture whose skills
+    directory has no shipped tree around it makes its parent whatever happens to sit
+    beside it, which for a temporary directory is the whole system temp directory.
+
+    Oracles are the specific error text, never the exit code alone. The escape case is
+    the one where that matters most: a dangling link and an escaping link both exit 1, so
+    a test asserting only the code cannot tell the two classes apart, and the escape is
+    the class worth having. `../../ROADMAP.md` resolves in this repository and dangles in
+    every installed tree, so an existence-only check passes it and every reader here sees
+    a link that works.
+    """
+
+    # The files this rule governs in the kit as it ships. Named rather than counted, so a
+    # walk that stops matching fails against a list a reader can check by hand, and so
+    # adding a fifth lens does not fail a test about the first four.
+    SHIPPED_OUTSIDE_SKILLS = (
+        "hooks/README.md",
+        "rules/autonomy.md",
+        "rules/house-style.md",
+        "rules/review-quality.md",
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.agents = self.root / "agents"
+        self.skills = self.agents / "skills"
+        self.rules = self.agents / "rules"
+        self.hooks = self.agents / "hooks"
+        self.rules.mkdir(parents=True)
+        self.hooks.mkdir(parents=True)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_beside(self, relpath: str, text: str) -> Path:
+        path = self.agents / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return path
+
+    def test_a_dangling_link_in_a_rules_file_errors(self):
+        # The ordinary half of the probe recorded in the task: a link to a file that is
+        # simply not there. Loud and local once anything reads the file at all.
+        self._write_beside("rules/example.md", "See [the notes](does-not-exist.md).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("link target does not exist: does-not-exist.md", out)
+        self.assertIn("rules/example.md", out)
+
+    def test_a_dangling_link_in_the_hooks_readme_errors(self):
+        # The rules directory is not the whole of what ships beside the skills, and the
+        # hooks README is the file both gates missed most completely: nothing in
+        # scripts/ or tests/ reads a link out of it, and `check_lenses_are_composed`
+        # never opens the hooks directory at all.
+        self._write_beside("hooks/README.md", "Run [the hook](missing-hook.py).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("link target does not exist: missing-hook.py", out)
+        self.assertIn("hooks/README.md", out)
+
+    def test_a_link_above_the_shipped_tree_is_reported_as_an_escape(self):
+        # The half that matters more, and the reason the oracle is the message rather
+        # than the code. The target exists, so the run must not report it as unresolved:
+        # it is a portability defect, invisible to every reader in this repository and
+        # broken in every installed tree. The negative assertion is what separates the
+        # two classes; without it this test passes against a check that never learned
+        # the difference.
+        (self.root / "ROADMAP.md").write_text("real file\n", encoding="utf-8")
+        self._write_beside("rules/example.md", "See [the roadmap](../../ROADMAP.md).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("link escapes the shipped skill tree: ../../ROADMAP.md", out)
+        self.assertNotIn("link target does not exist", out)
+
+    def test_a_link_to_the_skills_tree_beside_it_is_not_an_escape(self):
+        # The negative that keeps the rule from being switched off. A lens reaching
+        # `../skills/<name>/SKILL.md` stays inside the shipped tree, because install.py
+        # places the rules module as the sibling `<base>/../rules`, so the file it names
+        # is exactly where it says it is.
+        self._write_beside("rules/example.md",
+                           "Composed by [alpha](../skills/alpha/SKILL.md).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_the_sibling_skill_shortcut_is_not_applied_beside_the_skills_tree(self):
+        # `sibling_shortcut` must stay off here for the reason it is off for a supporting
+        # file, and the reason is sharper one level up. From the rules directory,
+        # `../doc-sync/SKILL.md` names a sibling of *that* directory, which does not
+        # exist; the skill `doc-sync` lives at `../skills/doc-sync/SKILL.md`. With the
+        # shortcut on, the broken link would be cleared purely because a real skill
+        # happens to share the name, which is the exact link this rule is for.
+        _write_skill(self.skills, "doc-sync", GOOD_FM.format(name="doc-sync", desc=LONG_DESC))
+        self._write_beside("rules/example.md", "See [doc-sync](../doc-sync/SKILL.md).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("link target does not exist: ../doc-sync/SKILL.md", out)
+        self.assertNotIn("no such skill exists in this kit", out)
+
+    def test_a_template_beside_the_skills_tree_is_not_link_checked(self):
+        # `classify_supporting_file` reused rather than reimplemented, so the decision
+        # chore-0036 made one level down holds here unchanged: a `.tmpl` file's links are
+        # authored for its destination and are meant to dangle where it currently sits.
+        self._write_beside("rules/AGENTS.md.tmpl",
+                           "Work lives in [`.tasks/`](.tasks/) and above in "
+                           "[the log](../../../CHANGELOG.md).\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("AGENTS.md.tmpl", out)
+
+    def test_a_link_inside_a_fenced_block_is_not_reported(self):
+        # The whole of `check_links` is reused, so the S-022 exception reaches these
+        # files too: a link that renders as literal text opens nothing and strands no
+        # reader. The lenses are documents about writing documents, so showing an example
+        # link is exactly what they do.
+        self._write_beside(
+            "rules/example.md",
+            "Write it like this:\n\n```markdown\nSee [the notes](does-not-exist.md).\n```\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_the_run_reports_how_many_files_beside_the_skills_it_checked_and_skipped(self):
+        # The coverage number, asserted against a fixture tree rather than only against a
+        # passing run. All three counts together, for the reason the supporting-file line
+        # states: "0 checked" reads the same whether the exclusion is right or the walk is
+        # broken, until what it declined to read sits beside it.
+        self._write_beside("rules/example.md", "no links here\n")
+        self._write_beside("rules/notes.md", "none here either\n")
+        self._write_beside("hooks/README.md", "still none\n")
+        self._write_beside("rules/AGENTS.md.tmpl", "a template\n")
+        self._write_beside("hooks/reminder.py", "# a hook\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Also link-checked 3 file(s) under ", out)
+        self.assertIn(" outside the skills tree; skipped 1 template(s) and "
+                      "1 non-markdown file(s).", out)
+
+    def test_zero_checked_does_not_read_the_same_as_nothing_present(self):
+        # The distinction the task names, at the point where it is easy to satisfy in
+        # appearance only. A walk that found files and checked none of them is a
+        # different fact from a tree with nothing beside the skills, and a coverage line
+        # rendering both as "0" is the failure bug-0045 exists to remove.
+        self._write_beside("rules/AGENTS.md.tmpl", "a template\n")
+        self._write_beside("hooks/reminder.py", "# a hook\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Also link-checked 0 file(s) under ", out)
+        self.assertIn(" outside the skills tree; skipped 1 template(s) and "
+                      "1 non-markdown file(s).", out)
+        self.assertNotIn("Nothing ships under", out)
+
+    def test_an_empty_tree_beside_the_skills_says_so_in_words(self):
+        # The other end of the same pair. Nothing ships beside the skills here, and the
+        # run says that in words naming the directory rather than as a count of zero,
+        # which is the form `validate-skills.py` already uses for an empty skills tree
+        # ("No skills found under <dir>.").
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Nothing ships under ", out)
+        self.assertIn(" outside the skills tree.", out)
+        self.assertNotIn("Also link-checked", out)
+
+    def test_a_tree_with_no_shipped_layout_around_it_says_it_did_not_look(self):
+        # The third rendering, and the one that keeps the walk from reading files nobody
+        # asked about. `main` is callable against any directory of skill folders, and for
+        # such a caller the parent is whatever happens to sit beside it. Pointed at a
+        # temporary directory it would otherwise walk the whole system temp directory and
+        # report unrelated broken links as this kit's. Declining is correct; declining
+        # silently, or declining as "0 files", is not.
+        with tempfile.TemporaryDirectory() as tmp:
+            loose = Path(tmp)
+            _write_skill(loose, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
+            code, out = _run(loose)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Did not look beside ", out)
+        self.assertNotIn("Also link-checked", out)
+        self.assertNotIn("Nothing ships under", out)
+
+    def test_the_skills_tree_is_excluded_rather_than_counted_twice(self):
+        # The exclusion is derived from the skills directory itself, so a file inside a
+        # skill is counted once by the supporting-file walk and not again here. Both
+        # numbers are asserted together, because either alone is satisfied by a walk that
+        # covers the wrong half of the tree.
+        supporting = self.skills / "alpha" / "references" / "notes.md"
+        supporting.parent.mkdir(parents=True, exist_ok=True)
+        supporting.write_text("no links here\n", encoding="utf-8", newline="\n")
+        self._write_beside("rules/example.md", "none here either\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Link-checked 1 supporting file(s) beside them", out)
+        self.assertIn("Also link-checked 1 file(s) under ", out)
+
+    def test_a_byte_cache_beside_the_skills_is_not_counted(self):
+        # `_is_shipped` reused for the reason it was written: install.py copies with
+        # `ignore_patterns("__pycache__", "*.pyc")`, so a byte cache is in no installed
+        # tree, and counting one would make the coverage number depend on whether the
+        # test suite had already run. The hooks directory grows one in this repository
+        # the moment tests/test_hooks.py imports a hook.
+        self._write_beside("hooks/reminder.py", "# a hook\n")
+        cache = self.hooks / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "reminder.cpython-311.pyc").write_bytes(b"\x00compiled\x00")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn(" outside the skills tree; skipped 0 template(s) and "
+                      "1 non-markdown file(s).", out)
+
+    def test_the_real_tree_ships_the_files_this_rule_governs(self):
+        # What the walk must reach, asserted before the next test asserts what it found.
+        # "Nothing dangles" is satisfied by an empty walk, which is the failure mode this
+        # whole rule is about, so the inventory is pinned by name first.
+        portable_root = (REPO_ROOT / ".agents").resolve()
+        skills_dir = portable_root / "skills"
+        for rel in self.SHIPPED_OUTSIDE_SKILLS:
+            with self.subTest(path=rel):
+                path = portable_root / rel
+                self.assertTrue(path.is_file(), f"{rel} is not where this rule expects it")
+                self.assertEqual(vs.classify_supporting_file(path), "markdown")
+                self.assertFalse(path.is_relative_to(skills_dir))
+
+    def test_every_shipped_file_outside_the_skills_tree_passes_the_link_check(self):
+        # The rule against the real tree. chore-0058 recorded that all four files resolve
+        # cleanly on 2026-08-22, which is what makes this a coverage gap rather than a
+        # live defect; this is that hand check made mechanical. One of the four links to
+        # `.py` targets rather than markdown, which `check_links` resolves on disk like
+        # any other relative target, so no extension rule is needed for it.
+        portable_root = (REPO_ROOT / ".agents").resolve()
+        skills_dir = portable_root / "skills"
+        names = {d.name for d in skills_dir.iterdir() if d.is_dir()}
+        errors = []
+        counts = vs.check_portable_markdown(portable_root, skills_dir, names, errors)
+        self.assertEqual(errors, [])
+        self.assertIsNotNone(counts, "the kit's own tree must be a shipped layout")
+        self.assertGreaterEqual(counts["markdown"], len(self.SHIPPED_OUTSIDE_SKILLS))
+
+
 if __name__ == "__main__":
     unittest.main()
