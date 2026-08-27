@@ -73,7 +73,7 @@ shaped like something you run.
 **Out of scope:**
 
 - **The progressive-disclosure question**, which is
-  [`chore-0070`](chore-0070-decide-whether-references-is-the-convention-or-single-file-is.md).
+  [`chore-0070`](chore-0070-adopt-the-published-disclosure-convention-and-decide-its-enforcement-level.md).
   **That task touches the same three files as this one, so the two cannot share a wave.**
 - Reshaping any skill other than `test-quality`, and reshaping even that one only if this task decides to.
 - The description ceiling and its headroom. Related surface, different question, not filed.
