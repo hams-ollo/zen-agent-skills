@@ -11,6 +11,7 @@ scenarios: []
 touched_files:
   - docs/spec/validate-skills.md
   - docs/spec/validate-skills.conformance.md
+  - docs/spec/cloud-executable.conformance.md
   - docs/spec/README.md
 created: 2026-08-27
 ---
