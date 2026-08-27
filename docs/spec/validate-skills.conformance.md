@@ -3,7 +3,7 @@ title: validate-skills conformance
 spec: docs/spec/validate-skills.md
 audited: 2026-07-27
 supersedes: 2026-07-24 audit (S-001 through S-008 only)
-re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039), 2026-08-20 (chore-0047), 2026-08-20 (bug-0040), 2026-08-21 (chore-0036), 2026-08-21 (chore-0054), 2026-08-22 (chore-0055), 2026-08-27 (chore-0065)
+re_audited: 2026-07-28 (feat-0032), 2026-08-19 (chore-0039), 2026-08-20 (chore-0047), 2026-08-20 (bug-0040), 2026-08-21 (chore-0036), 2026-08-21 (chore-0054), 2026-08-22 (chore-0055), 2026-08-27 (chore-0065), 2026-08-27 (chore-0045, partial: the S-022 test-coverage row only)
 ---
 
 # validate-skills conformance matrix
@@ -113,6 +113,29 @@ expression to one `print()` and touched nothing else. This is the fifth time the
 grown past this contract, after `feat-0023`, `bug-0027`, `feat-0048` and `chore-0036`, and the
 pattern the `chore-0036` paragraph named holds for the fifth time: the gap was found at a later
 task's closeout rather than by any gate.
+
+Re-audited 2026-08-27 by `chore-0045`, and **partially**: one row, the `S-022` row in the test
+coverage section below. That task retags `TestLinkChecksInsideCodeSpansAndFences` and all six of its
+cases from `Scenario S-009 refined` to `S-022`, which is the follow-up this row named and declined to
+do, so the row's closing sentence described a state the same change removed. No scenario row and no
+surface element was re-derived, and no file under `scripts/` was touched; every row in the matrix
+proper carries its previous audit date. Two passes now share the date 2026-08-27 and they are two:
+`S-025` and the two surface elements belong to `chore-0065`, and this pass looked at none of them.
+
+That row was re-derived against the retagged file **before** its citation moved, per the disposition
+`chore-0062` and `chore-0065` both recorded. It keeps `present`: six tests, unchanged in what they
+assert. The re-derivation also found one clause of the row wrong independently of the retag, and the
+row now says so rather than quietly dropping it. Correcting a stale tag and correcting a claim that
+was never true are different repairs, and a reader who cannot tell them apart cannot tell how much of
+this document was ever checked.
+
+Two sentences elsewhere in this document are falsified by the same retag, and are **named here rather
+than edited**, because each sits in a row or a passage this pass did not re-derive. The `S-025` row
+counts the outstanding retag follow-up at four sets; with S-022's six now done it stands at three,
+S-023's nine, S-024's thirteen and S-025's fifteen. And the paragraph closing the test coverage
+section, the one `chore-0065` deliberately restated rather than deleted, still places S-022's six
+tests in the untagged position they have now left. Editing either would repair a claim this pass did
+not audit, which is the move the paragraph above declines.
 
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies on 2026-08-19, `LINK_RE` matches 133 links and 0 of them sit
@@ -246,7 +269,7 @@ lacks one). Against [`tests/test_validate_skills.py`](../../tests/test_validate_
 | Scenario | Covering test | Note |
 |---|---|---|
 | S-009 through S-013 | present | one test each, plus negative cases for S-010 and S-012, each tagged with its scenario id |
-| S-022 | present | added by `bug-0027`, six tests in `TestLinkChecksInsideCodeSpansAndFences`. Two positives, a fenced link and an inline span in both the single and the double backtick form. The negatives carry the weight, since the cheap way to remove a false positive is to switch the check off: a genuine broken link beside a *closed* fence and one below an *unterminated* fence must both still be reported. A fifth asserts the escape rule S-011 is skipped inside a fence too, which is the decision this scenario records rather than an accident, and a sixth runs `check_links()` over the real tree, so the exclusion is shown not to have changed what the kit's own skills report. **The tests predate the id**: written when no scenario stated the rule, they are tagged `Scenario S-009 refined` and their docstrings describe the amendment as the author's open call. That call is now made, so the tags are stale in one direction only, naming less than they cover; retagging them is `chore-0045`'s follow-up and deliberately not done here |
+| S-022 | present | added by `bug-0027`, six tests in `TestLinkChecksInsideCodeSpansAndFences`. Two positives, a fenced link and an inline span in both the single and the double backtick form. The negatives carry the weight, since the cheap way to remove a false positive is to switch the check off: a genuine broken link beside a *closed* fence and one below an *unterminated* fence must both still be reported. A fifth asserts the escape rule S-011 is skipped inside a fence too, which is the decision this scenario records rather than an accident, and a sixth runs `check_links()` over the real tree, so the exclusion is shown not to have changed what the kit's own skills report. **The tests predate the id and no longer carry the older tag**: `bug-0027` wrote them before any scenario stated the rule and tagged the class `Scenario S-009 refined`, `chore-0039` stated it as S-022 on 2026-08-19, and `chore-0045` retagged the class and all six cases on 2026-08-27, which is the follow-up this row previously deferred. Re-audited on that date against the retagged file: six tests, unchanged in what they assert, and the tags now name what they cover rather than less. **One clause of this row was wrong when it was written, and is corrected rather than carried**: it said the docstrings describe the amendment as the author's open call. They never did. Searching the file's whole history for that sentence, by `git log -S` on both "author's call" and "open call" over `tests/test_validate_skills.py`, returns no commit. The sentence belongs to the parallel `S-018` row in [`build-adapters.conformance.md`](build-adapters.conformance.md), whose class docstring did carry it until `chore-0045` removed it. Here the tag was the only stale thing, and the retag is the whole of what changed |
 | S-014 | present | table-driven over all five contradiction phrasings and four negative cases. Confirmed to fail on four of the five against the pre-fix patterns, which is the bug population; the canonical phrasing always passed and proves nothing on its own, which is exactly how the original single-case test hid the divergence |
 | S-015, S-016 | present | added 2026-07-27 once the contract was approved. Asserts the pair together: the absent directory must fail and must not report `Checked 0 skill`, the empty one must succeed |
 | S-017 | present | two tests: over the limit errors with the measured length in the message, and exactly at the limit does not, so an off-by-one that rejected a legal description would fail |

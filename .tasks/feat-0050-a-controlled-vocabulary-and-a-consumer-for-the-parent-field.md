@@ -72,7 +72,7 @@ gets corrected when the consumer breaks. A pointer with no consumer is prose.
   whether the check applies to `.tasks/done/` at all and say so; grandfathering is a legitimate answer and
   an unstated one is not.
 - `ROADMAP.md`'s own staleness, which is
-  [`chore-0066`](chore-0066-the-roadmap-has-five-verified-staleness-defects-and-no-gate.md). This task
+  [`chore-0066`](done/chore-0066-the-roadmap-has-five-verified-staleness-defects-and-no-gate.md). This task
   reads that file; it does not repair it.
 - Adding an `owner`, `assignee`, or `reviewer` field. A different question, belonging with the multi-user
   work rather than here.

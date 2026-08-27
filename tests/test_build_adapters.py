@@ -85,7 +85,7 @@ class TestRewriteLinks(unittest.TestCase):
 
 
 class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
-    """Scenarios S-003 through S-008 refined: a link that renders as literal text is not a link.
+    """Scenario S-018: a link that renders as literal text is not a link.
 
     The bug population is a skill body that *shows* a markdown link as an example, which
     the documentation skills are the likeliest to want. `rewrite_links()` matched every
@@ -101,10 +101,14 @@ class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
     rewriting: a real link beside a closed fence, and one below an unterminated fence,
     must both still be repointed.
 
-    No scenario states this rule. S-008 is the closest ("external and same-page links are
-    emitted unchanged") and it governs a different class. Whether the contract gains an
-    S-018 in that shape is the author's call, recorded in bug-0028's decisions; these
-    tests are tagged with the scenarios they refine rather than inventing an id.
+    S-018 is an exception to S-003 through S-008 and takes precedence over all of them:
+    those scenarios sort a link by its kind, this one decides whether the text is a link
+    at all. S-008 is the closest of them ("external and same-page links are emitted
+    unchanged") and still governs a different question.
+
+    The tests predate the id. bug-0028 wrote them when no scenario stated the rule and
+    tagged them to the scenarios they refine; chore-0043 added S-018 to the contract on
+    2026-08-19, and chore-0045 retagged them here.
     """
 
     # The two inlining targets differ only in the extension a sibling link is given, so
@@ -125,17 +129,19 @@ class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
     )
 
     def test_a_link_inside_a_fenced_block_is_emitted_unchanged(self):
-        # Scenarios S-003, S-006, S-007 refined: inside a fence none of the three fires.
+        # Scenario S-018 over the three rewritten classes at once: inside a fence none
+        # of S-003, S-006, S-007 fires.
         for ext in self.EXTS:
             with self.subTest(ext=ext):
                 self.assertEqual(ba.rewrite_links(self.FENCED, "doc-author", ext),
                                  self.FENCED)
 
     def test_a_link_inside_an_inline_code_span_is_emitted_unchanged(self):
-        # Markdown opens a span with a backtick run of any length and closes it with a
-        # run of the same length, so a rule that knows only the single form fixes half
-        # the occurrences. The double form is what an author reaches for the moment the
-        # text being quoted contains a backtick of its own.
+        # Scenario S-018, the inline-span half. Markdown opens a span with a backtick
+        # run of any length and closes it with a run of the same length, so a rule that
+        # knows only the single form fixes half the occurrences. The double form is what
+        # an author reaches for the moment the text being quoted contains a backtick of
+        # its own.
         forms = {
             "single backtick": "Write `[the notes](../doc-revise/SKILL.md)` in the body.\n",
             "double backtick": "Write ``[`notes`](../doc-revise/SKILL.md)`` in the body.\n",
@@ -146,12 +152,12 @@ class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
                     self.assertEqual(ba.rewrite_links(body, "doc-author", ext), body)
 
     def test_a_real_link_beside_a_fence_is_still_rewritten(self):
-        # Negative: the exclusion must not switch the rewrite off. The fence here is
-        # closed and the genuine link sits after it, so a scanner that ran the fence past
-        # its closing delimiter would leave the real link unrewritten and dangling in
-        # every adapter. The genuine link also wraps its text in a code span, which is
-        # how nearly every link in this kit is written, so an exclusion keyed to the
-        # wrong bracket would suppress the whole tree rather than one example.
+        # Scenario S-018 (negative): the exclusion must not switch the rewrite off. The
+        # fence here is closed and the genuine link sits after it, so a scanner that ran
+        # the fence past its closing delimiter would leave the real link unrewritten and
+        # dangling in every adapter. The genuine link also wraps its text in a code span,
+        # which is how nearly every link in this kit is written, so an exclusion keyed to
+        # the wrong bracket would suppress the whole tree rather than one example.
         body = (
             "```markdown\n"
             "See [an example](../doc-revise/SKILL.md).\n"
@@ -166,10 +172,11 @@ class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
                 self.assertNotIn(f"](doc-revise{ext})", out)
 
     def test_an_unterminated_fence_does_not_suppress_the_rewrite_below_it(self):
-        # Negative: an opening fence that is never closed yields no range at all, the
-        # same trade bug-0015, bug-0017, bug-0023, and bug-0027 all made. A detector that
-        # ran it to end of file would disable the rewrite for the rest of the body and
-        # still report success, which is the one failure indistinguishable from success.
+        # Scenario S-018 (negative): an opening fence that is never closed yields no
+        # range at all, the same trade bug-0015, bug-0017, bug-0023, and bug-0027 all
+        # made. A detector that ran it to end of file would disable the rewrite for the
+        # rest of the body and still report success, which is the one failure
+        # indistinguishable from success.
         body = (
             "```markdown\n"
             "a fence that is never closed\n\n"
@@ -181,8 +188,9 @@ class TestRewriteLinksInsideCodeSpansAndFences(unittest.TestCase):
                               ba.rewrite_links(body, "doc-author", ext))
 
     def test_the_plugin_target_copies_a_body_byte_for_byte(self):
-        # The third target rewrites nothing at all (S-016): it copies the SKILL.md, so a
-        # fenced example survives there by construction rather than by exclusion.
+        # Scenario S-018's "in every target" clause. The third target rewrites nothing
+        # at all (S-016): it copies the SKILL.md, so a fenced example survives there by
+        # construction rather than by exclusion.
         # Asserted rather than assumed, because the criterion is "unchanged in every
         # target" and a rewrite added here later would break it silently.
         src = ba.discover_skills()[0]

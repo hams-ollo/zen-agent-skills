@@ -6,7 +6,8 @@ re_audited: 2026-07-27 (chore-0015), 2026-08-06 (feat-0034), 2026-08-19 (chore-0
   2026-08-22 (bug-0044, partial: S-009 and S-016 only),
   2026-08-27 (chore-0062, partial: S-019 only),
   2026-08-27 (chore-0068, partial: S-009, S-010, S-011, S-012, S-014, S-016 and the
-  Emitted shared paths surface row only)
+  Emitted shared paths surface row only),
+  2026-08-27 (chore-0045, partial: the S-018 test-coverage row only)
 ---
 
 # build-adapters conformance matrix
@@ -85,6 +86,21 @@ per-skill loop, and only the skill-asset half is still per skill, so correcting 
 have left the misdescribed mechanism in place. And `S-012`'s evidence covered only the first half of
 its Then; the second half is the half `bug-0025` exists for, and that row's own history is now in its
 note.
+
+Re-audited 2026-08-27 by `chore-0045`, and **partially**: one row, the `S-018` row in the test
+coverage section below. That task retags `TestRewriteLinksInsideCodeSpansAndFences` and all five of
+its cases from the scenarios they refine to `S-018`, and deletes the paragraph in its class docstring
+calling the amendment the author's open call, so this row's closing sentence described a state the
+same change removed. No scenario row was re-derived and no file under `scripts/` was touched; every
+row in the matrix proper carries its previous audit date. Three passes now share the date 2026-08-27
+and they are three: `S-019` belongs to `chore-0062`, the seven rows citing `bug-0025`'s split belong
+to `chore-0068`, and this pass looked at neither.
+
+That row was re-derived against the retagged file **before** its citation moved, per the disposition
+`chore-0062` and `chore-0068` both recorded. It keeps `present`, and the re-derivation found one
+claim wrong independently of the retag: the row said all five tests run against both inlining
+extensions, and four of them do. The fifth targets the plugin, which inlines nothing and has no
+extension to vary, which is the reason for having it. Corrected in the row rather than left standing.
 
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies, `bug-0028` measured 131 links matched by `LINK_RE` and 0 newly
@@ -192,7 +208,7 @@ lacks one. Against [`tests/test_build_adapters.py`](../../tests/test_build_adapt
 | S-019 | present | added by `bug-0044`: `TestEmittedRulesModuleResolves` emits each target into a directory of its own and resolves every relative link inside every emitted `.agents/rules/*.md` (or `rules/*.md`) file, asserting the three lenses were walked before asserting nothing dangled. **The test predates the id**: `bug-0044` wrote it when no scenario stated the rule and tagged it `S-009` and `S-016` in the extended sense that pass's unreconciled item described. `chore-0062` states the rule as `S-019`, so the test is retagged to the scenario it actually holds and its two original tags name less than it covers rather than more. Confirmed to **fail** against the pre-fix module, 7 dangling links per inlining target and none for the plugin, so it distinguishes the defect rather than restating the current tree. It walks the lenses because both older filesystem walks structurally cannot: one globs the adapters, the other globs `skills/*/SKILL.md`, and a lens is neither. **It covers three of the four paths S-019 names**, the three targets this tool emits; the fourth, the sibling `<base>/../rules` that `install.py` places, is walked by no test here. `tests/test_install.py` asserts that the module lands where a *skill's* `../../rules/<file>` reference resolves and never reads a link out of a lens, and the only markdown-link regex in the suite is `tests/test_build_adapters.py`'s `LINK`. That gap is flagged rather than filled, per this section's non-goal, and the fourth path was resolved by hand on 2026-08-27 instead |
 | S-016 | present | added by `feat-0034`, two tests: one resolving every relative link in every emitted skill on disk and asserting none is broken and none escapes the plugin root, one on `house-review` reaching its rubric and finding `blocker` in the file it lands on, with exactly one copy of the module in the tree. This is the invariant `claude plugin validate` cannot check, so these tests are the only thing holding it |
 | S-017 | present | added by `feat-0034`. Asserts both halves, since asserting the absence alone would pass against a target that emitted nothing |
-| S-018 | present | added by `bug-0028`, five tests in `TestRewriteLinksInsideCodeSpansAndFences`, each run against both inlining extensions. Two positives use whole-string equality rather than a substring, because "emitted unchanged" is a claim about the whole body. The negatives carry the weight, since the cheap way to remove a false rewrite is to stop rewriting: a real link beside a *closed* fence and one below an *unterminated* fence must both still be repointed. The fenced case holds all three rewritten classes at once (S-003, S-006, S-007), because one surviving proves nothing about the other two. A fifth test asserts the plugin target copies a body byte for byte, so the criterion "unchanged in every target" is asserted rather than assumed. **The tests predate the id**: written when no scenario stated the rule, they are tagged with the scenarios they refine and their docstring says an `S-018` is the author's call. That call is now made, so the tags are stale in one direction only, naming less than they cover |
+| S-018 | present | added by `bug-0028`, five tests in `TestRewriteLinksInsideCodeSpansAndFences`. The four on `rewrite_links()` each run against both inlining extensions; the fifth targets the plugin, which inlines nothing and has no extension to vary. Two positives use whole-string equality rather than a substring, because "emitted unchanged" is a claim about the whole body. The negatives carry the weight, since the cheap way to remove a false rewrite is to stop rewriting: a real link beside a *closed* fence and one below an *unterminated* fence must both still be repointed. The fenced case holds all three rewritten classes at once (S-003, S-006, S-007), because one surviving proves nothing about the other two. That fifth test asserts the plugin target copies a body byte for byte, so the criterion "unchanged in every target" is asserted rather than assumed. **The tests predate the id and no longer carry the older tags**: `bug-0028` wrote them before any scenario stated the rule, `chore-0043` stated it on 2026-08-19, and `chore-0045` retagged the class and all five cases to `S-018` on 2026-08-27, deleting the docstring paragraph that called the amendment the author's open call. Re-audited on that date against the retagged file: five tests, unchanged in what they assert, and the tags now name what they cover rather than less |
 
 Every scenario has a covering test, including the shared-asset re-run behavior that had neither a
 scenario nor a test when this matrix was first written, and the code-span rule that had tests before
