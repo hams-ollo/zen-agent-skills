@@ -73,7 +73,7 @@ search finds and one spec is already invisible to it for using different words.
   keeps existing fixtures unaffected, not a behaviour an adopter can observe.
 - Whether the five wired skills should now have their inline autonomy prose thinned in favour of the
   lens. `feat-0048` deliberately left that open and it is a separate decision.
-- Retagging any test docstring, which is [`chore-0045`](../chore-0045-three-small-items-from-the-2026-08-19-waves.md).
+- Retagging any test docstring, which is [`chore-0045`](chore-0045-three-small-items-from-the-2026-08-19-waves.md).
 
 ## Implementation notes
 

@@ -102,9 +102,22 @@ def gates():
         # Exercises the real placement path, including POSIX symlink mode, which the dry
         # run does not cover. Running it twice proves idempotence; the uninstall proves
         # the manifest can find what it created.
+        #
+        # `--with-hooks` is here by a decision recorded in chore-0067, not by habit. It
+        # costs this gate the six files of .agents/hooks/ written into the gitignored
+        # throwaway home per tool and removed again by the cleanup below, which needed no
+        # change: `--uninstall` reverses every recorded target beneath the home it is
+        # given, and the hooks placement is a recorded target. What it buys is the only
+        # module the kit runs inside an adopter's session being placed at least once per
+        # CI cell, in the real default mode for that platform, which is symlink on four of
+        # the six. The rejected option was leaving the flag off and relying on the
+        # component tests in tests/test_install.py alone: those run in-process and, off a
+        # POSIX host or on an account that cannot symlink, never take the link branch at
+        # all, so the saving would have been six temporary files against a placement path
+        # that still ran on no cell.
         Gate("install cycle",
-             [[PY, "scripts/install.py"] + install_home,
-              [PY, "scripts/install.py"] + install_home],
+             [[PY, "scripts/install.py", "--with-hooks"] + install_home,
+              [PY, "scripts/install.py", "--with-hooks"] + install_home],
              cleanup=[PY, "scripts/install.py", "--uninstall"] + install_home),
         # Calls the link rule in .tasks/validate.py rather than restating it. An inline
         # copy of that rule drifted once already (chore-0029). Globbed rather than

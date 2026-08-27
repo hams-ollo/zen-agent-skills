@@ -444,7 +444,7 @@ class TestLinkChecks(unittest.TestCase):
 
 
 class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
-    """Scenario S-009 refined: a link that renders as literal text is not a link.
+    """Scenario S-022: a link that renders as literal text is not a link.
 
     The bug population is a skill body that *shows* an example markdown link, which the
     documentation skills are the likeliest to want. `check_links()` matched every link
@@ -454,6 +454,14 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
     The negative cases carry the weight here, because the cheap way to remove a false
     positive is to switch the check off: a genuine broken link outside any span, and one
     below an unterminated fence, must both still be reported.
+
+    S-022 is an exception to S-009 through S-013 and takes precedence over all of them,
+    the portability rule S-011 included, which the scenario states as a decision rather
+    than leaving to fall out of the implementation.
+
+    The tests predate the id. bug-0027 wrote them when no scenario stated the rule and
+    tagged them `Scenario S-009 refined`; chore-0039 added S-022 to the contract on
+    2026-08-19, and chore-0045 retagged them here.
     """
 
     def setUp(self):
@@ -464,7 +472,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_a_link_inside_a_fenced_block_is_not_reported(self):
-        # Scenario S-009: the exact reproduction recorded in bug-0027, a `markdown`
+        # Scenario S-022: the exact reproduction recorded in bug-0027, a `markdown`
         # fenced block holding one ordinary link to a target that does not exist.
         body = (
             "Write the reference like this:\n\n"
@@ -478,7 +486,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
         self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
     def test_a_link_inside_an_inline_code_span_is_not_reported(self):
-        # Scenario S-009: markdown opens a span with a backtick run of any length and
+        # Scenario S-022: markdown opens a span with a backtick run of any length and
         # closes it with a run of the same length, so knowing only the single form fixes
         # half the occurrences. The double form is what an author reaches for the moment
         # the text being quoted contains a backtick of its own.
@@ -495,7 +503,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
                 self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
 
     def test_a_real_broken_link_beside_a_fence_is_still_reported(self):
-        # Scenario S-009 (negative): the exclusion must not switch the check off. The
+        # Scenario S-022 (negative): the exclusion must not switch the check off. The
         # fence here is closed and the genuine link sits after it, so a scanner that ran
         # the fence past its closing delimiter would pass this file for the wrong reason.
         body = (
@@ -511,7 +519,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
         self.assertNotIn("does-not-exist.md", out)
 
     def test_an_unterminated_fence_does_not_swallow_the_body_below_it(self):
-        # Scenario S-009 (negative): an opening fence that is never closed yields no
+        # Scenario S-022 (negative): an opening fence that is never closed yields no
         # range at all. A detector that ran it to end of file would disable the link
         # check for everything below and still exit clean, which is the one failure
         # indistinguishable from success (the trade bug-0015 and bug-0017 chose).
@@ -526,7 +534,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
         self.assertIn("link target does not exist: really-missing.md", out)
 
     def test_a_link_escaping_the_shipped_tree_is_not_reported_inside_a_fence(self):
-        # Scenario S-011 against the same exclusion, and a recorded decision rather than
+        # Scenario S-022 over the escape rule S-011, and a recorded decision rather than
         # an accident: a fenced link is skipped by every branch of check_links(), the
         # escape branch included. The portability rule protects a reader who clicks a
         # link that dangles once the skill is installed, and a link rendered as literal
@@ -549,7 +557,7 @@ class TestLinkChecksInsideCodeSpansAndFences(unittest.TestCase):
         self.assertNotIn("escapes the shipped skill tree", out)
 
     def test_every_shipped_skill_still_passes_the_link_check(self):
-        # Scenario S-009 against the real tree: the assertion that the exclusion did not
+        # Scenario S-022 against the real tree: the assertion that the exclusion did not
         # change what the kit's own skills report. Every real skill still lints clean.
         skills_dir = REPO_ROOT / ".agents" / "skills"
         skills = sorted(p for p in skills_dir.iterdir() if p.is_dir())

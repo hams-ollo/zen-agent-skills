@@ -198,6 +198,11 @@ Produce the review as markdown:
   > Suggested fix: a concrete change.
   > `sig: major|tests/test_install.py|tests|no-test-covers-the-with-hooks-path`
 
+  That example is a record rather than a live finding. The absence was real when it was
+  written, and `chore-0067` closed it on 2026-08-27, so the search now returns matches. It is
+  kept because the shape is what it teaches, and because a worked example whose claim was
+  later falsified by somebody fixing it is the honest end state for an absence finding.
+
 - If nothing substantive survives validation, say the change looks clean and why, rather than
   manufacturing findings. A review whose findings were all dropped by the gate is a clean review
   with a drop count, not a review with nothing to say about why.
