@@ -1,7 +1,7 @@
 ---
 title: agent-observatory readiness
 spec: docs/spec/agent-observatory.md
-task: .tasks/feat-0053-the-observatory-store-and-its-incremental-ingester.md
+task: .tasks/done/feat-0053-the-observatory-store-and-its-incremental-ingester.md
 gated: 2026-08-28
 verdict: implementable
 ---

@@ -2,7 +2,7 @@
 id: feat-0053
 title: Build the observatory store and the incremental ingester that fills it from the session corpus
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-08-28
 
 ## Problem
 
-[`docs/spec/agent-observatory.md`](../docs/spec/agent-observatory.md) is approved and nothing
+[`docs/spec/agent-observatory.md`](../../docs/spec/agent-observatory.md) is approved and nothing
 implements it. This task builds the layer every other scenario in that contract sits on: a local
 store, and the ingester that fills it from the session corpus without changing anything it reads.
 
@@ -55,8 +55,8 @@ ingest bookkeeping that makes `S-006` true.
 
 ## Implementation notes
 
-`main(argv)` injectable, per the precedent [`chore-0017`](done/chore-0017-give-install-an-injectable-entry-point.md)
-set for `install.py` and followed by [`.tasks/validate.py`](validate.py). The tests depend on it.
+`main(argv)` injectable, per the precedent [`chore-0017`](chore-0017-give-install-an-injectable-entry-point.md)
+set for `install.py` and followed by [`.tasks/validate.py`](../validate.py). The tests depend on it.
 
 **The read-only guarantee is the one to design for, not to assert.** `S-009` requires that every file
 the harness owns is byte-for-byte unchanged, and the corpus belongs to a program that may be writing
@@ -69,7 +69,7 @@ the rest of that record is never read once it completes. Advance the offset only
 last record that parsed, so a partial tail is re-read next run rather than skipped.
 
 **`S-007` needs an outcome a caller can distinguish**, not just different words on stdout. This
-repository already uses exit codes as contract: [`run-checks.py`](../scripts/run-checks.py) separates
+repository already uses exit codes as contract: [`run-checks.py`](../../scripts/run-checks.py) separates
 "ran and failed" from "could not run" for exactly this reason. Follow that shape.
 
 **Do not derive the skill and subagent handles from this task's prose.** Read the corpus and confirm
@@ -96,27 +96,27 @@ authoritative source on disk, so nothing is lost by rebuilding it, and it must b
 
     python scripts/run-checks.py
 
-- [ ] New tests in `tests/test_observatory.py` cover S-005, S-006, S-007, S-008, S-009, and S-022,
+- [x] New tests in `tests/test_observatory.py` cover S-005, S-006, S-007, S-008, S-009, and S-022,
       each named so the scenario it proves is identifiable from the test name.
-- [ ] Ingesting an unchanged corpus twice adds no rows on the second run (S-005).
-- [ ] The second run reads only records appended since the first, proven by a count the run reports
+- [x] Ingesting an unchanged corpus twice adds no rows on the second run (S-005).
+- [x] The second run reads only records appended since the first, proven by a count the run reports
       rather than by timing (S-006).
-- [ ] An empty corpus produces an outcome distinguishable from a populated one, by exit code (S-007).
-- [ ] A truncated final record is reported as unread and is picked up once complete, not skipped
+- [x] An empty corpus produces an outcome distinguishable from a populated one, by exit code (S-007).
+- [x] A truncated final record is reported as unread and is picked up once complete, not skipped
       (S-008).
-- [ ] A SHA256 of every file under the corpus root is identical before and after a full ingest
+- [x] A SHA256 of every file under the corpus root is identical before and after a full ingest
       (S-009).
-- [ ] No outbound connection is attempted during a full ingest (S-022).
-- [ ] The store path is gitignored, proven by `git status` staying clean after an ingest.
-- [ ] Standard library only: `python -c "import scripts.observatory.ingest"` needs no installed
+- [x] No outbound connection is attempted during a full ingest (S-022).
+- [x] The store path is gitignored, proven by `git status` staying clean after an ingest.
+- [x] Standard library only: `python -c "import scripts.observatory.ingest"` needs no installed
       package.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The conformance matrix for `agent-observatory` is created, covering the six scenarios this task
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The conformance matrix for `agent-observatory` is created, covering the six scenarios this task
       claims and recording the remaining sixteen as not-built.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

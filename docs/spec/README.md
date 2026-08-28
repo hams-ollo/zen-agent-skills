@@ -136,7 +136,7 @@ something else today.
 
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
-| [`agent-observatory`](agent-observatory.md) | approved | 22 | none yet, nothing built against it |
+| [`agent-observatory`](agent-observatory.md) | approved | 22 | [conformance](agent-observatory.conformance.md) (6 of 22 built), [readiness](agent-observatory.readiness.md) |
 | [`build-adapters`](build-adapters.md) | approved | 19 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |

@@ -18,7 +18,7 @@ created: 2026-08-28
 
 ## Problem
 
-[`feat-0053`](feat-0053-the-observatory-store-and-its-incremental-ingester.md) fills a store that
+[`feat-0053`](done/feat-0053-the-observatory-store-and-its-incremental-ingester.md) fills a store that
 nothing reads. This task builds the surface that reads it, and the first report on it.
 
 The skills report is first among the five for a reason the contribution-bar section of
@@ -97,8 +97,12 @@ Reversible by reverting one commit. The store is untouched by this task and no d
     python scripts/run-checks.py
 
 - [ ] New tests cover S-001 and S-002, each named so the scenario it proves is identifiable.
-- [ ] Skill use counts from the store equal counts taken directly from the corpus, asserted against a
-      fixture rather than against the author's machine (S-001).
+- [ ] Skill use counts equal the number of **distinct messages** carrying that attribution, not the
+      number of lines in the corpus, asserted against a fixture rather than against the author's
+      machine (S-001). Corrected 2026-08-28 at `feat-0053`'s closeout: a forked or resumed session
+      replays earlier history verbatim, so 5,442 uuids appear in more than one transcript and a naive
+      line count double-counts them. The store is right and the naive oracle is wrong; the criterion
+      as first written was satisfiable only by adopting the double-count.
 - [ ] A skill present in the installed roster and absent from the corpus is reported with a count of
       zero rather than omitted (S-002).
 - [ ] The page loads and renders with the network unavailable, proving no external asset is fetched.

@@ -37,7 +37,7 @@ Read the contract for what must be true. It is not restated here.
 **In scope:** the default live path, and the optional event source behind it.
 
 - Tailing the corpus for appended records, reusing the incremental read
-  [`feat-0053`](feat-0053-the-observatory-store-and-its-incremental-ingester.md) built rather than a
+  [`feat-0053`](done/feat-0053-the-observatory-store-and-its-incremental-ingester.md) built rather than a
   second mechanism.
 - Pushing updates to the open page, so `S-013` holds with no source configured.
 - An opt-in event receiver on the server, and a hook that feeds it, placed under `.agents/hooks/`
