@@ -124,7 +124,11 @@ Reversible by deleting the added files.
 - [ ] The closeout states where evals live and why the other location was rejected, referring to
       `install.py`'s placement behaviour rather than to preference.
 - [ ] The closeout states how the grader is protected from being written by the skill under test.
-- [ ] `scripts/run-checks.py` is unchanged and still exits 0 with all seven gates.
+- [ ] `scripts/run-checks.py` is unchanged and still exits 0 with every gate passing.
+      **Corrected 2026-08-28 at dispatch**: this criterion said "all seven gates" and
+      `chore-0049` added an eighth on the same day, which made it unsatisfiable as written.
+      It now states the property rather than the count, matching the amendment `chore-0049`
+      made to the `Gate set` surface element for the same reason.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
