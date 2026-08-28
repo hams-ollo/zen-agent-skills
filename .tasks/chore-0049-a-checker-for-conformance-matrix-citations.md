@@ -9,6 +9,9 @@ depends_on: [bug-0037]
 touched_files:
   - scripts/run-checks.py
   - tests/test_run_checks.py
+  - docs/spec/cloud-executable.md
+  - docs/spec/cloud-executable.conformance.md
+  - docs/spec/README.md
 created: 2026-08-20
 ---
 
@@ -53,6 +56,24 @@ phrase gets edited, and the matrix goes on asserting it.
   unchecked rather than guessed at, following the coverage-proof habit `spec-conformance` already uses.
 - Report the audited and unaudited counts, so a clean result over a subset is never mistaken for a
   clean result over the whole.
+
+- **Added 2026-08-28 at dispatch, after a first run stopped here.** An eighth gate diverges from an
+  approved contract, which this task did not say. The `Gate set` Proposed Surface element in
+  [`cloud-executable.md`](../docs/spec/cloud-executable.md) reads "The seven currently in
+  `checks.yml`" and then enumerates them by name, and
+  [`cloud-executable.conformance.md`](../docs/spec/cloud-executable.conformance.md) records it
+  `Conformed` against `test_the_seven_gates_are_present_ordered_and_complete`. Adding a gate without
+  touching either would ship a divergence and call it a feature.
+  **The author's decision, taken 2026-08-28: amend the element to state the property rather than the
+  count.** Name what the set is, every gate that decides whether a change here is acceptable, as
+  enumerated by `gates()`, rather than how many there are. A count-shaped claim in a contract goes
+  stale the first time anyone adds a gate, which is the class this repository keeps filing tasks
+  about. Add the dated amendment note, leave `status:` reading `approved` per the convention in
+  [`docs/spec/README.md`](../docs/spec/README.md), extend that file's existing `cloud-executable`
+  re-approval row rather than adding a second, and reconcile the matrix row you touch. Per
+  `.agents/rules/house-style.md`, introduce no count of any table's rows.
+  This also governs [`chore-0072`](chore-0072-a-gate-for-the-roadmap-staleness-class-chore-0066-mapped.md),
+  which adds a gate too and inherits the amendment rather than repeating it.
 
 **Out of scope:**
 
@@ -101,6 +122,8 @@ Reversible by reverting one commit. Nothing depends on the check existing.
 - [ ] The run states the audited and unaudited counts, and the arithmetic rather than the claim.
 - [ ] Run over the current ten matrices, the checker's output is recorded in the closeout, whether it
       is empty or not.
+- [ ] The `Gate set` surface element states the property rather than a count, carries a dated
+      amendment note, leaves `status:` reading `approved`, and its matrix row is reconciled.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
