@@ -14,7 +14,8 @@ positive there is more expensive than a miss.
 
 A second mode link-checks an arbitrary set of documents instead of the backlog,
 so a CI docs link gate can call the link rule here rather than author its own
-copy of it. See check_links() for why that matters.
+copy of it. Every pattern it is given must match at least one document, and the
+run names any that did not. See check_links() for why that matters.
 
 Standard library only, so it runs anywhere a bare Python 3 does. Exits non-zero
 on any error, so it drops cleanly into CI or a pre-commit hook.
@@ -365,10 +366,28 @@ def check_links(patterns) -> int:
     it everywhere else in this file. Matching nothing is an error rather than a pass:
     a link check over an empty file set reports zero broken links over zero documents
     and exits clean, which is the one failure indistinguishable from success.
+
+    **Every pattern must match at least one document**, and the run names each one that
+    did not. The first form of this guard fired per run instead, so it caught only the
+    case where every pattern died: a caller passing three globs kept passing when one of
+    them stopped matching, on the strength of the others (chore-0032). Measured here on
+    2026-08-27, `--links '*.md' 'docs/**/*.md' 'totally-gone/**/*.md'` reported 44
+    documents and exit 0, and renaming `docs/` would have left the CI gate checking 9 of
+    45 documents while reporting success. The dead glob is exactly the case with no
+    other symptom, because the surviving patterns supply a reassuring count.
+
+    There is deliberately no way to mark a pattern optional. No caller here or in the
+    scaffolded template has a pattern that can legitimately match nothing, and an escape
+    hatch is how a guard stops guarding; a caller whose tree may be absent passes only
+    the patterns it has.
     """
     docs = set()
+    unmatched = []
     for pattern in patterns:
-        docs.update(p for p in REPO_ROOT.glob(pattern) if p.is_file())
+        matched = [p for p in REPO_ROOT.glob(pattern) if p.is_file()]
+        if not matched:
+            unmatched.append(pattern)
+        docs.update(matched)
 
     broken = []
     for path in sorted(docs):
@@ -379,10 +398,17 @@ def check_links(patterns) -> int:
     for entry in broken:
         print(f"broken link: {entry}")
     print(f"checked {len(docs)} documents, {len(broken)} broken link(s)")
-    if not docs:
-        print("no document matched: " + (" ".join(patterns) or "(no pattern given)"))
+    # `--links` with nothing after it reaches the loop above with nothing to iterate, so
+    # it produces no dead pattern to blame and would otherwise exit 0 over zero
+    # documents. It gets its own branch rather than a `not docs` test, because after
+    # this change `docs` being empty is a consequence of the patterns rather than the
+    # thing being reported.
+    if not patterns:
+        print("no document matched: (no pattern given)")
         return 1
-    return 1 if broken else 0
+    for pattern in unmatched:
+        print(f"no document matched: {pattern}")
+    return 1 if broken or unmatched else 0
 
 
 def main(argv=None) -> int:
@@ -396,6 +422,9 @@ def main(argv=None) -> int:
     # the repository root:
     #
     #     python .tasks/validate.py --links '*.md' 'docs/**/*.md'
+    #
+    # Every pattern must match at least one document, and one that does not fails the
+    # run and is named (chore-0032). The bound is per pattern, not per run.
     if "--links" in args:
         return check_links(args[args.index("--links") + 1:])
     strict = "--strict" in args

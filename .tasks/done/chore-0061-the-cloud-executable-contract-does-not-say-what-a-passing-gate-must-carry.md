@@ -61,7 +61,7 @@ amendment.
   scaffolded repository legitimately has no task files, and `init-worktracking` ships `validate.py`
   into exactly that state. Its `## Decisions` records the rejection and the third shape it also
   considered, a per-gate declared floor.
-- [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md), which is about
+- [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md), which is about
   `.tasks/validate.py`'s exit code rather than this report's content. `bug-0045`'s agent checked and
   reported that its change does not subsume it. It stays open.
 - Granting the re-approval, which is the author's.

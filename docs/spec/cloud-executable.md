@@ -36,6 +36,17 @@ useless for three of the seven gates: a contract naming a rule like that needs a
 next time a gate rewords its summary. `status` is left reading `approved` per the convention in
 [`README.md`](README.md), for the reason that file gives. No existing scenario changes.
 
+**Amended 2026-08-28 (`chore-0049`) to state the `Gate set` surface element as a property rather
+than a count.** This amendment is **pending the author's re-approval**. The element read "The seven
+currently in `checks.yml`" and then enumerated them by name, so it was falsified the first time
+anyone added a gate, which `chore-0049` did by adding the matrix-citation gate. A count-shaped term
+in a contract goes stale on the next addition and says nothing a reader could not get by looking, so
+what the element now names is membership: every gate that decides whether a change here is
+acceptable, as `gates()` enumerates it. The set is open by design and its size is not a term of this
+contract. `status` is left reading `approved` per the convention in [`README.md`](README.md), for the
+reason that file gives. No scenario changes, and `S-001` needed none: it already said "every gate in
+the gate set" rather than naming a number.
+
 A **forward** spec, and the first here: every other spec in this directory was written against code
 that already existed, so it described a contract that already held. This one does not, which moves
 where the risk sits. A retrospective spec can be wrong about what the code does, and an audit finds
@@ -313,7 +324,7 @@ have caught, and then has no command to catch it with either.
 | Element | Detail |
 |---|---|
 | Acceptance command | `python scripts/run-checks.py`, no flags |
-| Gate set | The seven currently in [`checks.yml`](../../.github/workflows/checks.yml): skill lint, the test suite, backlog validation, adapter dry run, install dry run, the install/re-install/uninstall sequence, and the globbed link check |
+| Gate set | Every gate that decides whether a change here is acceptable, as enumerated by `gates()` in [`run-checks.py`](../../scripts/run-checks.py). Membership is the term of this contract and the size of the set is not, so a gate added or retired needs no amendment here |
 | Throwaway home | `./.tmp/zen-home`, the location the existing CI steps already use |
 | Exit code | 0 every gate passed, 1 at least one gate failed, 2 at least one gate could not run; 2 outranks 1, as in `install.py --check` and `check-provenance.py` |
 | Output | One line per gate naming it and its outcome; beneath each gate, one further line accounting for what that gate examined, in the gate's own words or naming its silence; the failing gate's own output where one failed; then a summary carrying the counts and the operating system and Python version the run used |

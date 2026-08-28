@@ -45,8 +45,8 @@ That is the exact failure `bug-0045` exists to remove, surviving inside the gate
 is a seam that task **disclosed rather than hid**, in its `## Decisions`: "the rule shows a gate's last
 count, not its best one." This task closes it.
 
-**This task is one of the same class as** [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md),
-[`chore-0049`](../chore-0049-a-checker-for-conformance-matrix-citations.md),
+**This task is one of the same class as** [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md),
+[`chore-0049`](chore-0049-a-checker-for-conformance-matrix-citations.md),
 [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md) and
 [`chore-0060`](../chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md): a guard that
 does not guard. It was found by the method that grouping asks for, looking for the next member while

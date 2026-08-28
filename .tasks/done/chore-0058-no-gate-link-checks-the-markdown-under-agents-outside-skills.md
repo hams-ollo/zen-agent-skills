@@ -76,7 +76,7 @@ this review and none dangles, so this is a missing gate rather than a live break
 the same class in the emitted adapter trees is
 [bug-0044](bug-0044-rules-module-links-dangle-in-the-inlining-adapter-trees.md).
 
-**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0049`](../chore-0049-a-checker-for-conformance-matrix-citations.md), [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md), and [`chore-0060`](../chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md). `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
+**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0049`](chore-0049-a-checker-for-conformance-matrix-citations.md), [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md), and [`chore-0060`](../chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md). `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
 
 ## Scope
 
@@ -101,7 +101,7 @@ skill directory is link-checked by the same rules a supporting file already gets
   targets, and knows nothing about the portable root), so the two would disagree about the same
   file. The rule that governs `.agents/` already lives in `validate-skills.py`.
 - The per-pattern reporting question in the `--links` mode, which is
-  [chore-0032](../chore-0032-links-guard-fires-per-run-not-per-pattern.md).
+  [chore-0032](chore-0032-links-guard-fires-per-run-not-per-pattern.md).
 - `.agents/skills/**`, already covered by
   [chore-0036](chore-0036-link-check-skill-supporting-files.md).
 - Amending `docs/spec/validate-skills.md`. This rule reaches outside `.agents/skills/` for the

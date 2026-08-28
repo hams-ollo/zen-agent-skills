@@ -57,7 +57,7 @@ both validator copies, and correct the `LINK_RE` comment so it describes what is
 **Out of scope:**
 
 - The empty-match guard on `--links`, which is
-  [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md). Different gap, same
+  [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md). Different gap, same
   command, and folding them makes both harder to verify.
 - Tilde fences and indented code blocks. `bug-0017` left those open deliberately and neither appears
   anywhere in this repository; leave the seam where it is rather than closing it on the way past.

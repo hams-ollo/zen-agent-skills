@@ -41,7 +41,7 @@ drifts when the symbol is renamed, and nothing here notices either.
 
 **Nothing reports it, and that is the second half of the problem.** No gate and no test resolves a
 conformance matrix's cited evidence against the file it cites. That absence is
-[`chore-0049`](../chore-0049-a-checker-for-conformance-matrix-citations.md), and this task is one of the
+[`chore-0049`](chore-0049-a-checker-for-conformance-matrix-citations.md), and this task is one of the
 two live instances that argue for it. The other arrived the same day, when `chore-0064` reworded a
 summary line and silently invalidated quotes in two other matrices.
 

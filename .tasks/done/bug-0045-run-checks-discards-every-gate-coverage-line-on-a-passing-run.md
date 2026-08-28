@@ -109,7 +109,7 @@ times in its checkers, one level up, in the tool that reports on them.
   policy decision about what each gate's minimum input is, and it belongs in its own task. The
   survey above is recorded here so whoever writes it does not have to redo it. Note that the
   `--links` half of that policy is already filed as
-  [chore-0032](../chore-0032-links-guard-fires-per-run-not-per-pattern.md).
+  [chore-0032](chore-0032-links-guard-fires-per-run-not-per-pattern.md).
 - Adding an eighth gate. `run-checks.py`'s summary arithmetic is pinned by
   `tests/test_run_checks.py` and a count change is a separate deliberate edit.
 - Parsing a gate's output for anything but display. The aggregator must not start deciding a

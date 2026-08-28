@@ -126,7 +126,7 @@ a link inside a code span is not a link and the CI copy never did, so a correctl
 passed `--strict` and failed CI.
 
 That lesson is now applied to the whole gate set. [`run-checks.py`](../scripts/run-checks.py) runs
-all seven gates in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
+every gate in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
 than listing them, so there is one gate set with two callers instead of one per caller:
 
 ```bash

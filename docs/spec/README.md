@@ -74,13 +74,13 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 
 Every spec listed below is approved and carries an amendment the author has not re-read. Some carry
 more than one: `install` carries two, `build-adapters` three, since `chore-0043` and again since
-`chore-0062`, `cloud-executable` two since `chore-0061`, and `validate-skills` four, since
-`chore-0047`, again since `chore-0054`, and again since `chore-0065`.
+`chore-0062`, `cloud-executable` three, since `chore-0061` and again since `chore-0049`, and
+`validate-skills` four, since `chore-0047`, again since `chore-0054`, and again since `chore-0065`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
 | [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`); `S-019`, what a relative link inside an emitted lens must satisfy (`chore-0062`) | 2026-08-06, 2026-08-19, 2026-08-27 |
-| [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`); `S-020` and the `Output` surface element, what a passing gate's entry carries (`chore-0061`) | 2026-08-20, 2026-08-27 |
+| [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`); `S-020` and the `Output` surface element, what a passing gate's entry carries (`chore-0061`); the `Gate set` surface element restated as a property rather than a count (`chore-0049`) | 2026-08-20, 2026-08-27, 2026-08-28 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
