@@ -54,9 +54,16 @@ who keeps our copy inherits the claim.
 - Item 2: retag the three remaining sets to `S-023`, `S-024` and `S-025`, keeping whatever the
   docstrings say about behaviour and changing only the id references and any sentence describing a
   decision as pending. This is the same correction `chore-0045` made twice and its diff is the model.
-- Item 3: correct the `S-025` row's count **in the same pass that re-derives it**, not before. Per
-  the disposition `chore-0062`, `chore-0068` and `chore-0045` all recorded, a citation repaired
-  without re-deriving the row asserts a freshness the repair did not establish.
+- Item 3: correct the `S-025` row **in the same pass that re-derives it**, not before. Per the
+  disposition `chore-0062`, `chore-0068` and `chore-0045` all recorded, a citation repaired without
+  re-deriving the row asserts a freshness the repair did not establish. **Widened 2026-08-27 at
+  authoring review, because the original wording said `count` and the retag falsifies more than a
+  number.** Two rows in that matrix carry present-tense claims item 2 makes false, and only one of
+  them was named. The `S-023` row says nine of its twelve tests "are tagged `feat-0048` rather than
+  `S-023`" and that "the gap is narrower than it was and still open"; after the retag none of that
+  holds. The `S-025` row says the follow-up "now covers four sets rather than three", and after this
+  task it covers none, so the clause goes rather than its number. Re-derive both rows, and check the
+  `S-024` row for the same shape rather than assuming it is clean.
 - Item 4: correct the `chore-0057` reference.
 
 **Out of scope:**
@@ -105,6 +112,8 @@ Reversible by reverting one commit. No contract changes, so no re-approval is af
       a decision as still open.
 - [ ] The `S-025` row's outstanding-retag count matches what is actually outstanding, corrected in a
       pass that re-derived the row, and `re_audited` credits only this pass.
+- [ ] The `S-023` and `S-025` rows no longer describe the retag as outstanding, both were re-derived
+      rather than edited in place, and the closeout says what the `S-024` row was checked against.
 - [ ] `house-style.md` no longer calls `chore-0057` open.
 - [ ] No dated measurement in either matrix is rewritten, and the closeout names the ones it left alone.
 - [ ] The line-number citation grep over `docs/spec/*.conformance.md` still returns nothing.
