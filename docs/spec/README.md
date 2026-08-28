@@ -136,6 +136,7 @@ something else today.
 
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
+| [`agent-observatory`](agent-observatory.md) | approved | 22 | none yet, nothing built against it |
 | [`build-adapters`](build-adapters.md) | approved | 19 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
@@ -148,9 +149,9 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 25 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Eleven specs, 160 scenarios, all approved. Ten carry a conformance matrix between them, holding 147
-of those scenarios, recomputed from the files on 2026-08-27 rather than incremented: the eleven counts
-in the column above sum to 160, and the one spec without a matrix carries 13, so 160 - 13 = 147.
+Twelve specs, 182 scenarios, all approved. Ten carry a conformance matrix between them, holding 147
+of those scenarios, recomputed from the files on 2026-08-28 rather than incremented: the twelve counts
+in the column above sum to 182, and the two specs without a matrix carry 13 and 22, so 182 - 35 = 147.
 
 Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
 `bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And

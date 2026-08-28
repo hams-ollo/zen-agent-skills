@@ -20,6 +20,8 @@ Do not scan the whole `.tasks/` directory, read other agents' task files, or rea
 
 A skills library, not an application. The deliverables are the skills under [`.agents/skills/`](.agents/skills/) and the tooling under [`scripts/`](scripts/) that distributes them. Success is measured by whether a skill is portable (works across harnesses), self-contained (needs no hidden context), and genuinely used and iterated on.
 
+**Not every script distributes a skill.** Some tooling under `scripts/` serves the maintainer of this repository and is not a deliverable: [`install.py`](scripts/install.py) never places it, no adopter receives it, and the portability contract in the portability-contract section therefore does not reach it. It is still bound by the stdlib rule in the conventions section, so it runs on a bare Python 3 with no install step like everything else here. Recorded 2026-08-28 by `chore-0076`, which needed a local store and a local server for [`docs/spec/agent-observatory.md`](docs/spec/agent-observatory.md); the sentence above had read as though every script were a distribution script, and five documents said so in five different scopes.
+
 ## 2. Layout
 
 | Path | Holds |

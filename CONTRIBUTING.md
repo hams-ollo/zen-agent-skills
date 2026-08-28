@@ -20,7 +20,9 @@ Speculative skills are not thrown away, they are parked. See [`ROADMAP.md`](ROAD
 
 ## What this repository is
 
-A library of portable agent skills plus the tooling that distributes them. It has no runtime application, no database, no service, and no third-party Python dependency, and those absences are the point. Anything that adds one needs a strong argument.
+A library of portable agent skills plus the tooling that distributes them. Nothing it ships has a runtime application, a database, a service, or a third-party Python dependency, and those absences are the point. Anything that adds one to what an adopter receives needs a strong argument.
+
+That argument has been made once, and narrowly. Maintainer tooling that ships to nobody sits outside the rule, because the rule protects an adopter's tree and [`install.py`](scripts/install.py) places only `.agents/skills/`, `.agents/rules/`, and `.agents/hooks/`. The no-third-party-dependency half is **not** narrowed and applies everywhere: the acceptance command still runs on a bare Python 3 with no install step. See the "Out of scope by design" section of [`ROADMAP.md`](ROADMAP.md) for the scoped rule and the amendment that produced it.
 
 The canonical rules live in [`AGENTS.md`](AGENTS.md). It is written for AI agents but is the most direct description of how the repository works, so read it whether you are one or not.
 

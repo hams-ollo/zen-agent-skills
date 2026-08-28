@@ -6,7 +6,9 @@ This guide explains how Zen Agent Skills is organized and maintained for contrib
 
 The kit keeps reusable agent procedures portable across coding harnesses. A skill has one canonical instruction body, then the repository either installs that source into a tool's global discovery location or generates a thin, tool-native project adapter.
 
-The kit deliberately has no runtime application, database, service, or third-party Python dependency. Its deliverables are Markdown skills and standard-library Python tooling.
+Nothing the kit ships has a runtime application, a database, a service, or a third-party Python dependency, and that is deliberate. Its deliverables are Markdown skills and standard-library Python tooling, and [`install.py`](../scripts/install.py) places only `.agents/skills/`, `.agents/rules/`, and `.agents/hooks/` into an adopter's discovery locations.
+
+The rule governs what an adopter receives rather than what sits in this repository, which was made explicit on 2026-08-28 (`chore-0076`) when the first maintainer-only tooling was contracted by [`spec/agent-observatory.md`](spec/agent-observatory.md). Such tooling ships to nobody and may hold local state or serve a local process. **The third-party-dependency prohibition is not scoped and holds everywhere**, so every gate below still runs on a bare Python 3 with no install step.
 
 ## System overview
 

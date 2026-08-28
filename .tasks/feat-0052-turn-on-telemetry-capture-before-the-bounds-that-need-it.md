@@ -58,8 +58,12 @@ measurement instrument that study found wanting.
 - A short document describing how to enable capture, which exporters need no infrastructure, what is
   captured, and where it lands.
 - A `.gitignore` entry for the capture directory, so run data never enters version control.
-- **Amend Epic E item 7 to split capture from bounds**, since the hold as written covers both and only one
-  half survives. State that capture is unheld and bounds stay held behind item 5.
+- ~~Amend Epic E item 7 to split capture from bounds.~~ **Performed 2026-08-28 by
+  [`chore-0076`](done/chore-0076-scope-the-no-service-rule-to-what-the-kit-ships.md)**, which split the item
+  three ways rather than two because an approved spec added a third part. Item 7(a) is capture, is
+  stated as unheld, and names this task as its owner. Nothing is left here to do, and this task no
+  longer edits `ROADMAP.md` for that purpose; two open tasks claiming one paragraph is a collision
+  whichever runs first.
 - **State the privacy position explicitly.** Prompts and tool parameters are redacted unless explicitly
   opted into, and `OTEL_LOG_RAW_API_BODIES` is the opt-in. Anyone reading this document is deciding
   whether to record their own prompts; say so plainly rather than leaving it to be discovered.
@@ -81,7 +85,8 @@ measurement instrument that study found wanting.
 
 **The honest question this task has to answer: what does it actually change in the repository?** Telemetry
 is enabled by environment variables in a developer's own shell, so there is no code to write. The
-deliverable is a document, a `.gitignore` line, and a roadmap amendment. **If that feels thin, say so in
+deliverable is a document and a `.gitignore` line. (It was "a document, a `.gitignore` line, and a
+roadmap amendment" until 2026-08-28, when `chore-0076` performed the amendment.) **If that feels thin, say so in
 the closeout rather than padding it with a wrapper script**, because a script that exports three variables
 is a worse interface than three lines a reader can paste, and it would be the kit's first piece of
 tooling that exists to look like work.
@@ -121,8 +126,8 @@ Reversible by reverting one commit; captured data is gitignored and local.
 - [ ] The document states what is captured by default and what requires an explicit opt-in, with the
       privacy consequence stated before the instruction.
 - [ ] The capture directory is gitignored, proven by `git status` staying clean after a capture run.
-- [ ] Epic E item 7 distinguishes capture from bounds, and records that capture is unheld while bounds
-      remain held behind item 5.
+- [x] Epic E item 7 distinguishes capture from bounds, and records that capture is unheld while bounds
+      remain held behind item 5. Met 2026-08-28 by `chore-0076`, not by this task.
 - [ ] **No bound, threshold, budget, or limit is set by this task.**
 - [ ] The closeout records the verbatim first few lines of real captured output, including one line
       carrying `skill.name`.
