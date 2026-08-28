@@ -517,6 +517,57 @@ def claude_registration(home: Path) -> str:
     return json.dumps({"hooks": by_event}, indent=2)
 
 
+def opencode_reader(home: Path) -> Path:
+    """The file that decides whether an opencode hook placement is read by anything.
+
+    `.opencode/plugins/zen-hooks.mjs` resolves its own `.agents/hooks` against
+    `worktree || directory || process.cwd()`, which is the project root opencode opened
+    and never the user's home. So the home-scoped copy this installer places is read
+    exactly when the home it was given is itself that project root, and this path is the
+    thing that would be doing the reading.
+    """
+    return home / ".opencode" / "plugins" / "zen-hooks.mjs"
+
+
+def opencode_activation_note(home: Path, hooks_target: Path) -> str:
+    """What an opencode `--with-hooks` run says about the copy it just placed.
+
+    The counterpart of `claude_registration`, and deliberately a different message,
+    because the two paths fail differently (bug-0048). A Claude Code placement is
+    complete and merely unregistered: the files are where the harness already reads
+    hooks from, and a person pastes a block to wake them. An opencode placement may
+    instead be somewhere nothing reads at all, which no registration repairs, so this
+    note states where the module landed, names the reader, and says whether that reader
+    is actually there.
+
+    The live-or-inert half is decided from the filesystem rather than from the shape of
+    the path, so a placement that did nothing useful and a placement that worked are
+    distinguishable in the output rather than only in a maintainer's head. Comparing the
+    home against `Path.home()` was the cheaper rule and is the wrong one twice over: it
+    answers whether this looks like the default run rather than whether anything reads
+    the files, and string equality over a home resolved through a macOS `/var` symlink or
+    a Windows 8.3 short name answers even that wrongly.
+
+    The kit does not install the reader. `.opencode/plugins/zen-hooks.mjs` is committed in
+    this repository as its own wiring, and nothing under `scripts/` distributes it, so the
+    inert branch says that plainly instead of implying a re-run would fix it.
+    """
+    reader = opencode_reader(home)
+    if reader.is_file():
+        return (f"The hooks are placed and LIVE for opencode: {reader} reads "
+                f"{hooks_target} from that project root.\n\n"
+                f"`--uninstall` removes the files.")
+    return (f"The hooks are placed but INERT for opencode. They landed at "
+            f"{hooks_target}, and the opencode plugin resolves `.agents/hooks` against "
+            f"the project root it opens rather than against a home, so nothing reads "
+            f"this copy: there is no {reader}.\n\n"
+            f"To make them run, the module has to sit at `<project>/.agents/hooks` in a "
+            f"project whose `.opencode/plugins/zen-hooks.mjs` is present. This installer "
+            f"ships neither that plugin nor a project scope: copy the plugin from this "
+            f"kit into the project you want it in, then re-run with `--home` set to that "
+            f"project root. `--uninstall` removes what was placed here.")
+
+
 def discover_hooks():
     if not HOOKS_DIR.is_dir():
         return []
@@ -582,6 +633,11 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
     hooks = discover_hooks() if with_hooks else []
     if with_hooks and not hooks:
         print(f"--with-hooks was given but no hooks were found under {HOOKS_DIR}.\n")
+    # Collected during placement rather than re-derived from `tools` afterwards, so the
+    # activation note below is printed for exactly the tools that received a module
+    # (bug-0048). The previous shape asked `"claude" in tools`, which is a different
+    # question from "claude got the hooks" everywhere the two maps ever disagree.
+    placed_hooks = []
 
     for tool in tools:
         base = home / TOOL_SUBPATHS[tool]
@@ -644,6 +700,7 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
                     "digests": digest_tree(HOOKS_DIR),
                 }
             print(f"{tag}{status:9} {tool:8} hooks  -> {hooks_target}")
+            placed_hooks.append((tool, hooks_target))
 
     save_manifest(list(entries.values()), dry)
     if preserved_adopted:
@@ -665,12 +722,35 @@ def install(tools, mode, home: Path, dry: bool, profile: str = DEFAULT_PROFILE,
     print(f"\n{tag}Done: profile {profile!r}, {len(skills)} of {len(all_skills)} skill(s) "
           f"x {len(tools)} tool(s), plus the rules module"
           + (f", plus {len(hooks)} hook(s)." if hooks else "."))
-    if hooks and "claude" in tools:
-        # Deliberately the last thing printed, and deliberately not done for the user.
-        print(f"\n{tag}The hooks are placed but INACTIVE. Nothing runs until you register "
-              f"them. Merge this into ~/.claude/settings.json:\n")
-        print(claude_registration(home))
-        print(f"\nRemove that block to deactivate; `--uninstall` removes the files.")
+    # One note per tool that received the module, rather than one note gated on Claude
+    # Code (bug-0048). Both the "placed but INACTIVE" warning and the registration block
+    # hung off the same `hooks and "claude" in tools` condition, so an opencode-only run
+    # placed four hooks and said only how many, which is the "installed, correct-looking,
+    # and doing nothing" failure feat-0038 hit twice arriving on the one path with no
+    # warning attached. Every tool that gets files now gets a sentence about them, and
+    # the sentences differ because the paths do: Claude Code's placement is complete and
+    # unregistered, opencode's may be somewhere nothing reads.
+    #
+    # Every branch opens with "The hooks are placed", including the fallback, so the
+    # invariant is countable: one note per tool that received the module. A two-case
+    # enumeration with no fallback would re-open this very defect the day a third tool
+    # joins HOOK_SUBPATHS without one, so the unknown case says it is unknown rather
+    # than saying nothing. `test_every_tool_that_receives_the_module_is_told_about_it`
+    # fails when that day arrives and the branch is not written.
+    for placed_tool, placed_target in placed_hooks:
+        if placed_tool == "claude":
+            # Deliberately not done for the user.
+            print(f"\n{tag}The hooks are placed but INACTIVE for claude. Nothing runs "
+                  f"until you register them. Merge this into "
+                  f"~/.claude/settings.json:\n")
+            print(claude_registration(home))
+            print(f"\nRemove that block to deactivate; `--uninstall` removes the files.")
+        elif placed_tool == "opencode":
+            print(f"\n{tag}{opencode_activation_note(home, placed_target)}")
+        else:
+            print(f"\n{tag}The hooks are placed at {placed_target} for {placed_tool}, "
+                  f"and this installer does not know what reads them there or how to "
+                  f"activate them. Check that tool's own hook wiring.")
     # A count, not a percentage: the harness budget scales with the context window and
     # is shared with skills this tool cannot see, so a proportion here would be invented.
     print(f"{tag}Description budget: {budgets[profile]} characters for this profile "

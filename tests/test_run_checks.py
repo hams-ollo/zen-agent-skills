@@ -108,6 +108,11 @@ class GateSetTests(unittest.TestCase):
         ("doc links",
          [[".tasks/validate.py", "--links", "*.md", ".github/**/*.md", "docs/**/*.md"]],
          None),
+        # Added by chore-0049. The doc-links gate above resolves a link's path; a matrix
+        # cites a symbol, a test name, or a quoted phrase, none of which is a path.
+        ("matrix citations",
+         [["scripts/check-citations.py"]],
+         None),
     ]
 
     @staticmethod
@@ -116,7 +121,12 @@ class GateSetTests(unittest.TestCase):
                 [command[1:] for command in gate_.commands],
                 gate_.cleanup[1:] if gate_.cleanup else None)
 
-    def test_the_seven_gates_are_present_ordered_and_complete(self):
+    def test_the_gate_set_is_present_ordered_and_complete(self):
+        # Renamed by chore-0049 from `test_the_seven_gates_are_...`. The gate set is open
+        # and the eighth gate landed in that task, so a name carrying a count was already
+        # false of the thing it pins. That is the same count-shaped staleness the
+        # cloud-executable `Gate set` element was amended to remove on the same date, and
+        # a test name is read far more often than the list beneath it.
         actual = [self._shape(g) for g in rc.gates()]
         self.assertEqual(self.EXPECTED, actual,
                          "the gate set changed; if that was deliberate, update this list "

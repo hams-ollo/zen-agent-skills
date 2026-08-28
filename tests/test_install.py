@@ -1506,12 +1506,17 @@ class RegistrationCarriesTheEventTests(unittest.TestCase):
 class HookPlacementTests(unittest.TestCase):
     """chore-0067: what `--with-hooks` actually places, records, and reverses.
 
-    **Characterization, not acceptance.** `docs/spec/install.md` says nothing about hooks:
-    `grep -in hook docs/spec/install.md` returns nothing, so there is no approved scenario
-    to derive from and no test here carries an `S-NNN` id. Every assertion below pins the
-    code's current observable behaviour so a change to it is deliberate rather than
-    silent. Two of them pin behaviour that is suspected wrong, and each says so where it
-    sits rather than only here.
+    **Mostly characterization, not acceptance.** `docs/spec/install.md` still says nothing
+    about hooks: `grep -in hook docs/spec/install.md` returns nothing, so there is no
+    approved scenario to derive from and no test here carries an `S-NNN` id. Most
+    assertions below pin the code's current observable behaviour so a change to it is
+    deliberate rather than silent.
+
+    chore-0067 wrote two of those pins over behaviour it suspected was wrong. bug-0048
+    fixed one of them and the three opencode-and-claude activation tests at the foot of
+    this class are acceptance of that fix rather than characterization, each saying so
+    where it sits. The other, `test_every_installable_tool_has_a_hook_path`, is still a
+    pin over a latent seam and bug-0048 deliberately left it alone.
 
     Why the placement path is worth its own class when `HookRegistrationTests` above
     already covers the printed registration thoroughly: the registration is the step
@@ -1760,35 +1765,107 @@ class HookPlacementTests(unittest.TestCase):
         # decision that updates this test, not one that ships a wordless omission.
         self.assertEqual(set(inst.TOOL_SUBPATHS), set(inst.HOOK_SUBPATHS))
 
-    def test_hooks_placed_for_opencode_alone_are_announced_by_nothing(self):
-        """Pins current behaviour that is suspected wrong. Reported, not fixed.
+    def test_hooks_placed_for_opencode_alone_are_announced_and_named_inert(self):
+        """bug-0048: **this test changed sides.**
 
-        `install.py` gates both the "placed but INACTIVE" warning and the registration
-        block on `hooks and "claude" in tools`, so `--tools opencode --with-hooks` copies
-        the module into `<home>/.agents/hooks` and says only "plus 4 hook(s)". No line
-        tells the adopter the files are inert or how to activate them.
+        It was `test_hooks_placed_for_opencode_alone_are_announced_by_nothing`, a
+        characterization pin written by chore-0067 over behaviour it believed wrong but
+        did not scope fixing. That version asserted the silence: no "INACTIVE", no
+        registration, nothing but "plus 4 hook(s)". Its docstring said the intended
+        signal was this test failing when a follow-up fixed the defect, and named the
+        rewrite as the correct response to that failure. This is the rewrite, so the
+        assertions below are acceptance of chosen behaviour rather than a pin on
+        observed behaviour, and the name no longer describes silence because there is
+        none left to describe.
 
-        Two reasons to think that is a defect rather than a choice. The Claude Code path
-        treats exactly this as the failure worth shouting about, in `claude_registration`'s
-        own words, because a hook that is installed, correct-looking, and doing nothing is
-        the failure `feat-0038` hit twice. And the opencode adapter does not read this
-        copy at all: `.opencode/plugins/zen-hooks.mjs` resolves `.agents/hooks` against
-        `worktree || directory || process.cwd()`, the project root, so the home-scoped
-        copy `install.py` places here is read by nothing.
-
-        This test asserts what the code does today, not what it should do. Fixing it means
-        changing `install.py`, which chore-0067 does not scope and does not touch. When a
-        follow-up adds guidance for the opencode path, this test should fail and be
-        rewritten to assert the new message; that failure is the intended signal.
+        The chosen behaviour: an opencode-only run says where the module landed, names
+        the plugin that would have to read it, and reports it INERT because that plugin
+        is not in this home. Placing it with a warning was chosen over placing it where
+        opencode actually reads, which is project-scoped rather than home-scoped and so
+        a different contract from the Claude path, and over refusing the combination.
+        See the task's Decisions for both rejected branches.
         """
         _code, out = self._install(tools=("opencode",))
-        self.assertTrue((self.home / ".agents" / "hooks").is_dir())
-        self.assertIn(f"plus {len(inst.discover_hooks())} hook(s).", out,
-                      "precondition: the run did place the module")
-        self.assertNotIn("INACTIVE", out)
+        # Resolved home joined to the subpath, mirroring what `install()` does, rather
+        # than `.resolve()` over the whole path: in symlink mode the placed leaf is a
+        # symlink into this repository, so resolving through it would compare against
+        # the source tree instead of the target. Comparing an unresolved home against a
+        # resolved one is the same defect from the other end, and it passes on Windows
+        # and Linux while failing on a macOS runner whose /var is a symlink.
+        target = self.home.resolve() / ".agents" / "hooks"
+        reader = self.home.resolve() / ".opencode" / "plugins" / "zen-hooks.mjs"
+        self.assertTrue(target.is_dir(), "precondition: the run did place the module")
+        self.assertFalse(reader.exists(),
+                         "precondition: this home carries no opencode plugin")
+        self.assertIn("INERT", out, "an unread placement must say so")
+        self.assertNotIn("LIVE", out)
+        self.assertIn(str(target), out, "the run must say where the module landed")
+        self.assertIn(str(reader), out, "the run must name the reader that is absent")
         # Matched against the block the Claude Code path prints rather than against a
-        # loose word, so a skill name that happens to contain "register" cannot fail this.
-        self.assertNotIn(inst.claude_registration(self.home), out)
+        # loose word, so a skill name that happens to contain "register" cannot fail
+        # this. Built from the resolved home because `install()` resolves before it
+        # builds the block, and an unresolved spelling would be trivially absent.
+        self.assertNotIn(inst.claude_registration(self.home.resolve()), out)
+
+    def test_an_opencode_placement_a_plugin_would_read_is_reported_live(self):
+        """bug-0048: the other branch of the same note, and why it is decided from disk.
+
+        The rule chore-0058 and chore-0065 settled one level up is that a run which did
+        something useful and a run which did nothing useful must be distinguishable in
+        the output. One fixed sentence cannot satisfy that, so the note asks the
+        filesystem: a `--home` pointing at a project root that carries
+        `.opencode/plugins/zen-hooks.mjs` receives the module at exactly the
+        `.agents/hooks` that plugin resolves against its own root, and the run says LIVE.
+
+        Not a hypothetical configuration. It is the only one in which the opencode half
+        of `--with-hooks` currently does anything, which is the reason refusing the
+        tool-and-flag combination was rejected: refusing would have removed the one case
+        that works.
+        """
+        reader = self.home / ".opencode" / "plugins" / "zen-hooks.mjs"
+        reader.parent.mkdir(parents=True)
+        reader.write_text("// stand-in for this kit's opencode adapter\n",
+                          encoding="utf-8")
+        _code, out = self._install(tools=("opencode",))
+        self.assertIn("LIVE", out)
+        self.assertNotIn("INERT", out)
+        self.assertIn(str(self.home.resolve() / ".agents" / "hooks"), out)
+
+    def test_every_tool_that_receives_the_module_is_told_about_it(self):
+        """bug-0048: the invariant, rather than the two sentences that satisfy it today.
+
+        The defect being fixed was one tool getting files and no words, so the property
+        worth pinning is the count and not the wording: every tool that received the
+        module gets exactly one activation note. Each branch opens with the same phrase
+        so this is countable without a per-tool regex, which would be the second source
+        of truth chore-0029 recorded the cost of.
+
+        This is what makes the fix structural. A third tool added to `HOOK_SUBPATHS`
+        without a branch of its own falls through to the fallback, which still opens with
+        the phrase and still says something true, so this test keeps passing and the
+        silence cannot come back by omission.
+        """
+        tools = sorted(inst.HOOK_SUBPATHS)
+        _code, out = self._install(tools=tuple(tools))
+        self.assertEqual(len(tools), out.count("The hooks are placed"),
+                         "one activation note per tool that received the module")
+        for tool in tools:
+            with self.subTest(tool=tool):
+                self.assertTrue((self.home / inst.HOOK_SUBPATHS[tool]).is_dir(),
+                                "precondition: this tool really did receive it")
+
+    def test_a_claude_placement_still_prints_the_registration_block(self):
+        """bug-0048 replaced one `hooks and "claude" in tools` gate with one note per
+        tool that received the module, and nothing asserted the Claude Code half of that
+        gate printed anything from `install()`. `HookRegistrationTests` covers
+        `claude_registration` as a function, and the only test that mentioned the printed
+        block asserted its *absence* on the opencode path, so a refactor that dropped the
+        block from the run entirely would have left the suite green.
+        """
+        _code, out = self._install(tools=("claude",))
+        self.assertIn("INACTIVE", out)
+        self.assertIn(inst.claude_registration(self.home.resolve()), out,
+                      "the pasteable block is what makes the placement usable")
 
 
 class AdoptedModulePreservationTests(unittest.TestCase):

@@ -63,7 +63,7 @@ not know a pointer exists.
 
 - **Building a check for it.** Whether a task's `touched_files` covers what its edits falsify is not
   decidable before the edit exists, and the nearest decidable thing, the citation checker, is
-  [`chore-0049`](chore-0049-a-checker-for-conformance-matrix-citations.md). This task writes a rule
+  [`chore-0049`](done/chore-0049-a-checker-for-conformance-matrix-citations.md). This task writes a rule
   into an authoring skill; it does not add a gate.
 - `AGENTS.md`'s task lifecycle, which was considered and declined: the rule is about authoring a task
   rather than closing one, and two open tasks already contend for that file. If it belongs there as

@@ -85,7 +85,13 @@ class Gate:
 
 
 def gates():
-    """The seven gates, in the order checks.yml ran them.
+    """The gate set: every gate that decides whether a change here is acceptable.
+
+    Ordered as checks.yml ran the ones it used to restate. The set is open by design and
+    its membership is the property that matters, not its size: it began as the seven
+    steps checks.yml carried, and `chore-0049` added the matrix-citation gate. Naming a
+    count here, or in the contract, goes stale the first time anyone adds a gate, which is
+    the class this repository keeps filing tasks about.
 
     A function rather than a module constant so a test can hold the canonical list
     without depending on import-time state, and so the interpreter is resolved at call
@@ -122,9 +128,22 @@ def gates():
         # Calls the link rule in .tasks/validate.py rather than restating it. An inline
         # copy of that rule drifted once already (chore-0029). Globbed rather than
         # listed, because a hardcoded list silently excludes every new document.
+        #
+        # Each of the three patterns must match at least one document or this gate
+        # fails and names the one that did not (chore-0032). Until then the guard fired
+        # only when every pattern matched nothing, so renaming `docs/` left this gate
+        # green over 9 documents of 45. The three trees are all guaranteed present here,
+        # which is why no pattern needs an escape and none is offered.
         Gate("doc links",
              [[PY, ".tasks/validate.py", "--links",
                "*.md", ".github/**/*.md", "docs/**/*.md"]]),
+        # Added by chore-0049. The doc-links gate above resolves a markdown link's path
+        # and stops there; a conformance matrix's evidence is a symbol, a test name, or a
+        # quoted phrase, and none of those is a path. So a matrix could go on asserting
+        # that a renamed symbol exists with every gate green, which is what bug-0037
+        # measured: seven of 65 pointers in one matrix aimed at something other than what
+        # they claimed, from two independent causes in one month.
+        Gate("matrix citations", [[PY, "scripts/check-citations.py"]]),
     ]
 
 
@@ -241,7 +260,7 @@ def run_all(the_gates=None, runner=None, out=None):
     """Run every gate and report. Returns the exit code.
 
     `the_gates` and `runner` are injectable so the aggregation logic is reachable from a
-    test without executing seven real gates, which would make the failure and
+    test without executing every real gate, which would make the failure and
     could-not-run branches untestable.
     """
     the_gates = gates() if the_gates is None else the_gates
