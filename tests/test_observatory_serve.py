@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Tests for the observatory server, its page shell, and the skills report (`feat-0054`).
 
-Each test names the scenario it proves, from `docs/spec/agent-observatory.md`. The two covered
-here are S-001 and S-002; the rest of the contract belongs to `feat-0053` (already covered in
-`test_observatory.py`) and to the four report tasks that follow this one.
+Each test names the scenario it proves, from `docs/spec/agent-observatory.md`. Four are covered
+here: S-001 and S-002 from `feat-0054`, and S-012 and S-018 from `feat-0055`. The rest of the
+contract belongs to `feat-0053` (already covered in `test_observatory.py`) and to the three
+report tasks that follow.
+
+The live-session fixtures are deliberately built from real process states rather than from a
+stubbed prober, and they are the same three on every operating system: this test runner's own
+pid is running, a subprocess that has been waited on is gone, and an entry stamped with another
+machine's pid domain cannot be checked. So the assertions below exercise the real check on
+whichever platform they run on, and a report that treated registry presence as proof of
+liveness fails them everywhere rather than on one CI cell.
 
 Standard library only, matching the rest of `tests/`. The HTTP client is `http.client` against
 a loopback server this suite starts and stops itself, so nothing here reaches a remote host.
@@ -15,9 +23,11 @@ import http.client
 import io
 import ipaddress
 import json
+import os
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -51,6 +61,12 @@ class ServeTestCase(unittest.TestCase):
         self.store = self.tmp / "store.db"
         self.skills_dir = self.tmp / "skills"
         self.skills_dir.mkdir()
+        # Deliberately not created. An absent registry is the default here so that no test
+        # reads the live registry of the machine it is running on: this suite would otherwise
+        # report whichever sessions the developer happened to have open, and `meta.projects`
+        # would carry their projects. The tests that want a registry make one.
+        self.registry = self.tmp / "sessions"
+        self._reaped = []
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -107,13 +123,77 @@ class ServeTestCase(unittest.TestCase):
     def uses(payload):
         return {row["skill"]: row["uses"] for row in payload["skills"]}
 
+    # -- live-registry fixtures -----------------------------------------------------
+
+    def entry(self, session_id, pid, proc_start=None, pid_domain=None, name=None,
+              cwd="D:\\demo", started_at=1787966447301, file_name=None):
+        """One registry entry, shaped as `~/.claude/sessions/<pid>.json` shapes them.
+
+        The field names are the harness's own, confirmed against three live entries on
+        2026-08-28: `pid`, `sessionId`, `cwd`, `startedAt`, `procStart`, `version`, `kind`,
+        `entrypoint`, `pidDomain`, and `name`.
+        """
+        self.registry.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "pid": pid, "sessionId": session_id, "cwd": cwd, "startedAt": started_at,
+            "version": "2.1.247", "kind": "interactive", "entrypoint": "claude-desktop",
+            "pidDomain": sys.platform + ":here" if pid_domain is None else pid_domain,
+            "name": name or ("session-" + session_id),
+        }
+        if proc_start is not None:
+            payload["procStart"] = proc_start
+        path = self.registry / (file_name or f"{pid}.json")
+        path.write_text(json.dumps(payload), encoding="utf-8", newline="\n")
+        return path
+
+    @staticmethod
+    def user_record(uuid, sid="s1", ts="2026-08-01T10:00:00.000Z"):
+        """A user record. It creates a session row and no `message_occurrence` row, because
+        only assistant records carry the per-message figures that table exists for."""
+        return {"type": "user", "uuid": uuid, "parentUuid": None, "sessionId": sid,
+                "timestamp": ts, "cwd": "D:\\demo", "gitBranch": "main",
+                "message": {"role": "user", "content": "hello"}}
+
+    def running_pid(self):
+        """A pid that is certainly alive: this test runner's own."""
+        return os.getpid()
+
+    def reaped_pid(self):
+        """A pid whose process has certainly exited.
+
+        The `Popen` object is kept for the lifetime of the test on purpose. On Windows it
+        holds an open handle to the exited process, which both keeps the pid from being
+        reused underneath the assertion and is what lets `GetExitCodeProcess` report the
+        exit rather than the lookup failing outright. Both routes conclude `gone`.
+        """
+        proc = subprocess.Popen([sys.executable, "-c", "pass"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc.wait()
+        self._reaped.append(proc)
+        return proc.pid
+
+    FOREIGN_DOMAIN = "not-this-platform:another-machine"
+
+    def fleet(self, project=None):
+        conn = db.connect(self.store)
+        try:
+            return serve.fleet_report(conn, project, registry=self.registry,
+                                      corpus=self.corpus)
+        finally:
+            conn.close()
+
+    @staticmethod
+    def by_session(payload):
+        return {row["session_id"]: row for row in payload["sessions"]}
+
 
 class ServerTestCase(ServeTestCase):
     """Adds a running loopback server for the tests that go over HTTP."""
 
     def serve_on_loopback(self, roster=None):
         server = serve.make_server(self.store, serve.DEFAULT_HOST, 0,
-                                   roster=roster, quiet=True)
+                                   roster=roster, quiet=True,
+                                   registry=self.registry, corpus=self.corpus)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         # Cleanups run last-registered-first, so these read backwards on purpose: the loop is
@@ -272,10 +352,15 @@ class TestPageBehaviour(ServerTestCase):
     """
 
     def renderer_body(self) -> str:
-        """The body of `RENDERERS.skills`, from its key to the end of the registry."""
+        """The body of `RENDERERS.skills`, from its key to the end of the registry.
+
+        Anchored on the skills key rather than on `var RENDERERS` plus a fixed span, because
+        the registry gained a renderer above this one in `feat-0055` and a positional slice
+        silently began asserting about the wrong function.
+        """
         html = UI_INDEX.read_text(encoding="utf-8")
-        start = html.index("var RENDERERS")
-        return html[start:start + 2000]
+        start = html.index("  skills: function (data, into) {")
+        return html[start:html.index("\n};", start)]
 
     def test_the_skills_renderer_maps_every_returned_row_without_filtering(self):
         """Kills the mutation that drops zero-count rows at the surface while the API still
@@ -561,10 +646,10 @@ class TestPageShell(ServerTestCase):
                 self.assertEqual(built, report["owner"] is None,
                                  "a report is both built and owed, or neither")
 
-    def test_the_four_unbuilt_reports_name_the_task_that_owes_them(self):
+    def test_the_unbuilt_reports_name_the_task_that_owes_them(self):
         owed = {r["id"]: r["owner"] for r in serve.REPORTS if r["endpoint"] is None}
-        self.assertEqual(owed, {"fleet": "feat-0055", "waves": "feat-0056",
-                                "cost": "feat-0057", "health": "feat-0058"})
+        self.assertEqual(owed, {"waves": "feat-0056", "cost": "feat-0057",
+                                "health": "feat-0058"})
 
     def test_the_shell_renders_navigation_from_the_registry_not_from_markup(self):
         """A shell that hardcoded its tabs would make each later task edit the markup, which is
@@ -636,6 +721,522 @@ class TestPageShell(ServerTestCase):
         server = self.serve_on_loopback(roster=[])
         status, _ = self.fetch(server, "/api/nothing-here")
         self.assertEqual(status, 404)
+
+
+class TestFleetState(ServerTestCase):
+    """S-012: a running session is distinguished from an ended one."""
+
+    def two_sessions(self):
+        """Two sessions in one project, with distinct last activity."""
+        self.build_store([self.record("a1", sid="s-live", ts="2026-08-01T10:00:00.000Z")],
+                         name="live.jsonl")
+        self.build_store([self.record("b1", sid="s-done", ts="2026-08-02T11:00:00.000Z")],
+                         name="done.jsonl")
+
+    def test_s012_a_session_in_the_live_registry_is_reported_as_running(self):
+        self.two_sessions()
+        self.entry("s-live", self.running_pid())
+
+        payload = self.fleet()
+        row = self.by_session(payload)["s-live"]
+
+        self.assertEqual(row["state"], "running")
+        self.assertEqual(row["registry"], "live")
+        self.assertEqual(payload["totals"]["running"], 1)
+
+    def test_s012_a_session_absent_from_the_registry_is_reported_as_ended(self):
+        self.two_sessions()
+        self.entry("s-live", self.running_pid())
+
+        row = self.by_session(self.fleet())["s-done"]
+
+        self.assertEqual(row["state"], "ended")
+        self.assertEqual(row["registry"], "absent")
+        self.assertIsNone(row["pid"])
+
+    def test_s012_each_session_carries_its_project_its_branch_and_its_last_activity(self):
+        """The three fields S-012's Then names, on both sides of the distinction."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid())
+
+        rows = self.by_session(self.fleet())
+
+        for session_id in ("s-live", "s-done"):
+            with self.subTest(session=session_id):
+                self.assertEqual(rows[session_id]["project"], "D--demo")
+                self.assertEqual(rows[session_id]["branch"], "main")
+        self.assertEqual(rows["s-live"]["last_activity"], "2026-08-01T10:00:00.000Z")
+        self.assertEqual(rows["s-done"]["last_activity"], "2026-08-02T11:00:00.000Z")
+
+    def test_s012_a_stale_registry_entry_is_reported_ended_rather_than_running(self):
+        """The consequential risk the task names. A registry entry can outlive the process
+        that wrote it, so an implementation treating presence as proof reports a crashed
+        session as live. Here the entry is present and its process is certainly gone, and the
+        report has to say so rather than trust the file."""
+        self.two_sessions()
+        self.entry("s-live", self.reaped_pid())
+
+        payload = self.fleet()
+        row = self.by_session(payload)["s-live"]
+
+        self.assertEqual(row["state"], "ended",
+                         "a registry entry whose process is gone was reported as running")
+        self.assertEqual(row["registry"], "stale")
+        self.assertTrue(row["evidence"], "a stale entry was reported with no reason given")
+        self.assertEqual(payload["totals"]["running"], 0)
+        self.assertEqual(payload["totals"]["stale_entries"], 1,
+                         "a stale entry was absorbed instead of counted")
+
+    def test_s012_an_unverifiable_entry_is_reported_unverified_rather_than_running(self):
+        """The pid here is alive: it is this test runner's own. What makes it unverifiable is
+        that the entry claims another machine's pid domain, so the pid names no process on
+        this one. An implementation that ignored the domain would report running, which is
+        the same failure as trusting a stale entry reached by a different route."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid(), pid_domain=self.FOREIGN_DOMAIN)
+
+        payload = self.fleet()
+        row = self.by_session(payload)["s-live"]
+
+        self.assertEqual(row["state"], "unverified",
+                         "a pid from another machine's table was read as a local process")
+        self.assertEqual(row["registry"], "unchecked")
+        self.assertEqual(payload["totals"]["running"], 0)
+        self.assertEqual(payload["totals"]["unverified"], 1)
+
+    def test_s012_the_report_renders_with_the_registry_absent(self):
+        self.two_sessions()
+        self.assertFalse(self.registry.exists(), "the fixture created a registry")
+
+        payload = self.fleet()
+
+        self.assertFalse(payload["registry"]["present"])
+        self.assertEqual(payload["registry"]["entries"], 0)
+        self.assertEqual(payload["totals"]["sessions"], 2)
+        self.assertEqual(payload["totals"]["ended"], 2)
+        self.assertFalse(self.registry.exists(),
+                         "reading an absent registry created one")
+
+    def test_s012_the_report_renders_with_the_registry_empty(self):
+        """Present and holding nothing is a different answer from absent, and both render."""
+        self.two_sessions()
+        self.registry.mkdir(parents=True)
+
+        payload = self.fleet()
+
+        self.assertTrue(payload["registry"]["present"])
+        self.assertEqual(payload["registry"]["entries"], 0)
+        self.assertEqual(payload["totals"]["ended"], 2)
+
+    def test_s012_the_report_states_which_check_it_ran_and_what_it_does_with_a_stale_entry(
+            self):
+        """A report that says "running" without saying what it checked is the thing this
+        task's Risks section calls worse than one that says it cannot tell."""
+        self.two_sessions()
+        payload = self.fleet()
+
+        self.assertTrue(payload["liveness_check"])
+        for outcome in ("running", "ended", "unverified"):
+            with self.subTest(outcome=outcome):
+                self.assertIn(outcome, payload["liveness_policy"],
+                              f"the stated policy does not say when a session is {outcome}")
+
+    def test_s012_the_report_is_served_over_http_and_matches_the_store(self):
+        """S-012 through the surface a person actually uses, not only the function."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid())
+        server = self.serve_on_loopback(roster=[])
+
+        status, payload = self.fetch_json(server, "/api/fleet")
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["store_present"])
+        rows = self.by_session(payload)
+        self.assertEqual(rows["s-live"]["state"], "running")
+        self.assertEqual(rows["s-done"]["state"], "ended")
+        self.assertEqual(payload["totals"], self.fleet()["totals"])
+
+    def test_s012_two_entries_naming_one_session_are_resolved_by_the_stronger_claim(self):
+        """`live_sessions()` states this rule and nothing asserted it, so last-writer-wins
+        survived the whole suite when an outside verification tried it.
+
+        Entries are read in sorted filename order, so the fixture runs the collision both
+        ways round: the alive entry sorts first for one session and last for the other. A
+        rule that took whichever file it read last gets one of them wrong whichever way it
+        leans, which is the point of testing both.
+        """
+        self.two_sessions()
+        self.entry("s-live", self.running_pid(), file_name="a-alive.json")
+        self.entry("s-live", self.reaped_pid(), file_name="z-gone.json")
+        self.entry("s-done", self.reaped_pid(), file_name="a-gone.json")
+        self.entry("s-done", self.running_pid(), file_name="z-alive.json")
+
+        rows = self.by_session(self.fleet())
+
+        for session_id in ("s-live", "s-done"):
+            with self.subTest(session=session_id):
+                self.assertEqual(rows[session_id]["state"], "running",
+                                 "the answer depended on which entry file sorted last")
+
+    def test_s012_a_live_sessions_start_time_is_a_timestamp_not_raw_milliseconds(self):
+        """`_started_at()` converts on the server, and its docstring says why: the page's
+        script has no execution coverage, so a date the page formats itself is a date nothing
+        can check. Nothing checked the conversion either, and returning the raw milliseconds
+        survived the suite."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid(), started_at=1787966447301)
+
+        rows = self.by_session(self.fleet())
+
+        self.assertEqual(rows["s-live"]["started_at"], "2026-08-29T01:20:47.301000+00:00")
+        self.assertIsNone(rows["s-done"]["started_at"],
+                          "a session with no registry entry reported a start time")
+
+    def test_s012_an_entry_whose_start_time_is_unusable_reports_none_not_a_crash(self):
+        """The registry belongs to another program. A field that is missing, or is a string
+        where a number was expected, must not take the report down with it."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid(), started_at="not-a-number")
+
+        self.assertIsNone(self.by_session(self.fleet())["s-live"]["started_at"])
+
+    def test_s012_a_running_session_sorts_above_an_ended_one_that_is_more_recent(self):
+        """The report answers a question about now, so `s-live` leads even though `s-done`
+        has the later timestamp. Sorting by activity alone would bury the running session."""
+        self.two_sessions()
+        self.entry("s-live", self.running_pid())
+
+        order = [row["session_id"] for row in self.fleet()["sessions"]]
+
+        self.assertEqual(order, ["s-live", "s-done"])
+
+
+class TestFleetProjects(ServerTestCase):
+    """S-018: every project reported in one place, and the per-project figures add up."""
+
+    def three_projects(self):
+        """Two projects in the store, a live entry in each, and a third live session the
+        store has never seen.
+
+        The mix is the point. The summing property is easy to hold when every session came
+        out of one query and hard when the report unions two sources, which is exactly what
+        this report does, so a fixture drawn only from the store would not test it.
+        """
+        other = self.corpus / "D--other"
+        self.build_store([self.record("a1", sid="s-a1"), self.record("a2", sid="s-a2")])
+        self.build_store([self.record("b1", sid="s-b1")], name="other.jsonl", project=other)
+        self.entry("s-a1", self.running_pid())
+        self.entry("s-b1", self.reaped_pid())
+        self.entry("s-ghost", self.running_pid(), pid_domain=self.FOREIGN_DOMAIN,
+                   file_name="ghost.json")
+
+    def test_s018_per_project_figures_sum_to_the_unrestricted_figures(self):
+        """S-018's arithmetic, asserted rather than inspected. This is the criterion the task
+        made arithmetic on purpose: dropping a session leaves every panel rendering and only
+        the sum wrong."""
+        self.three_projects()
+        everywhere = self.fleet()
+        self.assertTrue(everywhere["projects"], "the report declares no projects at all")
+
+        summed = {"sessions": 0, "running": 0, "ended": 0, "unverified": 0}
+        for bucket in everywhere["projects"]:
+            scoped = self.fleet(bucket["project"])
+            for figure in summed:
+                summed[figure] += scoped["totals"][figure]
+
+        for figure, total in summed.items():
+            with self.subTest(figure=figure):
+                self.assertEqual(
+                    total, everywhere["totals"][figure],
+                    f"the per-project {figure} figures do not sum to the unrestricted one")
+        self.assertEqual(everywhere["totals"]["sessions"], 4,
+                         "the fixture no longer holds the four sessions this counts on")
+
+    def test_s018_a_live_session_matching_no_known_project_is_counted_not_dropped(self):
+        """The quiet failure the task's Risks section names: a session nothing can attribute
+        is dropped, S-018's summing property goes false, and every panel still renders."""
+        self.three_projects()
+        payload = self.fleet()
+
+        row = self.by_session(payload)["s-ghost"]
+        self.assertEqual(row["project"], payload["unattributed_label"])
+        self.assertFalse(row["in_store"])
+
+        buckets = {bucket["project"]: bucket for bucket in payload["projects"]}
+        self.assertIn(payload["unattributed_label"], buckets,
+                      "a session attributed to no project vanished from the breakdown")
+        self.assertEqual(buckets[payload["unattributed_label"]]["sessions"], 1)
+
+    def test_s018_a_live_session_absent_from_the_store_is_placed_by_its_transcript(self):
+        """A session that started minutes ago has a transcript and no store row yet, and the
+        directory that transcript sits in is its project.
+
+        Deriving the project from the recorded working directory instead cannot work, which is
+        why nothing here tries. Over this maintainer's corpus on 2026-08-28 the project is not
+        a function of the working directory at all, two projects being reached from more than
+        one, and six of twenty-six distinct `(cwd, project)` pairs disagree under the most
+        permissive rule tried. The working directory drifts within a session; the project
+        directory does not.
+        """
+        self.build_store([self.record("a1", sid="s-a1")])
+        # Written and never ingested, exactly as a just-started session's transcript is.
+        self.write_transcript([], name="s-fresh.jsonl")
+        self.entry("s-fresh", self.running_pid())
+
+        row = self.by_session(self.fleet())["s-fresh"]
+
+        self.assertEqual(row["project"], "D--demo",
+                         "a live session was not placed by the transcript beside it")
+        self.assertEqual(row["state"], "running")
+        self.assertFalse(row["in_store"])
+        self.assertEqual(self.fleet()["totals"]["not_yet_ingested"], 1)
+
+    def test_s018_the_per_project_breakdown_counts_each_state_not_only_the_sessions(self):
+        """The page renders running, unverified, and ended as columns beside the session
+        count, and an outside verification found nothing asserting any of the three: making
+        every project report zero running sessions left all 102 tests green.
+
+        That is the same shape `feat-0054`'s verification found in the skills renderer, a
+        figure correct in the header and wrong in the table beside it, so the expected counts
+        are written out here rather than derived, and the breakdown is then tied to the
+        scoped report so the two paths cannot drift apart in silence.
+        """
+        self.three_projects()
+        payload = self.fleet()
+        buckets = {bucket["project"]: bucket for bucket in payload["projects"]}
+
+        self.assertEqual(
+            {name: (bucket["sessions"], bucket["running"], bucket["unverified"],
+                    bucket["ended"], bucket["stale_entries"])
+             for name, bucket in buckets.items()},
+            {"D--demo": (2, 1, 0, 1, 0),
+             "D--other": (1, 0, 0, 1, 1),
+             payload["unattributed_label"]: (1, 0, 1, 0, 0)})
+
+        for name, bucket in buckets.items():
+            with self.subTest(project=name):
+                totals = self.fleet(name)["totals"]
+                figures = ("sessions", "running", "ended", "unverified", "stale_entries")
+                self.assertEqual(
+                    {figure: bucket[figure] for figure in figures},
+                    {figure: totals[figure] for figure in figures},
+                    "a project's breakdown row disagrees with that project's own report")
+
+    def test_s018_a_stored_session_with_no_project_is_bucketed_rather_than_left_out(self):
+        """The defensive half of the unattributed bucket. The live half is well covered; this
+        branch is reached only by a stored session whose project is NULL, which no corpus
+        shape produces today because the ingester derives it from a directory name that
+        always exists, and 0 of 155 stored sessions carry one.
+
+        It is asserted anyway because the criterion it serves is arithmetic: an unbucketed row
+        breaks the sum while every panel still renders, which is exactly the failure the task
+        made this criterion arithmetic to catch. The row is written directly, since nothing
+        else can produce it.
+        """
+        self.build_store([self.record("a1", sid="s-a1")])
+        conn = db.connect(self.store)
+        try:
+            conn.execute(
+                "INSERT INTO session (session_id, project) VALUES ('s-null', NULL)")
+            conn.commit()
+        finally:
+            conn.close()
+
+        payload = self.fleet()
+
+        self.assertEqual(self.by_session(payload)["s-null"]["project"],
+                         payload["unattributed_label"],
+                         "a stored session with no project was left unbucketed")
+        summed = sum(self.fleet(bucket["project"])["totals"]["sessions"]
+                     for bucket in payload["projects"])
+        self.assertEqual(summed, payload["totals"]["sessions"])
+
+    def test_s018_the_state_counts_partition_the_sessions(self):
+        """Every session is in exactly one state, at every scope. A session counted twice, or
+        in none, would leave the header figures disagreeing with their own breakdown."""
+        self.three_projects()
+        scopes = [None] + [bucket["project"] for bucket in self.fleet()["projects"]]
+
+        for scope in scopes:
+            with self.subTest(scope=scope):
+                totals = self.fleet(scope)["totals"]
+                self.assertEqual(
+                    totals["running"] + totals["ended"] + totals["unverified"],
+                    totals["sessions"],
+                    "a session is in two states at once, or in none")
+
+    def test_s018_the_scoped_report_carries_only_that_projects_sessions(self):
+        """The route half of the scope selector, which the direct call cannot reach."""
+        self.three_projects()
+        server = self.serve_on_loopback(roster=[])
+
+        _, everywhere = self.fetch_json(server, "/api/fleet")
+        _, here = self.fetch_json(server, "/api/fleet?project=D--demo")
+
+        self.assertEqual(here["project"], "D--demo",
+                         "the requested scope did not reach the report")
+        self.assertEqual({row["project"] for row in here["sessions"]}, {"D--demo"},
+                         "another project's sessions leaked into a scoped report")
+        self.assertEqual(here["totals"]["sessions"], 2)
+        self.assertEqual(everywhere["totals"]["sessions"], 4)
+
+    def test_s018_the_scope_selector_offers_every_project_the_fleet_counts(self):
+        """A project the report counts and the selector cannot reach is a figure a reader can
+        see and not follow."""
+        self.three_projects()
+        server = self.serve_on_loopback(roster=[])
+
+        _, meta = self.fetch_json(server, "/api/meta")
+        counted = {bucket["project"] for bucket in self.fleet()["projects"]}
+
+        self.assertTrue(counted)
+        self.assertLessEqual(
+            counted, set(meta["projects"]),
+            "the fleet report counts a project the scope selector never offers")
+
+    def test_s018_a_project_whose_session_carries_no_message_is_still_offered(self):
+        """`message_occurrence` holds assistant messages only, so a session that produced
+        none has no row there. Four of this maintainer's 155 sessions were in that position
+        on 2026-08-28, and a selector built from occurrences alone never offered their
+        project while the fleet report counted it."""
+        quiet = self.corpus / "D--quiet"
+        self.build_store([self.user_record("u1", sid="s-quiet")],
+                         name="quiet.jsonl", project=quiet)
+
+        conn = db.connect(self.store)
+        try:
+            occurrences = conn.execute(
+                "SELECT COUNT(*) AS n FROM message_occurrence WHERE project = 'D--quiet'"
+            ).fetchone()["n"]
+            self.assertEqual(occurrences, 0,
+                             "the fixture no longer builds a session with no occurrence row")
+            self.assertIn("D--quiet", serve.projects(conn),
+                          "a project whose only session carries no message was not offered")
+        finally:
+            conn.close()
+
+
+class TestSkillsReportAcrossProjects(ServerTestCase):
+    """S-018 applied to the report `feat-0054` shipped, because the scenario says "any
+    report" rather than "the fleet report"."""
+
+    def test_s018_the_skills_report_identity_holds_when_no_message_spans_projects(self):
+        other = self.corpus / "D--other"
+        self.build_store([self.record("a1", sid="s1", skill="doc-sync"),
+                          self.record("a2", sid="s1", skill="new-task")])
+        self.build_store([self.record("b1", sid="s2", skill="doc-sync")],
+                         name="other.jsonl", project=other)
+        roster = ["doc-sync", "new-task"]
+
+        everywhere = self.report(roster=roster)["total_uses"]
+        summed = sum(self.report(project, roster)["total_uses"]
+                     for project in ("D--demo", "D--other"))
+
+        self.assertEqual(everywhere, 3)
+        self.assertEqual(summed, everywhere,
+                         "the per-project skill figures do not sum to the unrestricted one")
+
+    def test_s018_a_message_replayed_into_another_project_is_the_stated_bound(self):
+        """The one case where the identity above does not hold, pinned rather than left for
+        someone to find in a figure.
+
+        A forked or resumed session replays earlier history verbatim, and where the fork lands
+        in a different project directory the same message occurs under two projects: the
+        unscoped figure counts the message once and each scoped figure counts it, so the sum
+        exceeds the total. It does not happen in this maintainer's corpus, where 0 of 54,222
+        messages appear under more than one project as of 2026-08-28, which is why the
+        identity holds there. This test exists so that the day it stops holding, the change is
+        visible here rather than in a number nobody rechecks.
+        """
+        other = self.corpus / "D--other"
+        replayed = self.record("r1", sid="s1", skill="doc-sync")
+        self.build_store([replayed])
+        self.build_store([dict(replayed, sessionId="s1-fork")],
+                         name="other.jsonl", project=other)
+        roster = ["doc-sync"]
+
+        everywhere = self.report(roster=roster)["total_uses"]
+        summed = sum(self.report(project, roster)["total_uses"]
+                     for project in ("D--demo", "D--other"))
+
+        self.assertEqual(everywhere, 1, "the same message was counted twice in the total")
+        self.assertEqual(summed, 2,
+                         "the scoped figures no longer both count a cross-project replay")
+        self.assertGreater(
+            summed, everywhere,
+            "the cross-project bound this test pins no longer holds. If the skills report "
+            "now attributes each message to one project, S-018's identity is unconditional "
+            "and the conformance matrix should stop stating this bound")
+
+
+class TestFleetPageBehaviour(ServerTestCase):
+    """Structural assertions over the page's source, carrying the bound `feat-0054` stated:
+    the standard library has no JavaScript engine and this repository ships no dependency to
+    add one, so these pin the specific regressions that were shown to survive a green suite,
+    not the page's behaviour in general.
+    """
+
+    def renderer_body(self) -> str:
+        """The body of `RENDERERS.fleet`, from its key to the next renderer's."""
+        html = UI_INDEX.read_text(encoding="utf-8")
+        start = html.index("  fleet: function (data, into) {")
+        end = html.index("  skills: function (data, into) {")
+        self.assertGreater(end, start, "the fleet renderer is no longer where this looks")
+        return html[start:end]
+
+    def test_the_fleet_renderer_maps_every_returned_row_without_filtering(self):
+        """Kills the mutation that drops rows at the surface while the API still returns
+        them, which no API-level test can see. An independent verification of `feat-0054`
+        showed the shape: the skills renderer could drop every zero-count row with all
+        twenty-nine tests green."""
+        body = self.renderer_body()
+        for collection in ("data.sessions", "data.projects"):
+            with self.subTest(collection=collection):
+                self.assertIn(collection + ".map(", body,
+                              f"the renderer no longer maps the {collection} the API returned")
+                for hostile in (".filter(", ".slice(", ".splice("):
+                    self.assertNotIn(
+                        collection + hostile, body,
+                        f"the renderer applies {hostile} to {collection} before rendering, "
+                        f"so a session the report counted can be missing from the page")
+
+    def test_the_fleet_renderer_offers_no_action_against_a_session(self):
+        """`feat-0060` owns `S-019` and `S-020` and defines what a session-directed action
+        may be. Until it lands, this report names sessions and offers nothing to do to them,
+        which is a boundary in the task's Scope rather than a claim on those scenarios."""
+        body = self.renderer_body()
+        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', "addEventListener",
+                          "location.href", "window.open", "fetch("):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, body,
+                                 f"the fleet renderer introduces {forbidden}, which is an "
+                                 f"action against a session this task must not offer")
+
+    def test_the_fleet_renderer_reports_the_state_the_server_established(self):
+        """Kills the mutation that derives liveness page-side, for instance from whether a
+        row carries a pid, which would put the decision somewhere no test can reach."""
+        body = self.renderer_body()
+        self.assertIn("text: row.state", body,
+                      "the state badge no longer prints the state the report established")
+        for stated in ("liveness_check", "liveness_policy", "unattributed_label"):
+            with self.subTest(stated=stated):
+                self.assertIn(stated, body,
+                              f"the page no longer tells a reader about {stated}")
+
+    def test_the_default_report_comes_from_the_registry_not_a_hardcoded_id(self):
+        """`feat-0054` opened on the skills report by name. The registry is the contract's
+        Proposed Surface order and Fleet leads it, so a hardcoded default has to be edited
+        again the next time that order changes."""
+        html = UI_INDEX.read_text(encoding="utf-8")
+        boot = html[html.index("function boot("):][:900]
+        state = html[html.index("var STATE = "):][:200]
+
+        self.assertIn("STATE.reports[0]", boot,
+                      "the page no longer takes its default report from the registry")
+        self.assertNotIn('current: "skills"', state,
+                         "the default report is hardcoded again")
+        self.assertEqual(serve.REPORTS[0]["id"], "fleet",
+                         "Fleet no longer leads the registry, so the default has moved")
 
 
 if __name__ == "__main__":

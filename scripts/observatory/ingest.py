@@ -25,13 +25,23 @@ finished transcript would ever catch. `scan_file` therefore stops at the last ne
 reports the fragment as unread rather than consuming it.
 
 No network access at any point (S-022). This module imports nothing that can open a socket.
+`ctypes` is the one import that could reach outside Python, and it is used for exactly one
+thing: reading this machine's own process table, to decide whether a registered session's
+process is still alive. See the live-session registry section near the bottom.
 
-Contract: `docs/spec/agent-observatory.md`. Scenarios: S-005 to S-009, S-022.
+That section is the second source this file reads and the only one the store does not hold.
+It is read at report time rather than ingested, because it answers a question about now:
+`serve.py` calls `read_registry` and `process_state` per request, and nothing here writes a
+row for it.
+
+Contract: `docs/spec/agent-observatory.md`. Scenarios: S-005 to S-009, S-022, and the live
+half of S-012.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import re
@@ -437,6 +447,215 @@ def ingest(corpus: Path, store: Path) -> dict:
     finally:
         conn.close()
     return summary
+
+
+# ---------------------------------------------------------------------------------------
+# The live-session registry
+#
+# S-012 needs a real liveness source. A session whose last record is recent is not thereby
+# running, and one idle for an hour may still be, so nothing below infers liveness from a
+# timestamp. The harness keeps its own registry at `~/.claude/sessions/<pid>.json`, one file
+# per running session. Confirmed on 2026-08-28: three entries against exactly three running
+# `claude-code` processes, the other fifteen `claude.exe` processes on that machine being the
+# desktop app's Electron helpers rather than sessions.
+#
+# Nothing here writes. The registry belongs to the harness (S-009), so every file is opened
+# for reading and the directory is never created.
+# ---------------------------------------------------------------------------------------
+
+DEFAULT_REGISTRY = Path.home() / ".claude" / "sessions"
+
+# What a process lookup concluded. Deliberately not the report's own vocabulary (`running`,
+# `ended`, `unverified`): this layer answers a question about a pid, and the mapping from
+# that to a session's state belongs to the report.
+ALIVE = "alive"
+GONE = "gone"
+UNKNOWN = "unknown"
+
+# Windows. `PROCESS_QUERY_LIMITED_INFORMATION` is the least privilege that can read a
+# process's creation time and exit code, and it succeeds against processes a fuller access
+# mask is refused for.
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_STILL_ACTIVE = 259
+_ERROR_INVALID_PARAMETER = 87
+_ERROR_ACCESS_DENIED = 5
+
+_POSIX_PLATFORMS = ("linux", "darwin", "freebsd", "openbsd", "netbsd", "aix", "sunos",
+                    "cygwin")
+
+
+class _FileTime(ctypes.Structure):
+    """A Windows FILETIME, defined here rather than imported from `ctypes.wintypes`.
+
+    Importing `ctypes.wintypes` raises on a non-Windows build, which would make this module
+    unimportable on two of the three platforms the conventions section of `AGENTS.md`
+    requires. A plain `Structure` is definable everywhere and is used only on Windows.
+    """
+
+    _fields_ = [("low", ctypes.c_uint32), ("high", ctypes.c_uint32)]
+
+    @property
+    def value(self) -> int:
+        return (self.high << 32) | self.low
+
+
+def read_registry(registry_dir=DEFAULT_REGISTRY) -> dict:
+    """Every entry in the harness's live-session registry, and what could not be read.
+
+    An absent directory is a normal answer rather than an error: a machine with no session
+    running has no registry, and the report must still render. An entry that does not parse,
+    or that carries no `sessionId`, is counted and named rather than dropped, which is the
+    habit S-008 fixes for the corpus applied to this second source.
+
+    The directory also holds `<pid>.<hash>.key` files. They are not entries and are not read.
+    """
+    registry_dir = Path(registry_dir)
+    result = {"path": str(registry_dir), "present": registry_dir.is_dir(),
+              "entries": [], "unreadable": 0, "notes": []}
+    if not result["present"]:
+        return result
+
+    for path in sorted(registry_dir.glob("*.json")):
+        try:
+            entry = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            result["unreadable"] += 1
+            result["notes"].append(
+                f"{path.name}: could not be read ({exc.__class__.__name__})")
+            continue
+        if not isinstance(entry, dict) or not entry.get("sessionId"):
+            result["unreadable"] += 1
+            result["notes"].append(
+                f"{path.name}: carries no sessionId, so it names no session")
+            continue
+        result["entries"].append(entry)
+    return result
+
+
+def _posix_process_state(pid: int):
+    """Whether `pid` exists, against a POSIX process table.
+
+    Presence only. `procStart`'s meaning outside Windows is unverified here, so a pid the
+    operating system has since handed to a different program reads as alive. The report says
+    which check it ran rather than implying the stronger one everywhere.
+    """
+    if os.name != "posix":
+        return UNKNOWN, "this build has no POSIX process table to query"
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return GONE, f"no process {pid} exists"
+    except PermissionError:
+        return ALIVE, f"process {pid} exists and belongs to another user"
+    except OSError as exc:
+        return UNKNOWN, f"process {pid} could not be queried: {exc}"
+    return ALIVE, f"process {pid} exists"
+
+
+def _windows_process_state(pid: int, proc_start=None):
+    """Whether `pid` is still the process the entry recorded, on Windows.
+
+    Identity rather than presence: the pid must exist *and* its creation time must equal the
+    entry's `procStart`, so a pid the operating system has reused is reported gone. Confirmed
+    on 2026-08-28 that `procStart` is the creation FILETIME: `134324400435518083` is
+    1787966443.6 epoch seconds, 3.7 seconds before that entry's own `startedAt` and equal to
+    the process's start time as the operating system reports it.
+
+    **`os.kill(pid, 0)` is never used here.** On Windows, CPython's `os.kill` calls
+    `TerminateProcess` for every signal that is not a console control event, so the POSIX
+    idiom for "does this pid exist" would kill the session it was asked about.
+    """
+    windll = getattr(ctypes, "windll", None)
+    if windll is None or os.name != "nt":
+        return UNKNOWN, "this build has no Windows process API to query"
+
+    kernel32 = windll.kernel32
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+    if not handle:
+        code = kernel32.GetLastError()
+        if code == _ERROR_INVALID_PARAMETER:
+            return GONE, f"no process {pid} exists"
+        if code == _ERROR_ACCESS_DENIED:
+            return UNKNOWN, f"process {pid} exists but could not be opened for querying"
+        return UNKNOWN, f"process {pid} could not be opened (Windows error {code})"
+
+    try:
+        exit_code = ctypes.c_uint32()
+        if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle),
+                                           ctypes.byref(exit_code)):
+            return UNKNOWN, f"process {pid} exists but its exit code could not be read"
+        if exit_code.value != _STILL_ACTIVE:
+            return GONE, f"process {pid} has exited"
+
+        recorded = _int(proc_start)
+        if recorded is None:
+            return ALIVE, (f"process {pid} is running; the entry records no comparable "
+                           f"start time, so the pid was not matched to it")
+
+        created, exited = _FileTime(), _FileTime()
+        kernel_time, user_time = _FileTime(), _FileTime()
+        if not kernel32.GetProcessTimes(ctypes.c_void_p(handle), ctypes.byref(created),
+                                        ctypes.byref(exited), ctypes.byref(kernel_time),
+                                        ctypes.byref(user_time)):
+            return UNKNOWN, f"process {pid} is running but its start time could not be read"
+        if created.value != recorded:
+            return GONE, (f"process {pid} exists but started at {created.value}, not the "
+                          f"entry's {recorded}: the pid was reused")
+        return ALIVE, f"process {pid} is running and its start time matches the entry"
+    finally:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+
+
+def process_state(pid, proc_start=None, pid_domain=None, platform=None):
+    """`(state, evidence)` for one registry entry's process. Never raises.
+
+    `platform` is a parameter rather than a read of `sys.platform` so a test can drive every
+    branch from any operating system. Each branch refuses to act on a process table it is not
+    running against, so driving the Windows branch from Linux reports `unknown` rather than
+    reaching for an API that is not there, and driving the POSIX branch from Windows reports
+    `unknown` rather than reaching `os.kill`, which on Windows terminates the process.
+    """
+    platform = sys.platform if platform is None else platform
+    pid = _int(pid)
+    if pid is None or pid <= 0:
+        return UNKNOWN, "the entry records no usable pid"
+
+    # `pidDomain` is `<platform>:<host>`, so an entry written by another machine names a pid
+    # in a table this one cannot query. Open Question 3 of the contract scopes the whole
+    # thing to one machine; this refuses to read a foreign pid as a local one.
+    if pid_domain:
+        domain = str(pid_domain).split(":", 1)[0]
+        if domain and domain != platform:
+            return UNKNOWN, (f"the entry's pid domain {domain!r} is not this machine's "
+                             f"{platform!r}, so its pid names no process here")
+
+    if platform == "win32":
+        return _windows_process_state(pid, proc_start)
+    if platform.startswith(_POSIX_PLATFORMS):
+        return _posix_process_state(pid)
+    return UNKNOWN, f"no process check is defined for {platform!r}"
+
+
+def liveness_check(platform=None) -> str:
+    """What `process_state` can actually establish on this build, in one phrase.
+
+    Served to the page and printed by both entry points, so the surface says which check it
+    ran rather than leaving a reader to assume the strong one. It is derived by asking
+    `process_state` about this process rather than by restating the dispatch, so a platform
+    whose branch cannot run says so instead of advertising a check it will not perform.
+    """
+    platform = sys.platform if platform is None else platform
+    state, _ = process_state(os.getpid(), proc_start=None, pid_domain=None,
+                             platform=platform)
+    if state != ALIVE:
+        return "none: this build cannot query the process table, so no entry is confirmed"
+    if platform == "win32":
+        return "process identity: the pid exists and its start time matches the entry"
+    return "process presence: the pid exists, so a reused pid would read as running"
 
 
 def main(argv=None) -> int:
