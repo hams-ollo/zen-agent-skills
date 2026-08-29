@@ -2,7 +2,7 @@
 id: feat-0055
 title: Report every session across every project in one place, and say which are running now
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: [feat-0054]
@@ -21,7 +21,7 @@ The harness shows one session at a time. Work now runs across many projects at o
 which sessions exist, where, and which are still running.
 
 This is the operational gap named third in the Problem section of
-[`docs/spec/agent-observatory.md`](../docs/spec/agent-observatory.md), and it is the report a person
+[`docs/spec/agent-observatory.md`](../../docs/spec/agent-observatory.md), and it is the report a person
 opens first, because it is the only one that answers a question about right now rather than about the
 past.
 
@@ -31,7 +31,7 @@ Read the contract for what must be true. It is not restated here.
 
 **In scope:** the fleet report, and the live-session source `S-012` needs.
 
-- The report itself, in the page shell [`feat-0054`](done/feat-0054-the-local-server-the-page-shell-and-the-skills-report.md)
+- The report itself, in the page shell [`feat-0054`](feat-0054-the-local-server-the-page-shell-and-the-skills-report.md)
   establishes.
 - A reader for the harness's live session registry, added to `scripts/observatory/ingest.py`.
 - The project scoping that `S-018` requires, in the shell's scope selector, so every later report
@@ -87,20 +87,20 @@ source on disk. Nothing the harness owns is written to at any point.
 
     python scripts/run-checks.py
 
-- [ ] New tests cover S-012 and S-018, each named so the scenario it proves is identifiable.
-- [ ] A session present in the live registry is reported as running; one absent from it is reported as
+- [x] New tests cover S-012 and S-018, each named so the scenario it proves is identifiable.
+- [x] A session present in the live registry is reported as running; one absent from it is reported as
       ended, with its project, branch, and last activity (S-012).
-- [ ] Per-project figures sum across all projects to the unrestricted figures, asserted arithmetically
+- [x] Per-project figures sum across all projects to the unrestricted figures, asserted arithmetically
       rather than by inspection (S-018).
-- [ ] A session whose working directory matches no known project is still counted, not dropped.
-- [ ] A stale registry entry produces the documented outcome rather than an unqualified "running".
-- [ ] The report renders with the live registry absent or empty, without error.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] A session whose working directory matches no known project is still counted, not dropped.
+- [x] A stale registry entry produces the documented outcome rather than an unqualified "running".
+- [x] The report renders with the live registry absent or empty, without error.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `agent-observatory` conformance matrix is updated for S-012 and S-018.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `agent-observatory` conformance matrix is updated for S-012 and S-018.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

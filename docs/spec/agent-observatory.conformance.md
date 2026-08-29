@@ -8,12 +8,13 @@ audited: 2026-08-28
 
 Spec-vs-implementation audit of `scripts/observatory/` against
 [`agent-observatory.md`](agent-observatory.md), produced at `feat-0053`'s closeout and updated at
-`feat-0054`'s.
+`feat-0054`'s and `feat-0055`'s.
 
-**Eight of twenty-two scenarios are built.** `feat-0053` scoped the store and the ingester;
+**Ten of twenty-two scenarios are built.** `feat-0053` scoped the store and the ingester;
 `feat-0054` added the loopback server, the page shell, and the skills report, which is `S-001`
-and `S-002`. The remaining fourteen are `not-built` and that is the correct answer rather than a
-gap. Each names the task that owns it, from the decomposition
+and `S-002`; `feat-0055` added the fleet report and the live-session registry behind it, which is
+`S-012` and `S-018`. The remaining twelve are `not-built` and that is the correct answer rather
+than a gap. Each names the task that owns it, from the decomposition
 [`feat-0053`](../../.tasks/done/feat-0053-the-observatory-store-and-its-incremental-ingester.md)
 onward gated by [`agent-observatory.readiness.md`](agent-observatory.readiness.md).
 
@@ -22,14 +23,14 @@ established and `scripts/check-citations.py` enforces.
 
 ## Coverage proof
 
-The spec carries **22** scenarios, `S-001` to `S-022`. This matrix has **22** rows: **8**
-conformed, **0** diverged, **14** not-built. 8 + 0 + 14 = 22, and the arithmetic is stated
+The spec carries **22** scenarios, `S-001` to `S-022`. This matrix has **22** rows: **10**
+conformed, **0** diverged, **12** not-built. 10 + 0 + 12 = 22, and the arithmetic is stated
 rather than the claim, per the incident `feat-0036` recorded and `chore-0033` named.
 
-Nothing in the audited set is unreconciled. The audited set is the eight scenarios the two closed
-tasks declare between them: the six in `feat-0053`'s `scenarios` frontmatter and the two in
-`feat-0054`'s. The fourteen not-built rows were established by confirming no code implements
-them, not by inspecting an implementation.
+Nothing in the audited set is unreconciled. The audited set is the ten scenarios the three closed
+tasks declare between them: the six in `feat-0053`'s `scenarios` frontmatter, the two in
+`feat-0054`'s, and the two in `feat-0055`'s. The twelve not-built rows were established by
+confirming no code implements them, not by inspecting an implementation.
 
 ## Matrix
 
@@ -46,13 +47,13 @@ them, not by inspecting an implementation.
 | `S-009`: nothing the harness owns is modified | **conformed** | Transcripts are opened `"rb"` in `scan_file` and nowhere else; the store defaults outside the corpus via `DEFAULT_STORE`. Proven by `test_s009_the_corpus_is_byte_for_byte_unchanged` and `test_s009_the_store_is_written_outside_the_corpus`. Independently established over the real corpus by an outside verification: 769 files hashed before and after with 0 changed, and every file open during a full ingest instrumented, giving 412 opens all in mode `rb` and none outside the corpus. |
 | `S-010`: cost reported as a dated estimate | not-built | Owned by `feat-0057`. No rate table exists. |
 | `S-011`: an unpriced model yields no invented cost | not-built | Owned by `feat-0057`. |
-| `S-012`: a running session distinguished from an ended one | not-built | Owned by `feat-0055`. Requires the live-session registry, which this task scoped out. |
-| `S-013`: the report updates while a session is running | not-built | Owned by `feat-0059`. `feat-0054` deliberately renders what the store held when the page was requested, and offers a refresh rather than a live channel. |
+| `S-012`: a running session distinguished from an ended one | **conformed** | `fleet_report()` in `scripts/observatory/serve.py` reports every session with its project, its branch, and its last activity, and marks running the ones the harness's live-session registry accounts for. The registry is `~/.claude/sessions/`, read by `read_registry()` in `scripts/observatory/ingest.py` and checked per request by `live_sessions()`, not ingested, because the scenario asks a question about now. **Presence in the registry is evidence and never proof**: `process_state()` corroborates each entry against the operating system, and `LIVENESS_POLICY` states the rule the page shows a reader. On Windows the check is identity rather than presence, comparing the pid's start time against the entry's `procStart`, so a reused pid is reported gone; `os.kill(pid, 0)` is unreachable from that branch because on Windows it terminates the process it was asked about. Proven by `test_s012_a_session_in_the_live_registry_is_reported_as_running`, `test_s012_a_session_absent_from_the_registry_is_reported_as_ended`, `test_s012_each_session_carries_its_project_its_branch_and_its_last_activity`, and through the real surface by `test_s012_the_report_is_served_over_http_and_matches_the_store`. The stale and unverifiable outcomes are pinned by `test_s012_a_stale_registry_entry_is_reported_ended_rather_than_running` and `test_s012_an_unverifiable_entry_is_reported_unverified_rather_than_running`, and the degenerate inputs by `test_s012_the_report_renders_with_the_registry_absent` and `test_s012_the_report_renders_with_the_registry_empty`. **A third bound, which `docs/OBSERVATORY.md` states and this row previously did not**: a session that started since the last ingest has no store row, so its branch and last activity are reported as not yet recorded rather than invented, and only its project is recovered, from the transcript beside it. The field is reported unknown rather than the session dropped, because dropping it would break `S-018`. Measured 2026-08-28 over the maintainer's corpus: 155 sessions, of which the 3 with a registry entry were reported running and matched the 3 running processes on the machine; after a reboot the same store reported 1 running and the two whose entries had gone as ended. |
+| `S-013`: the report updates while a session is running | not-built | Owned by `feat-0059`. `feat-0054` deliberately renders what the store held when the page was requested, and offers a refresh rather than a live channel. `feat-0055` re-reads the live registry on every request, which makes the fleet report current as of when it was asked for and is a different claim from this scenario: nothing yet reaches an open report without being asked again. |
 | `S-014`: the optional event source is absent and all still works | not-built | Owned by `feat-0059`. |
 | `S-015`: an optional event source changes no figure | not-built | Owned by `feat-0059`. |
 | `S-016`: run health is reported | not-built | Owned by `feat-0058`. `health_event` holds 392 rows across four kinds, of which 133 carry a hook exit status and 16 are real hook failures, so the "hook's exit status" the scenario names is present and unread rather than absent. The scenario's third part is also in-store: `message.is_api_error` (26), `api_error_status` (21), and `is_aborted_mid_stream` (2) record a run that ended abnormally. |
 | `S-017`: context and quota pressure over time | not-built | Owned by `feat-0057`. The context half is in-store: `context_sample` holds 3,085 parsed remaining-token readings across 19 sessions, and compaction occasions are identifiable from the 2 `compact_boundary` rows in `health_event`. The quota half comes from a file outside the corpus and is `feat-0057`'s to bring in. |
-| `S-018`: every project reported in one place | not-built | Owned by `feat-0055`. |
+| `S-018`: every project reported in one place | **conformed** | Both built reports cover the whole corpus by default and restrict to one project, and the scenario's third clause is arithmetic rather than visual: restricted to each project in turn, the figures sum to the unrestricted ones. `fleet_report()` in `scripts/observatory/serve.py` holds it by construction, because every session lands in exactly one project bucket, including one nothing can attribute, which goes to `UNATTRIBUTED` rather than being dropped. Proven by `test_s018_per_project_figures_sum_to_the_unrestricted_figures` over all four figures, by `test_s018_a_live_session_matching_no_known_project_is_counted_not_dropped` for the bucket, by `test_s018_the_state_counts_partition_the_sessions` for the second identity, and over HTTP by `test_s018_the_scoped_report_carries_only_that_projects_sessions`. `projects()` was widened to the union of `message_occurrence` and `session`, and `scope_options()` adds the projects only a live session knows about, so a project a report counts is one the selector can reach: `test_s018_a_project_whose_session_carries_no_message_is_still_offered` and `test_s018_the_scope_selector_offers_every_project_the_fleet_counts`. **One bound, stated rather than left to be found.** For the skills report the identity holds only where no message appears under two projects, which is what a fork replaying history into another project's directory would produce. It does not occur in this corpus: 0 of 54,222 messages, measured 2026-08-28. Both halves are pinned, by `test_s018_the_skills_report_identity_holds_when_no_message_spans_projects` and by `test_s018_a_message_replayed_into_another_project_is_the_stated_bound`, which asserts what the report actually does in that case rather than what it should. Measured 2026-08-28 on the real corpus: 155 sessions summed across 23 projects to 155. |
 | `S-019`: the reporting surface offers no session mutation | not-built | Owned by `feat-0060`, which owes the enumeration the scenario asks for. There is now a surface, and it offers no action of any kind: every route reads, and a mutating method is declined, guarded by `test_the_surface_serves_reads_only`. That is a weaker claim than `S-019` states, so this stays not-built rather than being claimed. |
 | `S-020`: control available only where the harness exposes it | not-built | Owned by `feat-0060`. |
 | `S-021`: token consumption reported by kind | not-built | Owned by `feat-0057`. The store splits the four kinds on `message`; nothing reports them. |
@@ -150,6 +151,53 @@ render into a layout, a navigation, and a scope selector this task fixed, and a 
 hold five reports would be discovered after four of them were written. The five slots exist now
 and four are stubs naming their owner, so the shape has been exercised at the registry level and
 not yet at the rendering level.
+
+## What `feat-0055` added, and the two bounds it ships with
+
+The fleet report, and the live-session source behind it. The design decision worth recording is
+where the liveness answer comes from, because the task named the failure it was avoiding: a
+registry entry can outlive the process that wrote it, so a report that treats presence as proof
+shows a crashed session as live, and that is worse than one that says it cannot tell.
+
+So the entry is corroborated rather than trusted, and the report says which check it ran. On Windows
+that is process identity: the pid must exist and its start time must equal the entry's `procStart`.
+Confirmed against the machine before anything was built, rather than from documentation:
+`134324400435518083` is 1787966443.6 epoch seconds, 3.7 seconds before that entry's own `startedAt`
+and equal to the process start time the operating system reports, across all three live entries on
+2026-08-28. The same check found the corpus's own shape unusable for a simpler route: the project directory
+is not a function of the recorded working directory, since two projects are each reached from more
+than one, and six of twenty-six distinct pairs disagree under the most permissive rule tried. So a
+live session is placed by the store and then by the transcript beside it, and never by a transform.
+
+**Pid reuse is undetected outside Windows.** `procStart`'s meaning on macOS and Linux is unverified
+here, so those platforms check presence only, and `liveness_check()` says so on the page rather than
+letting a reader assume the strong check everywhere. `test_a_pid_whose_start_time_disagrees_with_the_entry_is_reported_gone`
+is the one test in this component that is skipped on five of the six CI cells.
+
+**A session absent from the registry is reported ended**, which is right for a session that has
+finished and unverified for one the registry never held. Every entry observed carried
+`kind: "interactive"`; whether a background or cloud session registers at all is unverified, so a
+running non-interactive session may be indistinguishable from an ended one. Stated here because the
+report is otherwise silent about it.
+
+Twenty-six mutations were run against the tests above and all twenty-six were killed, over a
+baseline of twenty-eight green tests. They included the ones that matter most: treating registry
+presence as liveness, dropping the pid-domain guard, no longer comparing `procStart`, reintroducing
+`os.kill` on the Windows path, dropping the unattributed bucket, ignoring the project scope, and
+filtering rows in the page's renderer while the API still returned them.
+
+**That figure was true and read as more than it proved, which an independent verification then
+demonstrated.** Mutating only the behaviours a test already claims to guard measures whether those
+tests work; it says nothing about behaviour no test names. Asked the other question, the
+verification found four such behaviours, three of them asserted in the code's own docstrings, each
+surviving a fully green suite (the set now stands at thirty mutations, all thirty killed): the per-project `running`, `unverified`, and `ended` columns the page
+renders beside the session count, which could all be forced to zero unnoticed; the duplicate-entry
+tie-break in `live_sessions()`; the timestamp conversion in `_started_at()`, whose docstring gives
+the reason it must not happen on the page; and the `UNATTRIBUTED` fallback on the stored-session
+path, as opposed to the live one. All four were reproduced independently before being accepted, a
+test was written for each, and all four now fail when the behaviour is broken. The first is the same
+shape as the regression `feat-0054`'s verification found in the skills renderer: a figure correct in
+the header and wrong in the table beside it.
 
 ## Bound worth stating
 

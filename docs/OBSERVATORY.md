@@ -26,12 +26,15 @@ Then open `http://127.0.0.1:8787/`.
 `ingest.py` is incremental: the first run reads the whole corpus (401 MB and about two minutes on
 this maintainer's machine), and every run after it reads only what has been appended since. Run it
 again whenever you want the page to reflect newer work. The page renders whatever the store held
-when the request was made; a report that updates while a session is running is `feat-0059`'s.
+when the request was made, and the fleet report additionally reads the live-session registry on each
+request, so both are correct as of when you asked and no more. A report that updates while a session
+is running is `feat-0059`'s.
 
 | Option | Applies to | Default |
 |---|---|---|
-| `--corpus DIR` | `ingest.py` | `~/.claude/projects` |
+| `--corpus DIR` | both | `~/.claude/projects`. `serve.py` reads it for one thing only: placing a live session the store has not seen yet. |
 | `--store PATH` | both | `.observatory/store.db`, gitignored |
+| `--registry DIR` | `serve.py` | `~/.claude/sessions`, the harness's own list of running sessions |
 | `--host ADDR` | `serve.py` | `127.0.0.1`. A non-loopback address is refused. |
 | `--port N` | `serve.py` | `8787` |
 
@@ -41,18 +44,59 @@ around: a store written by a newer schema than the code reading it.
 
 ## What the page reports
 
-Five reports, each answering one question over the whole corpus or one project. The scope selector
-in the header switches between them.
+Five reports, each answering one question over the whole corpus or one project. The tabs switch
+between reports, and the scope selector in the header restricts whichever one is open to a single
+project.
 
 | Report | Question | Status |
 |---|---|---|
-| Fleet | Which sessions exist, where, and which are running? | Owed by `feat-0055` |
+| Fleet | Which sessions exist, where, and which are running? | Built |
 | Skills | Which skills are used, how often, and which never are? | Built |
 | Waves | What did a dispatched wave run, cost, and produce? | Owed by `feat-0056` |
 | Cost and pressure | What was consumed, and how close to a limit? | Owed by `feat-0057` |
 | Health | What failed, and how often? | Owed by `feat-0058` |
 
-An owed report has a tab and says which task owes it rather than showing an empty panel.
+An owed report has a tab and says which task owes it rather than showing an empty panel. Fleet leads
+the list and is what opens, because it is the only one that answers a question about now.
+
+## How the fleet report knows a session is running
+
+Not from the corpus. A session whose last record is recent is not thereby running, and one idle for
+an hour may still be, so nothing here infers liveness from a timestamp. It reads the harness's own
+list of running sessions at `~/.claude/sessions/`, one file per session, and reads it on every
+request rather than at ingest time, because an answer stored at the last ingest would be as old as
+that ingest.
+
+**Presence in that list is evidence, not proof.** A crashed session can leave its entry behind, and a
+report that confidently shows a dead session as live is worse than one that says it cannot tell,
+since answering about now is the whole value of this report. So the entry is corroborated against the
+operating system before anything is called running, and the page says which check it ran:
+
+| Outcome | What was established |
+|---|---|
+| running | The entry's process is confirmed. On Windows that is process **identity**: the pid exists and its start time matches the one the entry recorded, so a pid the operating system has since handed to another program is not mistaken for the session. On macOS and Linux it is **presence** only, because the recorded start time's meaning there is unverified, and a reused pid would read as running. |
+| ended | Either there is no entry, or there is one and its process is gone. The second case is counted separately as a stale entry rather than folded quietly into the first. |
+| unverified | There is an entry and the check could not be run, for instance because it was written by another machine. Never reported as running. |
+
+Two bounds are worth stating rather than leaving to be discovered. **A session absent from the list
+is reported ended**, and every entry observed so far has been an interactive session, so whether a
+background or cloud session registers at all is unverified here. And **a session that started since
+the last ingest** has no store row yet, so it is reported running with its project taken from the
+transcript beside it, and its branch and last activity shown as not yet ingested.
+
+## Every project, in one place
+
+Every report covers the whole corpus by default and can be restricted to one project. The property
+that makes the scope selector trustworthy rather than merely present is arithmetic: restrict the
+fleet report to each project in turn, add the figures up, and you get the unrestricted figures.
+
+That is why a session nothing can attribute to a project is counted under `(unattributed)` rather
+than dropped. Dropping it would leave the sum quietly wrong while every panel still rendered.
+
+The same identity holds for the skills report, with one bound: a message that appears under two
+projects would be counted once in the total and once in each project. That happens when a forked
+session replays history into a different project's directory, and it does not occur in this
+maintainer's corpus, where 0 of 54,222 messages appear under more than one project as of 2026-08-28.
 
 ## Which roster the skills report counts against
 
@@ -106,11 +150,11 @@ lines would report every one of them twice.
 | File | Holds |
 |---|---|
 | [`scripts/observatory/db.py`](../scripts/observatory/db.py) | The store: schema, forward-only migrations, the connection helper. |
-| [`scripts/observatory/ingest.py`](../scripts/observatory/ingest.py) | The incremental reader, from the corpus into the store. |
-| [`scripts/observatory/serve.py`](../scripts/observatory/serve.py) | The loopback server, the report registry, and the skills report. |
+| [`scripts/observatory/ingest.py`](../scripts/observatory/ingest.py) | The incremental reader, from the corpus into the store, and the reader for the live-session registry. |
+| [`scripts/observatory/serve.py`](../scripts/observatory/serve.py) | The loopback server, the report registry, and the fleet and skills reports. |
 | [`scripts/observatory/ui/index.html`](../scripts/observatory/ui/index.html) | The page shell every report renders into. One file, no build step. |
-| [`tests/test_observatory.py`](../tests/test_observatory.py) | The store and ingester tests. |
-| [`tests/test_observatory_serve.py`](../tests/test_observatory_serve.py) | The server, page shell, and skills report tests. |
+| [`tests/test_observatory.py`](../tests/test_observatory.py) | The store, ingester, and live-registry tests. |
+| [`tests/test_observatory_serve.py`](../tests/test_observatory_serve.py) | The server, page shell, and report tests. |
 
 A later report is added by serving a JSON endpoint from `serve.py`, registering it in that file's
 `REPORTS`, and adding one function to `RENDERERS` in the page. The layout, the navigation, and the

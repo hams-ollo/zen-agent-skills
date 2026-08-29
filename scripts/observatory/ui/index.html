@@ -89,6 +89,11 @@
   th { font-size: 12px; color: var(--muted); font-weight: 600; }
   td.n { text-align: right; font-variant-numeric: tabular-nums; }
   tr[data-unused="true"] td { color: var(--muted); }
+  tr[data-state="ended"] td { color: var(--muted); }
+  tr[data-state="running"] td .tag {
+    background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
+  }
+  td .why { color: var(--muted); font-size: 11px; margin-top: 2px; max-width: 34em; }
   .tag {
     font-size: 11px; padding: 1px 6px; border-radius: 4px;
     border: 1px solid var(--rule); color: var(--muted);
@@ -121,7 +126,7 @@
 <script>
 "use strict";
 
-var STATE = { reports: [], current: "skills", project: "", store: "", roster: "" };
+var STATE = { reports: [], current: "", project: "", store: "", roster: "" };
 
 function el(tag, attrs, children) {
   var node = document.createElement(tag);
@@ -202,6 +207,95 @@ function figure(value, caption) {
    A report with no renderer falls back to the owed panel below, so the shell never shows an
    empty box without saying which task owes it. */
 var RENDERERS = {
+  fleet: function (data, into) {
+    if (data.store_present === false) {
+      into.appendChild(el("p", { text: data.message }));
+      return;
+    }
+    into.appendChild(el("h2", { text: "Fleet" }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Which sessions exist, where, and which are running. Correct as of when this "
+          + "report was requested, not live: press Refresh to ask again."
+    }));
+
+    var totals = data.totals;
+    var figures = [
+      figure(totals.sessions, "sessions"),
+      figure(totals.running, "running now"),
+      figure(totals.ended, "ended"),
+      figure(totals.unverified, "unverified")
+    ];
+    /* Shown only when there is one, because a row of zeroes trains a reader to skip the
+       line, and these two are exactly the lines that must not be skipped. */
+    if (totals.stale_entries) {
+      figures.push(figure(totals.stale_entries, "stale registry entries"));
+    }
+    if (totals.not_yet_ingested) {
+      figures.push(figure(totals.not_yet_ingested, "live, not yet ingested"));
+    }
+    into.appendChild(el("div", { "class": "figures" }, figures));
+
+    into.appendChild(el("p", { "class": "muted", text: data.liveness_policy }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Checked by " + data.liveness_check + ". Registry: " + data.registry.path
+          + (data.registry.present
+              ? ", " + data.registry.entries + " entries"
+              : ", absent, so every session here reads as ended")
+          + (data.registry.unreadable
+              ? ", " + data.registry.unreadable + " unreadable" : "")
+          + ". A session attributed to no project is counted under "
+          + data.unattributed_label + " rather than dropped, so the per-project figures "
+          + "still add up to the totals above."
+    }));
+
+    into.appendChild(el("h2", { text: "By project" }));
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Project" }), el("th", { text: "Sessions" }),
+        el("th", { text: "Running" }), el("th", { text: "Unverified" }),
+        el("th", { text: "Ended" })
+      ])]),
+      el("tbody", {}, data.projects.map(function (row) {
+        return el("tr", {}, [
+          el("td", { text: row.project }),
+          el("td", { "class": "n", text: String(row.sessions) }),
+          el("td", { "class": "n", text: String(row.running) }),
+          el("td", { "class": "n", text: String(row.unverified) }),
+          el("td", { "class": "n", text: String(row.ended) })
+        ]);
+      }))
+    ]));
+
+    into.appendChild(el("h2", { text: "Sessions" }));
+    var scroller = el("div", { "class": "scroller" });
+    scroller.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "State" }), el("th", { text: "Project" }),
+        el("th", { text: "Branch" }), el("th", { text: "Last activity" }),
+        el("th", { text: "Session" }), el("th", { text: "Where" })
+      ])]),
+      el("tbody", {}, data.sessions.map(function (row) {
+        var state = el("td", {}, [el("span", { "class": "tag", text: row.state })]);
+        /* A stale or unverifiable entry carries its reason on the row. Putting it in a
+           tooltip would hide the one thing this report must not state without qualifying. */
+        if (row.registry === "stale" || row.registry === "unchecked") {
+          state.appendChild(el("div", { "class": "why", text: row.evidence }));
+        }
+        return el("tr", { "data-state": row.state }, [
+          state,
+          el("td", { text: row.project }),
+          el("td", { text: row.branch || "not recorded yet" }),
+          el("td", { text: row.last_activity || "not ingested yet" }),
+          el("td", { text: row.title || row.name || row.session_id }),
+          el("td", { text: (row.entrypoint || "") + (row.pid ? " pid " + row.pid : "") })
+        ]);
+      }))
+    ]));
+    into.appendChild(scroller);
+  },
+
   skills: function (data, into) {
     if (data.store_present === false) {
       into.appendChild(el("p", { text: data.message }));
@@ -303,6 +397,7 @@ function renderFootnote() {
 function boot() {
   get("/api/meta").then(function (meta) {
     STATE.reports = meta.reports || [];
+    STATE.current = (STATE.reports[0] || {}).id || "";
     STATE.store = meta.store || "";
     var scope = document.getElementById("scope");
     (meta.projects || []).forEach(function (project) {

@@ -12,8 +12,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -758,6 +760,211 @@ class TestSchema(ObservatoryTestCase):
             sys.stderr = real_stderr
         self.assertEqual(rc, 1)
         self.assertIn("schema version", err.getvalue())
+
+
+class RegistryTestCase(ObservatoryTestCase):
+    """A registry directory this suite controls, never the machine's own.
+
+    The liveness fixtures are real process states rather than a stubbed prober, and they are
+    the same three on every operating system: this runner's own pid is alive, a subprocess
+    that has been waited on is gone, and an entry stamped with another machine's pid domain
+    cannot be checked. So each assertion exercises the real check on whichever platform it
+    runs on, rather than one platform's branch and a mock everywhere else.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.registry = self.tmp / "sessions"
+        self.registry.mkdir()
+        self._reaped = []
+
+    def write_entry(self, name, **fields):
+        path = self.registry / name
+        path.write_text(json.dumps(fields), encoding="utf-8", newline="\n")
+        return path
+
+    def reaped_pid(self):
+        """A pid whose process has certainly exited.
+
+        The `Popen` object is kept for the test's lifetime deliberately. On Windows it holds
+        an open handle to the exited process, which keeps the pid from being reused under the
+        assertion and is what lets `GetExitCodeProcess` report the exit rather than the
+        lookup failing outright. Both routes conclude `gone`, which is the point.
+        """
+        proc = subprocess.Popen([sys.executable, "-c", "pass"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc.wait()
+        self._reaped.append(proc)
+        return proc.pid
+
+
+class TestRegistryReader(RegistryTestCase):
+    """The live-session registry, the one source S-012 needs and the store does not hold."""
+
+    def test_the_registry_reader_finds_every_entry_and_ignores_the_key_files(self):
+        """The directory holds `<pid>.<hash>.key` files beside the entries. They name no
+        session and reading them as entries would report unreadable records that are not
+        records at all."""
+        self.write_entry("100.json", pid=100, sessionId="s-one", cwd="D:\\a")
+        self.write_entry("200.json", pid=200, sessionId="s-two", cwd="D:\\b")
+        (self.registry / "100.abcdef.key").write_text("not json", encoding="utf-8",
+                                                      newline="\n")
+
+        found = ingest.read_registry(self.registry)
+
+        self.assertTrue(found["present"])
+        self.assertEqual({entry["sessionId"] for entry in found["entries"]},
+                         {"s-one", "s-two"})
+        self.assertEqual(found["unreadable"], 0,
+                         "a .key file was counted as an unreadable entry")
+
+    def test_the_registry_reader_reports_an_unparseable_entry_rather_than_dropping_it(self):
+        """S-008's habit, applied to the second source: the harness may be writing an entry
+        as this reads it, and a half-written file is stated rather than absorbed."""
+        self.write_entry("100.json", pid=100, sessionId="s-one")
+        (self.registry / "200.json").write_text('{"pid": 200, "sessi',
+                                                encoding="utf-8", newline="\n")
+
+        found = ingest.read_registry(self.registry)
+
+        self.assertEqual(len(found["entries"]), 1)
+        self.assertEqual(found["unreadable"], 1,
+                         "an entry that did not parse was dropped without being counted")
+        self.assertTrue(any("200.json" in note for note in found["notes"]),
+                        "the unreadable entry was counted without being named")
+
+    def test_the_registry_reader_reports_an_entry_naming_no_session(self):
+        """An entry with no `sessionId` parses and still names nothing. Treating it as an
+        entry would put a session with no id into the report."""
+        self.write_entry("100.json", pid=100)
+
+        found = ingest.read_registry(self.registry)
+
+        self.assertEqual(found["entries"], [])
+        self.assertEqual(found["unreadable"], 1)
+
+    def test_an_absent_registry_is_an_empty_answer_rather_than_an_error(self):
+        """A machine with no session running has no registry, and the report must render."""
+        absent = self.tmp / "no-registry-here"
+
+        found = ingest.read_registry(absent)
+
+        self.assertFalse(found["present"])
+        self.assertEqual(found["entries"], [])
+        self.assertEqual(found["unreadable"], 0)
+        self.assertFalse(absent.exists(), "reading an absent registry created one")
+
+    def test_reading_the_registry_changes_nothing_in_it(self):
+        """S-009 covers everything the harness owns, and the registry is the second such
+        thing this code reads. `feat-0053` proved it for the corpus; nothing had asked it of
+        this directory."""
+        self.write_entry("100.json", pid=100, sessionId="s-one")
+        (self.registry / "100.abcdef.key").write_text("opaque", encoding="utf-8",
+                                                      newline="\n")
+        before = sha_tree(self.registry)
+
+        ingest.read_registry(self.registry)
+
+        self.assertEqual(sha_tree(self.registry), before,
+                         "reading the registry modified a file the harness owns")
+
+
+class TestProcessState(RegistryTestCase):
+    """Whether a registry entry's process is still there. The whole of S-012's liveness."""
+
+    def test_this_running_process_is_reported_alive(self):
+        state, evidence = ingest.process_state(os.getpid())
+        self.assertEqual(state, ingest.ALIVE, evidence)
+
+    def test_a_reaped_process_is_reported_gone_rather_than_alive(self):
+        """The stale-entry case at its source. A registry entry can outlive its process, so
+        an implementation that answered from the entry alone reports this one alive."""
+        state, evidence = ingest.process_state(self.reaped_pid())
+        self.assertEqual(state, ingest.GONE, evidence)
+
+    def test_an_entry_with_no_usable_pid_is_unknown_rather_than_alive(self):
+        for pid in (None, 0, -1, "not-a-pid", True):
+            with self.subTest(pid=pid):
+                state, _ = ingest.process_state(pid)
+                self.assertEqual(state, ingest.UNKNOWN)
+
+    def test_an_entry_from_another_machines_pid_domain_is_not_checked(self):
+        """`pidDomain` is `<platform>:<host>`, so an entry another machine wrote names a pid
+        in a table this one cannot query. The pid used here is alive locally, so an
+        implementation ignoring the domain reports running rather than unverified.
+
+        Open Question 3 of the contract scopes the whole thing to one machine. This is what
+        that scope looks like when the assumption is broken rather than assumed.
+        """
+        state, evidence = ingest.process_state(
+            os.getpid(), pid_domain="not-this-platform:another-machine")
+        self.assertEqual(state, ingest.UNKNOWN, evidence)
+
+    def test_os_kill_is_never_reached_on_the_windows_liveness_path(self):
+        """On Windows, CPython's `os.kill` calls `TerminateProcess` for every signal that is
+        not a console control event. So `os.kill(pid, 0)`, the POSIX idiom for "does this pid
+        exist", kills the session it was asked about: the observatory would end the very
+        sessions its fleet report exists to show.
+
+        The stub raises rather than records, so a reintroduction fails here loudly instead of
+        being read back from a list nobody asserts on.
+        """
+        calls = []
+
+        def refuse(*args, **kwargs):
+            calls.append(args)
+            raise AssertionError("os.kill was called on a Windows liveness path")
+
+        real_kill = os.kill
+        os.kill = refuse
+        try:
+            state, _ = ingest.process_state(os.getpid(), platform="win32")
+            self.assertIn(state, (ingest.ALIVE, ingest.UNKNOWN))
+            if os.name == "nt":
+                # The POSIX branch must also refuse to run here, for the same reason.
+                state, _ = ingest.process_state(os.getpid(), platform="linux")
+                self.assertEqual(state, ingest.UNKNOWN)
+        finally:
+            os.kill = real_kill
+        self.assertEqual(calls, [], "os.kill was reached on a Windows process table")
+
+    def test_a_platform_with_no_defined_check_is_unknown_rather_than_assumed_alive(self):
+        state, _ = ingest.process_state(os.getpid(), platform="some-future-os")
+        self.assertEqual(state, ingest.UNKNOWN)
+
+    def test_the_liveness_check_names_what_this_build_can_establish(self):
+        """The phrase the report shows a reader. It has to change with the platform, because
+        the whole point of saying it is that the Windows check is stronger than the POSIX one
+        and a reader must not assume the strong one everywhere."""
+        self.assertTrue(ingest.liveness_check())
+        self.assertTrue(ingest.liveness_check("some-future-os").startswith("none"))
+        if os.name == "nt":
+            self.assertIn("identity", ingest.liveness_check())
+        elif os.name == "posix":
+            self.assertIn("presence", ingest.liveness_check())
+
+    @unittest.skipUnless(sys.platform == "win32",
+                         "process identity is established from procStart, which is verified "
+                         "only on Windows")
+    def test_a_pid_whose_start_time_disagrees_with_the_entry_is_reported_gone(self):
+        """Pid reuse, the failure presence alone cannot see. The pid is this process and is
+        certainly alive; what makes the entry stale is that the process now holding the pid
+        is not the one the entry recorded.
+
+        `procStart` is the creation FILETIME. Confirmed on 2026-08-28 against three live
+        entries: `134324400435518083` is 1787966443.6 epoch seconds, 3.7 seconds before that
+        entry's own `startedAt`, and equal to the process start time the operating system
+        reports. This test is skipped on Linux and macOS, where `procStart`'s meaning is not
+        verified and the check is presence only.
+        """
+        alive, _ = ingest.process_state(os.getpid(), proc_start=None)
+        self.assertEqual(alive, ingest.ALIVE)
+
+        state, evidence = ingest.process_state(os.getpid(), proc_start="1")
+
+        self.assertEqual(state, ingest.GONE,
+                         "a reused pid was reported alive on the strength of the pid alone")
+        self.assertIn("reused", evidence)
 
 
 if __name__ == "__main__":
