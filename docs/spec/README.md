@@ -85,6 +85,7 @@ more than one: `install` carries two, `build-adapters` three, since `chore-0043`
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
+| [`systematic-debugging`](systematic-debugging.md) | `S-014` and `S-015`, where instrumentation may live and what happens where it cannot live anywhere, settling both Open Questions before anything was built against the contract (`chore-0078`) | 2026-08-29 |
 | [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`); `S-023` and the "what it reads" surface entry, the lens-composition rule (`chore-0047`); `S-024` and the `Output` and "what it reads" surface entries, the supporting-file link rule (`chore-0054`); `S-025` and the same two surface entries again, the non-skill `.agents/` markdown link rule (`chore-0065`) | 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-27 |
 
 The `house-review` row was missed when this table was first written, and how it was missed is the
@@ -136,29 +137,42 @@ something else today.
 
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
-| [`agent-observatory`](agent-observatory.md) | approved | 22 | [conformance](agent-observatory.conformance.md) (8 of 22 built), [readiness](agent-observatory.readiness.md) |
+| [`agent-observatory`](agent-observatory.md) | approved | 22 | [conformance](agent-observatory.conformance.md) (22 of 22 built), [readiness](agent-observatory.readiness.md) |
 | [`build-adapters`](build-adapters.md) | approved | 19 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
-| [`systematic-debugging`](systematic-debugging.md) | approved | 13 | none yet, conformance owed at closeout |
+| [`systematic-debugging`](systematic-debugging.md) | approved | 15 | [conformance](systematic-debugging.conformance.md) (15 of 15), [verification](systematic-debugging.verification.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
 | [`validate-skills`](validate-skills.md) | approved | 25 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Twelve specs, 182 scenarios, all approved. Ten carry a conformance matrix between them, holding 147
-of those scenarios, recomputed from the files on 2026-08-28 rather than incremented: the twelve counts
-in the column above sum to 182, and the two specs without a matrix carry 13 and 22, so 182 - 35 = 147.
+Twelve specs, 184 scenarios, all approved. **All twelve now carry a conformance matrix**, holding
+all 184 of those scenarios, recomputed from the files on 2026-08-29 rather than incremented: the
+twelve counts in the column above sum to 184, and no spec is now without a matrix.
+[`systematic-debugging`](systematic-debugging.md) was the last one, audited at `feat-0061`'s
+closeout on 2026-08-29.
 
-Two qualifications the raw count hides. `install`'s matrix covers 15 of its 18 scenarios, because
-`bug-0018` added S-016 to S-018 on 2026-08-07 and its matrix is owed at that task's closeout. And
-[`systematic-debugging`](systematic-debugging.md), the eleventh, drafted and approved 2026-08-19, is
-the only spec with no matrix at all: it is the second **forward** spec here, written before an
-implementation rather than pinning one that already existed, so there is nothing built to audit yet
-and its matrix is owed at closeout.
+**Carrying a matrix is not the same as being fully audited, and 184 is the first figure rather than
+the second.** It counts scenarios in specs that have a matrix, not scenarios a matrix has classified.
+`install` is the spec where the two differ: `bug-0018` added S-016 to S-018 on 2026-08-07 and the
+matrix update is owed at that task's closeout, so part of that contract has never been audited.
+
+**The second figure is deliberately not stated here.** Deriving it needs a per-matrix count of
+classified rows, which nothing computes and which this file has already carried wrong: the standing
+claim that `install`'s matrix "covers 15 of its 18 scenarios" does not survive a check, since that
+matrix cites 17 of the 18 scenario ids. Whether the other two are classified rows or prose recording
+what is owed is the question a reader has to answer by opening the file, and a number asserted here
+would be a guess wearing arithmetic. `chore-0075` is the open task that would make every figure on
+this page computed rather than hand-maintained, and this is the second one it would have caught.
+
+[`systematic-debugging`](systematic-debugging.md) was the second **forward** spec here, written
+before an implementation rather than pinning one that already existed, so from 2026-08-19 until
+2026-08-29 it was the only spec with nothing to audit. It carries 15 rather than the 13 it was
+approved with, since `chore-0078` settled both of its Open Questions on 2026-08-29.
 
 [`cloud-executable`](cloud-executable.md) was the first forward spec and stopped being the exception
 on 2026-08-19, when `chore-0034` audited it. That matrix is worth reading for what it declined to

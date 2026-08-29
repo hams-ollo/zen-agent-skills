@@ -7,6 +7,23 @@ status: approved
 
 Behavioral contract for the `systematic-debugging` skill. Drafted 2026-08-18 by the `spec-author`
 skill from the 2026-08-18 review pass, and self-checked to `ready` with the `spec-quality` lens.
+**Approved by the author on 2026-08-19.**
+
+**Amended 2026-08-29 (`chore-0078`) to settle both Open Questions before anything was built against
+this contract: `S-014` and `S-015` are new, and the Constraints bullet on read-only posture now
+points at them.** This amendment is **pending the author's re-approval**. Open Question 1 asked where
+temporary instrumentation may live, and it blocked implementation rather than deferring cleanly:
+`S-005`'s observable, that no tracked file differs when the run ends, is satisfied both by
+instrumenting the tracked files and cleaning up afterwards and by working only in a copy, and the
+first fails only on a run that dies partway, which is to say only when something else has already
+gone wrong. Leaving it open would have let whoever wrote the implementation decide this contract's
+most consequential safety property. The answer, decided by the author on 2026-08-29, is the copy, and
+it is stated as a property a reader can check rather than as a mechanism: naming `git worktree` would
+fix an implementation and would be false of a target repository that is not a git repository.
+Open Question 2 is settled by adopting this contract's own recommendation, recorded in place so a
+later reader does not reopen it as an oversight. `status` is left reading `approved` per the
+convention in [`README.md`](README.md), for the reason that file gives. Nothing else in this contract
+changes, and `S-001` through `S-013` are untouched.
 
 ## Problem
 
@@ -64,7 +81,11 @@ anything that diagnoses.
 - **Read-only with respect to tracked files.** The skill may read anything and may run commands, and
   no tracked source, test, or config file differs when the run ends. This mirrors the posture
   `verifier-agent` and `house-review` already hold, and it is what keeps a diagnosis admissible as
-  evidence rather than becoming the change it was meant to explain.
+  evidence rather than becoming the change it was meant to explain. Where the investigation needs to
+  observe something reading cannot reach, `S-014` says where the instrumentation lives and `S-015`
+  says what happens where it cannot live anywhere. Those two carry the rule; this bullet points at
+  them rather than restating it, because a restatement is a second copy that can come to disagree
+  with the first.
 - **One hypothesis at a time.** A trial that varies more than one thing cannot attribute its own
   result, so it produces no evidence regardless of outcome.
 - **The record is returned inline unless a destination is supplied**, matching `verifier-agent`'s
@@ -169,6 +190,21 @@ anything that diagnoses.
 - **Then** the record is returned inline and no file is created, and when a destination is supplied
   instead, the same record is written there
 
+### Scenario S-014: instrumentation lives in a copy, never in the tracked files
+- **Given** an investigation that needs to execute code or add temporary instrumentation to observe
+  behavior reading alone cannot reach
+- **When** the skill adds that instrumentation
+- **Then** the instrumentation exists only in a copy the run made for the purpose, and at no point
+  during the run does any tracked file differ from its state at the start, whether the run reaches a
+  verdict, is interrupted, or fails partway
+
+### Scenario S-015: a repository that cannot be copied is answered, not refused
+- **Given** a target repository offering no way to make a working copy for the run
+- **When** an observation would otherwise require instrumentation
+- **Then** no instrumentation is added and no tracked file is edited, `reproduction` records that the
+  observation was made without instrumentation, and the run continues to a verdict on the evidence it
+  could gather
+
 ## Proposed Surface
 
 **Verdicts.** Exactly one per run.
@@ -205,14 +241,21 @@ anything that diagnoses.
 
 ## Open Questions
 
-1. **May the skill run code and add temporary instrumentation, and where may that instrumentation
-   live?** Diagnosis without execution is reading, and reading is what produces the guesses this
-   contract exists to prevent. S-005 already fixes the observable half, that no tracked file differs
-   when the run ends. *Recommendation: allow execution and instrumentation, and decide whether this
-   contract should also name a permitted location (a worktree, a scratch path) or leave the location
-   to the implementation. Naming one costs portability, since not every target repository is a git
-   worktree; leaving it open risks an implementation that instruments in place and relies on cleanup.*
+Both are settled. Neither is reopened without a new amendment, and each records its answer's location
+so a later reader can check the answer rather than re-derive the question.
 
-2. **What is the default investigation bound?** *Recommendation: leave the number out of this contract
-   and set it in the skill, since it is a tuning value rather than a behavioral commitment. S-004
-   constrains only that a bound exists, is declared, and terminates the run.*
+1. **Settled 2026-08-29 (`chore-0078`): the skill may run code and add temporary instrumentation, and
+   that instrumentation lives only in a copy the run made for the purpose.** The answer is `S-014`,
+   with `S-015` covering the target that offers no way to make such a copy, and the Constraints
+   bullet on read-only posture pointing at both. Instrumenting the tracked files and cleaning up
+   afterwards was the alternative and was rejected: it satisfies `S-005` on every run that completes,
+   which means its failure is invisible until a run dies partway, and a safety property that only
+   fails once something else has already gone wrong is the kind this kit keeps being bitten by. The
+   cost of the answer is stated rather than discovered: it is `S-015`, and it is a real narrowing of
+   what the skill can observe in a repository it cannot copy.
+
+2. **Settled 2026-08-29 (`chore-0078`): the default investigation bound stays out of this contract,
+   adopting the recommendation this question carried.** The number is a tuning value rather than a
+   behavioral commitment, `S-004` already constrains that a bound exists, is declared, and terminates
+   the run, and fixing a number here would make every future retune an amendment. Recorded as
+   considered rather than deleted, so its absence reads as a decision and not as an oversight.

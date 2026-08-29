@@ -429,9 +429,10 @@ class HttpsOnlySourceTest(unittest.TestCase):
     def test_every_source_recorded_in_this_repository_is_https(self):
         # The real records, not fixtures. All eight were https:// before this tightening,
         # so it breaks nothing; this is the test that says so rather than a claim in a
-        # commit message that nobody can re-run.
+        # commit message that nobody can re-run. Nine since `feat-0061` folded in the
+        # `systematic-debugging` skill from an upstream library.
         found, _ = cp.collect(REPO_ROOT)
-        self.assertEqual(len(found), 8)
+        self.assertEqual(len(found), 9)
         for rel, record in found:
             with self.subTest(path=rel, line=record["line"]):
                 self.assertTrue(
@@ -1226,15 +1227,21 @@ class RepositoryRecordsTest(unittest.TestCase):
         ):
             self.assertIn(expected, recorded)
 
-    def test_the_recorded_set_is_eight_records_across_seven_files(self):
+    def test_the_recorded_set_is_nine_records_across_eight_files(self):
         # Pins the count in both directions. A grammar widened until it collects unrelated
         # `source:` lines raises it; one narrowed until a real block drops out lowers it,
         # and the second failure is the silent one.
+        #
+        # The count is deliberately a count and not a property, unlike the gate set in
+        # `cloud-executable.md` that `chore-0049` reworded: the whole question here is how
+        # many blocks the grammar collects, so a property would answer a different one.
+        # It moves whenever material is folded in, and `feat-0061` moved it from 8 across 7
+        # by adding `systematic-debugging`, whose upstream is Jesse Vincent's `superpowers`.
         found, unreadable = cp.collect(REPO_ROOT)
-        self.assertEqual(len(found), 8)
-        self.assertEqual(len({rel for rel, _ in found}), 7)
+        self.assertEqual(len(found), 9)
+        self.assertEqual(len({rel for rel, _ in found}), 8)
         # And the count is a full one rather than a narrowed one: if any file in scope
-        # could not be read, 8 would be what survived rather than what is there.
+        # could not be read, 9 would be what survived rather than what is there.
         self.assertEqual(unreadable, [])
 
     def test_no_record_in_this_repository_is_a_placement_without_a_source(self):
