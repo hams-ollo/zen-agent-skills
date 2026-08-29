@@ -45,7 +45,7 @@ permanent by inattention rather than by decision.
   reasons the contract cares about: it is **intermittent**, which is `S-012`; it **crosses
   components**, ingester and server, which is `S-008`; and its proximate cause is known while the
   right fix is not, which is exactly the gap between a symptom and a named cause.
-- **Record the diagnosis the contract's own record shape**, at whatever verdict it reaches.
+- **Record the diagnosis in the contract's own record shape**, at whatever verdict it reaches.
   `not_reproducible` and `architectural` are results, not failures, and a run that reaches one of
   them is still evidence about the skill.
 - **Report what the skill got wrong**, which is the actual deliverable. A dogfood that reports only
