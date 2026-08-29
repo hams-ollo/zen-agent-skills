@@ -221,11 +221,21 @@ class Result:
     def __init__(self, matrices, citations, unreadable=()):
         self.matrices = list(matrices)
         self.citations = list(citations)
-        # Matrices holding a table with no `Evidence` column. Kept apart from the citation
+        # Matrices this checker could not ask its question of. Kept apart from the citation
         # counts on purpose: they are not a citation that failed, they are a file whose
         # citations were never looked at, and folding the two together is how `bug-0049`
         # stayed invisible across four closed tasks that each reported this gate green.
-        self.unreadable = list(unreadable)
+        #
+        # Each entry is `(matrix, reason)`, because there are two ways to be unreadable and
+        # they need different sentences: a matrix whose tables carry no `Evidence` column,
+        # and a matrix carrying no table at all. Reporting the second under the first's
+        # wording would send a reader looking for a column in a file with no table to hold
+        # one.
+        self.unreadable = [(matrix, reason) for matrix, reason in unreadable]
+
+    def unreadable_matrices(self):
+        """Just the paths, for a caller asking whether a given matrix was readable."""
+        return [matrix for matrix, _reason in self.unreadable]
 
     def silent(self):
         """Matrices that yielded no citation at all.
@@ -535,8 +545,18 @@ def audit(root=None):
         # and stays a clean result: a spec whose scenarios are all not-built has nothing to
         # cite yet, and failing that would be the false alarm this checker is built to
         # avoid.
-        if tables and not readable:
-            unreadable.append(matrix)
+        if not tables:
+            # A conformance matrix holding no table at all: empty, truncated, or malformed.
+            # This is `bug-0049`'s own defect one level up. That bug was a gate reporting a
+            # clean result over a file it had never read, and its fix closed the case where
+            # a table is present and its column unrecognised while leaving the case where
+            # there is no table to recognise. Both are the question never being asked, and
+            # only one of them was being said out loud.
+            unreadable.append((matrix, "it holds no table at all, so there was nothing to "
+                                       "read a citation out of"))
+        elif not readable:
+            unreadable.append((matrix, "it holds a table with no 'Evidence' column, so none "
+                                       "of its citations was audited"))
 
         for header, body in readable:
             evidence_index = _column(header, EVIDENCE_HEADINGS)
@@ -641,11 +661,11 @@ def report(result, root, out):
                               in sorted(result.audited_kinds().items())) or "nothing"
     reasons = ", ".join(f"{reason} {count}" for reason, count
                         in sorted(result.unaudited_reasons().items())) or "nothing"
-    for matrix in result.unreadable:
-        out.write(f"COULD NOT READ {matrix}: it holds a table with no 'Evidence' column, "
-                  f"so none of its citations was audited. Not a clean result.\n")
+    unreadable_paths = result.unreadable_matrices()
+    for matrix, reason in result.unreadable:
+        out.write(f"COULD NOT READ {matrix}: {reason}. Not a clean result.\n")
     for matrix in result.silent():
-        if matrix not in result.unreadable:
+        if matrix not in unreadable_paths:
             out.write(f"note: {matrix} yielded no citation. Readable, and nothing in it "
                       f"cites anything yet.\n")
     out.write(f"Matrix citations: {len(unresolved)} unresolved.\n")

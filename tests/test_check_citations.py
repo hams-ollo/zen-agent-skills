@@ -198,6 +198,41 @@ class ColumnLayoutTests(unittest.TestCase):
                       "the unreadable matrix was counted but not named, which is how this "
                       "defect stayed invisible")
 
+    def test_a_matrix_holding_no_table_at_all_is_reported_as_unread_not_clean(self):
+        """`bug-0049`'s own defect one level up, found by review of the fix for it.
+
+        The first fix asked "is there a table whose column I cannot recognise?" and stopped
+        there. A file with no table at all, truncated, emptied, or malformed, has no table to
+        recognise, so it fell straight through to the silent branch and the run exited 0. The
+        module contract says exit 2 covers a matrix "found and could not be read, so for that
+        file the question was never asked", and that is exactly this file.
+        """
+        with _ShapedTree("# thing conformance\n\nProse and no table.\n", []) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 2,
+                         "a matrix holding no table was reported as a clean run, which is "
+                         "the gate going blind on a file it never read")
+        self.assertIn("COULD NOT READ", out)
+        self.assertIn("thing.conformance.md", out,
+                      "the unreadable matrix was counted but not named")
+
+    def test_the_two_ways_of_being_unreadable_are_reported_differently(self):
+        """One reason for two causes sends a reader looking for a missing column in a file
+        with no table to hold one. The reasons are asserted apart, because a single shared
+        sentence would satisfy any assertion that only checked for `COULD NOT READ`."""
+        with _ShapedTree("# thing conformance\n\nProse and no table.\n", []) as tree:
+            _, no_table = tree.run()
+        with _ShapedTree(NO_EVIDENCE_HEADER,
+                         [three_column_row("`scripts/thing.py` / `assemble()`")]) as tree:
+            _, no_column = tree.run()
+
+        self.assertIn("no table at all", no_table)
+        self.assertNotIn("'Evidence' column", no_table,
+                         "a file with no table was told its table lacks an Evidence column")
+        self.assertIn("'Evidence' column", no_column)
+        self.assertNotIn("no table at all", no_column)
+
     def test_a_matrix_that_cites_nothing_is_named_but_does_not_fail_the_run(self):
         """A spec whose scenarios are all not-built has nothing to cite yet. Failing that
         would be the false alarm this checker's design deliberately avoids, so it is

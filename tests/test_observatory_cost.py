@@ -562,6 +562,32 @@ class TestUnpricedModels(CostTestCase):
         was priced and came to nothing is a measured zero, and collapsing it into "unknown"
         loses exactly the distinction the null was introduced to preserve. Zero and unknown
         are two answers in both directions, not one answer and one escape hatch.
+
+        The zero here is reached by consuming nothing at a real rate, not by pricing real
+        consumption at a rate of zero. Both produce a total of `0.0` and only the first is
+        the case the docstring describes: a rate table of zeros is a strange table, while a
+        model that ran and consumed nothing is the ordinary empty scope this has to get
+        right. Recorded because the first version of this test took the second route and an
+        outside review caught the mismatch between what it said and what it built.
+        """
+        self.build_store([self.assistant("a1", model="test-model")])
+
+        payload = self.cost(pricing=self.pricing_file({"test-model": PRICED}))
+
+        self.assertEqual(payload["tokens"]["total"], 0, "the scope is not actually empty")
+        self.assertEqual(payload["cost"]["estimated_usd"], 0.0,
+                         "a fully priced scope that consumed nothing was reported as "
+                         "unknown, which hides a real measurement behind an absence")
+        self.assertTrue(payload["cost"]["complete"])
+        self.assertEqual(payload["cost"]["unpriced_models"], 0)
+
+    def test_s011_a_rate_of_zero_is_a_price_and_not_an_absence_of_one(self):
+        """The neighbouring case, kept because it is genuinely different.
+
+        A model priced at zero is priced: `_rate` admits `0.0`, so its cost is a measured
+        `0.0` and the total stays complete. A rule that treated a zero rate as no rate would
+        move this scope into the unpriced branch and report unknown, which is the same
+        collapse from the other end.
         """
         self.mixed_corpus()
 
@@ -569,10 +595,12 @@ class TestUnpricedModels(CostTestCase):
             {"test-model": {"input": 0.0, "output": 0.0},
              "mystery-model": {"input": 0.0, "output": 0.0}}))
 
-        self.assertEqual(payload["cost"]["estimated_usd"], 0.0,
-                         "a fully priced scope costing zero was reported as unknown, which "
-                         "hides a real measurement behind an absence")
-        self.assertTrue(payload["cost"]["complete"])
+        self.assertGreater(payload["tokens"]["total"], 0,
+                           "this case is only interesting over real consumption")
+        self.assertEqual(payload["cost"]["estimated_usd"], 0.0)
+        self.assertTrue(payload["cost"]["complete"],
+                        "a model priced at zero was treated as having no rate at all")
+        self.assertEqual(payload["cost"]["unpriced_model_names"], [])
 
     def test_s011_an_unparseable_rate_table_is_stated_rather_than_absorbed(self):
         """A hand-edited table with a trailing comma must not silently price everything at
@@ -890,8 +918,14 @@ class TestNoNetworkForRates(CostTestCase):
 
         class Refusing(real_socket):
             def __init__(self, *args, **kwargs):
+                # Recorded and then refused, rather than recorded and constructed. Calling
+                # `super().__init__` would create a real file descriptor, which makes the
+                # docstring above false and leaves a socket to be closed by whoever notices.
+                # Raising also fails at the point of the attempt, so a regression names the
+                # line that opened one instead of an assertion at the end of the test.
                 opened.append(args)
-                super().__init__(*args, **kwargs)
+                raise AssertionError(
+                    "loading the rate table constructed a socket, which S-022 forbids")
 
         socket.socket = Refusing
         try:
