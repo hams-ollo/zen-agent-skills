@@ -5,7 +5,7 @@ type: feat
 status: open
 priority: P2
 parent: "ROADMAP Epic B #17: repeat detection and futility classification"
-depends_on: [feat-0040]
+depends_on: [feat-0040, feat-0061]
 touched_files:
   - .agents/skills/fix-batch/SKILL.md
   - .agents/skills/house-review/SKILL.md
