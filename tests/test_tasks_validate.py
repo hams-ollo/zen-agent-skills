@@ -654,6 +654,123 @@ class DocsLinkModeTests(TasksRootTestCase):
         self.assertIn("checked 0 documents", out)
         self.assertIn("no-such-directory/**/*.md", out)
 
+    def _unmatched_lines(self, out):
+        """Every `no document matched:` line, so a test can assert which pattern died.
+
+        Asserted as whole lines rather than with `assertIn`, because the patterns
+        overlap as substrings: `*.md` occurs inside `no-such-directory/**/*.md`, so a
+        containment check could not tell blaming the dead pattern apart from blaming
+        every pattern in the run.
+        """
+        return [line for line in out.splitlines()
+                if line.startswith("no document matched:")]
+
+    def test_one_pattern_matching_nothing_fails_even_when_others_match(self):
+        # `chore-0032`: the guard fired per run rather than per pattern, so it caught
+        # only the case where every pattern died. Measured against this repository on
+        # 2026-08-27, before the fix: `--links '*.md' 'docs/**/*.md'
+        # 'totally-gone/**/*.md'` reported 44 documents and exit 0, and renaming `docs/`
+        # would have left the same command reporting 9 of 45 at exit 0.
+        #
+        # The live documents are the point of the fixture, not scenery: they are what
+        # produces the reassuring count that makes the dead pattern invisible.
+        (self.root / "CHANGELOG.md").write_text(
+            "See [the readme](README.md).\n", encoding="utf-8")
+        code, out = self._run_links("*.md", "no-such-directory/**/*.md")
+        self.assertNotEqual(
+            code, 0,
+            f"a dead pattern must fail the run even when another matches\n{out}")
+        self.assertIn("checked 2 documents, 0 broken link(s)", out)
+
+    def test_the_failure_names_the_pattern_that_matched_nothing(self):
+        # "No document matched" without saying which glob died sends the reader to
+        # check every pattern by hand, and being self-explaining is the whole value
+        # here. The live pattern must not be blamed alongside the dead one.
+        (self.root / "CHANGELOG.md").write_text(
+            "See [the readme](README.md).\n", encoding="utf-8")
+        _code, out = self._run_links("*.md", "no-such-directory/**/*.md")
+        self.assertEqual(
+            self._unmatched_lines(out),
+            ["no document matched: no-such-directory/**/*.md"],
+            f"exactly the dead pattern is named\n{out}")
+
+    def test_every_pattern_dead_still_fails_and_names_each_of_them(self):
+        # The guard the per-pattern rule replaces, kept rather than superseded. A
+        # stricter rule that stopped covering the all-dead case would be a regression
+        # hidden inside a fix, and it is the case the mode was originally built for.
+        code, out = self._run_links("gone/**/*.md", "also-gone/**/*.md")
+        self.assertNotEqual(code, 0, f"no pattern matched anything\n{out}")
+        self.assertIn("checked 0 documents", out)
+        self.assertEqual(
+            sorted(self._unmatched_lines(out)),
+            ["no document matched: also-gone/**/*.md",
+             "no document matched: gone/**/*.md"],
+            f"each dead pattern is named, not merely counted\n{out}")
+
+    def test_the_mode_with_no_pattern_at_all_still_fails(self):
+        # `--links` with nothing after it is the degenerate input, and it reaches the
+        # per-pattern loop with nothing to iterate. Without its own branch the run
+        # would report zero documents, find no pattern to blame, and exit 0, which is
+        # the exact shape this mode exists to make impossible.
+        code, out = self._run_links()
+        self.assertNotEqual(code, 0, f"a run over no pattern must not pass\n{out}")
+        self.assertIn("no pattern given", out)
+
+
+class TemplateDocsLinkModeTests(unittest.TestCase):
+    """`chore-0032`: the per-pattern guard in the tree the scaffold actually lands in.
+
+    Driven as a subprocess over a bare scaffolded tree for the reason
+    `TemplateStandaloneTests` gives: what matters is the file surviving the trip into a
+    repository holding nothing else from this kit.
+
+    The case worth pinning is the one the task's risk section named as costliest, a gate
+    that now fails for a legitimate reason. A scaffolded repository may have no
+    `.github/` and no `docs/`, so a caller that passes the patterns it actually has must
+    pass, and only a caller naming a tree that is not there may fail. That is also why
+    the template's usage line documents `'*.md'` alone and adds `'docs/**/*.md'` as
+    conditional prose: no scaffolded caller can then carry a pattern it does not have.
+    """
+
+    def _scaffold(self, tmp):
+        """A repository with a tracker, two documents, and no `.github/` or `docs/`."""
+        root = Path(tmp)
+        tasks = root / ".tasks"
+        tasks.mkdir()
+        (tasks / "validate.py").write_text(
+            TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        (root / "README.md").write_text(
+            "See [the changelog](CHANGELOG.md).\n", encoding="utf-8")
+        (root / "CHANGELOG.md").write_text(
+            "See [the readme](README.md).\n", encoding="utf-8")
+        return root, tasks
+
+    def _run_links(self, root, tasks, *patterns):
+        return subprocess.run(
+            [sys.executable, str(tasks / "validate.py"), "--links", *patterns],
+            capture_output=True, text=True, cwd=str(root))
+
+    def test_a_repository_with_no_github_or_docs_tree_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, tasks = self._scaffold(tmp)
+            proc = self._run_links(root, tasks, "*.md")
+        self.assertEqual(
+            proc.returncode, 0,
+            f"the patterns a scaffolded repository has must not fail\n"
+            f"{proc.stdout}\n{proc.stderr}")
+        self.assertIn("checked 2 documents, 0 broken link(s)", proc.stdout)
+
+    def test_the_same_tree_fails_when_a_caller_names_a_directory_it_lacks(self):
+        # The other half of the pair. Without it the test above would pass just as well
+        # against a guard that had been deleted, and there is deliberately no way to
+        # mark a pattern optional: a caller in a repository with no `docs/` drops the
+        # pattern instead of relaxing the rule.
+        with tempfile.TemporaryDirectory() as tmp:
+            root, tasks = self._scaffold(tmp)
+            proc = self._run_links(root, tasks, "*.md", "docs/**/*.md")
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("no document matched: docs/**/*.md", proc.stdout)
+
 
 class ValidatorCopiesAgreeTests(unittest.TestCase):
     """`bug-0023` and `bug-0026`: the two copies move together or not at all.

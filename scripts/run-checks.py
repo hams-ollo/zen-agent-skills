@@ -85,7 +85,13 @@ class Gate:
 
 
 def gates():
-    """The seven gates, in the order checks.yml ran them.
+    """The gate set: every gate that decides whether a change here is acceptable.
+
+    Ordered as checks.yml ran the ones it used to restate. The set is open by design and
+    its membership is the property that matters, not its size: it began as the seven
+    steps checks.yml carried, and `chore-0049` added the matrix-citation gate. Naming a
+    count here, or in the contract, goes stale the first time anyone adds a gate, which is
+    the class this repository keeps filing tasks about.
 
     A function rather than a module constant so a test can hold the canonical list
     without depending on import-time state, and so the interpreter is resolved at call
@@ -102,16 +108,42 @@ def gates():
         # Exercises the real placement path, including POSIX symlink mode, which the dry
         # run does not cover. Running it twice proves idempotence; the uninstall proves
         # the manifest can find what it created.
+        #
+        # `--with-hooks` is here by a decision recorded in chore-0067, not by habit. It
+        # costs this gate the six files of .agents/hooks/ written into the gitignored
+        # throwaway home per tool and removed again by the cleanup below, which needed no
+        # change: `--uninstall` reverses every recorded target beneath the home it is
+        # given, and the hooks placement is a recorded target. What it buys is the only
+        # module the kit runs inside an adopter's session being placed at least once per
+        # CI cell, in the real default mode for that platform, which is symlink on four of
+        # the six. The rejected option was leaving the flag off and relying on the
+        # component tests in tests/test_install.py alone: those run in-process and, off a
+        # POSIX host or on an account that cannot symlink, never take the link branch at
+        # all, so the saving would have been six temporary files against a placement path
+        # that still ran on no cell.
         Gate("install cycle",
-             [[PY, "scripts/install.py"] + install_home,
-              [PY, "scripts/install.py"] + install_home],
+             [[PY, "scripts/install.py", "--with-hooks"] + install_home,
+              [PY, "scripts/install.py", "--with-hooks"] + install_home],
              cleanup=[PY, "scripts/install.py", "--uninstall"] + install_home),
         # Calls the link rule in .tasks/validate.py rather than restating it. An inline
         # copy of that rule drifted once already (chore-0029). Globbed rather than
         # listed, because a hardcoded list silently excludes every new document.
+        #
+        # Each of the three patterns must match at least one document or this gate
+        # fails and names the one that did not (chore-0032). Until then the guard fired
+        # only when every pattern matched nothing, so renaming `docs/` left this gate
+        # green over 9 documents of 45. The three trees are all guaranteed present here,
+        # which is why no pattern needs an escape and none is offered.
         Gate("doc links",
              [[PY, ".tasks/validate.py", "--links",
                "*.md", ".github/**/*.md", "docs/**/*.md"]]),
+        # Added by chore-0049. The doc-links gate above resolves a markdown link's path
+        # and stops there; a conformance matrix's evidence is a symbol, a test name, or a
+        # quoted phrase, and none of those is a path. So a matrix could go on asserting
+        # that a renamed symbol exists with every gate green, which is what bug-0037
+        # measured: seven of 65 pointers in one matrix aimed at something other than what
+        # they claimed, from two independent causes in one month.
+        Gate("matrix citations", [[PY, "scripts/check-citations.py"]]),
     ]
 
 
@@ -228,7 +260,7 @@ def run_all(the_gates=None, runner=None, out=None):
     """Run every gate and report. Returns the exit code.
 
     `the_gates` and `runner` are injectable so the aggregation logic is reachable from a
-    test without executing seven real gates, which would make the failure and
+    test without executing every real gate, which would make the failure and
     could-not-run branches untestable.
     """
     the_gates = gates() if the_gates is None else the_gates

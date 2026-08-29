@@ -50,7 +50,7 @@ correct the `--strict` attribution.
 **Out of scope:**
 
 - `validate.py`. Both modes work as documented; only the instruction naming them is wrong. The related
-  `--links` guard defect is [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md) and
+  `--links` guard defect is [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md) and
   is independent.
 - Any other step in `doc-sync`.
 - Making `doc-sync` run the checker itself. It reports and, with per-finding approval, edits; the
@@ -76,7 +76,7 @@ has its own bug.
   sentence drops `--strict` entirely and keeps a general clause (this checker's other modes walk the
   tracker directory only) that carries the lesson without the local detail.
 - **Seam left open: the newly prescribed mode has its own open bug.** `doc-sync` now names `--links`
-  while [`chore-0032`](../chore-0032-links-guard-fires-per-run-not-per-pattern.md) is open against that
+  while [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md) is open against that
   mode's no-match guard. Deliberate per this task's scope, not an oversight for the next agent to
   close here.
 

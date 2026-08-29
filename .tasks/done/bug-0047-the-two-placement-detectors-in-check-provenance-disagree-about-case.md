@@ -2,7 +2,7 @@
 id: bug-0047
 title: The two provenance placement detectors disagree about case, so a docstring headed provenance loses the malformed-block safety net
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B #18: provenance convention for folded-in material"
 depends_on: [bug-0046]
@@ -77,6 +77,49 @@ not turn some other `Provenance`-looking heading into a placement. Check what a 
 newly capture across the real tree before and after, and report the count both ways rather than
 asserting no change.
 
+## Decisions
+
+**Chosen: case-insensitive for both markers, agreeing with `bug-0046` and `chore-0055`. Rejected:
+narrowing the fenced detector so both agree case-sensitively.** The rejected alternative was taken
+seriously, and it does not survive being written out for this file specifically. Its appeal is that a
+convention accepting one spelling is easier to check, but it buys no loudness at all: a mis-cased
+marker would still be *skipped* under it, not *reported*, so the silence this bug is filed for
+survives the fix meant to end it, and it spreads. Narrowing the fence removes coverage that exists
+today, because a malformed block inside a ```Provenance fence is reported now and would go back to
+being dropped at exit 0. Every bug in this file's history (`bug-0016`, `bug-0019`, `bug-0041`,
+`bug-0042`, `bug-0046`) is one silent drop, and each fix widened what the scanner can see. This is the
+first one where the strict answer would have moved the other way, which is the argument against it.
+Note that `AGENTS.md` genuinely does not settle it: it names the docstring section `Provenance` and
+the fence tag `provenance`, so under a case-sensitive-both answer the two markers would still be
+spelled differently and would still not "agree".
+
+**Premise checked, held, and found incomplete in a load-bearing way.** Every factual claim in the
+task file is true: the two detectors do disagree only about case, `--list` reports 8 records with 0
+malformed before and after, and every provenance docstring heading in the tree is `Provenance`
+exactly. But the two-line excerpt in `## Problem` shows only `_SECTION_RE`, and a docstring placement
+is not the heading: it is an *underlined* heading that is not inside an open fence. The underline is
+what bounds this widening, and it is a stronger guarantee than the measurement. Widening the heading
+cannot promote prose that merely says the word, and cannot reach into a fenced documentation example,
+because the fence branch runs first. `test_a_heading_with_no_underline_opens_nothing_in_any_case` and
+`test_a_mis_cased_heading_inside_someone_elses_fence_is_still_ignored` hold both bounds.
+
+**Seam left open deliberately: `_KEY_RE` stays case-sensitive, and this work confirmed it should.**
+After this change the file is case-insensitive about file suffixes and about both placement markers,
+and still case-sensitive about field keys, which looks like the same class one layer further in. It
+is not. A capitalised `Author:` exits 2 with `missing required field(s): author, license, retrieved,
+sha256`, so its consequence is loud where every member of this family is silent. It is worth noting
+that the message names the shortfall rather than the capitalised key that caused it, so the
+diagnostic is worse than `bug-0041`'s, but a loud wrong-sounding error is still a different class
+from a clean exit 0. Widening it would be a new rule rather than an agreement between two existing
+ones.
+
+**Seam left open deliberately: `AGENTS.md` never says the docstring heading needs an underline.** Its
+sentence reads true unchanged after this fix, which is what this task asked, but it says "a
+`Provenance` section of its module docstring" and the underline is only implicit in the word
+"section". An author who follows those words literally and omits the underline gets this same family's
+silent failure, at the exact spelling. Left alone because this task scopes `AGENTS.md` out and the
+document is a contract; reported as a finding for a separate task.
+
 ## Risks and rollback
 
 Two files in one module, so the more-than-one-module rule does not fire.
@@ -93,20 +136,20 @@ network, so nothing else depends on its exit code.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A module docstring headed with a case variant of `Provenance` is treated the same as the exact
+- [x] A module docstring headed with a case variant of `Provenance` is treated the same as the exact
       spelling, proven by a test that fails against the current code.
-- [ ] A malformed block inside such a docstring is reported rather than dropped, which is the
+- [x] A malformed block inside such a docstring is reported rather than dropped, which is the
       behaviour the disagreement currently costs.
-- [ ] The fenced-block detector's behaviour is unchanged, proven rather than asserted.
-- [ ] The closeout states the record count before and after, and what a widened match newly captures
+- [x] The fenced-block detector's behaviour is unchanged, proven rather than asserted.
+- [x] The closeout states the record count before and after, and what a widened match newly captures
       across the real tree.
-- [ ] No network request is made by any test.
-- [ ] The closeout states whether `AGENTS.md`'s provenance convention still reads true unchanged.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] No network request is made by any test.
+- [x] The closeout states whether `AGENTS.md`'s provenance convention still reads true unchanged.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

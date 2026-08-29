@@ -41,7 +41,7 @@ jobs:
       # If this workflow ever needs one, that is a signal to reconsider the change
       # rather than to add the step.
 
-      # One step, seven gates. This used to be seven steps, each naming its own
+      # One step, every gate. This used to be one step per gate, each naming its own
       # command, which meant the gate set existed only here and nothing outside CI
       # could run it. An agent working unattended cannot push and wait for someone to
       # read this page, so the gates moved into a committed script and this step calls

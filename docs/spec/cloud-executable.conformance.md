@@ -23,34 +23,49 @@ records what is true now. It is not a reprimand and it does not reopen either ta
 
 ## The one thing to read before the rows
 
-**Three of the nineteen scenarios are Not-built, and that is the honest state of this contract, not
-a gap this audit could close.** S-017 to S-019 describe the Phase 4 cloud proof run. That run was
-attempted on 2026-08-07 and did not happen; the attempt is recorded with a `blocked` verdict in
-[`cloud-executable.verification.md`](cloud-executable.verification.md), and nothing since has
-superseded it. Re-confirmed here against the repository's own history on 2026-08-19: no later
-verification record exists, and `bug-0021`, closed 2026-08-08, states in its own body that the proof
-run is still owed.
+**S-017, S-018 and S-019 were Not-built when this was written on 2026-08-19, and that was the honest
+state of this contract, not a gap the audit could close.** All three describe the Phase 4 cloud proof
+run. That run was attempted on 2026-08-07 and did not happen; the attempt is recorded with a
+`blocked` verdict in [`cloud-executable.verification.md`](cloud-executable.verification.md), and
+nothing had superseded it. Re-confirmed against the repository's own history on 2026-08-19: no later
+verification record existed, and `bug-0021`, closed 2026-08-08, states in its own body that the proof
+run is still owed. **Since the run of 2026-08-20, S-019 alone is Not-built**: that run moved S-017,
+S-018 and the unattended-branch surface row to Conformed and never entered the failure path S-019
+specifies, which the rows below and the observation on that run both record.
 
 This spec is also unusual in being **forward**, written before any of it existed, which its own
 header says. Every other retrospective matrix here audits code that predates its contract. This one
-audits sixteen scenarios built to a contract, and three that the contract is still waiting for.
+audits scenarios built to a contract, one the contract is still waiting for, and since `chore-0061`
+one written the other way round: S-020 pins behaviour `bug-0045` had already shipped, because the
+contract's silence about it was what made the defect conformant.
 
 ## Approval state
 
-`status: approved`, granted 2026-08-07, with **no pending amendment**. This matters because the
-convention in [`README.md`](README.md) requires a matrix to repeat any pending-re-approval note its
-rows depend on, and [`build-adapters.conformance.md`](build-adapters.conformance.md) and
-[`install.conformance.md`](install.conformance.md) both carry one. This one does not, and the reason
-is worth recording: `bug-0021` fixed the reachability defect behind S-008 and S-010 by moving the
-**code** to the contract rather than the contract to the code. The words "kit skill" were in the
-approved text from the start, verified here against the approving commit. So every row below is
-audited against text a human agreed to.
+`status: approved`, granted 2026-08-07, and the contract now carries **three amendments pending the
+author's re-approval**. They are repeated here because the convention in [`README.md`](README.md)
+requires a matrix to carry any pending-re-approval note its rows depend on, as
+[`build-adapters.conformance.md`](build-adapters.conformance.md) and
+[`install.conformance.md`](install.conformance.md) both do:
+
+- **2026-08-20 (`chore-0051`)**, repointing S-017 and S-018 from `bug-0018`, which had closed, to
+  `bug-0020`. Those two rows audit the repointed text.
+- **2026-08-27 (`chore-0061`)**, adding S-020 and widening the `Output` surface element to say what
+  a passing gate's entry carries. Those two rows audit text no human has agreed to yet.
+- **2026-08-28 (`chore-0049`)**, restating the `Gate set` surface element as a property rather than
+  a count, when that task added the matrix-citation gate. That row audits text no human has agreed
+  to yet.
+
+Every other row below is audited against approved text. When this matrix was written on 2026-08-19
+there was no pending amendment at all, and the reason is worth keeping: `bug-0021` fixed the
+reachability defect behind S-008 and S-010 by moving the **code** to the contract rather than the
+contract to the code. The words "kit skill" were in the approved text from the start, verified here
+against the approving commit.
 
 ## Matrix
 
 | Section | Item | Status | Evidence | Note |
 |---|---|---|---|---|
-| Scenarios | S-001 one command runs every gate and answers with one exit code | Conformed | `run-checks.py` / `gates()`, the seven; `run_all()` writes one line per gate with its status; its closing `return 1 if counts["failed"] else 0`, so 0 only when neither counter is set | Tests `test_the_seven_gates_are_present_ordered_and_complete`, `test_every_gate_runs_and_all_passing_exits_zero`. The gate list is pinned in the test as a deliberate second source of truth, since S-005 removes the seven CI steps it could otherwise have been compared against |
+| Scenarios | S-001 one command runs every gate and answers with one exit code | Conformed | `run-checks.py` / `gates()`, the whole set; `run_all()`'s `for gate in the_gates` loop, which writes one line per gate with its status; its closing `return 1 if counts["failed"] else 0`, so 0 only when neither counter is set | Tests `test_the_gate_set_is_present_ordered_and_complete`, `test_every_gate_runs_and_all_passing_exits_zero`. The gate list is pinned in the test as a deliberate second source of truth, since S-005 removes the seven CI steps it could otherwise have been compared against. **Re-derived 2026-08-28 (`chore-0049`)**, because that task falsified two things this row said rather than merely moving them: the evidence called `gates()` "the seven", and the pinned test was renamed off its count. The scenario itself needed nothing, since it says "every gate in the gate set" and names no number |
 | Scenarios | S-002 a failing gate is named, and the gates after it still run | Conformed | `run-checks.py` / `run_all()`'s `for gate in the_gates` loop reports each gate and continues rather than breaking; its `for name, status, output in notes` loop dumps every collected failure; the closing `return 1 if counts["failed"] else 0` | Tests `test_a_failing_gate_does_not_stop_the_ones_after_it`, `test_a_real_failure_exits_one_and_later_gates_still_run`. The second runs real subprocesses, so the non-fail-fast property is proved rather than stubbed |
 | Scenarios | S-003 a gate that could not run outranks a gate that failed | Conformed | `run-checks.py` / `_run()`'s missing-script check, `if script is not None and not (REPO_ROOT / script).exists()`, ahead of the call; its `except OSError as exc` branch for an interpreter that cannot start; `run_all()`'s `if counts["unrunnable"]: return 2`, whatever else is set | Tests `test_a_gate_that_cannot_run_outranks_one_that_failed`, `test_an_unrunnable_gate_is_not_reported_as_failed`, `test_a_missing_script_is_unrunnable_not_failed`, `test_unrunnable_outranks_failed_for_real`. The missing-script check is load-bearing rather than belt-and-braces: `subprocess` does not raise for a missing script, so without it the whole could-not-run branch would be dead in the case it exists for |
 | Scenarios | S-004 the run leaves no installation behind | Conformed | `run-checks.py` / the `THROWAWAY_HOME` constant; `gates()`'s `Gate("install cycle", ...)`, whose `cleanup` uninstall is scoped by `--home`; `run_gate()`'s `if gate.cleanup is not None` block, which runs whether the gate passed or failed | Tests `test_the_install_cycle_reverses_what_it_placed`, `test_cleanup_runs_even_when_the_gate_failed`, `test_only_the_install_cycle_cleans_up_after_itself`. Confirmed in [the S-001 to S-016 verification](cloud-executable.s001-s016.verification.md) by a before-and-after diff over a full copy of the tree. The one write outside the throwaway home is `scripts/.install-manifest.json`, which is gitignored, is the tool's own record, and is not an installation |
@@ -69,11 +84,12 @@ audited against text a human agreed to.
 | Scenarios | S-017 the proof run lands as a draft pull request carrying its evidence | **Conformed** | The 2026-08-20 run of `bug-0020` (`chore-0051` repointed the Given to it): branch `claude/bug-0020-unknown-remedy-lcqb52`, pull request #41 opened **draft** against `developer` and not merged, body carrying all nine fields including `run-checks.py`'s verbatim output and exit 0. Independently verified by a session that did not write it, per `A7`: diff confined to the task's three `touched_files` (109+/3-), zero existing tests edited, `docs/spec/install.md` untouched, acceptance re-run. Superseded evidence: [`cloud-executable.verification.md`](cloud-executable.verification.md) records the 2026-08-07 attempt with verdict `blocked`, two independent blockers, and `evidence_produced: none` | The run has not happened as of 2026-08-19. What exists is the surrounding apparatus, not the scenario: rule **A8** in [`autonomy.md`](../../.agents/rules/autonomy.md) states the ceiling, [`cloud-executable.runbook.md`](cloud-executable.runbook.md) tells a person how to start it, and the verification record carries the exact dispatch command. See the observations below on why `bug-0018` having landed on a `claude/` branch is not evidence for this row, and on the 2026-08-20 repointing to `bug-0020` |
 | Scenarios | S-018 the proof's evidence is a test that failed before the change | **Conformed** | `test_an_unrecorded_rules_entry_names_replace_adopted_rather_than_re_install` and `test_the_run_summary_names_both_remedies_when_the_unknown_entries_are_a_mix` fail against `developer`'s `install.py` and pass against the fixed one. **Reproduced independently rather than read from the report**: restoring `install.py` to `developer`'s copy with the new tests in place yields the same two failures with the same assertion text, and the third test is green in both directions by design as the scope guard. Superseded evidence: Same record, `evidence_owed: S-017, S-018, S-019` | This is the row that carries the actual proof, per prediction 6 in the verification record: the other predictions can be satisfied by an agent that followed instructions, and only a test failing before the change and passing after demonstrates work a plausible-sounding report could not have faked. Nothing has produced it |
 | Scenarios | S-019 a proof run whose gates fail still reports | **Not-built** | None. Same record | Unreachable until S-017 runs at all, since its Given is the same dispatched session. Recorded separately rather than folded into S-017, because it specifies the failure path and a successful run would leave it still unproved |
+| Scenarios | S-020 a passing gate accounts for what it examined | Conformed | `run-checks.py` / `coverage_line()`, which returns a line of the gate's own captured output and `(no output)` where the gate printed nothing; `run_all()`'s per-gate loop, whose `coverage_line(output)` write follows the status line unconditionally, with the comment stating that the passing case is the one `bug-0045` found silent | Tests in `test_run_checks.py` / `CoverageReportTests`: `test_two_passing_runs_over_different_scopes_are_not_byte_identical` for the report-level property, `test_a_passing_gate_carries_a_coverage_line_at_all` and `test_a_gate_that_examined_nothing_says_so_instead_of_only_ok` for the per-gate line, `test_the_addition_is_one_line_per_gate_not_the_whole_output` for the bound. **Audited 2026-08-27 by `chore-0061`, the task that wrote the scenario, and no other row was re-derived on that date.** What this row does not claim is that each gate's line varies with that gate's own scope: measured 2026-08-27, `lint skills` prints a byte-identical coverage line over 20 skills and over 21, because the line the rule reaches is the supporting-file line rather than `Checked N skill(s)`. That is the seam `bug-0045` recorded as left open, and it is why S-020 states its property over the report rather than over each gate. **That measurement was superseded later the same day**: `chore-0064` carried the skill count into the line the rule reaches, so `lint skills` now varies with its own scope. The sentence above is left as the dated record it is, and the re-audit is in the observation below (`chore-0065`). This row's status is unaffected either way, because S-020's property is over the report |
 | Proposed Surface | Acceptance command `python scripts/run-checks.py`, no flags | Conformed | `run-checks.py` / `main()` takes `argv` only in order to refuse it, returning 2 with a message | Test `test_any_argument_is_refused`. Exit 2 rather than 1 for a refused argument is consistent with the scenario's own precedence: the command did not run the gates, so it did not answer |
-| Proposed Surface | Gate set, the seven from `checks.yml` | Conformed | `run-checks.py` / the list `gates()` returns: lint skills, test suite, backlog, adapters dry run, install dry run, install cycle, doc links | Test `test_the_seven_gates_are_present_ordered_and_complete`, plus `test_every_real_gate_names_a_script_that_exists`. The install cycle runs `install.py` twice, which is the idempotence proof; a test pins that after verification found deleting the second run went uncaught |
+| Proposed Surface | Gate set: every gate deciding acceptability, as `gates()` enumerates it | Conformed | `run-checks.py` / the list `gates()` returns: lint skills, test suite, backlog, adapters dry run, install dry run, install cycle, doc links, matrix citations | Tests `test_the_gate_set_is_present_ordered_and_complete`, which pins every gate's whole shape, and `test_every_real_gate_names_a_script_that_exists`. The install cycle runs `install.py` twice, which is the idempotence proof; a test pins that after verification found deleting the second run went uncaught. **Re-derived 2026-08-28 against the amended element (`chore-0049`), which is text no human has agreed to yet**, and the enumeration above was read off `gates()` rather than carried over: the matrix-citation gate is new on that date. Two qualifications the word "every" carries, and neither is a divergence. `check-provenance.py` decides something about acceptability and is deliberately outside the set, because it needs network and a check that fails when GitHub is slow gets disabled within a week, recorded in the conventions section of `AGENTS.md`. And the set is what `gates()` returns, so the element is satisfied by construction and the load-bearing guard is the pinned shape, not the sentence |
 | Proposed Surface | Throwaway home `./.tmp/zen-home` | Conformed | `run-checks.py` / `THROWAWAY_HOME`, used through `gates()`'s `install_home` for all three install gates | The literal the spec names, matching what the CI steps already used, and gitignored via `.tmp/` |
 | Proposed Surface | Exit code 0 / 1 / 2, with 2 outranking 1 | Conformed | `run-checks.py` / `run_all()`'s closing branches: the unrunnable counter is tested first and returns 2 unconditionally | Proved end to end against real gates in [the S-001 to S-016 verification](cloud-executable.s001-s016.verification.md): three failed plus one unrunnable returned 2, and the same run with only failures returned 1 |
-| Proposed Surface | Output: one line per gate, the failing gate's output, then a summary with counts and platform | Conformed | `run-checks.py` / `run_all()`: the per-gate line, then the `----- {name}: {status} -----` output block, then the counts followed by the platform and Python version | Mirrors `install.py`'s `check()` report shape rather than inventing a second format, as `feat-0045` required. A passing gate whose cleanup failed still gets its output shown (`run_all()`'s `if status != "ok" or not cleanup_ok` guard), so leftover files are never announced in one word and explained nowhere. **Still Conformed after `bug-0045`, and the contract now owes an amendment**: `run_all()` also writes one indented coverage line beneath every gate, which this row neither requires nor forbids. See "An amendment this contract owes" below |
+| Proposed Surface | Output: one line per gate, a coverage line beneath each, the failing gate's output, then a summary with counts and platform | Conformed | `run-checks.py` / `run_all()`: the per-gate status line, the `coverage_line(output)` write directly beneath it, then the `----- {name}: {status} -----` output block, then the counts followed by the platform and Python version | Mirrors `install.py`'s `check()` report shape rather than inventing a second format, as `feat-0045` required. A passing gate whose cleanup failed still gets its output shown (`run_all()`'s `if status != "ok" or not cleanup_ok` guard), so leftover files are never announced in one word and explained nowhere. **The amendment this row owed is written**: `chore-0061` widened the element on 2026-08-27 to require the coverage line, which the code has emitted since `bug-0045`. Re-audited against the widened text on that date, and it is text no human has re-approved yet |
 | Proposed Surface | CI wiring: one step invoking the command | Conformed | `checks.yml` / a single `Run every acceptance gate` step | The seven steps it replaced are gone rather than commented out, which is what makes the S-005 restatement test meaningful |
 | Proposed Surface | `AGENTS.md` names the command and states the bound | Conformed | `AGENTS.md` / the section "The acceptance command": the command in a fenced block, the exit codes in the `run-checks.py` paragraph below it, and the bound in the spec's exact words, "**Passing it is necessary but not sufficient**" | |
 | Proposed Surface | Bootstrap hook: reminder shape, `SessionStart`, `startup` matcher | Conformed | `skill-reachability-reminder.py` / the module docstring declares the shape, and its "Contract" section states stdin, stdout, and exit; `FIRING_SOURCES` the matcher value; the injectable `main(stdin, stdout)`; listed in the module table in `.agents/hooks/README.md` | Satisfies the hooks module contract the spec's Constraints section imports: exit 0 always, at most one JSON object, no import from this repository, injectable entry point |
@@ -84,13 +100,14 @@ audited against text a human agreed to.
 
 ## Coverage proof
 
-- **audited**: all 19 scenarios, S-001 through S-019, and all 12 Proposed Surface rows. 19 + 12 = **31
+- **audited**: all 20 scenarios, S-001 through S-020, and all 12 Proposed Surface rows. 20 + 12 = **32
   items**, which is every auditable item the spec contains. Nothing was sampled and nothing was
-  skipped.
-- **unreconciled**: **1 of 31**, as re-audited 2026-08-20. S-019 alone, and it is **Not-built**;
-  none is Diverged. It was 4 of 31 until the proof run of 2026-08-20 moved S-017, S-018, and the
-  `Unattended branch and pull request` surface row to Conformed. The arithmetic: 4 minus 3 is 1.
-- **conformed**: 30 of 31, being S-001 through S-018 and all 12 surface rows. 30 + 1 = 31.
+  skipped. It was 31 items until `chore-0061` added S-020 on 2026-08-27: 31 plus 1 is 32.
+- **unreconciled**: **1 of 32**, as re-audited 2026-08-20 and re-derived 2026-08-27. S-019 alone, and
+  it is **Not-built**; none is Diverged. It was 4 of 31 until the proof run of 2026-08-20 moved
+  S-017, S-018, and the `Unattended branch and pull request` surface row to Conformed, and S-020
+  arrived Conformed, so it did not move again. The arithmetic: 4 minus 3 is 1, and 1 plus 0 is 1.
+- **conformed**: 31 of 32, being S-001 through S-018, S-020, and all 12 surface rows. 31 + 1 = 32.
 - **disposition of the one unreconciled item**: accepted-with-reason. S-019's Given is a session whose
   acceptance command exits non-zero, and the 2026-08-20 run's exited 0 with all seven gates passing,
   so the failure path was never entered. It cannot be closed by wanting it: it needs a proof run that
@@ -102,45 +119,53 @@ audited against text a human agreed to.
   message, and that is not evidence against the hook, because the session was staged on a commit
   without the fix. See the observation below.
 
-The audited range stops at S-019 and claims nothing wider. The spec has 19 scenarios and this matrix
-has 19 scenario rows.
+The audited range stops at S-020 and claims nothing wider. The spec has 20 scenarios and this matrix
+has 20 scenario rows.
 
-## An amendment this contract owes
+## The amendment this contract owed, and what was written
 
-**Unreconciled, and against the contract rather than against the code.** Recorded by `bug-0045` on
-2026-08-22, which changed `run-checks.py` to write one indented coverage line beneath every gate's
-status line, passing gates included. Before that change the aggregator captured each gate's output
-and printed it only `if status != "ok"`, so seven gates passing over this repository and six gates
-passing over a copy with the skills, the tests, and the task files removed produced byte-identical
-reports.
+**Closed by `chore-0061` on 2026-08-27.** Recorded here by `bug-0045` on 2026-08-22, which changed
+`run-checks.py` to write one indented coverage line beneath every gate's status line, passing gates
+included. Before that change the aggregator captured each gate's output and printed it only
+`if status != "ok"`, so seven gates passing over this repository and six gates passing over a copy
+with the skills, the tests, and the task files removed produced byte-identical reports.
 
-**This is a debt of the spec, not a divergence in the implementation, and the arithmetic above is
-deliberately unchanged.** Nothing the contract requires is missing: S-001 still gets every gate named
-with its own outcome, S-002 still gets a failing gate named with its output, and the `Output` surface
-row still gets its per-gate line, its failure block, and its summary. What is missing is the other
-direction. The contract does not say what a **passing** gate carries, so the silence the defect
-depended on was contract-compliant, and the coverage line the fix adds is contract-silent too. Both
-states satisfy the same three items, which is the property worth amending away.
+**It was a debt of the spec, not a divergence in the implementation.** Nothing the contract required
+was missing: S-001 got every gate named with its own outcome, S-002 got a failing gate named with its
+output, and the `Output` surface row got its per-gate line, its failure block, and its summary. What
+was missing was the other direction. The contract did not say what a **passing** gate carried, so the
+silence the defect depended on was contract-compliant, and the coverage line the fix added was
+contract-silent too. Both states satisfied the same three items, which is the property the amendment
+removes.
 
-What the amendment owes, for whoever files it:
+What was written, against what this section asked for:
 
-- **S-001** says each gate "is named in the output with its own outcome" and stops there. It is the
-  natural home for a clause requiring a passing gate to carry its own account of what it covered.
-- The **`Output`** surface row describes three elements and should describe four.
-- The property to state is the falsifiable one `bug-0045` asserts in
-  `tests/test_run_checks.py`, `CoverageReportTests`: a run over an empty scope must not be
-  byte-identical to a run over a full one. Stating a required wording instead would pin the aggregator
-  to whatever the gates print today.
+- **A new scenario, S-020, rather than a clause appended to S-001.** S-001 was named here as the
+  natural home, and a separate scenario was chosen instead so that the S-001 row keeps auditing the
+  text it has audited since 2026-08-19, and so the new clause carries an id that a task, a test, or a
+  later matrix can cite on its own.
+- **The `Output` surface element now describes four things rather than three**, the coverage line
+  being the fourth.
+- **The property stated is the falsifiable one**, that a run over an empty scope must not be
+  byte-identical to a run over a full one, which is what `bug-0045` asserts in
+  `tests/test_run_checks.py`, `CoverageReportTests`. No wording and no selection rule is named, so a
+  gate rewording its summary line does not put the contract out of date.
 
-Not filed here, deliberately. `docs/spec/cloud-executable.md` and
-[`README.md`](README.md) are both untouched by `bug-0045`, whose `touched_files` are
-`scripts/run-checks.py` and `tests/test_run_checks.py`, and two agents adding re-approval rows to one
-shared file collided on 2026-08-19. The amendment is a separate task, in the shape of the one
-`chore-0047` took.
+**Stated over the report rather than over each gate, deliberately, and the alternative is falsified
+rather than merely disliked.** The stronger property, that each passing gate's line must vary with
+that gate's own scope, is not what ships: `lint skills` prints a byte-identical coverage line over 20
+skills and over 21, measured 2026-08-27, because the rule reaches the supporting-file line and not
+`Checked N skill(s)`. `bug-0045` recorded that seam under "the rule shows a gate's last count, not its
+best one" and left it open on purpose. The per-gate wording would therefore have written a divergence
+into an approved contract, in a task forbidden from touching the code that would close it. See the
+observation below, which records that `chore-0064` closed exactly that seam later the same day, in
+the gate, which is where `bug-0045` said the remedy belonged. The measurement above is left as
+`chore-0061` took it, and the reasoning it supports is unchanged: a task that cannot touch the code
+cannot write a contract clause the code does not yet satisfy.
 
-**This section is a targeted note, not a re-audit.** Only the `Output` row and S-001 were re-read for
-it. The frontmatter's `audited` and `re_audited` dates are left alone, and the coverage proof's 1 of
-31 still refers to S-019 alone, which nothing here changes.
+**This closure re-read S-001, S-002, the `Output` row, and the new S-020, and nothing else.** The
+frontmatter's `audited` and `re_audited` dates are left alone, because no other row was re-derived;
+the coverage proof above is restated only where S-020 changes its arithmetic.
 
 ## Observations
 
@@ -256,3 +281,45 @@ One property of this audit is worth stating plainly, since it recurs: the run th
 Conformed rows above also produced a false finding, rediscovering `bug-0021` and offering it as new,
 because it was reading superseded code. The rows above are Conformed on evidence re-derived after the
 rebase and re-verified by a second session, not on the report as first written.
+
+**What a passing gate's line actually carries for `lint skills`, measured while S-020 was being
+written (`chore-0061`, 2026-08-27).** The report shows `Link-checked 1 supporting file(s) beside them;
+skipped 8 template(s) whose links are written for another repository and 5 non-markdown file(s).` and
+never `Checked 20 skill(s): 0 error(s), 0 warning(s).`, which is the line directly above it in
+`validate-skills.py`'s own output. Two consequences are worth recording. The line is not
+self-contained: "beside them" loses its antecedent once the line naming the skills is dropped. And it
+does not move with the gate's own scope: run against a tree of 20 skills and a tree of 21, both
+linting clean, the shipped rule returns byte-identical text, because adding a skill that carries no
+supporting file, no template, and no non-markdown file changes none of the three counts on that line.
+Reproduced by calling `validate-skills.py`'s injectable `main(skills_dir=...)` against two copied
+trees under a gitignored `.tmp/` and applying the rule to each output.
+
+**Both consequences were closed later the same day, and the paragraph above is left as the record of
+what was true when it was written rather than edited into agreement with today** (`chore-0064`,
+2026-08-27, re-audited here by `chore-0065`). That task carried the skill count into the second
+summary line, which is the line the rule reaches, so the wording quoted above no longer exists in
+`validate-skills.py`. The line now opens `Link-checked 1 supporting file(s) beside the 20 skill(s)
+checked`, which makes it self-contained: the antecedent the discarded first line used to supply is
+now inside the sentence. And it does move with the gate's own scope. Re-measured by execution
+2026-08-27, by the same method the paragraph above describes: two clean fixture trees differing only
+in skill count, of 20 skills and of 21, now produce selected lines differing in exactly that number,
+where before they were byte-identical. **The verdict was re-derived against the current script rather
+than the quotation repaired**, because a citation refreshed without re-deriving what it supports
+asserts a freshness the repair did not establish. Two consequences of the re-audit for this matrix:
+the seam this observation records as open is closed in the gate, which is where `bug-0045` said the
+remedy belonged, and S-020's classification is unaffected, since that scenario states its property
+over the report rather than over each gate and was Conformed before this change and after it. Two
+neighbouring statements of the superseded measurement are left standing as the dated records they
+are, each in its own place: the parenthetical in the S-020 row above, and the paragraph in "The
+amendment this contract owed, and what was written" explaining why the per-gate wording was not
+adopted. Both are true of 2026-08-27 as `chore-0061` measured it, and the reason the per-gate wording
+was declined is unchanged by the seam later closing, since that task could not touch the code that
+closed it.
+
+This is a seam `bug-0045` disclosed rather than a defect it hid. Its `## Decisions` records that the
+rule "shows a gate's last count, not its best one", names `lint skills` as one of the two cases, and
+argues that a gate wanting a different line shown should print that line last rather than have the
+aggregator learn its shape. It is recorded here because S-020 had to be written around it: a contract
+requiring each passing gate's line to vary with that gate's own scope would have been a divergence on
+the day it was written, in a task forbidden from touching `scripts/`. The remedy, if it is wanted,
+belongs in the gate.

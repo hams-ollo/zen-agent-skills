@@ -98,12 +98,20 @@ class GateSetTests(unittest.TestCase):
         ("install dry run",
          [["scripts/install.py", "--dry-run", "--home", "./.tmp/zen-home"]],
          None),
+        # `--with-hooks` added by chore-0067. The cleanup deliberately does not carry it:
+        # `install.py`'s uninstall branch returns before it ever reads the flag, and the
+        # reversal is driven by the recorded manifest entry instead.
         ("install cycle",
-         [["scripts/install.py", "--home", "./.tmp/zen-home"],
-          ["scripts/install.py", "--home", "./.tmp/zen-home"]],
+         [["scripts/install.py", "--with-hooks", "--home", "./.tmp/zen-home"],
+          ["scripts/install.py", "--with-hooks", "--home", "./.tmp/zen-home"]],
          ["scripts/install.py", "--uninstall", "--home", "./.tmp/zen-home"]),
         ("doc links",
          [[".tasks/validate.py", "--links", "*.md", ".github/**/*.md", "docs/**/*.md"]],
+         None),
+        # Added by chore-0049. The doc-links gate above resolves a link's path; a matrix
+        # cites a symbol, a test name, or a quoted phrase, none of which is a path.
+        ("matrix citations",
+         [["scripts/check-citations.py"]],
          None),
     ]
 
@@ -113,7 +121,12 @@ class GateSetTests(unittest.TestCase):
                 [command[1:] for command in gate_.commands],
                 gate_.cleanup[1:] if gate_.cleanup else None)
 
-    def test_the_seven_gates_are_present_ordered_and_complete(self):
+    def test_the_gate_set_is_present_ordered_and_complete(self):
+        # Renamed by chore-0049 from `test_the_seven_gates_are_...`. The gate set is open
+        # and the eighth gate landed in that task, so a name carrying a count was already
+        # false of the thing it pins. That is the same count-shaped staleness the
+        # cloud-executable `Gate set` element was amended to remove on the same date, and
+        # a test name is read far more often than the list beneath it.
         actual = [self._shape(g) for g in rc.gates()]
         self.assertEqual(self.EXPECTED, actual,
                          "the gate set changed; if that was deliberate, update this list "
@@ -139,6 +152,24 @@ class GateSetTests(unittest.TestCase):
         cycle = next(g for g in rc.gates() if g.name == "install cycle")
         self.assertIn("--uninstall", cycle.cleanup)
         self.assertIn(rc.THROWAWAY_HOME, cycle.cleanup)
+
+    def test_the_install_cycle_exercises_the_hook_placement_path(self):
+        # Called out separately from the pin above for the same reason the duplicate run
+        # is: the flag reads like something to drop when tidying, and dropping it costs
+        # more than it looks. `.agents/hooks/` is the only module the kit runs inside an
+        # adopter's session, and before chore-0067 its placement path ran on none of the
+        # six CI cells: `grep -n with-hooks scripts/run-checks.py` returned nothing.
+        #
+        # The component tests in tests/test_install.py cover placement in-process and in
+        # copy mode; this gate is what covers it through the real CLI in whichever mode
+        # the platform defaults to, which is symlink on macOS and Linux.
+        cycle = next(g for g in rc.gates() if g.name == "install cycle")
+        for command in cycle.commands:
+            with self.subTest(command=command):
+                self.assertIn("--with-hooks", command,
+                              "the hooks module ships untested on every cell without it")
+        self.assertNotIn("--with-hooks", cycle.cleanup,
+                         "reversal is driven by the manifest entry, not by the flag")
 
 
 class AggregationTests(unittest.TestCase):

@@ -40,6 +40,9 @@ The defect each group protects against:
                   state of a repository with nothing folded in
   suffix case   - a file whose suffix an author typed uppercase is never selected, so
                   every record it carries leaves the run and no count records the file
+  marker case   - the two placement markers answer differently on the same word, so a
+                  docstring headed `provenance` is not a declared placement at all and
+                  every malformed block inside it drops back out of the run, at exit 0
   real records  - a backfilled block in this repository is malformed and nobody notices
                   until the day someone runs the checker with a network
 """
@@ -47,6 +50,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import re
 import tempfile
 import unittest
 import unittest.mock
@@ -729,6 +733,19 @@ DOCSTRING_BLOCK = (
 )
 
 
+def docstring_block(heading="Provenance", underline="----------"):
+    """DOCSTRING_BLOCK with its placement marker respelled, for bug-0047.
+
+    Derived from the one fixture rather than copied, so a marker-case test can never drift
+    into exercising a differently-shaped block than the tests above it.
+
+    Both halves of the marker are parameters because both are load-bearing: a docstring
+    placement is an underlined heading, not a heading. Varying `underline` is how the tests
+    below hold the bound the widened heading match relies on.
+    """
+    return DOCSTRING_BLOCK.replace("Provenance", heading, 1).replace("----------", underline, 1)
+
+
 class MisspelledFieldTest(unittest.TestCase):
     """bug-0041: a typo on the field after `source:` deleted the whole block, at exit 0.
 
@@ -1046,6 +1063,144 @@ class SuffixCaseTest(unittest.TestCase):
     def test_the_constant_stays_lowercase_so_the_comparison_stays_honest(self):
         # The comparison lowers one side only, so an uppercase entry here would be dead.
         self.assertEqual(list(cp.SCAN_SUFFIXES), [s.lower() for s in cp.SCAN_SUFFIXES])
+
+
+class PlacementMarkerCaseTest(unittest.TestCase):
+    """bug-0047: the two placement markers disagreed about case, so half the net was off.
+
+    `_SECTION_RE` matched `Provenance` exactly, while the fence's info string was lowered
+    before comparison. So ```Provenance opened a placement and a module docstring headed
+    `provenance` did not: one concept, two answers on the same word.
+
+    Placement is what bug-0041 and bug-0042 made load-bearing. Inside one, a typo on the
+    field after `source:`, a typo on the `source` key itself, and a block carrying no
+    `source:` line at all are all reported. Outside one, the same three are dropped and the
+    run prints the clean empty state of a repository with nothing folded in, at exit 0. So
+    the oracles here are the malformed shapes, not the well-formed one: a well-formed block
+    under a mis-cased heading parses either way, because parse_records() also qualifies a
+    run on its content, and asserting on it would pass against the bug.
+
+    Characterization rather than acceptance: no spec covers this, so these pin the behaviour
+    the widened marker produces and the boundary tests hold what it must not start
+    capturing. The fenced marker is asserted here too, in both directions, because
+    "unchanged" is a claim a test has to carry rather than a sentence in a closeout.
+
+    The bound is the underline, which is the part the bug report's two-line excerpt did not
+    show. A placement is an *underlined* heading outside any open fence, so widening the
+    heading match cannot promote prose that merely says the word, in any spelling, and
+    cannot reach inside somebody else's fenced example.
+    """
+
+    # 0-based half-open region of docstring_block(): the underline opens it, the closing
+    # `\"\"\"` is the first line that is neither blank nor a `key: value` line.
+    DOCSTRING_REGION = [(3, 9)]
+    # And of block(): the fence line opens it, the closing fence is outside it.
+    FENCE_REGION = [(2, 8)]
+
+    @staticmethod
+    def regions(body):
+        return cp.placement_regions(cp.declared_lines(body.splitlines()))
+
+    def test_every_spelling_of_the_docstring_heading_opens_the_same_placement(self):
+        # The exact spelling leads the table deliberately: it is the case that already
+        # worked, so a fix that widened the match by breaking it would fail here first.
+        for heading in ("Provenance", "provenance", "PROVENANCE", "pRoVeNaNcE"):
+            with self.subTest(heading=heading):
+                self.assertEqual(self.regions(docstring_block(heading=heading)),
+                                 self.DOCSTRING_REGION)
+
+    def test_a_misspelled_field_under_a_mis_cased_heading_is_reported(self):
+        # bug-0041's net, switched off for this spelling by the disagreement. Before the fix
+        # the run collected `source` alone, failed the same content test that keeps
+        # review-depth's unrelated `source:` field out, and appended nothing at all.
+        body = docstring_block(heading="provenance").replace("author:", "authr:")
+        code, output = run(body, serve(UPSTREAM), filename="hook.py")
+        self.assertEqual(code, 2)
+        self.assertIn("authr", output)
+
+    def test_that_misspelled_field_is_counted_as_an_error_not_as_nothing(self):
+        # The bug's signature is a summary that reads like a repository with no fold-ins, so
+        # the count and the empty-tree sentence are the oracle rather than the exit code.
+        body = docstring_block(heading="provenance").replace("author:", "authr:")
+        code, output = run(body, serve(UPSTREAM), filename="hook.py")
+        self.assertEqual(code, 2)
+        self.assertNotIn("No provenance records found", output)
+        self.assertIn("0 up to date, 0 drifted, 0 unlocatable, 1 error(s).", output)
+
+    def test_a_mistyped_source_key_under_a_mis_cased_heading_is_reported(self):
+        # bug-0042's net, the other half of what placement buys. Nothing here ever produces
+        # a `source:` token, so only the placement pass can see this block at all.
+        body = docstring_block(heading="PROVENANCE").replace("source:", "sorce:")
+        code, output = run(body, serve(UPSTREAM), filename="hook.py")
+        self.assertEqual(code, 2)
+        self.assertIn("no 'source:' line", output)
+        self.assertIn("sorce", output)
+
+    def test_a_mis_cased_placement_is_never_fetched_when_it_is_malformed(self):
+        def never(url, timeout=30):
+            raise AssertionError("a record that cannot be checked must not be fetched")
+
+        body = docstring_block(heading="provenance").replace("author:", "authr:")
+        code, _ = run(body, never, filename="hook.py")
+        self.assertEqual(code, 2)
+
+    def test_every_spelling_of_the_fence_tag_opens_the_same_placement(self):
+        # The fenced marker's behaviour is unchanged, proven rather than asserted: it was
+        # already case-insensitive, and this fails if the fix had reached it.
+        for tag in ("provenance", "Provenance", "PROVENANCE"):
+            with self.subTest(tag=tag):
+                body = block().replace("```provenance", "```" + tag, 1)
+                self.assertEqual(self.regions(body), self.FENCE_REGION)
+
+    def test_someone_elses_fence_is_still_not_a_placement_in_any_case(self):
+        # The other direction, and the one that would fail if the fence match had been
+        # widened past its tag rather than left alone.
+        for tag in ("text", "Text", "TEXT", "python"):
+            with self.subTest(tag=tag):
+                body = block().replace("```provenance", "```" + tag, 1)
+                self.assertEqual(self.regions(body), [])
+
+    def test_a_heading_with_no_underline_opens_nothing_in_any_case(self):
+        # The bound the widening rests on. Markdown is scanned as well as Python, and in
+        # Markdown a word alone on a line above a run of dashes is a setext heading, so the
+        # underline is the whole difference between a placement and a paragraph.
+        for heading in ("Provenance", "provenance", "PROVENANCE"):
+            with self.subTest(heading=heading):
+                body = docstring_block(heading=heading, underline="Adapted from upstream.")
+                self.assertEqual(self.regions(body), [])
+
+    def test_a_mis_cased_heading_inside_someone_elses_fence_is_still_ignored(self):
+        # The fence branch runs before the heading branch, so a documentation example that
+        # shows the docstring shape inside a ```text block does not become a placement
+        # because the widening made its heading match.
+        body = (
+            "# Example\n\n"
+            + FENCE + "text\n"
+            + "provenance\n"
+            + "----------\n"
+            + f"source: {URL}\n"
+            + FENCE + "\n"
+        )
+        self.assertEqual(self.regions(body), [])
+
+    def test_the_widening_moved_no_placement_in_this_repository(self):
+        # The before-and-after measurement kept as a test rather than as a closeout claim.
+        # The narrow marker is rebuilt here rather than left behind in the module, and both
+        # are run over the real tree: they agree on every file, which is why `--list`
+        # reports the same eight records after the fix as before it.
+        narrow = re.compile(r"^[ \t]*Provenance[ \t]*$")
+        files = list(cp.iter_provenance_files(REPO_ROOT))
+        self.assertTrue(files, "nothing was scanned, so agreement would prove nothing")
+        placements = 0
+        for path in files:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            after = cp.placement_regions(cp.declared_lines(lines))
+            with unittest.mock.patch.object(cp, "_SECTION_RE", narrow):
+                before = cp.placement_regions(cp.declared_lines(lines))
+            with self.subTest(path=path.relative_to(REPO_ROOT).as_posix()):
+                self.assertEqual(before, after)
+            placements += len(after)
+        self.assertTrue(placements, "no placement was found at all, so equality is vacuous")
 
 
 class RepositoryRecordsTest(unittest.TestCase):

@@ -6,7 +6,9 @@ This guide explains how Zen Agent Skills is organized and maintained for contrib
 
 The kit keeps reusable agent procedures portable across coding harnesses. A skill has one canonical instruction body, then the repository either installs that source into a tool's global discovery location or generates a thin, tool-native project adapter.
 
-The kit deliberately has no runtime application, database, service, or third-party Python dependency. Its deliverables are Markdown skills and standard-library Python tooling.
+Nothing the kit ships has a runtime application, a database, a service, or a third-party Python dependency, and that is deliberate. Its deliverables are Markdown skills and standard-library Python tooling, and [`install.py`](../scripts/install.py) places only `.agents/skills/`, `.agents/rules/`, and `.agents/hooks/` into an adopter's discovery locations.
+
+The rule governs what an adopter receives rather than what sits in this repository, which was made explicit on 2026-08-28 (`chore-0076`) when the first maintainer-only tooling was contracted by [`spec/agent-observatory.md`](spec/agent-observatory.md). Such tooling ships to nobody and may hold local state or serve a local process. **The third-party-dependency prohibition is not scoped and holds everywhere**, so every gate below still runs on a bare Python 3 with no install step.
 
 ## System overview
 
@@ -81,6 +83,7 @@ The kit dogfoods its own work-tracking model:
 - [`CHANGELOG.md`](../CHANGELOG.md) is the append-only record of completed work.
 - [`docs/CATALOG.md`](CATALOG.md) is the reader-facing catalog of available skills and their shipping status.
 - [`docs/spec/`](spec/) holds the behavioral contracts, and [`tests/`](../tests/) the tests derived from them.
+- [`docs/OBSERVATORY.md`](OBSERVATORY.md) explains how to run the observatory, the local reporting surface over this repository's own session corpus, whose contract is [`spec/agent-observatory.md`](spec/agent-observatory.md).
 
 Work tracking stays local by design, because that is what keeps an agent's reading list short and the system usable offline. A task may nevertheless name the GitHub issue it serves through an optional `external` field, which `pr-describe` carries into the pull request description as a closing reference. The link is one-directional on purpose: the task file is the source of truth and nothing is ever read back from GitHub, so there is no second writable copy to diverge from. The contract is [`docs/spec/tracker-links.md`](spec/tracker-links.md); the practical guide is [`ISSUE-LINKING.md`](ISSUE-LINKING.md).
 
@@ -126,7 +129,7 @@ a link inside a code span is not a link and the CI copy never did, so a correctl
 passed `--strict` and failed CI.
 
 That lesson is now applied to the whole gate set. [`run-checks.py`](../scripts/run-checks.py) runs
-all seven gates in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
+every gate in one command, and [`checks.yml`](../.github/workflows/checks.yml) calls it rather
 than listing them, so there is one gate set with two callers instead of one per caller:
 
 ```bash

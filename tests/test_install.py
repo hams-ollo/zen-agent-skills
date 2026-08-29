@@ -1503,6 +1503,371 @@ class RegistrationCarriesTheEventTests(unittest.TestCase):
                          "every hook in .agents/hooks/ needs a registration entry")
 
 
+class HookPlacementTests(unittest.TestCase):
+    """chore-0067: what `--with-hooks` actually places, records, and reverses.
+
+    **Mostly characterization, not acceptance.** `docs/spec/install.md` still says nothing
+    about hooks: `grep -in hook docs/spec/install.md` returns nothing, so there is no
+    approved scenario to derive from and no test here carries an `S-NNN` id. Most
+    assertions below pin the code's current observable behaviour so a change to it is
+    deliberate rather than silent.
+
+    chore-0067 wrote two of those pins over behaviour it suspected was wrong. bug-0048
+    fixed one of them and the three opencode-and-claude activation tests at the foot of
+    this class are acceptance of that fix rather than characterization, each saying so
+    where it sits. The other, `test_every_installable_tool_has_a_hook_path`, is still a
+    pin over a latent seam and bug-0048 deliberately left it alone.
+
+    Why the placement path is worth its own class when `HookRegistrationTests` above
+    already covers the printed registration thoroughly: the registration is the step
+    *after* this one. Until this class existed, `grep -rn with_hooks tests/` returned
+    nothing, so copying the module into `<home>/<subpath>`, recording its manifest entry,
+    and reversing both were exercised by no test and by no gate. That matters more than an
+    ordinary coverage gap for two reasons AGENTS.md and the task both name. The module is
+    the only thing the kit ships that runs inside an adopter's session. And the manifest
+    entry it writes is the baseline `install.py --check` and `install-currency-reminder.py`
+    both measure later answers against, so a defect here is silent by construction: it
+    produces a wrong baseline rather than an error.
+
+    The manifest assertions are therefore the load-bearing half, not the files on disk.
+    A test that checked only for placed files would pass against a run that recorded a
+    digest for five of the six files in the module, which is the exact shape the task
+    reported seeing in a real manifest.
+
+    Fixture idiom mirrors `InstallAcceptanceTests` deliberately rather than inventing a
+    second one: a temporary home, `inst.MANIFEST` redirected away from the real
+    repository, and the real `.agents/hooks/` as the source, because the module actually
+    shipping untested is the thing under test.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+
+    def tearDown(self):
+        inst.MANIFEST = self._real_manifest
+        self._tmp.cleanup()
+
+    # `core` rather than `all`: the profile axis has no bearing on hook placement, and the
+    # smallest profile keeps a class that installs repeatedly cheap.
+    def _install(self, tools=("claude",), mode="copy", dry=False, with_hooks=True):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.install(list(tools), mode, self.home, dry, "core", with_hooks)
+        return code, buf.getvalue()
+
+    def _uninstall(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.uninstall(self.home, False)
+        return code, buf.getvalue()
+
+    def _entries(self, name="hooks"):
+        recorded = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+        return [e for e in recorded if e.get("name") == name]
+
+    @staticmethod
+    def _module_files():
+        """Every file the hooks module ships, read independently of `install.py`.
+
+        Deliberately not `inst.digest_tree` or `inst.discover_hooks`. Both are code this
+        class is checking: an expectation built from `digest_tree` would move with the
+        record if it ever dropped a file, which is the one failure these tests exist to
+        catch, and `discover_hooks` answers a narrower question (the `.py` hooks) than the
+        one placement answers (the module).
+
+        The two exclusions mirror what `_copy` refuses to place, so the byte-cache the
+        test suite creates the moment it imports a hook is not counted as a missing file.
+        """
+        return {p.relative_to(inst.HOOKS_DIR).as_posix():
+                hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in sorted(inst.HOOKS_DIR.rglob("*"))
+                if p.is_file() and p.suffix != ".pyc"
+                and "__pycache__" not in p.relative_to(inst.HOOKS_DIR).parts}
+
+    def test_the_module_lands_under_each_tools_own_hook_path(self):
+        # The placement half. Both tools in one run, because the two land at different
+        # subpaths (`.claude/hooks` against `.agents/hooks`) and a test covering only the
+        # Claude Code one would pass against a map that had lost its opencode row.
+        code, _ = self._install(tools=("claude", "opencode"))
+        self.assertEqual(code, 0)
+        expected = self._module_files()
+        self.assertTrue(expected, "precondition: the kit ships a hooks module")
+        for tool, subpath in (("claude", Path(".claude") / "hooks"),
+                              ("opencode", Path(".agents") / "hooks")):
+            with self.subTest(tool=tool):
+                landed = self.home / subpath
+                self.assertTrue(landed.is_dir(), f"{tool} received no hooks module")
+                self.assertEqual(
+                    {p.relative_to(landed).as_posix():
+                     hashlib.sha256(p.read_bytes()).hexdigest()
+                     for p in sorted(landed.rglob("*")) if p.is_file()},
+                    expected,
+                    "the placed module must be the kit's module, byte for byte")
+
+    def test_the_placement_is_recorded_with_a_digest_for_every_file_in_the_module(self):
+        # The load-bearing half, and the one assertion that fails against the manifest
+        # shape the task reported: digests for five of six files, the sixth being the
+        # hook whose own job is reporting a stale install.
+        #
+        # Compared against digests this test computed itself, not against the count, so a
+        # record holding the right number of wrong digests fails too.
+        self._install(tools=("claude", "opencode"))
+        expected = self._module_files()
+        entries = self._entries()
+        self.assertEqual(2, len(entries), "one hooks entry per tool that received it")
+        for entry in entries:
+            with self.subTest(tool=entry["tool"]):
+                self.assertEqual(str(inst.HOOKS_DIR), entry["source"])
+                # Resolved on both sides deliberately. install() resolves the home it
+                # is given, so the manifest always records a resolved absolute path,
+                # and comparing it against an unresolved composition is a string test
+                # that happens to hold only where the two spellings coincide. They do
+                # not on a macOS runner, where /var is a symlink to /private/var, nor
+                # on a Windows runner reached by its 8.3 short name.
+                self.assertEqual(
+                    str((self.home / inst.HOOK_SUBPATHS[entry["tool"]]).resolve()),
+                    entry["target"])
+                self.assertEqual(expected, entry["digests"],
+                                 "every file in the module needs a recorded baseline; a "
+                                 "file missing here is a later --check that cannot see it")
+
+    def test_the_module_is_recorded_under_one_name_rather_than_per_file(self):
+        # The detail the task's implementation notes single out as the one a test is most
+        # likely to get wrong. A skill is recorded per skill directory; the whole hooks
+        # module is recorded as a single entry named `hooks`, with the per-file detail
+        # living inside that entry's `digests` map rather than in sibling entries.
+        self._install()
+        self.assertEqual(1, len(self._entries()))
+        recorded = json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+        self.assertEqual(
+            [], [e for e in recorded if e.get("name", "").endswith(".py")],
+            "no per-hook-file entry: the module is one record, digested per file")
+
+    def test_more_files_land_than_the_run_counts_as_hooks(self):
+        # Pins a distinction that reads like an off-by-one to anyone tidying up. The
+        # summary counts `discover_hooks()`, which is the `*.py` hooks; placement copies
+        # the module directory, so its README and .gitkeep land and are digested too.
+        # Both are correct and they are answers to different questions, so a change that
+        # collapsed them would be a decision rather than a cleanup.
+        _code, out = self._install()
+        hooks = inst.discover_hooks()
+        self.assertIn(f"plus {len(hooks)} hook(s).", out)
+        landed = sorted(p.name for p in (self.home / ".claude" / "hooks").iterdir())
+        self.assertGreater(len(landed), len(hooks),
+                           "the module ships more than its hooks, and all of it is placed")
+        self.assertIn("README.md", landed)
+
+    def test_without_the_flag_nothing_is_placed_and_nothing_is_recorded(self):
+        # The negative control. Without it every assertion above would still pass against
+        # an installer that placed the hooks module unconditionally, which is the opposite
+        # of the opt-in rule AGENTS.md states for the one thing the kit runs in a session.
+        code, out = self._install(tools=("claude", "opencode"), with_hooks=False)
+        self.assertEqual(code, 0)
+        self.assertFalse((self.home / ".claude" / "hooks").exists())
+        self.assertFalse((self.home / ".agents" / "hooks").exists())
+        self.assertEqual([], self._entries())
+        self.assertNotIn("hook(s).", out)
+
+    def test_a_dry_run_places_no_hooks_and_records_none(self):
+        # S-006's shape applied to the opt-in module. The preview must not be the one
+        # command that writes into a session-executing directory.
+        code, out = self._install(dry=True)
+        self.assertEqual(code, 0)
+        self.assertIn("[dry-run]", out)
+        self.assertFalse(self.home.exists())
+        self.assertFalse(inst.MANIFEST.exists())
+
+    def test_a_second_run_updates_the_hooks_rather_than_conflicting(self):
+        # S-003's shape applied to the hooks entry, and the property `run-checks.py`'s
+        # install cycle depends on: that gate now runs the flag twice, so a hooks
+        # placement that reported CONFLICT against its own previous run would fail the
+        # acceptance command rather than the far quieter thing it did before.
+        self._install()
+        code, out = self._install()
+        self.assertEqual(code, 0)
+        hook_lines = [line for line in out.splitlines() if " hooks  ->" in line]
+        self.assertTrue(hook_lines, "precondition: the second run reported the hooks")
+        self.assertTrue(all("updated" in line for line in hook_lines), hook_lines)
+        self.assertNotIn("CONFLICT", out)
+
+    def test_uninstall_reverses_the_placement_and_drops_the_record(self):
+        # S-007's shape applied to the hooks entry. Reversal is manifest-driven and needs
+        # no flag of its own: `main()` returns from the uninstall branch before it ever
+        # reads `--with-hooks`, so the recorded entry is what makes this work. That is
+        # also what lets `run-checks.py` keep its existing cleanup unchanged.
+        self._install(tools=("claude", "opencode"))
+        self.assertTrue((self.home / ".claude" / "hooks").is_dir())
+        code, out = self._uninstall()
+        self.assertEqual(code, 0)
+        self.assertIn("hooks", out)
+        self.assertFalse((self.home / ".claude" / "hooks").exists())
+        self.assertFalse((self.home / ".agents" / "hooks").exists())
+        self.assertEqual([], self._entries())
+
+    @unittest.skipUnless(SYMLINKS_WORK, "this platform/account cannot create symlinks")
+    def test_symlink_mode_links_the_module_and_uninstall_removes_only_the_link(self):
+        # Covered separately because it is the mode `run-checks.py`'s install cycle uses
+        # by default on macOS and Linux, which is four of the six CI cells, and it takes a
+        # different branch of `_place`. The final assertion is the one that matters: the
+        # reversal must remove the link and leave the kit's own module alone.
+        self._install(mode="symlink")
+        placed = self.home / ".claude" / "hooks"
+        self.assertTrue(placed.is_symlink())
+        self.assertEqual(placed.resolve(), inst.HOOKS_DIR.resolve())
+        self._uninstall()
+        self.assertFalse(placed.exists() or placed.is_symlink())
+        self.assertTrue((inst.HOOKS_DIR / "README.md").is_file(),
+                        "reversing a link must never reach through it to the source")
+
+    def test_codex_receives_no_hooks_because_it_receives_no_install_at_all(self):
+        """The `codex` asymmetry, pinned as intended behaviour.
+
+        The task states it as "`HOOK_SUBPATHS` maps `claude` and `opencode` and not
+        `codex`, so `--with-hooks` places nothing for a Codex install". Re-derived
+        2026-08-27, that premise is false in its middle term: there is no Codex install to
+        place nothing for. `TOOL_SUBPATHS` and `HOOK_SUBPATHS` carry identical key sets,
+        `codex` is absent from both, and `main()` rejects `--tools codex` at exit 2 before
+        `install()` is ever called.
+
+        The omission is intended, and consistent with how the rest of the kit routes
+        Codex. `install.py` places into home-scoped discovery directories; Codex reads
+        neither a home-scoped skills directory (which is why the module docstring sends
+        Cursor and Copilot to `build-adapters.py`) nor a home-scoped hooks directory. Its
+        hook wiring is repo-scoped in the committed `.codex/hooks.json`, per the wiring
+        table in `.agents/hooks/README.md`, and `WiringConsistencyTests` in
+        `tests/test_hooks.py` already holds it to the every-hook rule. A `codex` row in
+        `HOOK_SUBPATHS` would place a second copy at a path nothing reads.
+        """
+        self.assertNotIn("codex", inst.TOOL_SUBPATHS)
+        self.assertNotIn("codex", inst.HOOK_SUBPATHS)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.main(["--tools", "codex", "--with-hooks",
+                              "--home", str(self.home)])
+        self.assertEqual(code, 2)
+        self.assertIn("Unknown tool(s)", buf.getvalue())
+        self.assertFalse(self.home.exists(), "a rejected tool places nothing")
+
+    def test_every_installable_tool_has_a_hook_path(self):
+        # The seam the codex framing points at, stated where it actually is. The comment
+        # above HOOK_SUBPATHS allows it to be a strict subset of TOOL_SUBPATHS ("absent
+        # from this map means the tool has no hook mechanism this installer knows how to
+        # place"), and the placement loop's `tool in HOOK_SUBPATHS` guard would then skip
+        # that tool while printing nothing at all about the skip.
+        #
+        # Today the maps agree, so that branch is unreachable and the silent skip cannot
+        # happen. Pinned rather than left implicit: this is characterization of the
+        # current state, and a future tool that gets skills but no hooks should be a
+        # decision that updates this test, not one that ships a wordless omission.
+        self.assertEqual(set(inst.TOOL_SUBPATHS), set(inst.HOOK_SUBPATHS))
+
+    def test_hooks_placed_for_opencode_alone_are_announced_and_named_inert(self):
+        """bug-0048: **this test changed sides.**
+
+        It was `test_hooks_placed_for_opencode_alone_are_announced_by_nothing`, a
+        characterization pin written by chore-0067 over behaviour it believed wrong but
+        did not scope fixing. That version asserted the silence: no "INACTIVE", no
+        registration, nothing but "plus 4 hook(s)". Its docstring said the intended
+        signal was this test failing when a follow-up fixed the defect, and named the
+        rewrite as the correct response to that failure. This is the rewrite, so the
+        assertions below are acceptance of chosen behaviour rather than a pin on
+        observed behaviour, and the name no longer describes silence because there is
+        none left to describe.
+
+        The chosen behaviour: an opencode-only run says where the module landed, names
+        the plugin that would have to read it, and reports it INERT because that plugin
+        is not in this home. Placing it with a warning was chosen over placing it where
+        opencode actually reads, which is project-scoped rather than home-scoped and so
+        a different contract from the Claude path, and over refusing the combination.
+        See the task's Decisions for both rejected branches.
+        """
+        _code, out = self._install(tools=("opencode",))
+        # Resolved home joined to the subpath, mirroring what `install()` does, rather
+        # than `.resolve()` over the whole path: in symlink mode the placed leaf is a
+        # symlink into this repository, so resolving through it would compare against
+        # the source tree instead of the target. Comparing an unresolved home against a
+        # resolved one is the same defect from the other end, and it passes on Windows
+        # and Linux while failing on a macOS runner whose /var is a symlink.
+        target = self.home.resolve() / ".agents" / "hooks"
+        reader = self.home.resolve() / ".opencode" / "plugins" / "zen-hooks.mjs"
+        self.assertTrue(target.is_dir(), "precondition: the run did place the module")
+        self.assertFalse(reader.exists(),
+                         "precondition: this home carries no opencode plugin")
+        self.assertIn("INERT", out, "an unread placement must say so")
+        self.assertNotIn("LIVE", out)
+        self.assertIn(str(target), out, "the run must say where the module landed")
+        self.assertIn(str(reader), out, "the run must name the reader that is absent")
+        # Matched against the block the Claude Code path prints rather than against a
+        # loose word, so a skill name that happens to contain "register" cannot fail
+        # this. Built from the resolved home because `install()` resolves before it
+        # builds the block, and an unresolved spelling would be trivially absent.
+        self.assertNotIn(inst.claude_registration(self.home.resolve()), out)
+
+    def test_an_opencode_placement_a_plugin_would_read_is_reported_live(self):
+        """bug-0048: the other branch of the same note, and why it is decided from disk.
+
+        The rule chore-0058 and chore-0065 settled one level up is that a run which did
+        something useful and a run which did nothing useful must be distinguishable in
+        the output. One fixed sentence cannot satisfy that, so the note asks the
+        filesystem: a `--home` pointing at a project root that carries
+        `.opencode/plugins/zen-hooks.mjs` receives the module at exactly the
+        `.agents/hooks` that plugin resolves against its own root, and the run says LIVE.
+
+        Not a hypothetical configuration. It is the only one in which the opencode half
+        of `--with-hooks` currently does anything, which is the reason refusing the
+        tool-and-flag combination was rejected: refusing would have removed the one case
+        that works.
+        """
+        reader = self.home / ".opencode" / "plugins" / "zen-hooks.mjs"
+        reader.parent.mkdir(parents=True)
+        reader.write_text("// stand-in for this kit's opencode adapter\n",
+                          encoding="utf-8")
+        _code, out = self._install(tools=("opencode",))
+        self.assertIn("LIVE", out)
+        self.assertNotIn("INERT", out)
+        self.assertIn(str(self.home.resolve() / ".agents" / "hooks"), out)
+
+    def test_every_tool_that_receives_the_module_is_told_about_it(self):
+        """bug-0048: the invariant, rather than the two sentences that satisfy it today.
+
+        The defect being fixed was one tool getting files and no words, so the property
+        worth pinning is the count and not the wording: every tool that received the
+        module gets exactly one activation note. Each branch opens with the same phrase
+        so this is countable without a per-tool regex, which would be the second source
+        of truth chore-0029 recorded the cost of.
+
+        This is what makes the fix structural. A third tool added to `HOOK_SUBPATHS`
+        without a branch of its own falls through to the fallback, which still opens with
+        the phrase and still says something true, so this test keeps passing and the
+        silence cannot come back by omission.
+        """
+        tools = sorted(inst.HOOK_SUBPATHS)
+        _code, out = self._install(tools=tuple(tools))
+        self.assertEqual(len(tools), out.count("The hooks are placed"),
+                         "one activation note per tool that received the module")
+        for tool in tools:
+            with self.subTest(tool=tool):
+                self.assertTrue((self.home / inst.HOOK_SUBPATHS[tool]).is_dir(),
+                                "precondition: this tool really did receive it")
+
+    def test_a_claude_placement_still_prints_the_registration_block(self):
+        """bug-0048 replaced one `hooks and "claude" in tools` gate with one note per
+        tool that received the module, and nothing asserted the Claude Code half of that
+        gate printed anything from `install()`. `HookRegistrationTests` covers
+        `claude_registration` as a function, and the only test that mentioned the printed
+        block asserted its *absence* on the opencode path, so a refactor that dropped the
+        block from the run entirely would have left the suite green.
+        """
+        _code, out = self._install(tools=("claude",))
+        self.assertIn("INACTIVE", out)
+        self.assertIn(inst.claude_registration(self.home.resolve()), out,
+                      "the pasteable block is what makes the placement usable")
+
+
 class AdoptedModulePreservationTests(unittest.TestCase):
     """bug-0018 and Scenario S-016: a re-install must not destroy an adopter's edited lens.
 

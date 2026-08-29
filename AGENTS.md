@@ -20,6 +20,8 @@ Do not scan the whole `.tasks/` directory, read other agents' task files, or rea
 
 A skills library, not an application. The deliverables are the skills under [`.agents/skills/`](.agents/skills/) and the tooling under [`scripts/`](scripts/) that distributes them. Success is measured by whether a skill is portable (works across harnesses), self-contained (needs no hidden context), and genuinely used and iterated on.
 
+**Not every script distributes a skill.** Some tooling under `scripts/` serves the maintainer of this repository and is not a deliverable: [`install.py`](scripts/install.py) never places it, no adopter receives it, and the portability contract in the portability-contract section therefore does not reach it. It is still bound by the stdlib rule in the conventions section, so it runs on a bare Python 3 with no install step like everything else here. Recorded 2026-08-28 by `chore-0076`, which needed a local store and a local server for [`docs/spec/agent-observatory.md`](docs/spec/agent-observatory.md); the sentence above had read as though every script were a distribution script, and five documents said so in five different scopes.
+
 ## 2. Layout
 
 | Path | Holds |
@@ -27,7 +29,7 @@ A skills library, not an application. The deliverables are the skills under [`.a
 | [`.agents/skills/`](.agents/skills/) | The skills. One directory per skill, each with a `SKILL.md` harness-agnostic body. |
 | [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities, [`autonomy.md`](.agents/rules/autonomy.md) for what an agent may do when nobody is watching. Adopters may replace any of them. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
 | [`.agents/hooks/`](.agents/hooks/) | Optional runtime guardrails (Python on stdin), each a *reminder* (injects context, never blocks) or a *gate* (blocks, only when the condition is decidable from the payload). The only thing the kit ships that runs inside an adopter's session, so installation is opt-in and activation is theirs: `install.py --with-hooks` places the files and prints the registration rather than editing anyone's settings. Contract in [`.agents/hooks/README.md`](.agents/hooks/README.md). |
-| [`scripts/`](scripts/) | `install.py`, `build-adapters.py`, `validate-skills.py`, `check-provenance.py`. |
+| [`scripts/`](scripts/) | Two kinds, and which kind a thing is matters more than the list. **Distribution tooling**, a deliverable, which ships the kit: `install.py`, `build-adapters.py`, `validate-skills.py`, `check-provenance.py`, `run-checks.py`, `check-citations.py`. **Maintainer tooling**, which reaches no adopter tree and which `install.py` never places: `observatory/`, a local reporting surface over this repository's own session corpus, contracted by [`agent-observatory.md`](docs/spec/agent-observatory.md). What decides the kind is whether an adopter receives it, not where it sits, and the stdlib rule in the conventions section governs both. **Membership is the term here, not the enumeration**: a script added or retired needs no amendment to this row, per the precedent [`chore-0049`](.tasks/done/chore-0049-a-checker-for-conformance-matrix-citations.md) set when a gate count went stale the first time anyone added a gate. |
 | [`.tasks/`](.tasks/) | Atomic, agent-assignable work items for building this kit, plus `validate.py`. |
 | [`docs/spec/`](docs/spec/) | Behavioral specifications (the contracts), plus the reports that sit beside them, one file kind per question asked: `<spec>.conformance.md` audits code against the contract, `<spec>.verification.md` records a verdict with evidence, `<spec>.readiness.md` records a go/no-go gate over a spec plus its task decomposition, `<spec>.characterization.md` records behavior pinned before a contract existed, `<spec>.runbook.md` tells a person how to perform a step no agent here can perform. |
 | [`tests/`](tests/) | The kit's own tests, derived from the specifications under `docs/spec/`. |
@@ -115,11 +117,26 @@ Follow [`.agents/rules/house-style.md`](.agents/rules/house-style.md) for writin
 python scripts/run-checks.py
 ```
 
-[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, and the documentation link check. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
+[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, the documentation link check, and the conformance-matrix citation check. The set is open, and its membership rather than its size is the property: naming a count here goes stale the first time anyone adds a gate. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
 
 [`.github/workflows/checks.yml`](.github/workflows/checks.yml) calls this same script rather than restating the gates. One rule, two callers, per `chore-0029`.
 
 **Passing it is necessary but not sufficient.** CI runs three operating systems by two Python versions, so any single run of this command covers one of those six cells. A change that passes locally can still fail on a platform you did not run. The command says so in its own summary on every run, and it is repeated here because this is where an agent reads the rules before it starts working, rather than after a run has already happened.
+
+**The other insufficiency is the one more runs do not close.** The paragraph above is about coverage
+across the CI matrix, which a second platform closes. This one does not: every gate here decides a
+mechanical property, and the defects below all sat outside what any of them sees. `bug-0045` emptied
+`.agents/skills/`, `tests/`, and the `.tasks/` task files and reran this command; six of seven gates
+reported `ok` over a repository holding nothing. `bug-0044` found seven links that resolve here and
+dangle in every `cursor` and `vscode` tree the adapter builder ships, having "survived every gate".
+`bug-0037` found three of sixty-five citations in a conformance matrix pointing at something other
+than what they claimed, and why nothing could report it: the tests match on content and the link
+check resolves paths, so neither sees a line anchor. The gates are healthy and catch what they were
+built to catch; the claim is about what they cannot see, so read a green run as evidence about the
+mechanical layer and nothing else. Buy the rest by hand, cheapest first: **construct the empty or
+degenerate input and see what the tool actually says**, as `bug-0045` did by emptying the tree and
+`bug-0046` did by renaming one `.md` to `.MD`, which carried two of eight provenance records out of
+the run at exit 0. A check that cannot fail is unchecked, whatever it printed.
 
 ### The one committed hook registration, and why it is an exception
 

@@ -132,7 +132,7 @@ tree is outside it than that file currently assumes.
   [chore-0043](chore-0043-amend-build-adapters-spec-for-the-code-span-exception.md). Record
   what is owed at closeout.
 - The repository-side lint gap that let this through, which is a different fix in a different tool.
-  See [chore-0058](../chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md).
+  See [chore-0058](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md).
 - `install.py`'s layout and the plugin layout, both of which already resolve these links. Do not
   change either to accommodate a fix for the other two.
 

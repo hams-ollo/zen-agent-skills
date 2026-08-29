@@ -23,6 +23,30 @@ criterion already requires a test failing against the current message. `status` 
 else in this contract changes, and `S-017` to `S-019` stay **Not-built**, since only the run itself
 can move them.
 
+**Amended 2026-08-27 (`chore-0061`) to state what a passing gate's entry must carry: `S-020`, and the
+`Output` surface element widened with it.** This amendment is **pending the author's re-approval**.
+Until it, the contract asked for a gate's name and its outcome and stopped, so `run-checks.py`
+discarding every passing gate's own account of what it examined was conformant. `bug-0045` measured
+that on 2026-08-22 against a copy of this repository with the skills, the tests, and the task files
+removed: six gates exited zero having examined nothing, and the report was byte-identical to a full
+clean run. The defect was in the contract before it was in the code, which is why closing it lands
+here rather than only there. `S-020` states the observable property and deliberately names no
+selection rule, because `bug-0045`'s own measurement found the obvious rule, the last non-blank line,
+useless for three of the seven gates: a contract naming a rule like that needs amending again the
+next time a gate rewords its summary. `status` is left reading `approved` per the convention in
+[`README.md`](README.md), for the reason that file gives. No existing scenario changes.
+
+**Amended 2026-08-28 (`chore-0049`) to state the `Gate set` surface element as a property rather
+than a count.** This amendment is **pending the author's re-approval**. The element read "The seven
+currently in `checks.yml`" and then enumerated them by name, so it was falsified the first time
+anyone added a gate, which `chore-0049` did by adding the matrix-citation gate. A count-shaped term
+in a contract goes stale on the next addition and says nothing a reader could not get by looking, so
+what the element now names is membership: every gate that decides whether a change here is
+acceptable, as `gates()` enumerates it. The set is open by design and its size is not a term of this
+contract. `status` is left reading `approved` per the convention in [`README.md`](README.md), for the
+reason that file gives. No scenario changes, and `S-001` needed none: it already said "every gate in
+the gate set" rather than naming a number.
+
 A **forward** spec, and the first here: every other spec in this directory was written against code
 that already existed, so it described a contract that already held. This one does not, which moves
 where the risk sits. A retrospective spec can be wrong about what the code does, and an audit finds
@@ -282,15 +306,28 @@ have caught, and then has no command to catch it with either.
   names the failure, rather than abandoning the work, retrying until something passes, or reporting
   a result the command did not produce.
 
+### Scenario S-020: a passing gate accounts for what it examined
+
+- **Given** the full repository, and a copy of it with what the gates examine removed
+- **When** the acceptance command runs over each
+- **Then** every gate that passed carries, alongside its outcome, an account of what that gate examined,
+  taken from what the gate itself printed, so a reader can find the same line by running that gate on
+  its own, or naming the gate's silence where it printed nothing at all.
+- **And** the two reports are therefore not byte-identical, so a reader holding one of them can tell
+  whether the run examined a repository or an empty tree, which a report of outcomes alone cannot say,
+  and which is the state `bug-0045` measured on 2026-08-22.
+- **And** the account is bounded to a line rather than the gate's whole output, because a report long
+  enough to stop being read takes the summary at its foot down with it.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
 | Acceptance command | `python scripts/run-checks.py`, no flags |
-| Gate set | The seven currently in [`checks.yml`](../../.github/workflows/checks.yml): skill lint, the test suite, backlog validation, adapter dry run, install dry run, the install/re-install/uninstall sequence, and the globbed link check |
+| Gate set | Every gate that decides whether a change here is acceptable, as enumerated by `gates()` in [`run-checks.py`](../../scripts/run-checks.py). Membership is the term of this contract and the size of the set is not, so a gate added or retired needs no amendment here |
 | Throwaway home | `./.tmp/zen-home`, the location the existing CI steps already use |
 | Exit code | 0 every gate passed, 1 at least one gate failed, 2 at least one gate could not run; 2 outranks 1, as in `install.py --check` and `check-provenance.py` |
-| Output | One line per gate naming it and its outcome, the failing gate's own output where one failed, then a summary carrying the counts and the operating system and Python version the run used |
+| Output | One line per gate naming it and its outcome; beneath each gate, one further line accounting for what that gate examined, in the gate's own words or naming its silence; the failing gate's own output where one failed; then a summary carrying the counts and the operating system and Python version the run used |
 | CI wiring | One workflow step invoking the command, replacing the seven that restate it |
 | `AGENTS.md` | Names the command and states that passing it is necessary but not sufficient |
 | Bootstrap hook | A member of the [`.agents/hooks/`](../../.agents/hooks/README.md) module in the **reminder** shape, on the `SessionStart` event with a `startup` matcher |
