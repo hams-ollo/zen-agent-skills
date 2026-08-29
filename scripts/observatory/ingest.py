@@ -654,7 +654,7 @@ def liveness_check(platform=None) -> str:
     if state != ALIVE:
         return "none: this build cannot query the process table, so no entry is confirmed"
     if platform == "win32":
-        return "process identity: the pid exists and its start time matches the entry"
+        return "process presence (with optional identity): the pid exists; where procStart is recorded, its start time is compared to detect pid reuse"
     return "process presence: the pid exists, so a reused pid would read as running"
 
 
