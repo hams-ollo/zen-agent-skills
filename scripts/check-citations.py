@@ -17,11 +17,27 @@ Exit codes
 ----------
     0   every citation this checker can decide still resolves
     1   at least one citation no longer resolves
-    2   the check could not run: no matrix was found, so the question was never asked
+    2   the check could not run: no matrix was found, or one was found and could not be
+        read, so for that file the question was never asked
 
 The 2 branch is the one worth explaining. A checker that reports `ok` over a directory
 holding nothing is the exact defect this task belongs to a group of, so this one is asked
 the degenerate question at birth: no matrices means no answer, not a clean answer.
+
+**`bug-0049` found that the same defect existed one level down and had shipped.** The
+evidence column was read at a fixed index and a row needed four or more cells, so
+`agent-observatory.conformance.md`, which is three-column, yielded no rows at all. None of
+its citations was ever audited, the run reported `0 unresolved`, and four closed tasks
+cited this gate as green over that file. Two things changed as a result, and the second
+matters more than the first: columns are now located by their heading rather than by
+position, so a layout is a property of the matrix instead of an assumption here; and a
+matrix holding a table with no recognisable evidence column is **named in the output and
+exits 2**, so the next unanticipated shape fails loudly instead of silently.
+
+A matrix that is readable and simply cites nothing is a different thing and stays a clean
+result. A spec whose scenarios are all not-built has nothing to cite yet, and failing that
+would be the false-alarm failure this checker's whole design is arranged to avoid. It is
+named in the output so the two cases are distinguishable without arithmetic.
 
 What is decided, and what is declined
 -------------------------------------
@@ -202,9 +218,24 @@ class Result:
     corrected at the one call site that happened to be wrong.
     """
 
-    def __init__(self, matrices, citations):
+    def __init__(self, matrices, citations, unreadable=()):
         self.matrices = list(matrices)
         self.citations = list(citations)
+        # Matrices holding a table with no `Evidence` column. Kept apart from the citation
+        # counts on purpose: they are not a citation that failed, they are a file whose
+        # citations were never looked at, and folding the two together is how `bug-0049`
+        # stayed invisible across four closed tasks that each reported this gate green.
+        self.unreadable = list(unreadable)
+
+    def silent(self):
+        """Matrices that yielded no citation at all.
+
+        Reported rather than failed. A spec whose scenarios are all not-built has nothing
+        to cite yet, and treating that as a failure is the false alarm this checker's
+        design deliberately avoids.
+        """
+        cited = {str(c.matrix) for c in self.citations}
+        return [m for m in self.matrices if str(m) not in cited]
 
     def _partition(self):
         """`(audited, unaudited)`, with every citation in exactly one half."""
@@ -326,11 +357,66 @@ def _rows(text):
             yield [cell.strip() for cell in stripped[1:-1].split(" | ")]
 
 
-def _is_body_row(cells):
-    """A data row, as opposed to a header row or the `|---|` separator beneath it."""
-    return (len(cells) >= 4
-            and cells[0] not in ("Section", "Item")
-            and not set(cells[0]) <= set("-: "))
+# The column headings this checker steers by. A matrix's evidence lives under `Evidence`
+# and its subject under `Item` or `Scenario`, and both are found by name rather than by
+# position. `bug-0049` is why: the position was fixed at `cells[3]`, so a three-column
+# matrix had every row skipped, none of its citations was ever audited, and the run still
+# reported `ok` over it across four closed tasks.
+EVIDENCE_HEADINGS = ("evidence",)
+ITEM_HEADINGS = ("item", "scenario")
+
+
+def _is_separator(cells):
+    """The `|---|---|` line under a header.
+
+    It arrives as a single cell rather than one per column, because `_rows` splits on
+    ` | ` and a separator carries no spaces around its pipes.
+    """
+    return bool(cells) and all(cell and set(cell) <= set("-:| ") for cell in cells)
+
+
+def _column(header, names):
+    """The index of the first column whose heading is one of `names`, or None."""
+    for index, cell in enumerate(header):
+        if cell.strip().lower() in names:
+            return index
+    return None
+
+
+def _tables(text):
+    """Every markdown table, as `(header_cells, [body_rows])`.
+
+    A table is a header, the separator beneath it, and the rows that follow until the next
+    header or a line that is not a table row. Grouping this way is what lets a column be
+    located by its heading, which a flat scan of rows cannot do.
+    """
+    rows = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|"):
+            rows.append([cell.strip() for cell in stripped[1:-1].split(" | ")])
+        else:
+            rows.append(None)                # a break between tables
+
+    index = 0
+    while index < len(rows) - 1:
+        header, below = rows[index], rows[index + 1]
+        if header is None or below is None or not _is_separator(below):
+            index += 1
+            continue
+        body, cursor = [], index + 2
+        while cursor < len(rows) and rows[cursor] is not None:
+            if _is_separator(rows[cursor]):
+                break
+            # A row with a separator under it starts the next table rather than ending
+            # this one, which matters where two tables sit with no prose between them.
+            following = rows[cursor + 1] if cursor + 1 < len(rows) else None
+            if following is not None and _is_separator(following):
+                break
+            body.append(rows[cursor])
+            cursor += 1
+        yield header, body
+        index = cursor
 
 
 def _header_subjects(matrix, text):
@@ -435,48 +521,66 @@ def audit(root=None):
     sources = _Sources()
     citations = []
 
+    unreadable = []
     for matrix in matrices:
         text = _read(matrix)
         subjects = _header_subjects(matrix, text) + _ledger_siblings(matrix)
-        for cells in _rows(text):
-            if not _is_body_row(cells):
-                continue
-            item = cells[1]
-            seen_tests = set()
-            for span in SPAN.findall(" ".join(cells)):
-                if TEST_NAME.match(span) and span not in seen_tests:
-                    seen_tests.add(span)
+        tables = list(_tables(text))
+        readable = [(header, body) for header, body in tables
+                    if _column(header, EVIDENCE_HEADINGS) is not None]
+        # A matrix holding a table this checker cannot find an `Evidence` column in is one
+        # whose question was never asked. That is `bug-0049` exactly, and it is reported by
+        # name and made a "could not run" rather than folded into a pair of counts nobody
+        # reads. A matrix with tables that simply carry no citations is a different thing
+        # and stays a clean result: a spec whose scenarios are all not-built has nothing to
+        # cite yet, and failing that would be the false alarm this checker is built to
+        # avoid.
+        if tables and not readable:
+            unreadable.append(matrix)
+
+        for header, body in readable:
+            evidence_index = _column(header, EVIDENCE_HEADINGS)
+            item_index = _column(header, ITEM_HEADINGS)
+            item_index = 0 if item_index is None else item_index
+            for cells in body:
+                if len(cells) <= evidence_index:
+                    continue
+                item = cells[item_index] if item_index < len(cells) else ""
+                seen_tests = set()
+                for span in SPAN.findall(" ".join(cells)):
+                    if TEST_NAME.match(span) and span not in seen_tests:
+                        seen_tests.add(span)
+                        citations.append(Citation(
+                            matrix, item, "test name", span,
+                            "resolved" if span in test_names else "unresolved"))
+                evidence = cells[evidence_index]
+                candidates = _row_candidates(matrix, evidence, subjects, index)
+                for span in SPAN.findall(evidence):
+                    kind, needle = _classify(span)
+                    if kind is None:
+                        citations.append(Citation(matrix, item, "other", span,
+                                                  "unchecked", UNCHECKED_FORM))
+                        continue
+                    if kind == "test name":
+                        continue  # already recorded once, from the whole row
+                    if kind == "symbol" and needle in BUILTIN_NAMES:
+                        citations.append(Citation(matrix, item, kind, span,
+                                                  "unchecked", UNCHECKED_BUILTIN))
+                        continue
+                    if kind == "quoted phrase" and ELISION.search(span):
+                        citations.append(Citation(matrix, item, kind, span,
+                                                  "unchecked", UNCHECKED_ELISION))
+                        continue
+                    if not candidates:
+                        citations.append(Citation(matrix, item, kind, span,
+                                                  "unchecked", UNCHECKED_NO_SUBJECT))
+                        continue
                     citations.append(Citation(
-                        matrix, item, "test name", span,
-                        "resolved" if span in test_names else "unresolved"))
-            evidence = cells[3]
-            candidates = _row_candidates(matrix, evidence, subjects, index)
-            for span in SPAN.findall(evidence):
-                kind, needle = _classify(span)
-                if kind is None:
-                    citations.append(Citation(matrix, item, "other", span,
-                                              "unchecked", UNCHECKED_FORM))
-                    continue
-                if kind == "test name":
-                    continue  # already recorded once, from the whole row
-                if kind == "symbol" and needle in BUILTIN_NAMES:
-                    citations.append(Citation(matrix, item, kind, span,
-                                              "unchecked", UNCHECKED_BUILTIN))
-                    continue
-                if kind == "quoted phrase" and ELISION.search(span):
-                    citations.append(Citation(matrix, item, kind, span,
-                                              "unchecked", UNCHECKED_ELISION))
-                    continue
-                if not candidates:
-                    citations.append(Citation(matrix, item, kind, span,
-                                              "unchecked", UNCHECKED_NO_SUBJECT))
-                    continue
-                citations.append(Citation(
-                    matrix, item, kind, span,
-                    "resolved" if _resolves(kind, needle, candidates, sources)
-                    else "unresolved",
-                    candidates=candidates))
-    return Result(matrices, citations)
+                        matrix, item, kind, span,
+                        "resolved" if _resolves(kind, needle, candidates, sources)
+                        else "unresolved",
+                        candidates=candidates))
+    return Result(matrices, citations, unreadable)
 
 
 def _resolves(kind, needle, candidates, sources):
@@ -537,6 +641,13 @@ def report(result, root, out):
                               in sorted(result.audited_kinds().items())) or "nothing"
     reasons = ", ".join(f"{reason} {count}" for reason, count
                         in sorted(result.unaudited_reasons().items())) or "nothing"
+    for matrix in result.unreadable:
+        out.write(f"COULD NOT READ {matrix}: it holds a table with no 'Evidence' column, "
+                  f"so none of its citations was audited. Not a clean result.\n")
+    for matrix in result.silent():
+        if matrix not in result.unreadable:
+            out.write(f"note: {matrix} yielded no citation. Readable, and nothing in it "
+                      f"cites anything yet.\n")
     out.write(f"Matrix citations: {len(unresolved)} unresolved.\n")
     out.write(f"Audited {result.audited} of {result.extracted} citation(s) "
               f"by decidable form: {audited_kinds}.\n")
@@ -550,6 +661,11 @@ def report(result, root, out):
               f"{result.extracted} extracted, over {len(result.matrices)} matrix file(s) "
               f"holding {len(set(str(c.matrix) for c in result.citations))} with "
               f"citations.\n")
+    # 2 outranks 1 for the reason the module docstring already gives: a check that could
+    # not run is a different claim from a check that failed, and an incomplete report is
+    # the more urgent of the two.
+    if result.unreadable:
+        return 2
     return 1 if unresolved else 0
 
 

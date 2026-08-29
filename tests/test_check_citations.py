@@ -92,6 +92,144 @@ def row(evidence, item="S-001 a thing", note=""):
     return f"| Scenarios | {item} | Conformed | {evidence} | {note} |\n"
 
 
+THREE_COLUMN_HEADER = """---
+title: thing conformance
+spec: docs/spec/thing.md
+---
+
+# thing conformance matrix
+
+Spec-vs-implementation audit of [`scripts/thing.py`](../../scripts/thing.py) against
+[`thing.md`](thing.md).
+
+## Matrix
+
+| Scenario | Status | Evidence |
+|---|---|---|
+"""
+
+NO_EVIDENCE_HEADER = THREE_COLUMN_HEADER.replace(
+    "| Scenario | Status | Evidence |", "| Scenario | Status | Finding |")
+
+
+class _ShapedTree(_Tree):
+    """A tree whose matrix uses a column layout other than the five-column house shape."""
+
+    def __init__(self, header, rows, **kwargs):
+        super().__init__([], **kwargs)
+        (self.root / "docs" / "spec" / "thing.conformance.md").write_text(
+            header + "".join(rows), encoding="utf-8")
+
+
+def three_column_row(evidence, item="S-001 a thing"):
+    return f"| {item} | Conformed | {evidence} |\n"
+
+
+class ColumnLayoutTests(unittest.TestCase):
+    """`bug-0049`: a matrix whose columns are not the house shape was skipped in silence.
+
+    The evidence column was read at a fixed index and a row needed four or more cells, so
+    a three-column matrix yielded no rows at all. Every one of its citations went
+    unaudited, the run reported `0 unresolved`, and four closed tasks cited this gate as
+    green over that file. The reproduction below is the one from the task: inject a
+    citation that resolves nowhere and watch what the run says.
+    """
+
+    def test_a_dead_citation_in_a_three_column_matrix_is_reported(self):
+        """The reproduction. Before the fix this exited 0 with byte-identical output."""
+        with _ShapedTree(THREE_COLUMN_HEADER,
+                         [three_column_row("`scripts/thing.py` / `no_such_symbol()`")]) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 1,
+                         "a citation resolving nowhere in a three-column matrix was not "
+                         "reported, so the gate cannot fail on that shape")
+        self.assertIn("no_such_symbol", out)
+
+    def test_a_live_citation_in_a_three_column_matrix_is_not_reported(self):
+        """The other half, so the fix is not simply failing everything it now reads."""
+        with _ShapedTree(THREE_COLUMN_HEADER,
+                         [three_column_row("`scripts/thing.py` / `assemble()`")]) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 0)
+        self.assertIn("0 unresolved", out)
+
+    def test_a_three_column_matrix_contributes_citations_at_all(self):
+        """The count is what four closed tasks read as coverage. It was zero for that
+        file, and the two figures in the summary were the only place it showed."""
+        with _ShapedTree(THREE_COLUMN_HEADER,
+                         [three_column_row("`scripts/thing.py` / `assemble()`")]) as tree:
+            result = cc.audit(tree.root)
+
+        self.assertGreater(result.extracted, 0,
+                           "a three-column matrix yielded no citations, which is the "
+                           "defect bug-0049 recorded")
+        self.assertEqual(result.unreadable, [])
+
+    def test_the_item_column_is_found_by_its_heading_not_its_position(self):
+        """`Scenario` sits where `Item` sits in the house shape, and the reported item has
+        to name the row rather than whatever column happened to be second."""
+        with _ShapedTree(THREE_COLUMN_HEADER,
+                         [three_column_row("`scripts/thing.py` / `no_such_symbol()`",
+                                           item="S-042 the item")]) as tree:
+            _, out = tree.run()
+
+        self.assertIn("S-042 the item", out,
+                      "the reported row was identified by position rather than by the "
+                      "column its heading names")
+
+    def test_a_matrix_with_no_evidence_column_is_reported_as_unread_not_clean(self):
+        """The generalisation, and the part that matters more than the fix.
+
+        Widening one shape leaves the next unanticipated one failing the same way. A
+        matrix the checker cannot find an evidence column in is named and the run reports
+        it could not run, which is the same answer the module already gives when it finds
+        no matrix at all: no question asked is not a clean answer.
+        """
+        with _ShapedTree(NO_EVIDENCE_HEADER,
+                         [three_column_row("`scripts/thing.py` / `no_such_symbol()`")]) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 2,
+                         "a matrix the checker could not read was reported as a clean run")
+        self.assertIn("COULD NOT READ", out)
+        self.assertIn("thing.conformance.md", out,
+                      "the unreadable matrix was counted but not named, which is how this "
+                      "defect stayed invisible")
+
+    def test_a_matrix_that_cites_nothing_is_named_but_does_not_fail_the_run(self):
+        """A spec whose scenarios are all not-built has nothing to cite yet. Failing that
+        would be the false alarm this checker's design deliberately avoids, so it is
+        reported and the run stays clean."""
+        with _ShapedTree(THREE_COLUMN_HEADER,
+                         [three_column_row("Owned by feat-0056.")]) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 0, "a matrix with nothing to cite failed the run")
+        # The name, not just the phrase. Asserting the phrase alone let a mutation drop the
+        # filename and keep the sentence, which reports that *something* cited nothing
+        # without saying what, and naming it is the entire value of the line.
+        note = [line for line in out.splitlines() if "yielded no citation" in line]
+        self.assertEqual(len(note), 1, "the note about a matrix citing nothing is missing")
+        self.assertIn("thing.conformance.md", note[0],
+                      "a matrix contributing nothing was reported without being named, so "
+                      "a reader cannot tell which file it was")
+
+    def test_the_house_five_column_shape_still_reads_exactly_as_before(self):
+        """The regression that would matter most: ten of the eleven real matrices use the
+        five-column shape, and this change must not move them."""
+        with _Tree([row("`scripts/thing.py` / `no_such_symbol()`")]) as tree:
+            code, out = tree.run()
+
+        self.assertEqual(code, 1)
+        self.assertIn("no_such_symbol", out)
+
+        with _Tree([row("`scripts/thing.py` / `assemble()`")]) as tree:
+            code, _ = tree.run()
+        self.assertEqual(code, 0)
+
+
 class QuotedPhraseTests(unittest.TestCase):
     """The acceptance criterion: a phrase that no longer appears in the named file."""
 
