@@ -7,11 +7,13 @@ audited: 2026-08-28
 # agent-observatory conformance matrix
 
 Spec-vs-implementation audit of `scripts/observatory/` against
-[`agent-observatory.md`](agent-observatory.md), produced at `feat-0053`'s closeout.
+[`agent-observatory.md`](agent-observatory.md), produced at `feat-0053`'s closeout and updated at
+`feat-0054`'s.
 
-**Six of twenty-two scenarios are built.** `feat-0053` scoped the store and the ingester and
-nothing else, so the remaining sixteen are `not-built` and that is the correct answer rather
-than a gap. Each names the task that owns it, from the decomposition
+**Eight of twenty-two scenarios are built.** `feat-0053` scoped the store and the ingester;
+`feat-0054` added the loopback server, the page shell, and the skills report, which is `S-001`
+and `S-002`. The remaining fourteen are `not-built` and that is the correct answer rather than a
+gap. Each names the task that owns it, from the decomposition
 [`feat-0053`](../../.tasks/done/feat-0053-the-observatory-store-and-its-incremental-ingester.md)
 onward gated by [`agent-observatory.readiness.md`](agent-observatory.readiness.md).
 
@@ -20,20 +22,21 @@ established and `scripts/check-citations.py` enforces.
 
 ## Coverage proof
 
-The spec carries **22** scenarios, `S-001` to `S-022`. This matrix has **22** rows: **6**
-conformed, **0** diverged, **16** not-built. 6 + 0 + 16 = 22, and the arithmetic is stated
+The spec carries **22** scenarios, `S-001` to `S-022`. This matrix has **22** rows: **8**
+conformed, **0** diverged, **14** not-built. 8 + 0 + 14 = 22, and the arithmetic is stated
 rather than the claim, per the incident `feat-0036` recorded and `chore-0033` named.
 
-Nothing in the audited set is unreconciled. The audited set is the six scenarios `feat-0053`
-declares in its `scenarios` frontmatter; the sixteen not-built rows were established by
-confirming no code implements them, not by inspecting an implementation.
+Nothing in the audited set is unreconciled. The audited set is the eight scenarios the two closed
+tasks declare between them: the six in `feat-0053`'s `scenarios` frontmatter and the two in
+`feat-0054`'s. The fourteen not-built rows were established by confirming no code implements
+them, not by inspecting an implementation.
 
 ## Matrix
 
 | Scenario | Status | Evidence |
 |---|---|---|
-| `S-001`: skill usage reported from attribution | not-built | Owned by `feat-0054`. The store records the attribution (`apply_record` writes `attribution_skill`), but nothing reports it. |
-| `S-002`: an unused skill reported as zero | not-built | Owned by `feat-0054`. Requires the installed-skill roster, which the corpus cannot supply. |
+| `S-001`: skill usage reported from attribution | **conformed** | `skills_report()` in `scripts/observatory/serve.py` groups `message` by `attribution_skill`, and that table holds one canonical row per uuid, so a use is one distinct message rather than one line in the corpus. Proven by `test_s001_a_skill_use_count_is_distinct_messages_not_corpus_lines`, whose fixture makes the two candidate oracles disagree (three lines, two messages), by `test_s001_the_reported_total_equals_the_attribution_in_the_corpus`, and by `test_s001_the_report_is_served_over_http_and_matches_the_store` through the real surface. Measured over the maintainer's corpus on 2026-08-28: 6,033 attributed messages across 21 names against 6,518 lines, and the served figure matched a count made independently of the store. |
+| `S-002`: an unused skill reported as zero | **conformed** | `skill_roster()` in `scripts/observatory/serve.py` takes the roster from the installer's own discovery rather than from the corpus, and `skills_report()` unions it with what the corpus carries, so a roster skill the corpus never mentions appears at zero. Proven by `test_s002_an_installed_skill_absent_from_the_corpus_is_reported_as_zero`, by `test_s002_every_installed_skill_appears_even_when_the_corpus_is_empty` for the degenerate case, and by `test_s002_the_roster_is_the_installers_own_skill_directories` for the roster's source. Measured 2026-08-28: 8 of the 20 shipped skills have never been used, which is the figure the contribution-bar section of `AGENTS.md` asks for and nothing here could previously answer. |
 | `S-003`: subagent runs reported with outcome and cost | not-built | Owned by `feat-0056`. The store now holds what it can: 260 of 270 `agent_run` rows carry `agent_type` and `spawn_depth`, sourced from the `agent-<id>.meta.json` sidecars, and 16,426 messages carry `agent_id` so per-agent token figures are derivable. **A bound remains and is the corpus's, not the store's**: only 19 rows carry `total_tokens`, `total_duration_ms`, and `total_tool_use_count`, because the other 251 are backgrounded launches with no completion record anywhere in the corpus. **Those three are still derivable in-store** for the 261 agents that have messages, from `message.agent_id`, `message.ts`, and `tool_call.message_uuid`; only a backgrounded agent's completion *outcome* is genuinely absent, and it lives outside the corpus entirely. `feat-0056` inherits that bound, not a blocked scenario. |
 | `S-004`: a dispatched wave reported as one unit | not-built | Owned by `feat-0056`. |
 | `S-005`: re-reporting an unchanged corpus changes nothing | **conformed** | `ingest` skips a transcript whose recorded size and offset both match the file on disk. Proven by `test_s005_reingesting_an_unchanged_corpus_adds_no_rows`, and by `test_a_shortened_transcript_is_re_read_without_duplicating_rows` for the path where the conflict clauses rather than the offset carry it. |
@@ -44,16 +47,16 @@ confirming no code implements them, not by inspecting an implementation.
 | `S-010`: cost reported as a dated estimate | not-built | Owned by `feat-0057`. No rate table exists. |
 | `S-011`: an unpriced model yields no invented cost | not-built | Owned by `feat-0057`. |
 | `S-012`: a running session distinguished from an ended one | not-built | Owned by `feat-0055`. Requires the live-session registry, which this task scoped out. |
-| `S-013`: the report updates while a session is running | not-built | Owned by `feat-0059`. |
+| `S-013`: the report updates while a session is running | not-built | Owned by `feat-0059`. `feat-0054` deliberately renders what the store held when the page was requested, and offers a refresh rather than a live channel. |
 | `S-014`: the optional event source is absent and all still works | not-built | Owned by `feat-0059`. |
 | `S-015`: an optional event source changes no figure | not-built | Owned by `feat-0059`. |
 | `S-016`: run health is reported | not-built | Owned by `feat-0058`. `health_event` holds 392 rows across four kinds, of which 133 carry a hook exit status and 16 are real hook failures, so the "hook's exit status" the scenario names is present and unread rather than absent. The scenario's third part is also in-store: `message.is_api_error` (26), `api_error_status` (21), and `is_aborted_mid_stream` (2) record a run that ended abnormally. |
 | `S-017`: context and quota pressure over time | not-built | Owned by `feat-0057`. The context half is in-store: `context_sample` holds 3,085 parsed remaining-token readings across 19 sessions, and compaction occasions are identifiable from the 2 `compact_boundary` rows in `health_event`. The quota half comes from a file outside the corpus and is `feat-0057`'s to bring in. |
 | `S-018`: every project reported in one place | not-built | Owned by `feat-0055`. |
-| `S-019`: the reporting surface offers no session mutation | not-built | Owned by `feat-0060`. There is no reporting surface yet. |
+| `S-019`: the reporting surface offers no session mutation | not-built | Owned by `feat-0060`, which owes the enumeration the scenario asks for. There is now a surface, and it offers no action of any kind: every route reads, and a mutating method is declined, guarded by `test_the_surface_serves_reads_only`. That is a weaker claim than `S-019` states, so this stays not-built rather than being claimed. |
 | `S-020`: control available only where the harness exposes it | not-built | Owned by `feat-0060`. |
 | `S-021`: token consumption reported by kind | not-built | Owned by `feat-0057`. The store splits the four kinds on `message`; nothing reports them. |
-| `S-022`: no data leaves the machine | **conformed** | `db` and `ingest` import only `argparse`, `json`, `sys`, `datetime`, `pathlib`, and `sqlite3`. Proven by `test_s022_no_socket_is_opened_during_a_full_ingest`, which replaces `socket.socket` for the duration of a real ingest, and `test_s022_the_modules_import_nothing_network_capable`. |
+| `S-022`: no data leaves the machine | **conformed** | `db` and `ingest` import only `argparse`, `json`, `sys`, `datetime`, `pathlib`, and `sqlite3`. Proven by `test_s022_no_socket_is_opened_during_a_full_ingest`, which replaces `socket.socket` for the duration of a real ingest, and `test_s022_the_modules_import_nothing_network_capable`. The surface `feat-0054` added holds the property from both sides: the server binds a loopback address and refuses any other before binding, and serving the page plus both data routes connects only to loopback. Proven by `test_a_full_page_and_data_load_connects_only_to_loopback`, `test_a_non_loopback_address_is_refused_before_anything_is_bound`, and `test_the_page_requests_no_subresource_at_all`. |
 
 ## Two defects found by independent verification, and fixed before this matrix was written
 
@@ -129,6 +132,24 @@ that ended abnormally", was unanswerable.
 The same run also found ten behaviours that no test could fail on, including the transcript open
 mode, project derivation, subagent-transcript discovery, and the migration path. Each now has a
 test, and each test was confirmed by breaking the behaviour and watching it fail.
+
+## What `feat-0054` added, and the bound it inherits
+
+The server, the page shell, and the skills report. Three properties are asserted by tests rather
+than by reading the source, because each is the kind of claim that reads as true either way:
+
+- **The bound address is a loopback address**, checked with `ipaddress` against the socket the
+  server actually bound, and a non-loopback address is refused before `bind` is called at all.
+- **The page requests no subresource**, so there is nothing for an unavailable network to fail to
+  deliver. Not "no external subresource": none at all.
+- **The skills figure is distinct messages**, on a fixture built so the naive oracle and the
+  correct one disagree. A count of corpus lines reports 3 there where the correct figure is 2.
+
+The bound is the shell rather than the report. Four later tasks (`feat-0055` to `feat-0058`)
+render into a layout, a navigation, and a scope selector this task fixed, and a shape that cannot
+hold five reports would be discovered after four of them were written. The five slots exist now
+and four are stubs naming their owner, so the shape has been exercised at the registry level and
+not yet at the rendering level.
 
 ## Bound worth stating
 

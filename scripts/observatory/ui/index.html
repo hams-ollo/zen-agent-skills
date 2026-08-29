@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent observatory</title>
+<!--
+  One page, no build step, no subresource. Every style and every line of script is inline and
+  nothing outside this file is requested, so the page renders with the network unavailable.
+  That is a contract property, not a preference: docs/spec/agent-observatory.md S-022 says no
+  data leaves the machine, and a remote font or a chart library would fetch on every load.
+
+  Charts are hand-rolled inline SVG for the same reason.
+
+  The shell is the deliverable here. feat-0055 to feat-0058 add their reports by serving a JSON
+  endpoint and adding one function to RENDERERS below; none of them should need to touch the
+  layout, the navigation, or the scope selector.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --ink: #1c1c1a;
+    --muted: #6a6a63;
+    --rule: #e2e2dc;
+    --accent: #3f6f5e;
+    --accent-soft: #cfe0d8;
+    --zero: #b9b9b1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a;
+      --panel: #1d1f23;
+      --ink: #e9e9e4;
+      --muted: #9b9b93;
+      --rule: #2c2f34;
+      --accent: #7fbfa5;
+      --accent-soft: #2f4a41;
+      --zero: #4a4d52;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
+    padding: 18px 24px 12px; border-bottom: 1px solid var(--rule);
+  }
+  h1 { font-size: 17px; margin: 0; letter-spacing: 0.02em; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .grow { flex: 1 1 auto; }
+  .controls { display: flex; gap: 8px; align-items: center; flex: 0 0 auto; }
+  .controls select { flex: 0 1 auto; max-width: 280px; }
+  .controls button {
+    font: inherit; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--rule);
+    background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  .scroller { overflow-x: auto; }
+  .muted { color: var(--muted); font-size: 13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  select {
+    font: inherit; padding: 4px 8px; border: 1px solid var(--rule);
+    border-radius: 5px; background: var(--panel); color: var(--ink);
+  }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 24px; }
+  nav button {
+    font: inherit; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px;
+    background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  nav button[aria-current="true"] {
+    background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
+  }
+  nav button[data-built="false"] { color: var(--muted); }
+  main { padding: 8px 24px 40px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .figures { display: flex; flex-wrap: wrap; gap: 26px; margin: 14px 0 4px; }
+  .figure strong { display: block; font-size: 22px; font-weight: 600; }
+  .figure span { color: var(--muted); font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--rule); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr[data-unused="true"] td { color: var(--muted); }
+  .tag {
+    font-size: 11px; padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--rule); color: var(--muted);
+  }
+  .chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+  footer { padding: 0 24px 30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent observatory</h1>
+  <div class="grow"></div>
+  <div class="controls">
+    <label class="muted" for="scope">Scope</label>
+    <select id="scope"><option value="">Every project</option></select>
+    <button id="refresh" type="button">Refresh</button>
+  </div>
+</header>
+
+<nav id="nav"></nav>
+
+<main>
+  <div id="report" class="panel"><p class="muted">Loading.</p></div>
+</main>
+
+<footer>
+  <p class="muted" id="footnote"></p>
+</footer>
+
+<script>
+"use strict";
+
+var STATE = { reports: [], current: "skills", project: "", store: "", roster: "" };
+
+function el(tag, attrs, children) {
+  var node = document.createElement(tag);
+  attrs = attrs || {};
+  for (var key in attrs) {
+    if (key === "text") { node.textContent = attrs[key]; }
+    else { node.setAttribute(key, attrs[key]); }
+  }
+  (children || []).forEach(function (child) { node.appendChild(child); });
+  return node;
+}
+
+function svg(tag, attrs) {
+  var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (var key in attrs) { node.setAttribute(key, attrs[key]); }
+  return node;
+}
+
+function get(path) {
+  return fetch(path, { cache: "no-store" }).then(function (response) {
+    return response.json();
+  });
+}
+
+function scoped(path) {
+  return STATE.project ? path + "?project=" + encodeURIComponent(STATE.project) : path;
+}
+
+/* One hand-rolled horizontal bar chart. No chart library, and none is wanted: this is the
+   whole of what the five reports need from a chart, and a dependency here would also have to
+   be fetched, which S-022 forbids. */
+function barChart(rows, labelKey, valueKey) {
+  var shown = rows.slice(0, 20);
+  var rowHeight = 22, labelWidth = 190, pad = 8;
+  var width = 720;
+  var height = shown.length * rowHeight + pad * 2;
+  var max = 0;
+  shown.forEach(function (row) { max = Math.max(max, row[valueKey]); });
+  var scale = max > 0 ? (width - labelWidth - 60) / max : 0;
+
+  var chart = svg("svg", {
+    "class": "chart", viewBox: "0 0 " + width + " " + height,
+    role: "img", "aria-label": "Skill use counts"
+  });
+  shown.forEach(function (row, index) {
+    var y = pad + index * rowHeight;
+    var value = row[valueKey];
+    var label = svg("text", {
+      x: labelWidth - 8, y: y + 14, "text-anchor": "end",
+      "font-size": "12", fill: "currentColor",
+      "fill-opacity": value ? "0.95" : "0.5"
+    });
+    label.textContent = row[labelKey];
+    chart.appendChild(label);
+
+    var barWidth = Math.max(value * scale, value > 0 ? 2 : 0);
+    chart.appendChild(svg("rect", {
+      x: labelWidth, y: y + 4, width: barWidth, height: rowHeight - 10, rx: "2",
+      fill: value ? "var(--accent)" : "var(--zero)"
+    }));
+    var count = svg("text", {
+      x: labelWidth + barWidth + 6, y: y + 14, "font-size": "12",
+      fill: "currentColor", "fill-opacity": value ? "0.8" : "0.45"
+    });
+    count.textContent = value;
+    chart.appendChild(count);
+  });
+  return chart;
+}
+
+function figure(value, caption) {
+  return el("div", { "class": "figure" }, [
+    el("strong", { text: String(value) }), el("span", { text: caption })
+  ]);
+}
+
+/* Each report adds one function here, keyed by its id in the server's REPORTS registry.
+   A report with no renderer falls back to the owed panel below, so the shell never shows an
+   empty box without saying which task owes it. */
+var RENDERERS = {
+  skills: function (data, into) {
+    if (data.store_present === false) {
+      into.appendChild(el("p", { text: data.message }));
+      return;
+    }
+    into.appendChild(el("h2", { text: "Skills" }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Which skills are used, how often, and which never are. A use is one message "
+          + "carrying that skill's attribution, counted once even where a forked session "
+          + "replays it."
+    }));
+    into.appendChild(el("div", { "class": "figures" }, [
+      figure(data.total_uses, "attributed messages"),
+      figure(data.installed_used, "installed skills used"),
+      figure(data.installed_unused, "installed skills never used"),
+      figure(data.roster_size, "skills in the roster")
+    ]));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Never-used is counted against " + data.roster_label + "."
+    }));
+    var scroller = el("div", { "class": "scroller" });
+    scroller.appendChild(barChart(data.skills, "skill", "uses"));
+    into.appendChild(scroller);
+
+    var body = el("tbody", {}, data.skills.map(function (row) {
+      return el("tr", { "data-unused": String(row.uses === 0) }, [
+        el("td", { text: row.skill }),
+        el("td", { "class": "n", text: String(row.uses) }),
+        el("td", {}, [el("span", {
+          "class": "tag",
+          text: row.installed ? "in roster" : "not in roster"
+        })])
+      ]);
+    }));
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Skill" }), el("th", { text: "Uses" }), el("th", { text: "Roster" })
+      ])]),
+      body
+    ]));
+  }
+};
+
+function owedPanel(report, into) {
+  into.appendChild(el("h2", { text: report.title }));
+  into.appendChild(el("p", { "class": "muted", text: report.question }));
+  into.appendChild(el("p", {
+    text: "Not built yet. Owned by " + report.owner + ", covering "
+        + report.scenarios.join(", ") + "."
+  }));
+}
+
+function renderNav() {
+  var nav = document.getElementById("nav");
+  nav.textContent = "";
+  STATE.reports.forEach(function (report) {
+    var built = Boolean(report.endpoint);
+    var button = el("button", {
+      type: "button", "data-report": report.id, "data-built": String(built),
+      "aria-current": String(report.id === STATE.current), text: report.title
+    });
+    button.addEventListener("click", function () {
+      STATE.current = report.id;
+      renderNav();
+      renderReport();
+    });
+    nav.appendChild(button);
+  });
+}
+
+function renderReport() {
+  var into = document.getElementById("report");
+  into.textContent = "";
+  var report = STATE.reports.filter(function (r) { return r.id === STATE.current; })[0];
+  if (!report) { return; }
+  if (!report.endpoint || !RENDERERS[report.id]) {
+    owedPanel(report, into);
+    return;
+  }
+  into.appendChild(el("p", { "class": "muted", text: "Loading." }));
+  get(scoped(report.endpoint)).then(function (data) {
+    into.textContent = "";
+    if (data.error) { into.appendChild(el("p", { text: data.error })); return; }
+    RENDERERS[report.id](data, into);
+  }).catch(function (err) {
+    into.textContent = "";
+    into.appendChild(el("p", { text: "Could not load the report: " + err }));
+  });
+}
+
+function renderFootnote() {
+  document.getElementById("footnote").textContent =
+    "Local only, bound to the loopback interface, and read only: this surface changes nothing "
+    + "the harness owns and offers no session action. Store: " + STATE.store;
+}
+
+function boot() {
+  get("/api/meta").then(function (meta) {
+    STATE.reports = meta.reports || [];
+    STATE.store = meta.store || "";
+    var scope = document.getElementById("scope");
+    (meta.projects || []).forEach(function (project) {
+      scope.appendChild(el("option", { value: project, text: project }));
+    });
+    scope.addEventListener("change", function () {
+      STATE.project = scope.value;
+      renderReport();
+    });
+    document.getElementById("refresh").addEventListener("click", renderReport);
+    renderNav();
+    renderReport();
+    renderFootnote();
+  }).catch(function (err) {
+    document.getElementById("report").textContent = "Could not reach the local server: " + err;
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

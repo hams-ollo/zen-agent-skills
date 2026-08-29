@@ -31,7 +31,7 @@ Read the contract for what must be true. It is not restated here.
 
 **In scope:** the fleet report, and the live-session source `S-012` needs.
 
-- The report itself, in the page shell [`feat-0054`](feat-0054-the-local-server-the-page-shell-and-the-skills-report.md)
+- The report itself, in the page shell [`feat-0054`](done/feat-0054-the-local-server-the-page-shell-and-the-skills-report.md)
   establishes.
 - A reader for the harness's live session registry, added to `scripts/observatory/ingest.py`.
 - The project scoping that `S-018` requires, in the shell's scope selector, so every later report
