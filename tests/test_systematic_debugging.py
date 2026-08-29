@@ -594,6 +594,94 @@ class TestTheContractsConstraints(SkillTestCase):
             "skipped")
 
 
+class TestWhatTheDogfoodAdded(SkillTestCase):
+    """Three instructions `feat-0062` added after running the skill on a real defect.
+
+    Each closes a place where the procedure, as written, cost the run something measurable.
+    They are asserted rather than left in prose for the reason the verification of `feat-0061`
+    established: an unasserted paragraph in this body is silently deletable, and the three
+    survivors it found were all paragraphs nothing was scoped to.
+    """
+
+    def test_an_unfired_reproduction_is_checked_for_an_uncontrolled_variable_first(self):
+        """The dogfood's first two reproduction attempts failed, and not because the defect is
+        intermittent: the writer simply did not hold the store for long enough. The contract
+        asks for a rate, and what the run needed was a knob."""
+        step = section(self.body, "### 2. Reproduce before you explain")
+        self.assertContains(
+            step, "check whether you are the one varying it",
+            "nothing tells a reader to look for an uncontrolled variable before calling a "
+            "defect intermittent, which is the reading that turns a harness problem into a "
+            "property of the system")
+        self.assertContains(
+            step, "the fix is a knob rather\nthan a rate",
+            "the remedy is not named, so a reader who suspects a variable is still told only "
+            "to count attempts")
+        self.assertContains(
+            step, "Record what you pinned and to what",
+            "a pinned variable is not recorded, so a later reader cannot tell a deterministic "
+            "reproduction from a lucky one")
+
+    def test_a_measurement_is_checked_against_a_second_source_before_it_becomes_a_hypothesis(self):
+        """The dogfood formed a hypothesis from its own harness's timings, which turned out to
+        be an artifact, and spent a trial disproving it. The trial was correctly recorded, and
+        nothing in the procedure would have avoided it."""
+        step = section(self.body, "### 1. Restate the symptom as an observable")
+        self.assertContains(
+            step, "is a claim about your harness until something else agrees with it",
+            "nothing warns that a figure from the reader's own instrument is not yet evidence")
+        self.assertContains(
+            step, "check it against a second source",
+            "the warning is given without the remedy, so a reader who agrees with it does not "
+            "know what to do next")
+
+    def test_a_sufficient_condition_is_not_accepted_as_the_cause_without_a_second_look(self):
+        """The correction the dogfood earned the hard way. Its own `root_cause_found` was
+        refuted by an independent check: the trial that "confirmed" it, raising a timeout,
+        would have flipped the outcome whatever the blocking statement was, and a different
+        single change fixed the same symptom at baseline latency. The skill's confirming
+        observation, as written, did not require the counterfactual to discriminate."""
+        step = section(self.body, "### 5. One hypothesis at a time")
+        self.assertContains(
+            step, "merely consistent with your hypothesis has confirmed nothing",
+            "nothing distinguishes a trial that confirms from one that is only compatible, "
+            "which is how a sufficient condition gets recorded as a cause")
+        self.assertContains(
+            step, "a sufficient condition is not the cause until you have looked for a second "
+                  "change that also makes it go away",
+            "the reader is not told to look for a second sufficient change, which is the only "
+            "move that separates a cause from its neighbourhood")
+        self.assertContains(
+            step, "a counterfactual that would hold whatever the answer turned out to be",
+            "the tell is not named, so a reader who agrees with the rule still cannot spot "
+            "the trial it applies to")
+
+    def test_the_probe_must_cover_the_whole_suspect_region(self):
+        """Also from the refutation: the dogfood's boundary probe instrumented three
+        statements of a five-statement function, reported both as returning in 0.000s, and
+        concluded the function was innocent. The block was at the fifth."""
+        step = section(self.body, "### 4. Localize before you explain")
+        self.assertContains(
+            step, "not the part you already suspect",
+            "the reader is not told to instrument beyond their own theory, so a probe returns "
+            "a clean result for everything it was not pointed at")
+        self.assertContains(
+            step, "The gap in the instrumentation is where the answer will be",
+            "the consequence is not stated, and it is what makes the rule worth the extra "
+            "probes rather than a counsel of perfection")
+
+    def test_the_copy_boundary_is_given_a_rule_rather_than_left_to_judgment(self):
+        """Step 3 required a copy and said nothing about what to put in it. For a component
+        rather than a file that is a real decision, and getting it wrong debugs the copy."""
+        step = section(self.body, "### 3. Work in a copy, and never in the tracked files")
+        self.assertContains(
+            step, "Copy enough that the thing still runs, and no more.",
+            "the copy's boundary is left entirely to judgment")
+        self.assertContains(
+            step, "its imports, its package layout, and its data files",
+            "the rule names no criterion, so it restates the problem rather than answering it")
+
+
 class TestTheSkillIsADraftAndNoProfilePlacesIt(SkillTestCase):
     """The consequential risk `feat-0061` names. A skill that is not excluded is placed into
     user-scope discovery and starts triggering in unrelated sessions before it has been used

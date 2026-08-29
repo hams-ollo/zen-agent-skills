@@ -80,6 +80,12 @@ step 2.
 Read the error text completely while you do it, including the stack trace and the exit code. This is
 the cheapest evidence available and it is the most often skipped.
 
+**A number your harness reported is a claim about your harness until something else agrees with it.**
+Before forming a hypothesis from a measurement, check it against a second source: the system's own
+log, a timestamp from inside the process, a run with the suspected cause absent. A figure that only
+one instrument has ever produced is where an investigation goes wrong quietly, because it looks like
+evidence and costs a trial to disprove.
+
 ### 2. Reproduce before you explain
 
 Run the thing. **A cause inferred from reading code alone is a guess**, however good it looks, and
@@ -99,8 +105,15 @@ Three outcomes, and each is an answer:
   the exact failure this skill exists to prevent, and it is more dangerous than an empty answer
   because it will be believed.
 
-**When it reproduces sometimes and not others**, do not take a passing attempt as an answer. Repeat
-the reproduction and record the **observed rate** in `reproduction`, as attempts and successes rather
+**Before calling anything intermittent, check whether you are the one varying it.** A reproduction
+that fires sometimes usually has a condition nobody is holding still, and the fix is a knob rather
+than a rate: find the quantity the symptom depends on, set it deliberately, and see whether the
+symptom becomes reliable. A defect that is deterministic once one variable is pinned is not an
+intermittent defect, and reporting a rate for it describes your harness rather than the system.
+Record what you pinned and to what, in `reproduction`, alongside anything that stayed uncontrolled.
+
+**When it is genuinely intermittent**, do not take a passing attempt as an answer. Repeat the
+reproduction and record the **observed rate** in `reproduction`, as attempts and successes rather
 than as an adjective. Then hunt for a condition that produces the behavior reliably, and record each
 condition tried and its outcome in `hypotheses`. `root_cause_found` is available only once such a
 condition is found. **An attempt that happened to pass is not evidence that anything was fixed.**
@@ -124,6 +137,12 @@ failure is invisible until a run dies, which is to say until something has alrea
 Make the copy however the target allows. Nothing here requires a particular tool, and naming one
 would be false of a target that does not have it.
 
+**Copy enough that the thing still runs, and no more.** For one file that is the file; for a component
+it is whatever its imports, its package layout, and its data files need, which is usually less than
+the whole repository and more than the directory you were looking at. Get it wrong in the small
+direction and you debug your copy instead of the system, which is the same wasted trial as a bad
+measurement.
+
 **Where no working copy can be made at all**, say so, add no instrumentation, and continue read-only.
 Record in `reproduction` that the observation was made without instrumentation, so a reader knows the
 diagnosis was reached with a weaker instrument than usual. **The run still reaches a verdict** on the
@@ -142,6 +161,13 @@ the wrong component about half the time.
 In the copy, log what enters and what leaves at each boundary, along with the environment and
 configuration each side actually sees. Run once, then read. The output tells you which side of which
 boundary is wrong, and that observation goes in `hypotheses` **before** any entry proposing a cause.
+
+**Probe the whole of the region you are suspicious of, not the part you already suspect.** A probe
+placed at the statements you had a theory about, and nowhere else, returns a clean bill of health for
+everything you did not instrument, and reads exactly like a clean bill of health for the region. If
+you are timing a function, time every statement in it; if you are timing a request, cover it end to
+end. The gap in the instrumentation is where the answer will be, because that is the part you were
+not thinking about.
 
 Trace backwards from there. Where does the bad value originate, what handed it over, and what handed
 it to that? Keep going up until the value is first wrong rather than first noticed. The place a bad
@@ -166,6 +192,19 @@ Then:
   claim about program behavior and where it originates, and `confirming_observation` states **what
   was observed that would have differed had the hypothesis been wrong**. If nothing would have
   differed, the trial confirmed nothing and the hypothesis is still open.
+
+**A trial that is merely consistent with your hypothesis has confirmed nothing, and this is the one
+that gets past people.** Before writing `root_cause_found`, ask what else would have produced the
+same result. A change that makes the symptom go away is a **sufficient condition**, and a sufficient
+condition is not the cause until you have looked for a second change that also makes it go away.
+Look for one deliberately, and try it. If a second change works too, you have found a symptom's
+neighbourhood rather than its origin: the cause is whatever they have in common, and the record says
+which changes were trialled rather than naming the first one that worked.
+
+The tell is a counterfactual that would hold whatever the answer turned out to be. "Raising the
+timeout fixed it, so the timeout was the cause" is that shape: raising a timeout ends any wait, so
+the trial cannot tell one waiting thing from another. A counterfactual worth writing down is one that
+a wrong hypothesis would have failed.
 
 When you do not understand something, say you do not understand it. An honest gap is cheaper than a
 confident cause that has to be unwound later.

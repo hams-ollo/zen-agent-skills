@@ -43,7 +43,9 @@ is what an agent follows. The sentence above stated the stronger property while 
 weaker one, which is the shape `AGENTS.md` names in its conventions section, a check that cannot fail
 being reported as coverage.
 
-**Twenty mutations, all killed, and five of them only after the suite was strengthened.** The suite
+**Twenty-five mutations, all killed, and ten of them only after the suite was strengthened.** Run in
+one pass on 2026-08-29 so the count is measured rather than added up: fifteen, then five, then five.
+The suite
 was run against fifteen deliberate defects in the skill, one at a time, each a way the contract could
 be broken: a fourth verdict invented in the table, a presence condition widened to `always`,
 `S-014`'s bound weakened back to the end of the run, the no-copy path deleted, a tool named as
@@ -57,20 +59,37 @@ instructed in Procedure step 6, a record cell rewritten to admit "a new one wher
 the one-variable-per-trial Constraint deleted outright, and Procedure step 1 removed entirely. Four
 new assertions close them, including a per-sentence exclusion rather than a per-word one, because
 this section legitimately uses "cleaning up afterwards" in the sentence that rejects it and a
-bare-word check would have been broken by the prose explaining the rule. All twenty now fail the
-suite. A structural test that cannot fail is unchecked whatever it printed, and the five survivors
-are why that sentence is worth more than the fifteen kills that preceded them.
+bare-word check would have been broken by the prose explaining the rule.
+
+**Then `feat-0062` added five instructions and five more mutations.** Each correction the dogfood
+produced was, on arrival, a paragraph nothing was scoped to and therefore silently deletable, which
+is the same class a third time. All five now have assertions and all five fail when the instruction
+is cut. All twenty-five fail the suite. A structural test that cannot fail is unchecked whatever it
+printed, and the survivors are why that sentence is worth more than the kills that preceded them.
 
 **What neither buys.** Nothing here observes an agent following the procedure. `feat-0062` is the
-task that does, by running the skill on a real defect, and until it has run this contract's central
-claim, that the procedure produces the cause rather than decorating one arrived at some other way,
-is untested.
+task that did, and its result belongs in this matrix rather than only in a task file.
+
+**The dogfood, 2026-08-29, and it refuted its own output.** The skill was run on a real defect, the
+`database is locked` failure in `scripts/observatory/serve.py`. It reached `root_cause_found`, and an
+independent check then refuted the cause: the trial the run called confirming was raising a SQLite
+busy timeout, which ends any wait whatever is waiting, so it was consistent with the hypothesis and
+did not test it. Two further single-variable cells, which nobody had run, showed a different change
+fixing the same symptom at baseline latency and showed the record's stated mechanism was not involved
+at all.
+
+**That result cuts two ways and both belong here.** The procedure did change the answer: reading the
+code produced a wrong cause, and the boundary probe killed it in one run. And the procedure then let
+a second wrong cause through, under a counterfactual that could not have failed. Five corrections
+went into the skill as a result, three from the run and two from the refutation, and each is asserted
+in the suite. `feat-0063` is the second run, by a session that did not write the skill, on a defect
+it did not choose, and the skill stays a draft until then.
 
 ## Matrix
 
 | Section | Item | Status | Evidence | Note |
 |---|---|---|---|---|
-| Scenarios | S-001 a reproducible defect yields a named cause | Conformed | Procedure step 5 / "The result confirms it." branch, which returns `root_cause_found` and requires `confirming_observation` to state "what was observed that would have differed had the hypothesis been wrong"; `test_s001_a_confirmed_hypothesis_returns_a_cause_with_a_disconfirming_observation` | the skill adds a clause the contract implies but does not state, that a trial nothing would have contradicted leaves "the hypothesis is still open". A narrowing toward the checkable, not a divergence |
+| Scenarios | S-001 a reproducible defect yields a named cause | Conformed | Procedure step 5 / "The result confirms it." branch, which returns `root_cause_found` and requires `confirming_observation` to state "what was observed that would have differed had the hypothesis been wrong"; `test_s001_a_confirmed_hypothesis_returns_a_cause_with_a_disconfirming_observation` | **the row the dogfood put pressure on.** The contract's wording was satisfiable by a trial that could not have failed, and `feat-0062`'s own run did exactly that. The scenario is not wrong and the skill now says the missing half outright: "a sufficient condition is not the cause until you have looked for a second change that also makes it go away". Whether the contract should say it too is a live question and not a divergence today |
 | Scenarios | S-002 a defect that will not reproduce is a verdict, not a failure | Conformed | Procedure step 2 / "It does not reproduce." branch, carrying `not_reproducible`, `missing_input`, and "no `root_cause` is offered"; `test_s002_a_defect_that_will_not_reproduce_returns_a_verdict_and_no_cause` | all three obligations present, including the prohibition, which is the half most easily lost. "This is a result." carries the scenario's title claim into the body a model reads |
 | Scenarios | S-003 a disproved hypothesis is recorded, not discarded | Conformed | Procedure step 5 / "The result contradicts the hypothesis." branch, which "retains the hypothesis, its trial" and the "disconfirming result", with the next hypothesis a "separate entry" stated "before its own trial"; `test_s003_a_disproved_hypothesis_is_retained_and_the_next_is_a_separate_entry` | the ordering clause is the one with teeth and it is stated rather than implied |
 | Scenarios | S-004 an investigation that will not converge terminates with a verdict | Conformed | Procedure step 6 / "Do not start another hypothesis.", with "`bound_reached` names the bound and the count" and the statement that "shape of the system, rather than any single defect, is" the subject; `test_s004_reaching_the_bound_returns_architectural_with_the_bound_and_the_count` | the bound's declaration is placed in Inputs rather than in step 6, and requires it "before the first trial", which the contract does not say and which is what stops a bound being chosen afterwards to fit the count |
