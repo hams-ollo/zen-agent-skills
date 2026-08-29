@@ -652,7 +652,11 @@ class ProfileTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             inst.install(["claude"], "copy", self.home, True, "core")
         out = buf.getvalue()
-        budgets = inst.profile_budgets(inst.discover_skills())
+        # Over the shipped set, matching what install.py prints and why: a draft is placed
+        # by no profile, so counting its description reports a budget no run can incur.
+        # Passing everything discovered here diverged the moment the kit gained its first
+        # draft skill, which is a defect in this expectation rather than in the installer.
+        budgets = inst.profile_budgets(inst.partition_drafts(inst.discover_skills())[0])
         self.assertIn("Description budget:", out)
         self.assertIn(f"{budgets['core']} characters for this profile", out)
         for name, total in budgets.items():
@@ -660,7 +664,7 @@ class ProfileTests(unittest.TestCase):
 
     def test_a_smaller_profile_costs_fewer_description_characters(self):
         # Scenario S-014: the figure has to track the selection, or it is decoration.
-        budgets = inst.profile_budgets(inst.discover_skills())
+        budgets = inst.profile_budgets(inst.partition_drafts(inst.discover_skills())[0])
         self.assertLess(budgets["core"], budgets["spine"])
         self.assertLess(budgets["spine"], budgets["all"])
 

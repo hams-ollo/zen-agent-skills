@@ -141,6 +141,7 @@ USER_SKILL_SUBPATHS = (
 # with three skills installed is reachable and hears nothing.
 KIT_SKILL_NAMES = frozenset({
     "agent-handoff",
+    "agent-observatory",
     "doc-author",
     "doc-revise",
     "doc-sync",

@@ -94,6 +94,13 @@
     background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
   }
   td .why { color: var(--muted); font-size: 11px; margin-top: 2px; max-width: 34em; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .acts a, .acts button {
+    font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 5px;
+    border: 1px solid var(--rule); background: var(--panel); color: var(--ink);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .acts code { font-size: 11px; color: var(--muted); word-break: break-all; }
   .tag {
     font-size: 11px; padding: 1px 6px; border-radius: 4px;
     border: 1px solid var(--rule); color: var(--muted);
@@ -126,7 +133,8 @@
 <script>
 "use strict";
 
-var STATE = { reports: [], current: "", project: "", store: "", roster: "" };
+var STATE = { reports: [], current: "", project: "", store: "", roster: "", actions: [],
+              live: false, pollSeconds: null };
 
 function el(tag, attrs, children) {
   var node = document.createElement(tag);
@@ -197,6 +205,59 @@ function barChart(rows, labelKey, valueKey) {
   return chart;
 }
 
+/* Every interactive element this surface offers against a session is built here and nowhere
+   else, and every one carries data-action naming its entry in the server's ACTIONS registry.
+   S-019 is an enumeration claim, so the enumeration has to be derivable rather than
+   maintained by hand: one construction site plus one tag is what makes it derivable. A
+   renderer that builds its own button is caught by the test, not by a reviewer remembering.
+
+   Both kinds are non-mutating by construction. A navigate action is an anchor the viewer
+   follows; a copy-command puts text on their clipboard for them to run. Neither can reach a
+   session, and there is no third kind. */
+function actionControl(action, row) {
+  var value = row[action.field];
+  if (!value) { return null; }
+
+  if (action.kind === "navigate") {
+    /* noreferrer keeps the loopback URL from reaching the destination. The report itself
+       still requests nothing: this is a link the viewer chooses to follow. */
+    return el("a", {
+      "data-action": action.id, href: value, target: "_blank",
+      rel: "noreferrer noopener", text: action.label, title: action.note
+    });
+  }
+
+  var text = action.template.replace("{" + action.field + "}", value);
+  if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+    /* No clipboard API, so present the command as selectable text instead of a button that
+       would do nothing. S-019 asks that the command reach a person, not that a button exist. */
+    return el("code", { "data-action": action.id, text: text, title: action.note });
+  }
+  var button = el("button", {
+    "data-action": action.id, type: "button", text: action.label, title: text
+  });
+  button.addEventListener("click", function () {
+    navigator.clipboard.writeText(text).then(function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = action.label; }, 1200);
+    }, function () {
+      button.textContent = "Copy failed";
+      setTimeout(function () { button.textContent = action.label; }, 1200);
+    });
+  });
+  return button;
+}
+
+function actionCell(row) {
+  var cell = el("td", {}, [el("div", { "class": "acts" })]);
+  var holder = cell.firstChild;
+  STATE.actions.forEach(function (action) {
+    var control = actionControl(action, row);
+    if (control) { holder.appendChild(control); }
+  });
+  return cell;
+}
+
 function figure(value, caption) {
   return el("div", { "class": "figure" }, [
     el("strong", { text: String(value) }), el("span", { text: caption })
@@ -215,8 +276,13 @@ var RENDERERS = {
     into.appendChild(el("h2", { text: "Fleet" }));
     into.appendChild(el("p", {
       "class": "muted",
-      text: "Which sessions exist, where, and which are running. Correct as of when this "
-          + "report was requested, not live: press Refresh to ask again."
+      /* Derived from the same state the footnote uses, so the two cannot disagree again.
+         This sentence said "not live: press Refresh to ask again" while the footer said
+         the page was following the corpus, and both were on screen at once. */
+      text: "Which sessions exist, where, and which are running. "
+          + (STATE.live
+              ? "Following the corpus: new work appears here on its own."
+              : "Correct as of when this report was requested. Press Refresh to ask again.")
     }));
 
     var totals = data.totals;
@@ -269,12 +335,25 @@ var RENDERERS = {
     ]));
 
     into.appendChild(el("h2", { text: "Sessions" }));
+    /* The surface stating its own boundary. S-019 is answered by enumerating what is offered,
+       so the enumeration is shown rather than left for a reader to infer from the buttons. */
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Everything this surface can do to a session, in full: "
+          + STATE.actions.map(function (action) {
+              return action.label + " (" + action.kind + ")";
+            }).join(", ")
+          + ". None of them changes a session. Starting, resuming, interrupting, and ending "
+          + "one are the contract's Non-Goals, so a command is presented for you to run "
+          + "rather than run for you."
+    }));
     var scroller = el("div", { "class": "scroller" });
     scroller.appendChild(el("table", {}, [
       el("thead", {}, [el("tr", {}, [
         el("th", { text: "State" }), el("th", { text: "Project" }),
         el("th", { text: "Branch" }), el("th", { text: "Last activity" }),
-        el("th", { text: "Session" }), el("th", { text: "Where" })
+        el("th", { text: "Session" }), el("th", { text: "Where" }),
+        el("th", { text: "Actions" })
       ])]),
       el("tbody", {}, data.sessions.map(function (row) {
         var state = el("td", {}, [el("span", { "class": "tag", text: row.state })]);
@@ -289,7 +368,8 @@ var RENDERERS = {
           el("td", { text: row.branch || "not recorded yet" }),
           el("td", { text: row.last_activity || "not ingested yet" }),
           el("td", { text: row.title || row.name || row.session_id }),
-          el("td", { text: (row.entrypoint || "") + (row.pid ? " pid " + row.pid : "") })
+          el("td", { text: (row.entrypoint || "") + (row.pid ? " pid " + row.pid : "") }),
+          actionCell(row)
         ]);
       }))
     ]));
@@ -388,15 +468,50 @@ function renderReport() {
   });
 }
 
+/* The live channel. EventSource is built into the browser and text/event-stream is a
+   handful of bytes on the wire, so S-013 costs no library here and none on the server.
+
+   A browser without EventSource, or a server that refuses the route, leaves the page
+   exactly as it was: the Refresh button still works and nothing reports an error. That
+   degradation is S-014's requirement, not a nicety. */
+function live() {
+  if (!window.EventSource) { return; }
+  var source = new EventSource("/api/events");
+  source.addEventListener("open", function (message) {
+    try {
+      STATE.pollSeconds = JSON.parse(message.data).poll_seconds;
+    } catch (err) { STATE.pollSeconds = null; }
+    STATE.live = true;
+    renderFootnote();
+  });
+  source.addEventListener("change", function () {
+    /* A hint to look, never a datum: the event says something appeared and the report is
+       then read from the store as it always is. Nothing here adds to a figure. */
+    renderReport();
+    renderFootnote();
+  });
+  source.onerror = function () {
+    STATE.live = false;
+    renderFootnote();
+  };
+}
+
 function renderFootnote() {
+  var delay = STATE.pollSeconds === null ? "" :
+    " Newly appended records reach an open report within about "
+    + STATE.pollSeconds + (STATE.pollSeconds === 1 ? " second" : " seconds")
+    + ", whether or not the optional event source is running.";
   document.getElementById("footnote").textContent =
     "Local only, bound to the loopback interface, and read only: this surface changes nothing "
-    + "the harness owns and offers no session action. Store: " + STATE.store;
+    + "the harness owns and offers no session action. "
+    + (STATE.live ? "Following the corpus live." : "Not following: press Refresh to update.")
+    + delay + " Store: " + STATE.store;
 }
 
 function boot() {
   get("/api/meta").then(function (meta) {
     STATE.reports = meta.reports || [];
+    STATE.actions = meta.actions || [];
     STATE.current = (STATE.reports[0] || {}).id || "";
     STATE.store = meta.store || "";
     var scope = document.getElementById("scope");
@@ -411,6 +526,7 @@ function boot() {
     renderNav();
     renderReport();
     renderFootnote();
+    live();
   }).catch(function (err) {
     document.getElementById("report").textContent = "Could not reach the local server: " + err;
   });

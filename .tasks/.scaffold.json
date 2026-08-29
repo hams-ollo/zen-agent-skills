@@ -13,9 +13,9 @@
     "CHANGELOG.md"
   ],
   "id_high_water": {
-    "bug": 41,
+    "bug": 49,
     "feat": 49,
-    "chore": 48,
+    "chore": 77,
     "epic": 0
   }
 }

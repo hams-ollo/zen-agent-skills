@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -42,6 +43,7 @@ from scripts import install                            # noqa: E402
 from scripts.observatory import db, ingest, serve      # noqa: E402
 
 UI_INDEX = REPO_ROOT / "scripts" / "observatory" / "ui" / "index.html"
+COMPANION_SKILL = REPO_ROOT / ".agents" / "skills" / "agent-observatory" / "SKILL.md"
 
 
 class ServeTestCase(unittest.TestCase):
@@ -1200,17 +1202,46 @@ class TestFleetPageBehaviour(ServerTestCase):
                         f"the renderer applies {hostile} to {collection} before rendering, "
                         f"so a session the report counted can be missing from the page")
 
-    def test_the_fleet_renderer_offers_no_action_against_a_session(self):
-        """`feat-0060` owns `S-019` and `S-020` and defines what a session-directed action
-        may be. Until it lands, this report names sessions and offers nothing to do to them,
-        which is a boundary in the task's Scope rather than a claim on those scenarios."""
+    def test_the_fleet_renderer_builds_no_interactive_element_of_its_own(self):
+        """The renderer must not construct an action directly, because `S-019`'s enumeration
+        is derived from one tagged construction site (`actionControl`) and an element built
+        anywhere else escapes it.
+
+        This assertion predates the actions and its reason has changed rather than weakened:
+        it used to mean the surface offered nothing, and now it means the surface offers only
+        what the registry declares.
+        """
         body = self.renderer_body()
-        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', "addEventListener",
-                          "location.href", "window.open", "fetch("):
+        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', 'el("input"',
+                          "addEventListener", "location.href", "window.open", "fetch("):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, body,
-                                 f"the fleet renderer introduces {forbidden}, which is an "
-                                 f"action against a session this task must not offer")
+                                 f"the fleet renderer builds {forbidden} directly instead of "
+                                 f"going through actionControl, so it is outside the "
+                                 f"enumeration S-019 is proven by")
+        self.assertIn("actionCell(row)", body,
+                      "the renderer no longer offers the declared actions at all")
+
+    def test_the_fleet_renderer_does_not_contradict_the_footnote_about_being_live(self):
+        """Both sentences are on screen at once, so they cannot be allowed to disagree.
+
+        An outside verification read "Correct as of when this report was requested, not
+        live: press Refresh to ask again" directly above a footer saying "Following the
+        corpus live", and then watched the page re-fetch on its own, which made the first
+        sentence false rather than merely stale.
+        """
+        body = self.renderer_body()
+        # Comments stripped first. The phrase appears in the comment that explains this very
+        # fix, so asserting on the raw body matched prose rather than code, which is the
+        # third time in this component that an assertion has been satisfied or broken by a
+        # sentence rather than by a statement.
+        code = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+
+        self.assertIn("STATE.live", code,
+                      "the fleet subtitle does not consult whether the page is following, "
+                      "so it can claim the opposite of what the footnote says")
+        self.assertNotIn("not live", code,
+                         "the fleet subtitle still asserts the page is not live")
 
     def test_the_fleet_renderer_reports_the_state_the_server_established(self):
         """Kills the mutation that derives liveness page-side, for instance from whether a
@@ -1237,6 +1268,959 @@ class TestFleetPageBehaviour(ServerTestCase):
                          "the default report is hardcoded again")
         self.assertEqual(serve.REPORTS[0]["id"], "fleet",
                          "Fleet no longer leads the registry, so the default has moved")
+
+
+class TestActionBoundary(ServerTestCase):
+    """S-019: the reporting surface offers no session mutation.
+
+    "Nothing mutates a session" is untestable as prose and decidable as a list, which is why
+    the contract phrases it as an enumeration. The list is `serve.ACTIONS`, the page renders
+    from it and tags each element with `data-action`, and the assertions below resolve the two
+    against each other so a control added to the page without an entry is caught mechanically
+    rather than by a reviewer noticing.
+    """
+
+    def page(self) -> str:
+        return UI_INDEX.read_text(encoding="utf-8")
+
+    def construction_site(self) -> str:
+        """The body of `actionControl`, the one place an action element is built."""
+        html = self.page()
+        start = html.index("function actionControl(")
+        end = html.index("function actionCell(", start)
+        return html[start:end]
+
+    def test_s019_every_action_the_surface_offers_resolves_to_a_non_mutating_kind(self):
+        """S-019's Then, over the enumeration itself: an action referencing a session must
+        resolve to navigation or to a command presented for a person to run. Both permitted
+        kinds are that by construction, and there is deliberately no third."""
+        self.assertEqual(set(serve.ACTION_KINDS), {"navigate", "copy-command"},
+                         "a third action kind was introduced, and S-019 permits only "
+                         "navigation and a command presented for a person to run")
+        self.assertTrue(serve.ACTIONS, "the surface declares no actions, so this asserts "
+                                       "nothing and S-019 is vacuous again")
+        for action in serve.ACTIONS:
+            with self.subTest(action=action["id"]):
+                self.assertIn(action["kind"], serve.ACTION_KINDS)
+                for key in ("id", "kind", "label", "field", "note"):
+                    self.assertTrue(action.get(key) or key == "template",
+                                    f"action {action['id']} declares no {key}")
+
+    def test_s019_the_enumeration_is_derived_from_the_page_not_maintained_by_hand(self):
+        """The criterion the task states in those words: a newly added action must appear in
+        the enumeration without this test being edited.
+
+        It holds because every `data-action` the page carries has to resolve to a declared
+        action. A control tagged with an id nobody declared fails here; an untagged control
+        fails the next test.
+        """
+        declared = {action["id"] for action in serve.ACTIONS}
+        tagged = set(re.findall(r'"data-action":\s*([A-Za-z_.]+|"[^"]+")', self.page()))
+
+        self.assertTrue(tagged, "the page tags no element, so the enumeration is unenforced")
+        for token in tagged:
+            with self.subTest(token=token):
+                if token.startswith('"'):
+                    self.assertIn(token.strip('"'), declared,
+                                  "the page tags an element with an action id the server "
+                                  "does not declare")
+                else:
+                    self.assertEqual(
+                        token, "action.id",
+                        "the page tags an element from something other than the declared "
+                        "action, so the two lists can drift apart")
+
+    def test_s019_every_element_the_construction_site_returns_is_tagged(self):
+        """The other half. The enumeration is only complete if no element escapes it, which
+        holds because all three are built in one function and every one of its returns carries
+        the tag. Counting is the mechanical form of that claim."""
+        body = self.construction_site()
+        built = sum(body.count(f'el("{tag}"') for tag in ("a", "button", "code", "input",
+                                                          "form", "select", "textarea"))
+        tagged = body.count('"data-action"')
+
+        self.assertGreater(built, 0, "the construction site builds nothing")
+        self.assertEqual(built, tagged,
+                         f"actionControl builds {built} element(s) and tags {tagged}: an "
+                         f"untagged element is outside the enumeration S-019 is proven by")
+
+    def test_s019_the_construction_site_cannot_reach_a_session(self):
+        """A navigate action opens something and a copy-command writes to the clipboard.
+        Neither may acquire a way to talk to a session, which is what these would be."""
+        body = self.construction_site()
+        for forbidden in ("fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon",
+                          "location.href =", "document.forms", "method=\"post\""):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, body,
+                                 f"the action construction site introduces {forbidden}, "
+                                 f"which is a route to a session rather than navigation or "
+                                 f"a command presented for a person to run")
+
+    # The renderers and helpers permitted to build an interactive element, and what each is
+    # for. `renderNav` builds the report tabs, which are page chrome and reference no session;
+    # `actionControl` builds every session-directed control and tags each one. Anything else
+    # building a control is unreviewed surface, which is what the widened check below catches.
+    INTERACTIVE_BUILDERS = {"renderNav", "actionControl"}
+    INTERACTIVE_TAGS = ("a", "button", "form", "input", "select", "textarea")
+
+    def script_blocks(self) -> dict:
+        """Every named function body in the page's script, renderers included.
+
+        Renderers are object-literal members (`  fleet: function (data, into) {`) rather than
+        top-level declarations, so both forms are recognised. Splitting by name is what makes
+        the assertion below name the offender instead of just failing.
+        """
+        html = self.page()
+        script = html[html.index("<script>"):html.index("</script>")]
+        marks = list(re.finditer(r"\n(?:function (\w+)\(|  (\w+): function \()", script))
+        blocks = {}
+        for index, mark in enumerate(marks):
+            end = marks[index + 1].start() if index + 1 < len(marks) else len(script)
+            blocks[mark.group(1) or mark.group(2)] = script[mark.start():end]
+        return blocks
+
+    def test_s019_no_part_of_the_page_builds_a_control_outside_the_tagged_site(self):
+        """The task's Risks section says `S-019` "is one added button away from being false.
+        The enumeration test is the guard."
+
+        An outside verification showed the guard was narrower than that: it covered
+        `actionControl` and the fleet renderer, so an untagged control added to any of the
+        other four renderers survived the whole suite. That is not hypothetical for long,
+        because `feat-0056`'s waves report renders per-session rows.
+
+        So the check is over the whole script and names which function offended. A renderer
+        that grows a control appears in this set and fails without the test being edited.
+        """
+        blocks = self.script_blocks()
+        self.assertIn("actionControl", blocks, "the script no longer parses as expected")
+
+        building = {name for name, body in blocks.items()
+                    if any(f'el("{tag}"' in body for tag in self.INTERACTIVE_TAGS)}
+
+        self.assertEqual(
+            building, self.INTERACTIVE_BUILDERS,
+            "a function outside the permitted set builds an interactive element. Every "
+            "session-directed control must come from actionControl, which tags it, or "
+            "S-019's enumeration no longer covers the page")
+
+    def test_s019_the_actions_reach_the_page_from_the_server_registry(self):
+        """The page must not carry its own copy of the list, or the two drift and the
+        enumeration stops meaning anything."""
+        self.build_store([self.record("a1", sid="s1")])
+        server = self.serve_on_loopback(roster=[])
+
+        _, meta = self.fetch_json(server, "/api/meta")
+
+        self.assertEqual([a["id"] for a in meta["actions"]],
+                         [a["id"] for a in serve.ACTIONS])
+        self.assertEqual(meta["action_kinds"], list(serve.ACTION_KINDS))
+        self.assertIn("STATE.actions = meta.actions", self.page(),
+                      "the page no longer takes its actions from the server's registry")
+
+    def test_s019_a_navigate_action_targets_stored_data_rather_than_a_composed_url(self):
+        """The one action that produces a remote target takes it from the store verbatim. A
+        template would let the page build a URL of its own, which is a different and much
+        larger claim to have to defend."""
+        navigate = [a for a in serve.ACTIONS if a["kind"] == "navigate"]
+        self.assertTrue(navigate)
+        for action in navigate:
+            with self.subTest(action=action["id"]):
+                self.assertIsNone(action["template"],
+                                  "a navigate action composes its target instead of taking "
+                                  "it from the store")
+        # The attribute, not the word. Asserting on the bare word passed against the comment
+        # that explains it, so removing the attribute survived the whole suite: found by
+        # mutation, which is the only thing that finds an assertion prose can satisfy.
+        self.assertIn('rel: "noreferrer noopener"', self.construction_site(),
+                      "the outbound link no longer suppresses the referrer, so following it "
+                      "hands the loopback URL to its destination")
+
+    def test_s019_a_mutating_method_is_declined_on_every_route_the_handler_defines(self):
+        """Derived from the handler rather than restated: every `do_*` it defines is either
+        one of the two readers or the refusal. A `do_POST` that did something would be caught
+        without this test being edited."""
+        handler = serve.ObservatoryHandler
+        methods = {name for name in dir(handler) if name.startswith("do_")}
+
+        self.assertEqual(methods, {"do_GET", "do_HEAD", "do_POST", "do_PUT", "do_PATCH",
+                                   "do_DELETE"})
+        for name in methods - {"do_GET", "do_HEAD"}:
+            with self.subTest(method=name):
+                self.assertIs(getattr(handler, name), handler._refuse,
+                              f"{name} is no longer the refusal, so this surface may write")
+
+    def test_s019_the_page_states_the_enumeration_rather_than_leaving_it_to_be_inferred(self):
+        """S-019 is answered by enumerating what is offered, so the surface says it. A reader
+        who has to infer the boundary from which buttons happen to be present has not been
+        told it."""
+        body = self.renderer_body_fleet()
+        self.assertIn("STATE.actions.map(", body,
+                      "the page no longer lists its own actions for a reader")
+        self.assertIn("Non-Goals", body,
+                      "the page states the enumeration without saying what is excluded")
+
+    def renderer_body_fleet(self) -> str:
+        html = self.page()
+        start = html.index("  fleet: function (data, into) {")
+        return html[start:html.index("  skills: function (data, into) {", start)]
+
+
+class TestHostHeader(ServerTestCase):
+    """A rebound request must not reach a report.
+
+    Binding a loopback address stops another machine reaching this server and does nothing
+    about a browser on this one. The `Host` header is attacker-controlled, so a page on any
+    origin can point a name it owns at 127.0.0.1 and read every route here, and what it reads
+    is one maintainer's whole session history.
+
+    `feat-0054` recorded this as outside `S-022`'s wording, which is about outbound
+    connections, and left it to whichever task defined the surface's boundary. It was then
+    missed by that task and found by an outside verification, which demonstrated a foreign
+    `Host` returning 155 sessions with their working directories.
+    """
+
+    def fetch_with_host(self, server, path, host_header):
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", path, headers={"Host": host_header})
+            response = conn.getresponse()
+            return response.status, response.read()
+        finally:
+            conn.close()
+
+    def test_a_foreign_host_header_is_refused_on_every_route(self):
+        self.build_store([self.record("a1", sid="s1", skill="doc-sync")])
+        server = self.serve_on_loopback(roster=[])
+
+        for route in ("/", "/api/meta", "/api/skills", "/api/fleet", "/api/reports"):
+            with self.subTest(route=route):
+                status, body = self.fetch_with_host(server, route, "evil.example.com")
+                self.assertEqual(status, 403,
+                                 f"{route} answered a request naming another origin's host")
+                self.assertNotIn(b"doc-sync", body,
+                                 "the refusal leaked report content anyway")
+
+    def test_a_loopback_host_header_is_served(self):
+        """The refusal must not break the honest caller, which is a browser on this machine
+        sending the address or name it was given."""
+        self.build_store([self.record("a1", sid="s1", skill="doc-sync")])
+        server = self.serve_on_loopback(roster=[])
+        port = server.server_address[1]
+
+        for header in (f"127.0.0.1:{port}", "127.0.0.1", "localhost", f"localhost:{port}",
+                       "[::1]", f"[::1]:{port}", "127.0.0.2"):
+            with self.subTest(host=header):
+                status, _ = self.fetch_with_host(server, "/api/skills", header)
+                self.assertEqual(status, 200, f"a loopback host {header!r} was refused")
+
+    def test_the_host_check_decides_the_header_without_a_server(self):
+        """The unit form, so every shape is covered cheaply and the parse is pinned."""
+        for header in (None, "localhost", "localhost.", "LOCALHOST", "127.0.0.1",
+                       "127.0.0.1:8787", "127.1.2.3", "[::1]", "[::1]:8787", "::1"):
+            with self.subTest(allowed=header):
+                self.assertTrue(serve.host_is_loopback(header), f"{header!r} was refused")
+        # The suffix forms are here because a mutation replacing the equality with
+        # `endswith("localhost")` survived without them. `attacker.localhost` and
+        # `notlocalhost` are what that mutation would let through, and the strict equality
+        # is a decision this pins rather than a detail: widening to `*.localhost` later
+        # means changing the code and this list together, deliberately.
+        for header in ("evil.example.com", "evil.example.com:8787", "example.invalid",
+                       "192.168.1.10", "10.0.0.1", "[2001:db8::1]", "", "   ",
+                       "localhost.evil.com", "attacker.localhost", "notlocalhost",
+                       "0.0.0.0"):
+            with self.subTest(refused=header):
+                self.assertFalse(serve.host_is_loopback(header), f"{header!r} was allowed")
+
+    def test_the_check_runs_before_the_route_is_resolved(self):
+        """A rebound request must not reach a report even on a route that does not exist, or
+        the 404 becomes an oracle for which routes are there."""
+        server = self.serve_on_loopback(roster=[])
+        status, _ = self.fetch_with_host(server, "/api/nothing-here", "evil.example.com")
+        self.assertEqual(status, 403,
+                         "an unknown route answered 404 rather than refusing the host, "
+                         "which tells a rebound page which routes exist")
+
+
+class TestControlDegradesWithoutTheHarness(ServeTestCase):
+    """S-020: control is available only where the harness exposes it, and its absence
+    degrades.
+
+    **These are structural assertions over the skill's prose, and that is a real bound rather
+    than an oversight.** A skill body is instructions to a model, so a test can assert the
+    declining instruction is present and cannot assert a model obeyed it. That is weaker than
+    execution, and it is stated here rather than left for a verifier to discover.
+    """
+
+    def body(self) -> str:
+        return COMPANION_SKILL.read_text(encoding="utf-8")
+
+    def test_s020_the_skill_declines_with_the_reason_stated(self):
+        body = self.body()
+        self.assertIn("declined", body,
+                      "the skill does not say a session-directed request is declined")
+        self.assertIn("no session-management capability", body,
+                      "the skill declines without stating the reason S-020 requires")
+
+    def test_s020_the_navigation_actions_remain_available_when_control_does_not(self):
+        """S-020's second clause: the `S-019` actions survive the absence of control, so the
+        skill has to name what is still there rather than only what is gone."""
+        body = self.body()
+        self.assertIn("still available", body)
+        for affordance in ("pull request", "working directory", "resume command"):
+            with self.subTest(affordance=affordance):
+                self.assertIn(affordance, body,
+                              f"the decline does not tell the reader {affordance} is still "
+                              f"available")
+
+    def test_s020_no_alternative_route_to_the_same_effect_is_attempted(self):
+        """The clause with teeth. The harness's live registry records a messaging path, and
+        writing to it is exactly the route S-020 has in mind."""
+        body = self.body()
+        self.assertIn("Attempt nothing else", body)
+        for route in ("shell out", "socket"):
+            with self.subTest(route=route):
+                self.assertIn(route, body,
+                              f"the skill does not rule out reaching a session by {route}")
+
+    def test_s020_the_harness_dependent_half_sits_in_a_labelled_optional_section(self):
+        """The portability contract requires it: no other harness exposes these tools, and a
+        body that assumes one is not portable."""
+        body = self.body()
+        self.assertRegex(body, r"(?m)^##\s+Optional:",
+                         "the harness-specific capability is not in a section labelled "
+                         "optional, so a body assuming one harness reads as universal")
+        optional = body[body.index("## Optional:"):]
+        self.assertIn("does not", optional,
+                      "the optional section does not say what happens without the capability")
+
+    def test_s020_the_skill_ends_no_session_and_says_so(self):
+        """Archiving stops the process, which is ending a session, and the contract's
+        Non-Goals exclude all four verbs. The skill names them rather than omitting them and
+        leaving the reader to assume."""
+        body = self.body()
+        for verb in ("start", "resume", "interrupt", "end"):
+            with self.subTest(verb=verb):
+                self.assertIn(verb, body.lower())
+        self.assertIn("Non-Goals", body,
+                      "the skill excludes the four verbs without saying on whose authority")
+
+    def test_the_companion_skill_is_a_draft_and_no_profile_places_it(self):
+        """The consequential risk the task names. A skill that is not excluded is placed into
+        user-scope discovery and starts triggering in unrelated sessions before it has been
+        used once. Proven against the real installer rather than by reading the frontmatter."""
+        self.assertRegex(self.body(), r"(?m)^metadata:\n\s+status:\s*draft\s*$",
+                         "the draft marker is absent or not in the block form install.py "
+                         "parses, so the skill would ship")
+
+        home = self.tmp / "install-home"
+        # Captured rather than left to print: a dry run over 21 skills times 2 tools buries
+        # the suite's own output, and the summary it prints is what this asserts on anyway.
+        stdout, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            placed = install.main(["--dry-run", "--profile", "all", "--home", str(home)])
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout.close()
+            sys.stdout = stdout
+
+        self.assertEqual(placed, 0)
+        self.assertIn("agent-observatory",
+                      [d.name for d in install.discover_skills()],
+                      "the skill is not discoverable at all, so its exclusion proves nothing")
+        self.assertIn("excluded from every profile, including 'all': agent-observatory",
+                      output, "the installer did not exclude the draft skill")
+        self.assertNotIn("copied    claude   agent-observatory", output,
+                         "the draft skill was placed into a discovery location")
+
+    def test_the_companion_skill_is_reported_by_the_observatory_as_never_used(self):
+        """The kit reports on itself, so adding a skill moves the observatory's own figure.
+        Asserted rather than left to surprise a reader of `docs/OBSERVATORY.md`."""
+        self.build_store([])
+        payload = self.report(roster=serve.skill_roster())
+        counts = {row["skill"]: row["uses"] for row in payload["skills"]}
+
+        self.assertEqual(counts.get("agent-observatory"), 0,
+                         "the new skill is missing from the roster the report counts against")
+
+
+class TestLiveWatcher(ServeTestCase):
+    """S-013 and S-015 at the level where they are decidable.
+
+    The watcher is driven a tick at a time rather than left to its thread, because a test
+    that sleeps and hopes is a test that fails on a slow machine and passes on a fast one
+    while proving the same nothing. The thread is exercised once, end to end, in
+    `TestLiveOverHttp`.
+    """
+
+    def watcher(self, poll_seconds=0.01):
+        return serve.LiveWatcher(self.store, self.corpus,
+                                 self.tmp / "events.jsonl", poll_seconds)
+
+    def append_record(self, uuid, sid="s-live", name="session.jsonl"):
+        path = self.project / name
+        with path.open("ab") as handle:
+            handle.write((json.dumps(self.record(uuid, sid=sid)) + "\n").encode("utf-8"))
+
+    def spool(self, *events):
+        path = self.tmp / "events.jsonl"
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            for event in events:
+                handle.write(json.dumps(event) + "\n")
+        return path
+
+    def test_s013_appended_records_produce_an_event_without_anyone_asking(self):
+        """S-013's Then: the open report reflects the new work without being requested
+        again. The event is what carries "without being requested", and the store holding
+        the record is what makes the re-read show it."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+
+        self.assertIsNone(watcher.poll_once(),
+                          "the first look folded nothing in, so it had nothing to announce")
+        self.append_record("a2")
+        event = watcher.poll_once()
+
+        self.assertIsNotNone(event, "an appended record produced no event")
+        self.assertEqual(event["type"], "change")
+        self.assertEqual(event["source"], "corpus")
+        self.assertEqual(event["records"], 1, "the appended record was not folded in")
+
+        conn = db.connect(self.store)
+        try:
+            seen = conn.execute("SELECT COUNT(*) AS n FROM message").fetchone()["n"]
+        finally:
+            conn.close()
+        self.assertEqual(seen, 2, "the store does not hold the record the event announced")
+
+    def test_an_unchanged_corpus_is_not_ingested_at_all(self):
+        """The cheap fingerprint exists so an idle tick costs 38 milliseconds instead of
+        167. Removing that guard leaves the *output* correct, because a second guard drops
+        an event with no records, so only counting the ingests catches it."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        calls = []
+        real = ingest.ingest
+        ingest.ingest = lambda *a, **kw: (calls.append(a), real(*a, **kw))[1]
+        try:
+            watcher.poll_once()
+            watcher.poll_once()
+        finally:
+            ingest.ingest = real
+
+        self.assertEqual(calls, [],
+                         "an unchanged corpus was ingested anyway, so the cheap probe is "
+                         "not saving the work it exists to save")
+
+    def test_s013_an_unchanged_corpus_produces_no_event(self):
+        """An event per tick would make the page re-fetch forever and would tell a reader
+        nothing. Silence is the correct output for nothing happening."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        self.assertIsNone(watcher.poll_once())
+        self.assertIsNone(watcher.poll_once())
+
+    def test_s014_the_watcher_works_with_no_spool_present_and_reports_no_error(self):
+        """S-014: with no optional source configured, the report still reflects the work and
+        nothing reports an error attributable to the missing source."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = serve.LiveWatcher(self.store, self.corpus,
+                                    self.tmp / "nothing-here.jsonl", 0.01)
+        watcher.poll_once()
+        self.append_record("a2")
+
+        event = watcher.poll_once()
+
+        self.assertIsNotNone(event, "the default path needs the optional source to work")
+        self.assertEqual(event["source"], "corpus")
+        self.assertEqual(event["hook_events"], 0)
+        self.assertFalse((self.tmp / "nothing-here.jsonl").exists(),
+                         "looking for an absent spool created one")
+
+    def test_s014_the_stated_delay_is_a_number_and_the_page_and_document_agree(self):
+        """S-014 requires the delay to be stated rather than left as "slower". A reader
+        cannot judge slower without knowing by how much, so the number lives in one place
+        and both the page and the document take it from there."""
+        self.assertIsInstance(serve.DEFAULT_POLL_SECONDS, float)
+        self.assertGreater(serve.DEFAULT_POLL_SECONDS, 0)
+
+        page = UI_INDEX.read_text(encoding="utf-8")
+        self.assertIn("poll_seconds", page,
+                      "the page does not state the delay it was told")
+        # Defining live() and never calling it leaves every other assertion here true and
+        # the page dead, which is what commenting out the call proved.
+        boot = page[page.index("function boot("):]
+        # Anchored, not a substring: commenting the call out leaves "live();" inside
+        # "// live();" and satisfied the first version of this assertion.
+        self.assertRegex(boot, r"(?m)^\s*live\(\);",
+                         "boot() never opens the live channel, so the page defines it and "
+                         "then does not follow anything")
+
+        doc = (REPO_ROOT / "docs" / "OBSERVATORY.md").read_text(encoding="utf-8")
+        stated = f"{serve.DEFAULT_POLL_SECONDS:g}"
+        # The number in a sentence, not the digit anywhere. Asserting on the bare digit
+        # passed against every date in the document, which is an assertion that cannot
+        # fail, and this component has now shipped two of those.
+        self.assertIn(f"within about {stated} seconds", doc,
+                      f"docs/OBSERVATORY.md does not state the {stated} second delay in a "
+                      f"sentence, so a reader is told the default path is slower without "
+                      f"being told by how much")
+
+    def test_s015_an_event_from_the_spool_is_attributed_to_the_hook(self):
+        """S-015: events are attributed to the source they arrived from. There are exactly
+        two, and the difference is what a reader needs to know whether the optional source
+        is doing anything."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        self.append_record("a2")
+        self.spool({"ts": "2026-08-29T00:00:00Z", "source": "hook", "session_id": "s-live"})
+        event = watcher.poll_once()
+
+        self.assertEqual(event["source"], "hook")
+        self.assertEqual(event["hook_events"], 1)
+
+    def test_s015_the_optional_source_changes_no_figure(self):
+        """S-015's Then, as an equality rather than a description: the reported figures with
+        the source active are identical to a corpus-only run over the same work.
+
+        It holds by construction because an event is a hint to look and never a datum, and
+        this is the test that would catch anyone making it a datum.
+        """
+        records = [self.record("a1", sid="s1", skill="doc-sync"),
+                   self.record("a2", sid="s1", skill="doc-sync"),
+                   self.record("a3", sid="s1", skill="new-task")]
+
+        # Run A: the corpus alone, ingested the ordinary way.
+        self.build_store(records)
+        corpus_only = self.report(roster=["doc-sync", "new-task"])
+
+        # Run B: the same work, a fresh store, and the hook shouting about all of it.
+        second = self.tmp / "with-events.db"
+        watcher = serve.LiveWatcher(second, self.corpus, self.tmp / "events.jsonl", 0.01)
+        self.spool(*[{"ts": "2026-08-29T00:00:0%dZ" % i, "source": "hook",
+                      "session_id": "s1"} for i in range(3)])
+        watcher.poll_once()
+        watcher.poll_once()
+
+        conn = db.connect(second)
+        try:
+            with_events = serve.skills_report(conn, None, ["doc-sync", "new-task"])
+        finally:
+            conn.close()
+
+        self.assertEqual(corpus_only["total_uses"], 3,
+                         "the fixture no longer carries the work this compares")
+        self.assertEqual(self.uses(with_events), self.uses(corpus_only),
+                         "the optional source changed a figure, which S-015 forbids")
+        self.assertEqual(with_events["total_uses"], corpus_only["total_uses"])
+
+    def test_s015_the_reconciliation_rule_is_stated_where_a_reader_meets_it(self):
+        """The rule is the whole defence against double counting, so it is served rather
+        than left in a comment somebody has to find."""
+        self.assertIn("hint to look", serve.EVENT_POLICY)
+        self.assertIn("never a datum", serve.EVENT_POLICY)
+
+    def test_the_spool_is_consumed_so_one_event_does_not_fire_forever(self):
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+        self.spool({"source": "hook"})
+
+        first = watcher.poll_once()
+        second = watcher.poll_once()
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second, "the same spooled event fired twice")
+
+    def test_a_half_written_spool_line_is_left_for_the_next_look(self):
+        """The hook writes from inside a live session and may be mid-append, so the spool
+        reader stops at the last newline for the same reason the corpus reader does."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        path = self.tmp / "events.jsonl"
+        path.write_text('{"source": "hook"}\n{"source": "ho', encoding="utf-8",
+                        newline="\n")
+        first = watcher.poll_once()
+        self.assertEqual(first["hook_events"], 1, "the partial line was consumed")
+
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write('ok"}\n')
+        self.assertEqual(watcher.poll_once()["hook_events"], 1,
+                         "the completed line was skipped")
+
+    def test_the_watcher_runs_only_while_something_is_listening(self):
+        """A background loop that polls with nobody watching is a cost with no reader, and
+        this component's whole posture is that it costs nothing when unused."""
+        watcher = self.watcher(poll_seconds=0.01)
+        self.assertEqual(watcher.listeners(), 0)
+        self.assertIsNone(watcher._thread)
+
+        channel = watcher.subscribe()
+        self.assertEqual(watcher.listeners(), 1)
+        self.assertTrue(watcher._thread.is_alive())
+
+        watcher.unsubscribe(channel)
+        watcher._thread.join(timeout=5)
+        self.assertEqual(watcher.listeners(), 0)
+        self.assertFalse(watcher._thread.is_alive(),
+                         "the watcher kept polling after the last page closed")
+
+    def test_a_fingerprint_is_cheaper_than_an_ingest_and_notices_both_kinds_of_change(self):
+        """The probe has to see an append that keeps the size the same and a rewrite that
+        keeps the timestamp the same, or the watcher misses work."""
+        self.build_store([self.record("a1", sid="s-live")])
+        spool = self.tmp / "events.jsonl"
+        path = self.project / "session.jsonl"
+
+        # A rewrite that keeps the byte count. Size alone cannot see it.
+        before = serve.corpus_fingerprint(self.corpus, spool)
+        body = path.read_bytes()
+        path.write_bytes(body.replace(b'"a1"', b'"a9"'))
+        self.assertEqual(path.stat().st_size, len(body),
+                         "the fixture changed the size, so it no longer isolates mtime")
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), before,
+                            "an equal-length rewrite was missed, so the probe keys on size "
+                            "alone and a transcript replaced in place is invisible")
+
+        # An append whose timestamp is put back. Mtime alone cannot see it.
+        before_append = serve.corpus_fingerprint(self.corpus, spool)
+        stat_before = path.stat()
+        with path.open("ab") as handle:
+            handle.write((json.dumps(self.record("a3", sid="s-live")) + "\n")
+                         .encode("utf-8"))
+        os.utime(path, ns=(stat_before.st_atime_ns, stat_before.st_mtime_ns))
+
+        self.assertEqual(path.stat().st_mtime_ns, stat_before.st_mtime_ns,
+                         "the fixture could not hold the timestamp, so it no longer "
+                         "isolates size")
+        self.assertNotEqual(
+            serve.corpus_fingerprint(self.corpus, spool), before_append,
+            "an append with an unchanged timestamp was missed, so the probe keys on mtime "
+            "alone and a same-second append is invisible")
+
+        # And the spool, which is the third thing the probe has to see.
+        after = serve.corpus_fingerprint(self.corpus, spool)
+        self.spool({"source": "hook"})
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), after,
+                            "a spooled event did not change the fingerprint")
+
+    def test_the_default_spool_is_never_placed_inside_the_corpus(self):
+        """S-009 forbids adding a file to anything the harness owns, and the spool is the
+        one file this component creates. The rule was a comment until a mutation moving the
+        default into the corpus survived the whole suite."""
+        server = serve.make_server(self.store, serve.DEFAULT_HOST, 0, roster=[],
+                                   quiet=True, registry=self.registry,
+                                   corpus=self.corpus)
+        try:
+            spool = Path(server.spool).resolve()
+        finally:
+            server.server_close()
+
+        self.assertEqual(spool.parent, self.store.parent.resolve(),
+                         "the default spool no longer sits beside the store")
+        self.assertNotIn(self.corpus.resolve(), spool.parents,
+                         "the default spool sits inside the corpus, which is the one tree "
+                         "S-009 says must be byte-for-byte unchanged")
+
+    def test_an_absent_corpus_is_an_empty_fingerprint_rather_than_a_crash(self):
+        """Both degenerate inputs, and a bound worth stating.
+
+        `pathlib` yields nothing for a missing directory and for a path that is a file, on
+        this platform, rather than raising. So the `except OSError` inside
+        `corpus_fingerprint` is a guard for a case nothing here reaches: removing it changes
+        no observable behaviour and no test can see the difference. That is recorded rather
+        than covered up, because a mutation surviving is only acceptable when the reason is
+        known.
+        """
+        a_file = self.tmp / "not-a-directory.txt"
+        a_file.write_text("x", encoding="utf-8", newline="\n")
+
+        self.assertEqual(serve.corpus_fingerprint(self.tmp / "no-corpus"), {})
+        self.assertEqual(serve.corpus_fingerprint(a_file), {})
+        self.assertFalse((self.tmp / "no-corpus").exists(),
+                         "looking at an absent corpus created one")
+
+
+class TestObservatoryHook(ServeTestCase):
+    """The optional event source, which is the one part of this component that runs inside
+    somebody else's session.
+
+    Everything here is about it not mattering when it goes wrong. A dashboard that can slow
+    or break a coding session is worse than no dashboard, so the criteria are that it always
+    exits 0, never writes to stdout, and never touches anything the harness owns.
+    """
+
+    HOOK = REPO_ROOT / ".agents" / "hooks" / "observatory-event.py"
+
+    def load(self):
+        """Import the hook by path, the way the harness runs it: no package, no repo."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("observatory_event", self.HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def run_hook(self, payload, env=None):
+        module = self.load()
+        out = io.StringIO()
+        code = module.main(stdin=io.StringIO(json.dumps(payload)), stdout=out)
+        return code, out.getvalue()
+
+    def test_the_hook_appends_one_line_and_says_nothing(self):
+        code, out = self.run_hook({"session_id": "s1", "cwd": str(self.tmp),
+                                   "hook_event_name": "Stop"})
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "", "the hook wrote to stdout, which the harness parses")
+        spool = self.tmp / ".observatory" / "events.jsonl"
+        self.assertTrue(spool.exists(), "no event was spooled")
+        lines = spool.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        event = json.loads(lines[0])
+        self.assertEqual(event["source"], "hook")
+        self.assertEqual(event["session_id"], "s1")
+
+    def test_the_hook_writes_nothing_to_the_real_stdout_the_harness_reads(self):
+        """Run as a subprocess, because that is how the harness runs it and because an
+        injected stream cannot see a bare `print`.
+
+        An outside verification showed what that costs: a hook emitting
+        `{"decision": "block", "reason": "..."}`, which is precisely how a `Stop` hook tells
+        the harness to block a session, survived the whole suite under an assertion whose
+        failure message was "the hook wrote to stdout, which the harness parses".
+        """
+        result = subprocess.run(
+            [sys.executable, str(self.HOOK)],
+            input=json.dumps({"session_id": "s1", "cwd": str(self.tmp),
+                              "hook_event_name": "Stop"}),
+            capture_output=True, text=True, timeout=30)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "",
+                         "the hook wrote to the stdout the harness parses, which is how a "
+                         "Stop hook blocks a session")
+        self.assertEqual(result.stderr, "", "the hook wrote to stderr")
+        self.assertTrue((self.tmp / ".observatory" / "events.jsonl").exists(),
+                        "the subprocess run spooled nothing, so this asserted nothing")
+
+    def test_the_hook_binds_stdout_like_every_other_hook_in_the_module(self):
+        """The module's contract gives every hook an injectable `stdout`, and the other four
+        bind it. Taking the parameter and dropping it is what made silence untestable."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        self.assertIn("stdout = sys.stdout if stdout is None else stdout", source,
+                      "main() takes a stdout parameter and never binds it, so every "
+                      "assertion about what it writes there is unfalsifiable")
+
+    def test_the_hook_exits_zero_on_anything_it_is_given(self):
+        """Every failure path returns 0. This hook has nothing to say that is worth one
+        interrupted run."""
+        module = self.load()
+        for stdin_text in ("", "not json at all", "[]", "null", '{"cwd": 12345}'):
+            with self.subTest(stdin=stdin_text[:20]):
+                out = io.StringIO()
+                self.assertEqual(
+                    module.main(stdin=io.StringIO(stdin_text), stdout=out), 0)
+                self.assertEqual(out.getvalue(), "")
+
+    def test_the_spool_append_reports_failure_rather_than_raising(self):
+        """`append` documents that it never raises. `main` has its own guard, so narrowing
+        this one is invisible from the outside: the contract has to be asserted here."""
+        module = self.load()
+        blocked = self.tmp / "blocked-file"
+        blocked.write_text("not a directory", encoding="utf-8", newline="\n")
+
+        self.assertIs(module.append(blocked / "x" / "events.jsonl", {"a": 1}), False,
+                      "append raised or claimed success on an unwritable path")
+
+    def test_the_hook_exits_zero_when_the_spool_cannot_be_written(self):
+        """The case that matters: something is wrong with the disk or the path, and the
+        session must not notice."""
+        module = self.load()
+        blocked = self.tmp / "blocked"
+        blocked.write_text("i am a file, not a directory", encoding="utf-8", newline="\n")
+        out = io.StringIO()
+
+        code = module.main(
+            stdin=io.StringIO(json.dumps({"session_id": "s1", "cwd": str(blocked)})),
+            stdout=out)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_the_hook_never_writes_where_the_harness_lives(self):
+        """S-009 covers everything the harness owns, and this is the only piece of the
+        observatory with the access to break it."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        for forbidden in (".claude", "projects", "sessions"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(f'"{forbidden}"', source,
+                                 f"the hook names {forbidden!r} as a path component")
+        self.assertIn(".observatory", source)
+
+    def test_the_hook_opens_no_socket_and_imports_nothing_from_this_repository(self):
+        """A file append cannot block on a connect or wait out a read timeout. That is the
+        whole reason the event source is a spool file rather than a request."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        # Import statements, not bare words. The first version of this matched "socket" and
+        # "subprocess" in the docstring that explains why neither is used, which is the same
+        # defect as an assertion prose can satisfy, arriving from the other direction.
+        imports = re.findall(r"(?m)^\s*(?:import|from)\s+([\w.]+)", source)
+        for forbidden in ("socket", "urllib", "http", "requests", "subprocess",
+                          "scripts", "asyncio", "ssl"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, [name.split(".")[0] for name in imports],
+                                 f"the hook imports {forbidden}, which can block inside "
+                                 f"somebody else's session")
+        self.assertEqual(sorted(imports),
+                         ["__future__", "datetime", "json", "os", "pathlib", "sys"],
+                         "the hook's import list changed; every entry must be standard "
+                         "library and none may block")
+
+    def test_the_spool_is_capped_so_nothing_grows_without_bound_in_a_session(self):
+        """Nobody may ever drain it. Losing an old hint costs nothing, because a hint is
+        not a datum."""
+        module = self.load()
+        spool = self.tmp / ".observatory" / "events.jsonl"
+        spool.parent.mkdir(parents=True)
+        spool.write_text("x" * (module.MAX_SPOOL_BYTES + 10), encoding="utf-8",
+                         newline="\n")
+
+        module.main(stdin=io.StringIO(json.dumps({"cwd": str(self.tmp)})),
+                    stdout=io.StringIO())
+
+        self.assertLess(spool.stat().st_size, module.MAX_SPOOL_BYTES,
+                        "the spool grew past its cap inside a live session")
+
+    def test_the_spool_location_follows_the_session_and_can_be_overridden(self):
+        module = self.load()
+        payload = {"cwd": str(self.tmp / "projectA")}
+        self.assertEqual(module.spool_path(payload, env={}),
+                         self.tmp / "projectA" / ".observatory" / "events.jsonl")
+        self.assertEqual(module.spool_path(payload, env={"OBSERVATORY_SPOOL": "X.jsonl"}),
+                         Path("X.jsonl"))
+
+    def test_the_hook_spools_no_conversation_content(self):
+        """The contract excludes reconstructing conversation content, and a hook that
+        spooled a prompt would put it in a file the contract never described."""
+        code, _ = self.run_hook({"session_id": "s1", "cwd": str(self.tmp),
+                                 "prompt": "SECRET PROMPT TEXT",
+                                 "tool_input": {"command": "SECRET COMMAND"}})
+        self.assertEqual(code, 0)
+        spooled = (self.tmp / ".observatory" / "events.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn("SECRET", spooled,
+                         "the hook spooled conversation content")
+
+
+class TestLiveOverHttp(ServerTestCase):
+    """S-013 through the channel a page actually opens, once, end to end."""
+
+    def read_events(self, server, seconds=10.0):
+        """Open the stream and collect parsed events until the deadline."""
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=seconds)
+        conn.request("GET", "/api/events")
+        response = conn.getresponse()
+        collected, deadline = [], time.monotonic() + seconds
+        try:
+            while time.monotonic() < deadline:
+                line = response.fp.readline()
+                if not line:
+                    break
+                if line.startswith(b"data: "):
+                    collected.append(json.loads(line[6:].decode("utf-8")))
+                    if len(collected) >= 2:
+                        break
+        finally:
+            conn.close()
+        return collected
+
+    def test_s013_an_open_stream_is_told_about_work_it_did_not_ask_for(self):
+        self.build_store([self.record("a1", sid="s-live")])
+        server = self.serve_on_loopback(roster=[])
+        server.watcher.poll_seconds = 0.05
+
+        appended = threading.Event()
+
+        def append_after_a_moment():
+            time.sleep(0.6)                  # let the baseline tick happen first
+            path = self.project / "session.jsonl"
+            with path.open("ab") as handle:
+                handle.write((json.dumps(self.record("a2", sid="s-live")) + "\n")
+                             .encode("utf-8"))
+            appended.set()
+
+        threading.Thread(target=append_after_a_moment, daemon=True).start()
+        events = self.read_events(server)
+
+        self.assertTrue(appended.wait(10), "the fixture never appended")
+        self.assertTrue(events, "the stream delivered nothing at all")
+        self.assertEqual(events[0]["type"], "open",
+                         "the stream did not announce itself, so a page cannot tell it is "
+                         "following rather than silently dead")
+        self.assertEqual(events[0]["poll_seconds"], 0.05)
+        self.assertTrue(any(e.get("type") == "change" for e in events),
+                        "appending a record produced no change event on an open stream")
+
+    def test_the_stream_declares_itself_as_an_event_stream(self):
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("HEAD", "/api/events")
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertIn("text/event-stream", response.getheader("Content-Type"))
+            self.assertEqual(response.getheader("Cache-Control"), "no-store")
+        finally:
+            conn.close()
+
+    def test_a_head_on_the_stream_returns_rather_than_holding_a_thread(self):
+        """`do_HEAD` is `do_GET`, so without a guard a HEAD here would block until the
+        process ended. The test is that the request completes at all."""
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        finished = threading.Event()
+
+        def ask():
+            conn = http.client.HTTPConnection(host, port, timeout=5)
+            try:
+                conn.request("HEAD", "/api/events")
+                conn.getresponse().read()
+                finished.set()
+            finally:
+                conn.close()
+
+        threading.Thread(target=ask, daemon=True).start()
+        self.assertTrue(finished.wait(8), "a HEAD on the event stream never returned")
+
+        # The client returns for a HEAD whether or not the server thread does, because
+        # http.client knows a HEAD has no body. The property that matters is server-side:
+        # the handler must not subscribe and sit in the loop.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline and server.watcher.listeners():
+            time.sleep(0.05)
+        self.assertEqual(server.watcher.listeners(), 0,
+                         "a HEAD subscribed to the stream and held a thread in the loop")
+
+    def test_the_stream_is_refused_to_a_rebound_host_like_every_other_route(self):
+        """A long-lived channel handing the corpus to a rebound page would be worse than a
+        single response doing it, not better."""
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", "/api/events", headers={"Host": "evil.example.com"})
+            self.assertEqual(conn.getresponse().status, 403)
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

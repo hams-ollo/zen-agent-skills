@@ -555,8 +555,11 @@ def _posix_process_state(pid: int):
 def _windows_process_state(pid: int, proc_start=None):
     """Whether `pid` is still the process the entry recorded, on Windows.
 
-    Identity rather than presence: the pid must exist *and* its creation time must equal the
-    entry's `procStart`, so a pid the operating system has reused is reported gone. Confirmed
+    Presence always, and identity wherever the entry records a start time: the pid must
+    exist, and where `procStart` is present its creation time must equal it, so a pid the
+    operating system has reused is reported gone. **An entry carrying no `procStart` is
+    therefore confirmed on presence alone**, which is the weaker claim and is why
+    `liveness_check` says so rather than advertising identity unconditionally. Confirmed
     on 2026-08-28 that `procStart` is the creation FILETIME: `134324400435518083` is
     1787966443.6 epoch seconds, 3.7 seconds before that entry's own `startedAt` and equal to
     the process's start time as the operating system reports it.
@@ -654,7 +657,8 @@ def liveness_check(platform=None) -> str:
     if state != ALIVE:
         return "none: this build cannot query the process table, so no entry is confirmed"
     if platform == "win32":
-        return "process presence (with optional identity): the pid exists; where procStart is recorded, its start time is compared to detect pid reuse"
+        return ("process presence, plus identity wherever the entry records a start "
+                "time: a reused pid is caught only in that case")
     return "process presence: the pid exists, so a reused pid would read as running"
 
 

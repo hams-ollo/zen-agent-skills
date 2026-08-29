@@ -469,6 +469,10 @@ HOOK_REGISTRATIONS = [
     # branch inside the first: reachability is a directory-name match, currency reads and
     # digests files, and the reachability reminder's own message disclaims this question.
     ("install-currency-reminder.py", "SessionStart", "startup"),
+    # `Stop` rather than `PostToolUse`: one line per finished turn is the granularity the
+    # observatory needs, and a hook on every tool call would spool twenty lines for one
+    # turn's worth of the same hint. No tool matcher, because this event carries no tool.
+    ("observatory-event.py", "Stop", ""),
 ]
 
 

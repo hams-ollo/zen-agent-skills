@@ -50,6 +50,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/observatory-event.py\"",
+            "statusMessage": "Observatory event",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
