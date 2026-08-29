@@ -40,8 +40,14 @@ Exit codes, matching `run-checks.py` and `ingest.py`:
     0  the server ran and was stopped
     2  the server could not start (a non-loopback address, or a port already in use)
 
-Contract: `docs/spec/agent-observatory.md`. Scenarios: S-001, S-002, S-012 to S-015, S-018
-to S-020.
+**Cost is derived and says so.** The corpus carries no cost field, so every monetary figure
+here is an estimate against `pricing.json`, a local table with a recorded date that is read
+from disk and never fetched. A model absent from that table is reported unpriced: its tokens
+are counted, its cost is unknown rather than zero, and every total it would have contributed
+to names it. Zero and unknown are different answers and `S-011` is the difference.
+
+Contract: `docs/spec/agent-observatory.md`. Scenarios: S-001 to S-021, every scenario
+this component claims.
 """
 
 from __future__ import annotations
@@ -92,13 +98,14 @@ REPORTS = (
      "scenarios": ["S-001", "S-002"], "endpoint": "/api/skills", "owner": None},
     {"id": "waves", "title": "Waves",
      "question": "What did a dispatched wave run, cost, and produce?",
-     "scenarios": ["S-003", "S-004"], "endpoint": None, "owner": "feat-0056"},
+     "scenarios": ["S-003", "S-004"], "endpoint": "/api/waves", "owner": None},
     {"id": "cost", "title": "Cost and pressure",
      "question": "What was consumed, and how close to a limit?",
-     "scenarios": ["S-010", "S-011", "S-017", "S-021"], "endpoint": None, "owner": "feat-0057"},
+     "scenarios": ["S-010", "S-011", "S-017", "S-021"], "endpoint": "/api/cost",
+     "owner": None},
     {"id": "health", "title": "Health",
      "question": "What failed, and how often?",
-     "scenarios": ["S-016"], "endpoint": None, "owner": "feat-0058"},
+     "scenarios": ["S-016"], "endpoint": "/api/health", "owner": None},
 )
 
 # Said in one place, and served to the page so the document and the surface cannot disagree
@@ -124,6 +131,168 @@ LIVENESS_POLICY = (
 # report exists to answer a question about now, so what is now goes at the top.
 STATE_ORDER = ("running", "unverified", "ended")
 
+# How long a session may go without dispatching before the next dispatch starts a new wave.
+#
+# **Calibrated against the corpus rather than chosen.** Measured 2026-08-29 over this
+# maintainer's 278 dispatches. The population, stated exactly because "consecutive" has two
+# readings that give different numbers: every pair adjacent in a session's own dispatch
+# ordering whose both ends went into isolated worktrees. That is 60 gaps, of which 53 are 53.3
+# seconds or less, the next is 152.5 seconds, and the one after that is 1,524.7 seconds. (The
+# other reading, gaps between isolated dispatches with any ordinary ones between them ignored,
+# gives 63 gaps and a 174.3-second gap between those last two. The valley survives either way,
+# which is why the rule is unchanged and only the wording is.) The widest relative valley is the ten-fold
+# jump between those last two, so 300 sits inside it with room on both sides: every observed
+# `fix-batch` burst stays whole and every observed pause between bursts, all of them 25 minutes
+# or longer, still separates.
+WAVE_GAP_SECONDS = 300.0
+
+# The rule, stated in the report rather than only in this file, because a reader who cannot tell
+# a wave from a sequence of unrelated dispatches cannot use the grouping at all.
+WAVE_RULE = (
+    "A wave is a maximal run of dispatches from one session in which each dispatch begins "
+    f"within {WAVE_GAP_SECONDS:g} seconds of the one before it. A longer pause starts a new "
+    "wave, and a dispatch with nothing within that window on either side is a wave of one."
+)
+
+# What the rule above cannot do, said next to it. An honest heuristic that names its own
+# population is usable; one that does not is a number a reader will over-trust.
+WAVE_RULE_BOUND = (
+    "It is a proximity rule, not a boundary the corpus draws. The corpus does draw one, the "
+    "user turn, and the store cannot see it: only assistant records are stored, so the user "
+    "record that ends a turn is not there to split on. Against dispatches into isolated "
+    "worktrees the gaps are strongly bimodal and the rule reproduces every observed batch; "
+    "against ordinary dispatches they are not, with observed gaps at 73, 137, 206 and 289 "
+    "seconds either side of no gap at all, so a group of those is proximity and nothing more. "
+    "The isolated count on each wave is what tells the two apart."
+)
+
+# Every outcome a run may be reported with, and there is deliberately no failure among them.
+# `S-003` asks whether a run "completed or ended without completing", and the corpus answers the
+# first half exactly and the second half only as an absence, so the absences are named
+# separately rather than collapsed into one word that would read as failure.
+RUN_OUTCOMES = (
+    {"id": "completed", "label": "completed",
+     "meaning": "The dispatching session recorded a completion record, so this run's duration, "
+                "token total, and tool-call count are the harness's own figures."},
+    {"id": "launched", "label": "launched, outcome unrecorded",
+     "meaning": "The dispatch was acknowledged as a backgrounded launch and no completion "
+                "record for it exists anywhere in the corpus. Whether it finished is not "
+                "something the corpus can say, so this is neither a success nor a failure."},
+    {"id": "unrecorded", "label": "no result record",
+     "meaning": "Nothing acknowledged the dispatch at all: the run is known only from the "
+                "sidecar written beside its transcript. Still in flight when the corpus was "
+                "read is one way to reach this, and it is not a failure either."},
+    {"id": "unrecognised", "label": "unrecognised status",
+     "meaning": "The result record carries a status this report has no name for. Reported as "
+                "itself rather than folded into one of the three above, so a status added "
+                "upstream cannot arrive silently as something else."},
+)
+
+# The statuses the corpus actually writes, mapped to the outcomes above. Confirmed by counting
+# on 2026-08-29 rather than recalled: of 343 agent-result records, 314 say `async_launched` and
+# 29 say `completed`, and no third value appears.
+OUTCOME_OF_STATUS = {"completed": "completed", "async_launched": "launched"}
+
+OUTCOME_POLICY = (
+    "No outcome here means the run failed. Of 343 agent-result records in this maintainer's "
+    "corpus on 2026-08-29, 314 say async_launched and 29 say completed and no other status "
+    "appears, so the corpus carries no vocabulary for a failed run and this report does not "
+    "invent one. A run with no completion record is reported as launched or unrecorded, never "
+    "as failed."
+)
+
+# Where each of the three per-run figures came from. Reporting the figure without its basis
+# would mix an exact number from the harness with an approximation from the agent's own
+# messages and leave a reader no way to tell which they were looking at.
+FIGURE_BASES = (
+    {"id": "reported", "meaning": "The harness's own figure, from the completion record. "
+                                  "Exact."},
+    {"id": "derived", "meaning": "Computed from the agent's own messages, because no "
+                                 "completion record exists. Close, not exact: see the note."},
+    {"id": "unknown", "meaning": "Neither available. Reported as unknown rather than as zero, "
+                                 "which would be a figure nobody measured."},
+)
+
+# What "close, not exact" is worth, in numbers, from the 19 runs where both a completion record
+# and the agent's own messages exist. Measured 2026-08-29.
+DERIVATION_NOTE = (
+    "Tool calls derived from the agent's own messages matched the harness's count exactly on "
+    "all 19 runs where both exist. Durations ran 1 to 3 seconds short, because the derived "
+    "span starts at the agent's first message rather than at the dispatch. Tokens are the "
+    "agent's last message's own input, output, cache-read and cache-creation figures added up, "
+    "which is what the harness's total turned out to be: exact on 17 of the 19 and within 9 "
+    "percent on the other two. Summing every message instead would overstate it by 20 to 60 "
+    "times, because each message's input and cache-read counts include the whole conversation "
+    "before it again."
+)
+
+# Depth is carried on every run and never collapsed. An agent can dispatch an agent, and a
+# report that flattened without saying so would show a nested run as a peer of the run that
+# dispatched it.
+NESTING_POLICY = (
+    "Nested dispatch is flattened, not hidden: every run carries the spawn depth the harness "
+    "recorded, a wave reports the deepest it holds, and a run deeper than 1 is counted. A "
+    "nested run is grouped by the session it was recorded under, which is the dispatching "
+    "session for every run in this corpus, where all 268 sidecars record depth 1."
+)
+
+# The health report's own statement of what it cannot see, served to the page rather than
+# written into the page's markup, for the same reason `ROSTER_LABEL` and `LIVENESS_POLICY`
+# are: the qualification belongs beside the figures, and a document and a surface that state
+# it separately eventually disagree. `AGENTS.md` makes the same move about its own gate set,
+# and for the same reason: a clean result over what was looked at is not a clean result over
+# what happened.
+HEALTH_BLIND_SPOT = (
+    "Only failures that left a record are here. A hook that never ran, one that died before "
+    "writing anything, and a session that ended without writing its last record leave "
+    "nothing in the corpus to read, so an empty health report is not evidence that nothing "
+    "failed."
+)
+
+# Why every count here is of events rather than of records. This is the same replay that
+# makes the skills report count distinct messages rather than corpus lines, arriving at a
+# table with no canonical-versus-occurrence split to lean on, so the grouping happens in the
+# report instead of in the store. Measured over this maintainer's corpus on 2026-08-29: 428
+# `health_event` rows carry 345 distinct events, and the 19 rows that look like hook failures
+# are 14 real failures written under 19 session ids.
+HEALTH_REPLAY_POLICY = (
+    "An event is counted once however many transcripts carry it. A forked or resumed session "
+    "replays earlier records verbatim under a new session id, so every session an event was "
+    "seen in is reported and the counts are of events rather than of records."
+)
+
+# Everything about a health event except the session it was seen in. Two rows agreeing on all
+# of these are one event written twice by a replay, not two failures. Kept as a tuple because
+# it is the identity, the projection, and the field list of the event dict all at once, and
+# three copies of it would drift.
+HEALTH_EVENT_FIELDS = ("ts", "kind", "detail", "tool_use_id", "exit_code", "attempt",
+                       "hook_name", "hook_event", "command", "duration_ms")
+
+# The non-hook kinds `ingest.apply_record` can write, declared rather than discovered from the
+# store, so a kind filtered to zero on a given corpus is still named in the ledger instead of
+# vanishing from it. `stop_hook_summary` is the case that matters: `feat-0053`'s verification
+# recorded that every one of the 1,287 such records carries empty `hookErrors` and false
+# `preventedContinuation`, so the branch writes no row at all and
+# `health_event.prevented_continuation` is NULL on every row in the store. **That is a bound,
+# not a repair**, and a ledger built only from what the store holds would show it as nothing
+# rather than as zero. Confirmed unchanged on 2026-08-29: 0 rows of that kind and 0 rows
+# carrying a `prevented_continuation` value, out of 428.
+DECLARED_HEALTH_KINDS = ("api_error", "compact_boundary", "stop_hook_summary")
+
+# What the health report does with each kind it meets, said for a reader rather than left to
+# be inferred from which rows appear in which table. A kind it does not count is still listed
+# and labelled, because a record silently dropped from a report about failures is exactly the
+# failure this report exists to stop.
+HEALTH_KIND_ROLES = {
+    "api_error": "counted as an API error, with the attempt it was",
+    "compact_boundary": "not a failure: a compaction, which the cost and pressure report "
+                        "covers under S-017",
+    "stop_hook_summary": "counted as a hook failure. The ingester writes one only where the "
+                         "summary carried a hook error or prevented a continuation, so the "
+                         "row's existence is the failure and a zero here is a bound rather "
+                         "than a repair",
+}
+
 # How often the watcher looks, and therefore the worst-case delay between a session
 # writing a record and an open report showing it. S-014 requires that delay to be a stated
 # number rather than "slower", so it is a constant here and a sentence in
@@ -148,6 +317,64 @@ EVENT_POLICY = (
     "An event is a hint to look, never a datum. Every figure is derived from the corpus, "
     "so the optional source changes when a figure appears and never which figures exist."
 )
+
+# The rate table, and the words that must travel with every figure derived from it. `S-010`
+# requires the cost to be labelled an estimate and accompanied by the date the rates were
+# recorded, so both are constants here, both are served to the page, and both appear beside the
+# number rather than in a footnote. A stale table misstates every cost figure while the report
+# looks exactly as correct as it did the day the rates were right, so the mitigation has to be
+# where the number is read.
+PRICING_PATH = Path(__file__).resolve().parent / "pricing.json"
+
+ESTIMATE_LABEL = (
+    "Estimated, not billed. Every cost below is derived from token counts against a local "
+    "rate table. The corpus carries no cost field, so no figure here has ever been checked "
+    "against an invoice."
+)
+
+HISTORICAL_RATES_NOTE = (
+    "Historical sessions are priced at current rates. The table holds one rate per model and "
+    "the corpus spans months, so a session run when rates differed is priced at today's."
+)
+
+# `S-011` in one sentence, served to the page for the same reason `LIVENESS_POLICY` is: the
+# reader has to be told which of two answers they are looking at, and zero and unknown are
+# different answers.
+UNPRICED_POLICY = (
+    "A model with no entry in the rate table is reported unpriced: its tokens are still "
+    "counted and its cost is unknown, never zero. Every total it would have contributed to "
+    "says so and names it, because a missing rate that yielded zero would be indistinguishable "
+    "from a free model."
+)
+
+# The denominator, stated once. `S-021` asks for the cache-served proportion to be derivable
+# from the four kinds, and derivable is only true if the reader knows what it was derived from:
+# there are two defensible bases and they give different numbers.
+CACHE_SHARE_BASIS = (
+    "cache-read tokens over all input-side tokens, meaning input plus cache read plus cache "
+    "creation. Output is excluded because no output token is served from cache."
+)
+
+# The optional quota source. `S-017` has two halves from two sources with different shapes, and
+# the contract's Sources table marks this one not required, so its absence degrades the report
+# to the context half rather than failing it.
+QUOTA_NAME = "quota.jsonl"
+QUOTA_FORMAT = (
+    "JSON Lines, one sample per line, each an object carrying `ts` (an ISO-8601 timestamp), "
+    "`window` (a name such as session or week), and `used_percent` (0 to 100). Unknown keys "
+    "are ignored."
+)
+QUOTA_PROVENANCE = (
+    "The format above is this component's own, and nothing writes it. Searched on 2026-08-29 "
+    "across the harness's data directory and across the corpus: no file and no record carries "
+    "a quota sample series, so the reader is the only producer and the shape is unverified "
+    "against any other. The absence is the normal state, not an error."
+)
+
+# What a model row is keyed by when the corpus recorded no model at all. It is a name in the
+# report rather than a dropped row, for the same reason `UNATTRIBUTED` is: dropping it would
+# make the per-model figures quietly fail to add up to the totals beside them.
+MODEL_UNRECORDED = "(model not recorded)"
 
 # The two kinds of action this surface may offer against a session, and there is deliberately
 # no third. `S-019` permits exactly these: an action referencing a session must "resolve to
@@ -532,6 +759,1047 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
     }
 
 
+def _instant(ts):
+    """A corpus timestamp as a datetime, or None when it is absent or unparseable.
+
+    None rather than an exception, because a run whose time cannot be read still has a type,
+    a model and an outcome worth reporting, and dropping the row to protect an arithmetic
+    convenience is the failure `S-018`'s summing property exists to make visible.
+    """
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _span_ms(start, end):
+    """Milliseconds from `start` to `end`, or None when either end is missing."""
+    first, last = _instant(start), _instant(end)
+    if first is None or last is None:
+        return None
+    return int((last - first).total_seconds() * 1000)
+
+
+# One row per dispatched agent, with the three figures `S-003` names taken from the harness
+# where it recorded them and from the agent's own messages where it did not.
+#
+# The token subquery is the agent's **last** message rather than a sum over all of them, and
+# that is not a shortcut. Checked against the 19 runs carrying both: the harness's total equals
+# the last message's four token kinds added up, exactly on 17 and within 9 percent on the other
+# two, while summing every message overstates it by 20 to 60 times because each message's input
+# and cache-read counts include the whole conversation before it again.
+#
+# Tool calls join through `message.uuid` rather than `tool_call.session_id`, because a subagent
+# transcript reuses its parent's `sessionId` and the session column therefore cannot tell an
+# agent's tool calls from the dispatching session's own.
+AGENT_RUN_QUERY = """
+SELECT a.agent_id, a.session_id, a.agent_type, a.resolved_model, a.status,
+       a.total_tokens, a.total_duration_ms, a.total_tool_use_count,
+       a.description, a.worktree_path, a.worktree_branch, a.spawn_depth,
+       s.project AS project,
+       t.ts AS dispatched_at,
+       (SELECT MIN(m.ts) FROM message m WHERE m.agent_id = a.agent_id) AS first_activity,
+       (SELECT MAX(m.ts) FROM message m WHERE m.agent_id = a.agent_id) AS last_activity,
+       (SELECT COUNT(*) FROM message m WHERE m.agent_id = a.agent_id) AS messages,
+       (SELECT COUNT(*) FROM tool_call tc JOIN message m ON m.uuid = tc.message_uuid
+          WHERE m.agent_id = a.agent_id) AS derived_tool_calls,
+       (SELECT m.input_tokens + m.output_tokens + m.cache_read_tokens
+               + m.cache_creation_tokens
+          FROM message m WHERE m.agent_id = a.agent_id
+          ORDER BY m.ts DESC, m.uuid DESC LIMIT 1) AS derived_tokens
+FROM agent_run a
+LEFT JOIN tool_call t ON t.tool_use_id = a.tool_use_id
+LEFT JOIN session s ON s.session_id = a.session_id
+"""
+
+
+def _outcome_of(status):
+    """The outcome name for a result record's status. Never a failure: see `OUTCOME_POLICY`."""
+    if status is None:
+        return "unrecorded"
+    return OUTCOME_OF_STATUS.get(status, "unrecognised")
+
+
+def agent_runs(conn, project: str | None = None) -> list[dict]:
+    """Every dispatched agent, with its type, model, duration, tokens, tool calls and outcome.
+
+    This is `S-003` on its own. Each of the three figures carries the basis it came from, so a
+    reader is never shown an exact figure and an approximation side by side without being told
+    which is which.
+
+    A run whose session carries no project lands in `UNATTRIBUTED` rather than being dropped,
+    for the reason the fleet report gives: restricting to each project in turn has to add back
+    up to the unrestricted figures, and a dropped row breaks that while every panel still
+    renders.
+    """
+    runs = []
+    for row in conn.execute(AGENT_RUN_QUERY):
+        if row["total_tokens"] is not None:
+            tokens, tokens_basis = row["total_tokens"], "reported"
+        elif row["derived_tokens"] is not None:
+            tokens, tokens_basis = row["derived_tokens"], "derived"
+        else:
+            tokens, tokens_basis = None, "unknown"
+
+        if row["total_tool_use_count"] is not None:
+            tool_calls, tool_calls_basis = row["total_tool_use_count"], "reported"
+        elif row["messages"]:
+            # Zero here is a measured zero: the agent wrote messages and called no tool.
+            tool_calls, tool_calls_basis = row["derived_tool_calls"], "derived"
+        else:
+            tool_calls, tool_calls_basis = None, "unknown"
+
+        derived_span = _span_ms(row["first_activity"], row["last_activity"])
+        if row["total_duration_ms"] is not None:
+            duration_ms, duration_basis = row["total_duration_ms"], "reported"
+        elif derived_span is not None:
+            duration_ms, duration_basis = derived_span, "derived"
+        else:
+            duration_ms, duration_basis = None, "unknown"
+
+        if row["dispatched_at"]:
+            started, started_basis = row["dispatched_at"], "dispatch record"
+        elif row["first_activity"]:
+            started, started_basis = row["first_activity"], "first message"
+        else:
+            started, started_basis = None, "unknown"
+
+        runs.append({
+            "agent_id": row["agent_id"],
+            "session_id": row["session_id"],
+            "project": row["project"] or UNATTRIBUTED,
+            "agent_type": row["agent_type"],
+            "resolved_model": row["resolved_model"],
+            "description": row["description"],
+            "status": row["status"],
+            "outcome": _outcome_of(row["status"]),
+            "started": started, "started_basis": started_basis,
+            "ended": row["last_activity"],
+            "ended_basis": "last message" if row["last_activity"] else "unknown",
+            "dispatched_at": row["dispatched_at"],
+            "duration_ms": duration_ms, "duration_basis": duration_basis,
+            "tokens": tokens, "tokens_basis": tokens_basis,
+            "tool_calls": tool_calls, "tool_calls_basis": tool_calls_basis,
+            "messages": row["messages"],
+            "worktree_path": row["worktree_path"],
+            "worktree_branch": row["worktree_branch"],
+            "spawn_depth": row["spawn_depth"],
+        })
+
+    if project:
+        runs = [run for run in runs if run["project"] == project]
+    # A run with no start time sorts last within its session rather than first, so it cannot
+    # anchor a wave it has no time to belong to.
+    runs.sort(key=lambda run: (run["session_id"], run["started"] is None,
+                               run["started"] or "", run["agent_id"]))
+    return runs
+
+
+def group_waves(runs: list[dict], gap_seconds: float = WAVE_GAP_SECONDS) -> list[dict]:
+    """Group runs into waves by the rule `WAVE_RULE` states, one wave per burst.
+
+    `runs` must already be ordered by session and then by start, which `agent_runs` does. A run
+    with no start time cannot be placed in time, so it breaks the run it would otherwise have
+    joined and becomes a wave of its own rather than being silently attached to a neighbour.
+    """
+    waves: list[dict] = []
+    current: list[dict] = []
+    previous = None
+
+    def close(members):
+        if members:
+            waves.append(_wave_of(members))
+
+    for run in runs:
+        at = _instant(run["started"])
+        same_session = previous is not None and previous["session_id"] == run["session_id"]
+        within = (same_session and at is not None and previous["at"] is not None
+                  and (at - previous["at"]).total_seconds() <= gap_seconds)
+        if not within:
+            close(current)
+            current = []
+        current.append(run)
+        previous = {"session_id": run["session_id"], "at": at}
+    close(current)
+
+    waves.sort(key=lambda wave: (wave["started"] or "", wave["session_id"]), reverse=True)
+    return waves
+
+
+def _bar(started, ended, wave_started, span_ms):
+    """Where a member's own span sits inside its wave's, as two fractions of the wave.
+
+    Computed here rather than on the page for one reason: the page's script has no execution
+    coverage in this repository, and arithmetic nothing can run is arithmetic nobody can check.
+    Two numbers the page multiplies by a width are checkable; the same sums written in
+    JavaScript are not.
+
+    `None` when the member has no start time, which is what tells the page to draw nothing
+    rather than to draw a bar at an invented position. A wave with no span at all, one dispatch
+    or several inside the same instant, gives every member the full width, because a zero-width
+    wave has no inside to place anything in.
+
+    **There is deliberately no clamp holding the bar inside its wave.** The wave's start is the
+    earliest member start and its end the latest member end, so `offset + width` is at most one
+    by construction, and a clamp would be a branch no input can reach: unreachable code that
+    reads as a safeguard is the "check that cannot fail" the conventions section of `AGENTS.md`
+    warns about. The invariant is asserted by a test instead. The one comparison that is
+    reachable stays: a run whose last message predates its dispatch record yields a negative
+    length, and that becomes a zero-width mark rather than a bar drawn backwards.
+    """
+    if not started:
+        return None
+    if not span_ms or span_ms <= 0:
+        return {"offset": 0.0, "width": 1.0}
+    offset_ms = _span_ms(wave_started, started)
+    if offset_ms is None:
+        return None
+    length_ms = _span_ms(started, ended) if ended else 0
+    if length_ms is None or length_ms < 0:
+        length_ms = 0
+    return {"offset": round(offset_ms / span_ms, 6),
+            "width": round(length_ms / span_ms, 6)}
+
+
+def _last_moment(member: dict):
+    """The last moment a member is known to have reached: its end, or its start when that is
+    later or when it has no end at all.
+
+    Taking the later of the two is what keeps a wave's window around all of its members. A run
+    dispatched after every other member's last message, or one whose own last message predates
+    its dispatch record, would otherwise sit outside the window the timeline is drawn in.
+    """
+    stamps = [stamp for stamp in (member["started"], member["ended"]) if stamp]
+    return max(stamps) if stamps else None
+
+
+def _sum_basis(members: list[dict], field: str) -> str:
+    """The basis of a sum, which is the weakest basis among the figures that went into it.
+
+    Exactness does not survive addition. A total assembled from four reported figures and one
+    derived one is derived, because the derived one's error is in the total, so this reports
+    the whole sum at the weaker basis rather than letting four exact figures launder a fifth.
+    `unknown` members are excluded before this runs (they contribute nothing to the sum), so a
+    sum over none of them is itself unknown.
+    """
+    bases = {member[f"{field}_basis"] for member in members
+             if member[field] is not None}
+    if not bases:
+        return "unknown"
+    return "reported" if bases == {"reported"} else "derived"
+
+
+def _wave_of(members: list[dict]) -> dict:
+    """One wave, summarised from its members. Every member keeps its own fields."""
+    started = min((m["started"] for m in members if m["started"]), default=None)
+    ended = max((moment for moment in map(_last_moment, members) if moment), default=None)
+    span = _span_ms(started, ended)
+    for member in members:
+        member["bar"] = _bar(member["started"], member["ended"], started, span)
+    outcomes = {entry["id"]: 0 for entry in RUN_OUTCOMES}
+    for member in members:
+        outcomes[member["outcome"]] += 1
+    depths = [m["spawn_depth"] for m in members if m["spawn_depth"] is not None]
+    tokens = [m["tokens"] for m in members if m["tokens"] is not None]
+    tool_calls = [m["tool_calls"] for m in members if m["tool_calls"] is not None]
+    isolated = [m for m in members if m["worktree_path"]]
+    # A sum is only as exact as the least exact figure in it. A wave whose members are all
+    # reported is reported; one derived member makes the whole total derived, because the
+    # error it carries is in the sum too. Without this the wave tables render bare numbers
+    # under a legend promising a tilde, which is the one thing the run rows already avoid.
+    tokens_basis = _sum_basis(members, "tokens")
+    tool_calls_basis = _sum_basis(members, "tool_calls")
+    return {
+        "wave_id": f"{members[0]['session_id']}@{started or members[0]['agent_id']}",
+        "session_id": members[0]["session_id"],
+        "project": members[0]["project"],
+        "started": started,
+        "ended": ended,
+        "span_ms": span,
+        "size": len(members),
+        "isolated": len(isolated),
+        "workspaces": len({m["worktree_path"] for m in isolated}),
+        "branches": len({m["worktree_branch"] for m in isolated if m["worktree_branch"]}),
+        "outcomes": outcomes,
+        # Counted separately from the sums, so a total assembled over half its members is not
+        # read as the wave's whole cost. Both reach the page: the count as "n of m", the basis
+        # as the same tilde the run rows carry.
+        "tokens": sum(tokens) if tokens else None,
+        "tokens_known": len(tokens),
+        "tokens_basis": tokens_basis,
+        "tool_calls": sum(tool_calls) if tool_calls else None,
+        "tool_calls_known": len(tool_calls),
+        "tool_calls_basis": tool_calls_basis,
+        # The span is bounded by the members' own endpoints, and an end time is only ever the
+        # last message. So this is derived whenever it exists, and says so rather than looking
+        # like a figure the harness reported.
+        "span_basis": "derived" if span is not None else "unknown",
+        "max_depth": max(depths) if depths else None,
+        "nested": sum(1 for depth in depths if depth > 1),
+        "types": sorted({m["agent_type"] for m in members if m["agent_type"]}),
+        "models": sorted({m["resolved_model"] for m in members if m["resolved_model"]}),
+        "members": members,
+    }
+
+
+def waves_report(conn, project: str | None = None,
+                 gap_seconds: float = WAVE_GAP_SECONDS) -> dict:
+    """The waves report: what each dispatched agent cost, and the wave it belonged to.
+
+    `S-003` is the run rows and `S-004` is the grouping. Both are served from one payload
+    because they are two readings of the same set: a wave is exactly the runs it holds, so
+    reporting them apart would let the two disagree about how many runs exist.
+
+    The rule that decides a wave, and the bound on that rule, travel in the payload rather than
+    living only here. The task's acceptance criterion asks for it in the report surface, and
+    the reason is the same one `LIVENESS_POLICY` exists for: a grouping a reader cannot check
+    the meaning of is a grouping they will over-trust.
+    """
+    dispatched = agent_runs(conn, project)
+    waves = group_waves(dispatched, gap_seconds)
+    # Re-laid in wave order, so the run table and the wave table above it read the same way
+    # round. Grouping needs session-then-time order and a reader wants most recent first.
+    runs = [member for wave in waves for member in wave["members"]]
+
+    # Counted from what came out of the store, not from what came out of the grouping. Deriving
+    # this from `runs` would make "the wave sizes add up to the runs" true by construction: a
+    # grouping that dropped a member would drop it from both sides of the identity and the
+    # arithmetic would still balance. Found by mutation, after an earlier version did exactly
+    # that.
+    total_runs = len(dispatched)
+
+    outcomes = {entry["id"]: 0 for entry in RUN_OUTCOMES}
+    bases = {entry["id"]: 0 for entry in FIGURE_BASES}
+    for run in dispatched:
+        outcomes[run["outcome"]] += 1
+        bases[run["tokens_basis"]] += 1
+
+    by_project: dict = {}
+    for wave in waves:
+        bucket = by_project.setdefault(
+            wave["project"],
+            {"project": wave["project"], "runs": 0, "waves": 0, "isolated": 0})
+        bucket["waves"] += 1
+        bucket["runs"] += wave["size"]
+        bucket["isolated"] += wave["isolated"]
+    breakdown = sorted(by_project.values(),
+                       key=lambda bucket: (-bucket["runs"], bucket["project"]))
+
+    tokens = [run["tokens"] for run in dispatched if run["tokens"] is not None]
+    depths = [run["spawn_depth"] for run in dispatched
+              if run["spawn_depth"] is not None]
+    return {
+        "report": "waves",
+        "project": project,
+        "wave_gap_seconds": gap_seconds,
+        "wave_rule": WAVE_RULE,
+        "wave_rule_bound": WAVE_RULE_BOUND,
+        "outcome_policy": OUTCOME_POLICY,
+        "outcomes_legend": list(RUN_OUTCOMES),
+        "bases_legend": list(FIGURE_BASES),
+        "derivation_note": DERIVATION_NOTE,
+        "nesting_policy": NESTING_POLICY,
+        "unattributed_label": UNATTRIBUTED,
+        "totals": {
+            "runs": total_runs,
+            "waves": len(waves),
+            "waves_of_several": sum(1 for wave in waves if wave["size"] > 1),
+            "single_dispatches": sum(1 for wave in waves if wave["size"] == 1),
+            "sessions": len({run["session_id"] for run in dispatched}),
+            "isolated_runs": sum(1 for run in dispatched if run["worktree_path"]),
+            "nested_runs": sum(1 for depth in depths if depth > 1),
+            "max_depth": max(depths) if depths else None,
+            "tokens": sum(tokens) if tokens else None,
+            "tokens_known": len(tokens),
+            "outcomes": outcomes,
+            "token_bases": bases,
+        },
+        "projects": breakdown,
+        "waves": waves,
+        "runs": runs,
+    }
+
+
+def _rate(value):
+    """A rate, or None. A rate has to be a non-negative number and nothing else.
+
+    `True` is an `int` in Python, so the `bool` guard is load-bearing: without it a hand-edited
+    `"input": true` would price a model at one dollar per million tokens and look deliberate.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if value >= 0 else None
+
+
+def load_pricing(path=None) -> dict:
+    """The rate table, read from a local file. Never fetched, at any point (`S-022`).
+
+    Three properties are why this returns a table rather than raising.
+
+    **A model is priced only when all four of its rates resolve.** Input and output come from
+    the table; cache read and cache creation come from the table's multipliers against the
+    model's own input rate. A half-resolved model would be worse than an unpriced one, because
+    its cost would look like a figure while quietly omitting whichever kind had no rate, and
+    cache reads are the largest kind in this corpus by a wide margin.
+
+    **A missing or unparseable table is a normal state.** It makes every model unpriced, which
+    is exactly the path `S-011` describes, so the report still carries every token figure and
+    says the cost is unknown. Raising here would take the token halves of the report down with
+    the cost half over a bad edit to one JSON file.
+
+    **Nothing here normalises a model name.** A key is present or the model is unpriced. A
+    prefix match would silently price a model nobody has a rate for, which is the failure the
+    whole table is arranged around.
+    """
+    path = PRICING_PATH if path is None else Path(path)
+    table = {
+        "path": str(path), "present": False, "as_of": None, "transcribed": None,
+        "currency": None, "unit": None, "source": None, "source_author": None,
+        "models": {}, "cache_multipliers": {}, "note": "", "rate_notes": [],
+    }
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        table["note"] = (f"No rate table at {path}. Every model is therefore unpriced and "
+                         f"every cost is unknown rather than zero.")
+        return table
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        table["note"] = (f"The rate table at {path} does not parse ({exc}). Every model is "
+                         f"therefore unpriced and every cost is unknown rather than zero.")
+        return table
+    if not isinstance(raw, dict):
+        table["note"] = (f"The rate table at {path} is not an object. Every model is therefore "
+                         f"unpriced and every cost is unknown rather than zero.")
+        return table
+
+    table["present"] = True
+    for key in ("as_of", "transcribed", "currency", "unit", "source", "source_author"):
+        value = raw.get(key)
+        table[key] = value if isinstance(value, str) else None
+
+    multipliers = raw.get("cache_multipliers")
+    multipliers = multipliers if isinstance(multipliers, dict) else {}
+    read_multiplier = _rate(multipliers.get("cache_read"))
+    creation_multiplier = _rate(multipliers.get("cache_creation"))
+    table["cache_multipliers"] = {"cache_read": read_multiplier,
+                                  "cache_creation": creation_multiplier}
+
+    if read_multiplier is None or creation_multiplier is None:
+        table["note"] = (f"The rate table at {path} carries no usable cache multipliers, so no "
+                         f"model can be priced across all four token kinds. Every model is "
+                         f"therefore unpriced and every cost is unknown rather than zero.")
+        return table
+
+    models = raw.get("models")
+    for name, entry in (models if isinstance(models, dict) else {}).items():
+        if not isinstance(entry, dict):
+            continue
+        base_input = _rate(entry.get("input"))
+        base_output = _rate(entry.get("output"))
+        if base_input is None or base_output is None:
+            continue                          # half a rate is not a rate
+        table["models"][name] = {
+            "input": base_input,
+            "output": base_output,
+            "cache_read": base_input * read_multiplier,
+            "cache_creation": base_input * creation_multiplier,
+        }
+        # A rate can be correct and temporary at once, and the number alone cannot say so.
+        # Carried to the report and never priced with: a note is for the reader, and letting
+        # it reach the arithmetic would be a second rate table nobody declared.
+        note, expires = entry.get("note"), entry.get("expires")
+        if isinstance(note, str) and note.strip():
+            table["rate_notes"].append({
+                "model": name,
+                "note": note.strip(),
+                "expires": expires if isinstance(expires, str) else None,
+            })
+
+    if not table["models"]:
+        table["note"] = (f"The rate table at {path} names no model with a usable rate. Every "
+                         f"model is therefore unpriced and every cost is unknown rather than "
+                         f"zero.")
+    else:
+        table["note"] = (f"{len(table['models'])} model(s) priced from {path}, recorded "
+                         f"{table['as_of']}.")
+    return table
+
+
+def load_quota(path=None) -> dict:
+    """The optional quota sample series, or a stated absence.
+
+    The contract's Sources table marks this source not required, and `S-017`'s implementation
+    note says its absence degrades the report to the context half rather than failing it. That
+    is the path this machine actually takes: nothing the harness ships writes such a file, so
+    absent is the normal outcome and is reported as a state rather than as an error.
+    """
+    result = {
+        "path": None if path is None else str(path), "available": False,
+        "reason": "", "format": QUOTA_FORMAT, "provenance": QUOTA_PROVENANCE,
+        "samples": 0, "unreadable": 0, "windows": [], "series": [],
+    }
+    if path is None:
+        # No "above" or "below" here: the same sentence is printed to the terminal at startup,
+        # where the page's layout does not exist and a direction refers to nothing.
+        result["reason"] = ("No quota source configured. Point --quota at a sample series to "
+                            "report the quota half. The context half of pressure is "
+                            "unaffected and is reported in full.")
+        return result
+
+    path = Path(path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        result["reason"] = (f"No quota sample series at {path}, so only the context half of "
+                            f"pressure is reported. That is the expected state: nothing on "
+                            f"this machine writes one.")
+        return result
+
+    series = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            result["unreadable"] += 1
+            continue
+        if not isinstance(record, dict):
+            result["unreadable"] += 1
+            continue
+        ts = record.get("ts")
+        used = _rate(record.get("used_percent"))
+        if not isinstance(ts, str) or used is None:
+            result["unreadable"] += 1
+            continue
+        window = record.get("window")
+        series.append({"ts": ts, "used_percent": used,
+                       "window": window if isinstance(window, str) else "(unnamed)"})
+
+    series.sort(key=lambda sample: (sample["window"], sample["ts"]))
+    result["series"] = series
+    result["samples"] = len(series)
+    result["available"] = bool(series)
+    if not series:
+        result["reason"] = (f"The quota sample series at {path} holds no readable sample, so "
+                            f"only the context half of pressure is reported.")
+        return result
+
+    windows: dict = {}
+    for sample in series:
+        bucket = windows.setdefault(sample["window"], {
+            "window": sample["window"], "samples": 0, "first_ts": sample["ts"],
+            "last_ts": sample["ts"], "peak_used_percent": sample["used_percent"],
+            "latest_used_percent": sample["used_percent"],
+        })
+        bucket["samples"] += 1
+        bucket["first_ts"] = min(bucket["first_ts"], sample["ts"])
+        if sample["ts"] >= bucket["last_ts"]:
+            bucket["last_ts"] = sample["ts"]
+            bucket["latest_used_percent"] = sample["used_percent"]
+        bucket["peak_used_percent"] = max(bucket["peak_used_percent"],
+                                          sample["used_percent"])
+    result["windows"] = sorted(windows.values(), key=lambda w: w["window"])
+    result["reason"] = (f"{len(series)} sample(s) across {len(result['windows'])} window(s) "
+                        f"from {path}.")
+    return result
+
+
+def context_pressure(conn, project: str | None = None) -> dict:
+    """The context half of `S-017`: the budget series, and the compactions in it.
+
+    The series is bucketed by day for the chart and reported raw in two other shapes, because
+    a daily mean answers "how has pressure trended" and hides "how close did anything actually
+    get". `lowest` answers the second, and `compactions` answers the scenario's own clause
+    about occasions being identifiable, from the only record in the corpus that marks one.
+    """
+    # Built as a bare predicate and joined by each caller, rather than as a clause carrying its
+    # own `WHERE`. The clause form was written first and was wrong: it holds a second `WHERE`
+    # inside its subquery, and rewriting `WHERE` to `AND` to reuse it rewrote both.
+    scope, params = "", ()
+    if project:
+        # `session` is the only table carrying a project for a context sample, so a session the
+        # store has no row for is out of scope here. Said in the payload rather than assumed.
+        scope = "session_id IN (SELECT session_id FROM session WHERE project = ?)"
+        params = (project,)
+
+    samples = conn.execute(
+        "SELECT session_id, ts, tokens_left FROM context_sample"
+        + (f" WHERE {scope}" if scope else "") + " ORDER BY ts", params).fetchall()
+    compactions = conn.execute(
+        "SELECT session_id, ts, detail FROM health_event WHERE kind = 'compact_boundary'"
+        + (f" AND {scope}" if scope else "") + " ORDER BY ts", params).fetchall()
+
+    daily: dict = {}
+    for row in samples:
+        left = row["tokens_left"]
+        if left is None:
+            continue
+        day = (row["ts"] or "")[:10]
+        bucket = daily.setdefault(day, {"day": day, "samples": 0,
+                                        "min_tokens_left": left, "max_tokens_left": left})
+        bucket["samples"] += 1
+        bucket["min_tokens_left"] = min(bucket["min_tokens_left"], left)
+        bucket["max_tokens_left"] = max(bucket["max_tokens_left"], left)
+
+    readings = [row for row in samples if row["tokens_left"] is not None]
+    lowest = sorted(readings, key=lambda row: row["tokens_left"])[:10]
+
+    return {
+        "available": bool(samples),
+        "samples": len(samples),
+        "sessions": len({row["session_id"] for row in samples}),
+        "source": "the corpus's `total_tokens_reminder` attachments, one per turn",
+        "daily": sorted(daily.values(), key=lambda bucket: bucket["day"]),
+        "lowest": [{"session_id": row["session_id"], "ts": row["ts"],
+                    "tokens_left": row["tokens_left"]} for row in lowest],
+        "compactions": [{"session_id": row["session_id"], "ts": row["ts"]}
+                        for row in compactions],
+        "compaction_count": len(compactions),
+        "reason": ("" if samples else
+                   "No context-budget records in scope, so there is no series to report."),
+    }
+
+
+def cost_report(conn, project: str | None = None, pricing=None, quota=None) -> dict:
+    """Tokens by kind, an estimated cost that never invents a figure, and pressure over time.
+
+    Scenarios `S-010`, `S-011`, `S-017` and `S-021`. Three things about the shape are the point.
+
+    **Tokens are counted over canonical message rows, never over joined occurrences.** A forked
+    or resumed session replays earlier history verbatim, so one uuid legitimately appears in
+    more than one transcript, and `SUM` over a join to `message_occurrence` would add that
+    message's tokens once per replay. The scoped branch therefore selects the uuid set first and
+    sums `message` itself, which is the same trap the skills report answers with
+    `COUNT(DISTINCT uuid)` and the reason `message` holds one row per uuid at all.
+
+    **An unpriced model is unknown, not zero, and the unknown reaches the total** (`S-011`). Its
+    tokens are reported, its `cost_usd` is `None`, and the total carries `complete: false` with
+    the offending models named, so a figure covering unpriced sessions cannot read as a
+    complete one.
+
+    **Thinking tokens are a memo, not a fifth kind.** They arrive from `output_tokens_details`
+    and are already inside `output_tokens`, so they are reported beside the four and are absent
+    from every cost figure. Adding them would double-count output.
+    """
+    table = load_pricing() if pricing is None else pricing
+    quota = load_quota(None) if quota is None else quota
+
+    kinds = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens")
+    columns = kinds + ("thinking_tokens",)
+    sums = ", ".join(f"COALESCE(SUM({column}), 0) AS {column}" for column in columns)
+
+    if project:
+        rows = conn.execute(
+            f"SELECT model, COUNT(*) AS messages, {sums} FROM message "
+            f"WHERE uuid IN (SELECT uuid FROM message_occurrence WHERE project = ?) "
+            f"GROUP BY model", (project,)).fetchall()
+    else:
+        rows = conn.execute(
+            f"SELECT model, COUNT(*) AS messages, {sums} FROM message "
+            f"GROUP BY model").fetchall()
+
+    models = []
+    for row in rows:
+        name = row["model"] or MODEL_UNRECORDED
+        counts = {column: row[column] for column in columns}
+        rate = table["models"].get(name)
+        entry = {
+            "model": name,
+            "messages": row["messages"],
+            "tokens": sum(counts[kind] for kind in kinds),
+            "priced": rate is not None,
+            "rate": rate,
+            "cost_usd": None,
+        }
+        entry.update(counts)
+        if rate is not None:
+            entry["cost_usd"] = round(sum(
+                counts[kind] / 1_000_000 * rate[kind[: -len("_tokens")]] for kind in kinds), 6)
+        models.append(entry)
+
+    # Priced first, then by what each cost, then by tokens so an unpriced row with real
+    # consumption is not buried under one with none.
+    models.sort(key=lambda entry: (not entry["priced"], -(entry["cost_usd"] or 0),
+                                   -entry["tokens"], entry["model"]))
+
+    totals = {column: sum(entry[column] for entry in models) for column in columns}
+    input_side = (totals["input_tokens"] + totals["cache_read_tokens"]
+                  + totals["cache_creation_tokens"])
+    unpriced = [entry for entry in models if not entry["priced"]]
+    unpriced_tokens = sum(entry["tokens"] for entry in unpriced)
+
+    if not models:
+        completeness = "No messages in scope, so there is nothing to price."
+    elif unpriced:
+        completeness = (
+            f"Incomplete. This total covers {len(models) - len(unpriced)} of {len(models)} "
+            f"model(s) and excludes {unpriced_tokens} token(s) across "
+            f"{sum(entry['messages'] for entry in unpriced)} message(s) from "
+            f"{len(unpriced)} unpriced model(s): "
+            f"{', '.join(entry['model'] for entry in unpriced)}. Their cost is unknown, not "
+            f"zero.")
+    else:
+        completeness = "Complete: every model in scope has a rate in the table."
+
+    return {
+        "report": "cost",
+        "project": project,
+        "estimate_label": ESTIMATE_LABEL,
+        "historical_note": HISTORICAL_RATES_NOTE,
+        "unpriced_policy": UNPRICED_POLICY,
+        "rates": {
+            "path": table["path"], "present": table["present"], "as_of": table["as_of"],
+            "transcribed": table["transcribed"], "currency": table["currency"],
+            "unit": table["unit"], "source": table["source"],
+            "source_author": table["source_author"], "priced_models": len(table["models"]),
+            "cache_multipliers": table["cache_multipliers"], "note": table["note"],
+            "rate_notes": table["rate_notes"],
+        },
+        "tokens": {
+            "input": totals["input_tokens"],
+            "output": totals["output_tokens"],
+            "cache_read": totals["cache_read_tokens"],
+            "cache_creation": totals["cache_creation_tokens"],
+            "total": sum(totals[kind] for kind in kinds),
+            "thinking_within_output": totals["thinking_tokens"],
+            "messages": sum(entry["messages"] for entry in models),
+        },
+        "cache": {
+            "basis": CACHE_SHARE_BASIS,
+            "input_side_tokens": input_side,
+            "served_share": (round(totals["cache_read_tokens"] / input_side, 6)
+                             if input_side else None),
+        },
+        "cost": {
+            # `None` when nothing in scope could be priced at all, rather than the sum of an
+            # empty set. Zero dollars over 14 million tokens is the confident zero `S-011`
+            # exists to prevent, and it is no less confident for having a true sentence under
+            # it: `usd()` already prints `unknown` for a null, so the state has a rendering.
+            "estimated_usd": (
+                round(sum(entry["cost_usd"] for entry in models
+                          if entry["cost_usd"] is not None), 6)
+                if any(entry["cost_usd"] is not None for entry in models) else None),
+            "complete": not unpriced,
+            "priced_models": len(models) - len(unpriced),
+            "unpriced_models": len(unpriced),
+            "unpriced_model_names": [entry["model"] for entry in unpriced],
+            "unpriced_tokens": unpriced_tokens,
+            "unpriced_messages": sum(entry["messages"] for entry in unpriced),
+            "note": completeness,
+        },
+        "models": models,
+        "pressure": {
+            "context": context_pressure(conn, project),
+            "quota": quota,
+        },
+    }
+
+
+def is_hook_event(kind: str) -> bool:
+    """Whether a health event records a hook running at all, failed or not.
+
+    Hook outcomes arrive as `attachment` records whose kind is the attachment's own type, so
+    the set is open-ended and matched by prefix rather than enumerated: this maintainer's
+    corpus carries `hook_additional_context`, `hook_success`, and `hook_non_blocking_error`
+    on 2026-08-29, and nothing promises a fourth will not appear. `stop_hook_summary` is a
+    `system` record rather than an attachment and is the one hook outcome not spelled that
+    way, so it is named.
+    """
+    kind = kind or ""
+    return kind.startswith("hook_") or kind == "stop_hook_summary"
+
+
+def hook_failed(kind: str, exit_code) -> bool:
+    """Whether a health event records a hook that failed.
+
+    Both halves of the rule are load-bearing and neither alone is right. **An exit status
+    decides it where there is one**: 126 `hook_success` records carry 0 and 19
+    `hook_non_blocking_error` records carry 49. **The kind decides it where there is not**:
+    all 205 `hook_additional_context` records carry no exit status at all, so an exit-code
+    rule alone would read every one of them as a success it never established, and a kind
+    rule alone would miss a non-zero exit on a kind nobody has met yet.
+
+    A `stop_hook_summary` row is a failure by construction, because the ingester writes one
+    only where the summary carried a hook error or prevented a continuation.
+    """
+    kind = kind or ""
+    if kind == "stop_hook_summary":
+        return True
+    if not is_hook_event(kind):
+        return False
+    if exit_code is not None and exit_code != 0:
+        return True
+    return "error" in kind
+
+
+def health_kind_role(kind: str) -> str:
+    """One line saying what the health report does with a kind of record."""
+    if kind in HEALTH_KIND_ROLES:
+        return HEALTH_KIND_ROLES[kind]
+    if is_hook_event(kind):
+        return ("counted as a hook failure where its exit status is non-zero or its kind "
+                "names an error, and as a hook that ran otherwise")
+    return "not counted: this report does not classify this kind"
+
+
+def _session_context(conn) -> tuple:
+    """`(project, sort key, title)` per session, for placing and ordering a health event.
+
+    The sort key is `(first_ts, session_id)` and the tie-break carries the real weight. A fork
+    replays the parent's earliest record too, so both sessions report the same `first_ts` and
+    the id is what actually decides: every one of the forked pairs carrying a health event in
+    this maintainer's corpus is in exactly that position on 2026-08-29. **The corpus does not
+    record which session originally produced a replayed record**, so the choice of which to
+    name first is deterministic rather than meaningful, and that is why every session an event
+    was seen in is reported beside it rather than only the chosen one.
+    """
+    projects, order, titles = {}, {}, {}
+    for row in conn.execute(
+            "SELECT session_id, project, first_ts, title FROM session"):
+        projects[row["session_id"]] = row["project"] or UNATTRIBUTED
+        order[row["session_id"]] = (row["first_ts"] or "", row["session_id"])
+        titles[row["session_id"]] = row["title"]
+    return projects, order, titles
+
+
+def health_events(conn) -> list:
+    """Every health event once, carrying every session it was observed in.
+
+    The grouping is the whole of `HEALTH_REPLAY_POLICY` made mechanical. `health_event` has no
+    canonical-versus-occurrence split of the kind `message` and `message_occurrence` have, so
+    a replayed failure is a second row in the store and a `COUNT(*)` over it overstates by
+    however much history has been replayed.
+    """
+    projects, order, titles = _session_context(conn)
+
+    # The field list is projected from the identity tuple rather than spelled out again, so
+    # the two cannot come to disagree about what makes one event distinct from another. The
+    # names are this module's own constant, never anything a request supplies.
+    columns = ", ".join(HEALTH_EVENT_FIELDS)
+    grouped: dict = {}
+    for row in conn.execute(f"SELECT session_id, {columns} FROM health_event"):
+        key = tuple(row[field] for field in HEALTH_EVENT_FIELDS)
+        grouped.setdefault(key, set()).add(row["session_id"])
+
+    events = []
+    for key, sessions in grouped.items():
+        seen = sorted(sessions, key=lambda s: order.get(s, ("", s)))
+        event = dict(zip(HEALTH_EVENT_FIELDS, key))
+        event["session_id"] = seen[0]
+        event["session_title"] = titles.get(seen[0])
+        event["sessions"] = seen
+        event["replays"] = len(seen) - 1
+        event["project"] = projects.get(seen[0], UNATTRIBUTED)
+        event["projects"] = sorted({projects.get(s, UNATTRIBUTED) for s in seen})
+        events.append(event)
+
+    events.sort(key=lambda event: (event["ts"] or "", event["session_id"]), reverse=True)
+    return events
+
+
+def abnormal_runs(conn) -> list:
+    """Runs the corpus marks as having ended abnormally, once each.
+
+    S-016's third part. The markers sit on assistant records rather than in `health_event`,
+    which is why this reads `message`: `isApiErrorMessage` with its status, and
+    `isAbortedMidStream`. A record may carry both, so the markers are a list rather than a
+    kind.
+
+    `message` already holds one canonical row per uuid, so this is a distinct-run count before
+    anything is done to it; `message_occurrence` supplies every session the record appeared
+    in, which is the same split the skills report uses and for the same reason.
+    """
+    projects, order, titles = _session_context(conn)
+
+    seen: dict = {}
+    for row in conn.execute(
+            "SELECT o.uuid AS uuid, o.session_id AS session_id FROM message_occurrence o "
+            "JOIN message m ON m.uuid = o.uuid "
+            "WHERE m.is_api_error = 1 OR m.is_aborted_mid_stream = 1"):
+        seen.setdefault(row["uuid"], set()).add(row["session_id"])
+
+    runs = []
+    for row in conn.execute(
+            "SELECT uuid, session_id, ts, model, api_error_status, error, is_api_error, "
+            "is_aborted_mid_stream FROM message "
+            "WHERE is_api_error = 1 OR is_aborted_mid_stream = 1"):
+        # The canonical row's own session is the fallback, for a record whose occurrence row
+        # is absent. Only assistant records get one, and these are assistant records, so the
+        # fallback is a belt rather than a path anything is known to take.
+        sessions = sorted(seen.get(row["uuid"]) or {row["session_id"]},
+                          key=lambda s: order.get(s, ("", s)))
+        markers = []
+        if row["is_api_error"]:
+            markers.append("API error")
+        if row["is_aborted_mid_stream"]:
+            markers.append("aborted mid stream")
+        runs.append({
+            "uuid": row["uuid"], "session_id": sessions[0],
+            "session_title": titles.get(sessions[0]), "sessions": sessions,
+            "replays": len(sessions) - 1,
+            "project": projects.get(sessions[0], UNATTRIBUTED),
+            "projects": sorted({projects.get(s, UNATTRIBUTED) for s in sessions}),
+            "ts": row["ts"], "model": row["model"], "status": row["api_error_status"],
+            "detail": row["error"], "markers": markers,
+        })
+
+    runs.sort(key=lambda run: (run["ts"] or "", run["session_id"]), reverse=True)
+    return runs
+
+
+def retry_episodes(events) -> list:
+    """Consecutive retries of one request, grouped into the episode they belong to.
+
+    The corpus writes one `api_error` record per attempt carrying `retryAttempt`, which counts
+    up within a request and restarts at 1 for the next one, so an episode ends where the count
+    stops rising. Measured on 2026-08-29, the longest run on this machine reached 10.
+
+    **Grouped rather than listed one attempt at a time**, because the signal this task names is
+    a session quietly taking ten attempts per request, and ten rows each reading "attempt 1"
+    through "attempt 10" state that only to a reader who adds them up. The episode is reported
+    whatever it ended in: this report says how many attempts a request took and never whether
+    it eventually succeeded, because the corpus records the retries and not the verdict, and
+    collapsing an episode to success or failure would throw away the figure that matters.
+
+    An event with no recorded attempt starts its own episode rather than joining the previous
+    one, since nothing says it belongs there.
+    """
+    by_session: dict = {}
+    for event in sorted(events, key=lambda event: (event["session_id"], event["ts"] or "")):
+        by_session.setdefault(event["session_id"], []).append(event)
+
+    episodes = []
+    for session_id, series in by_session.items():
+        current = None
+        for event in series:
+            attempt = event["attempt"]
+            if current is None or attempt is None or attempt <= current["attempts"]:
+                current = {
+                    "session_id": session_id, "session_title": event["session_title"],
+                    "sessions": event["sessions"], "project": event["project"],
+                    "projects": event["projects"], "first_ts": event["ts"],
+                    "last_ts": event["ts"], "attempts": attempt or 1, "events": 1,
+                    "detail": event["detail"],
+                }
+                episodes.append(current)
+            else:
+                current["attempts"] = attempt
+                current["last_ts"] = event["ts"]
+                current["events"] += 1
+
+    episodes.sort(key=lambda episode: (episode["last_ts"] or "", episode["session_id"]),
+                  reverse=True)
+    return episodes
+
+
+def _kind_ledger(events) -> list:
+    """Every kind of health record in scope, what it counted for, and what it did not.
+
+    Built over the events rather than filtered out of them, so a kind this report does not
+    treat as a failure is visible as a labelled zero rather than as an absence. That is what
+    makes the `stop_hook_summary` branch reading nothing legible as the bound it is.
+    """
+    ledger: dict = {}
+    for event in events:
+        bucket = ledger.setdefault(
+            event["kind"], {"kind": event["kind"], "events": 0, "records": 0})
+        bucket["events"] += 1
+        bucket["records"] += 1 + event["replays"]
+    for kind in DECLARED_HEALTH_KINDS:
+        ledger.setdefault(kind, {"kind": kind, "events": 0, "records": 0})
+
+    rows = list(ledger.values())
+    for row in rows:
+        row["role"] = health_kind_role(row["kind"])
+        # Whether this report counts the kind toward any figure at all, which is a different
+        # question from whether it is a failure: a hook that succeeded is counted as a hook
+        # that ran, and that is what makes the failure count a proportion rather than a number
+        # floating free.
+        row["counted"] = is_hook_event(row["kind"]) or row["kind"] == "api_error"
+    rows.sort(key=lambda row: (-row["events"], row["kind"]))
+    return rows
+
+
+def health_report(conn, project: str | None = None) -> dict:
+    """The health report: what failed, and how often (S-016).
+
+    Three kinds of thing, each with the session it occurred in, when it occurred, and what it
+    reported: a hook that failed, carrying its exit status; an API error, carrying the number
+    of attempts the request took; and a run the corpus marks as having ended abnormally.
+
+    Three properties are the shape of this function, and none of them is visible from the
+    figures alone.
+
+    **A count here is of events, not of records** (`HEALTH_REPLAY_POLICY`). See
+    `health_events`, which is where the grouping happens and where the reason is.
+
+    **A kind this report does not count is still listed**, in `kinds`, rather than filtered
+    where nobody can see it went.
+
+    **The report states what it cannot see** (`HEALTH_BLIND_SPOT`), because a hook that never
+    ran leaves nothing to read and an empty result would otherwise be mistaken for a clean
+    one. That qualification is served with the figures rather than left in a code comment, for
+    the reason the task states: it is the same claim `AGENTS.md` makes about a passing gate
+    set being necessary and not sufficient.
+    """
+    events = health_events(conn)
+    runs = abnormal_runs(conn)
+
+    # Scoped before anything is counted, so every figure below is the scoped figure and the
+    # per-project sums are the unrestricted ones. An event is in a project when any session it
+    # was seen in is, which is the same bound the skills report states: an event that spanned
+    # two projects would be counted in each. It does not occur on this corpus, where 0 of 345
+    # events and 0 of 28 abnormal runs span more than one project as of 2026-08-29.
+    if project:
+        events = [event for event in events if project in event["projects"]]
+        runs = [run for run in runs if project in run["projects"]]
+
+    hook_events = [event for event in events if is_hook_event(event["kind"])]
+    hook_failures = [event for event in hook_events
+                     if hook_failed(event["kind"], event["exit_code"])]
+    api_errors = [event for event in events if event["kind"] == "api_error"]
+    episodes = retry_episodes(api_errors)
+
+    totals = {
+        "events": len(events),
+        # What those events were written as, so the gap between the two is on the page rather
+        # than only in the policy sentence explaining it.
+        "records": sum(1 + event["replays"] for event in events),
+        "hook_events": len(hook_events),
+        "hook_failures": len(hook_failures),
+        "api_errors": len(api_errors),
+        "retry_episodes": len(episodes),
+        "worst_attempts": max((episode["attempts"] for episode in episodes), default=0),
+        "abnormal_runs": len(runs),
+        "sessions_affected": len(
+            {session for event in events for session in event["sessions"]}
+            | {session for run in runs for session in run["sessions"]}),
+    }
+
+    return {
+        "report": "health",
+        "project": project,
+        "blind_spot": HEALTH_BLIND_SPOT,
+        "replay_policy": HEALTH_REPLAY_POLICY,
+        # Not `totals["events"] == 0`: a corpus can carry health records of which none is a
+        # failure, and that is still an empty health report rather than a populated one.
+        "empty": not (hook_failures or episodes or runs),
+        "totals": totals,
+        "hook_failures": hook_failures,
+        "retry_episodes": episodes,
+        "abnormal_runs": runs,
+        "kinds": _kind_ledger(events),
+    }
+
+
 def corpus_fingerprint(corpus: Path, spool: Path | None = None) -> dict:
     """A cheap snapshot of what the corpus and the spool look like right now.
 
@@ -721,9 +1989,14 @@ class ObservatoryServer(ThreadingHTTPServer):
 
     def __init__(self, address, handler, store: Path, roster=None, quiet: bool = False,
                  family=socket.AF_INET, registry=None, corpus=None, spool=None,
-                 poll_seconds: float = DEFAULT_POLL_SECONDS):
+                 poll_seconds: float = DEFAULT_POLL_SECONDS, pricing=None, quota=None):
         self.store = Path(store)
         self.roster = roster
+        # Both are paths rather than loaded tables, and both are read per request. Editing the
+        # rate table and pressing Refresh is the documented way to correct a stale rate, and a
+        # table loaded once at startup would make that quietly not work.
+        self.pricing = PRICING_PATH if pricing is None else Path(pricing)
+        self.quota = None if quota is None else Path(quota)
         # Carried rather than read from the module defaults at the point of use, so a test
         # drives the fleet report against a registry and a corpus it controls.
         self.registry = ingest.DEFAULT_REGISTRY if registry is None else Path(registry)
@@ -810,6 +2083,15 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
             return self._with_store(
                 lambda conn: fleet_report(conn, project, self.server.registry,
                                           self.server.corpus))
+        if route == "/api/waves":
+            return self._with_store(lambda conn: waves_report(conn, project))
+        if route == "/api/cost":
+            return self._with_store(
+                lambda conn: cost_report(conn, project,
+                                         load_pricing(self.server.pricing),
+                                         load_quota(self.server.quota)))
+        if route == "/api/health":
+            return self._with_store(lambda conn: health_report(conn, project))
         if route == "/api/events":
             return self._events()
         self._json({"error": f"no route for {route}"}, 404)
@@ -902,7 +2184,8 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
 def make_server(store: Path, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
                 roster=None, quiet: bool = False, registry=None, corpus=None,
                 spool=None,
-                poll_seconds: float = DEFAULT_POLL_SECONDS) -> ObservatoryServer:
+                poll_seconds: float = DEFAULT_POLL_SECONDS,
+                pricing=None, quota=None) -> ObservatoryServer:
     """Build the server, refusing a non-loopback address before anything is bound."""
     address = loopback_address(host)
     family = (socket.AF_INET6 if ipaddress.ip_address(address).version == 6
@@ -910,7 +2193,7 @@ def make_server(store: Path, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
     return ObservatoryServer((address, port), ObservatoryHandler, store=store,
                              roster=roster, quiet=quiet, family=family,
                              registry=registry, corpus=corpus, spool=spool,
-                             poll_seconds=poll_seconds)
+                             poll_seconds=poll_seconds, pricing=pricing, quota=quota)
 
 
 def main(argv=None) -> int:
@@ -937,13 +2220,22 @@ def main(argv=None) -> int:
                         help=f"how often to look for appended records, and so the worst-case "
                              f"delay before an open report shows them "
                              f"(default: {DEFAULT_POLL_SECONDS})")
+    parser.add_argument("--pricing", type=Path, default=PRICING_PATH,
+                        help=f"the local rate table behind every cost estimate. Read from "
+                             f"disk on every request and never fetched "
+                             f"(default: {PRICING_PATH})")
+    parser.add_argument("--quota", type=Path, default=None,
+                        help="an optional quota sample series, JSON Lines. Absent is the "
+                             "normal state and is not an error: pressure then reports its "
+                             "context half only.")
     parser.add_argument("--quiet", action="store_true", help="suppress the request log")
     args = parser.parse_args(argv)
 
     try:
         server = make_server(args.store, args.host, args.port, quiet=args.quiet,
                              registry=args.registry, corpus=args.corpus,
-                             spool=args.spool, poll_seconds=args.poll_seconds)
+                             spool=args.spool, poll_seconds=args.poll_seconds,
+                             pricing=args.pricing, quota=args.quota)
     except NotLoopback as exc:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
@@ -960,6 +2252,10 @@ def main(argv=None) -> int:
     print(f"Optional event spool: {server.spool} "
           f"({'present' if server.spool.exists() else 'absent, which is not an error'})")
     print(f"Liveness check: {ingest.liveness_check()}")
+    rates = load_pricing(args.pricing)
+    print(f"Rate table: {rates['note']} Costs are estimates and are never fetched.")
+    quota = load_quota(args.quota)
+    print(f"Quota source: {quota['reason']}")
     if not Path(args.registry).is_dir():
         print("No live registry there, so every session is reported ended.")
     if not Path(args.store).exists():

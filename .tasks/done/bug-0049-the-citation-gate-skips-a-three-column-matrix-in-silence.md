@@ -2,7 +2,7 @@
 id: bug-0049
 title: The citation gate skips a three-column matrix in silence, and four closed tasks reported it green
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -15,8 +15,8 @@ created: 2026-08-29
 
 ## Problem
 
-[`check-citations.py`](../scripts/check-citations.py) audits nothing in
-[`agent-observatory.conformance.md`](../docs/spec/agent-observatory.conformance.md), reports `0
+[`check-citations.py`](../../scripts/check-citations.py) audits nothing in
+[`agent-observatory.conformance.md`](../../docs/spec/agent-observatory.conformance.md), reports `0
 unresolved`, and exits 0. It has done so since that matrix was created, across four closed tasks
 that each cited the gate as green over it: `feat-0053`, `feat-0054`, `feat-0055`, and `feat-0060`.
 
@@ -96,20 +96,39 @@ is added has to keep that property rather than append a line that is constant.
 
     python scripts/run-checks.py
 
-- [ ] A test injects a citation that resolves nowhere into a three-column matrix and asserts the run
+- [x] A test injects a citation that resolves nowhere into a three-column matrix and asserts the run
       reports it, rather than exiting 0 over it. This is the reproduction above, as a test.
-- [ ] A test asserts that a matrix contributing zero citations is named in the output, so the
+- [x] A test asserts that a matrix contributing zero citations is named in the output, so the
       difference between "audited and clean" and "never read" is visible without arithmetic.
-- [ ] `agent-observatory.conformance.md`'s citations are audited: the run's audited total rises by
+- [x] `agent-observatory.conformance.md`'s citations are audited: the run's audited total rises by
       the count that file contributes, and the arithmetic still closes.
-- [ ] The summary line still varies with what was examined, per the comment in `render`.
-- [ ] Existing tests still pass, unchanged in intent.
-- [ ] Any citation the fix newly audits and finds dead is reported in the task's closeout, whether
+- [x] The summary line still varies with what was examined, per the comment in `render`.
+- [x] Existing tests still pass, unchanged in intent.
+- [x] Any citation the fix newly audits and finds dead is reported in the task's closeout, whether
       or not it is corrected here.
+
+## Decisions
+
+- **Columns are located by their heading rather than by position**, so a matrix's layout is a
+  property of the matrix instead of an assumption in the checker. Widening the fixed index from
+  four cells to three was rejected: it fixes the one shape that exists and leaves the next one
+  failing the same way.
+- **A matrix with no recognisable evidence column exits 2 and is named. A matrix that is readable
+  and cites nothing exits 0 and is named.** The split is deliberate. Failing the second would break
+  a spec whose scenarios are all not-built, which has nothing to cite yet, and that false alarm is
+  the failure this checker's whole design is arranged to avoid.
+- **The blast radius the task warned about did not materialise, and it was measured rather than
+  assumed.** Every one of the eleven matrices has exactly one table carrying an `Evidence` column;
+  the secondary tables (`Scenario | Covering test | Note`, `Item | Disposition | Reasoning`) have
+  none, so a header-driven parse skips them exactly as the old index-based one did. Body-row counts
+  are identical for all ten five-column matrices and go from 0 to 22 for the three-column one.
+- **A premise in this task was too pessimistic.** It said admitting three-cell rows "will extract
+  citations that have never been audited, and some may not resolve", across five other matrices.
+  Those five carry three-cell tables with no evidence column, so nothing in them changed at all.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

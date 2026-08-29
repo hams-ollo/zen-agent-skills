@@ -89,6 +89,13 @@
   th { font-size: 12px; color: var(--muted); font-weight: 600; }
   td.n { text-align: right; font-variant-numeric: tabular-nums; }
   tr[data-unused="true"] td { color: var(--muted); }
+  tr[data-memo="true"] td { color: var(--muted); }
+  /* An unpriced row is not greyed out. It carries a real token figure and an unknown cost,
+     and muting it would make the one row a reader must not skim past look like the skippable
+     kind. See S-011. */
+  tr[data-priced="false"] td .tag {
+    border-color: var(--accent); color: var(--ink);
+  }
   tr[data-state="ended"] td { color: var(--muted); }
   tr[data-state="running"] td .tag {
     background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
@@ -106,6 +113,9 @@
     border: 1px solid var(--rule); color: var(--muted);
   }
   .chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+  /* Fixed rather than fluid: a per-row timeline inside a table cell shrinks to whatever the
+     other columns leave it, and at 60 pixels wide it stops meaning anything. */
+  .strip { width: 240px; min-width: 240px; height: auto; display: block; }
   footer { padding: 0 24px 30px; }
 </style>
 </head>
@@ -205,6 +215,88 @@ function barChart(rows, labelKey, valueKey) {
   return chart;
 }
 
+/* Number formatting, in one place so the cost report cannot show a figure one way in the
+   headline and another in the table. usd() is deliberately not currency-aware: the rate table
+   states its own currency and the page prints that, rather than assuming dollars. */
+function group(value) {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function usd(value) {
+  return value === null || value === undefined ? "unknown" : value.toFixed(2);
+}
+
+function pct(share) {
+  return share === null || share === undefined ? "unknown" : (share * 100).toFixed(1) + "%";
+}
+
+/* The context-budget series as one hand-rolled inline SVG: a line of the lowest remaining
+   context seen each day, with a tick on every day a session was compacted. No chart library,
+   for the same reason the bar chart has none.
+
+   Compactions are drawn on the same axis rather than listed only in the table below, because
+   S-017 asks for the occasions to be identifiable and a compaction is precisely the thing that
+   explains a line jumping back up. */
+function pressureChart(daily, compactions) {
+  if (!daily || daily.length < 2) { return null; }
+  var width = 720, height = 180, padLeft = 70, padRight = 12, padTop = 14, padBottom = 26;
+  var plotWidth = width - padLeft - padRight, plotHeight = height - padTop - padBottom;
+  var max = 0;
+  daily.forEach(function (row) { max = Math.max(max, row.max_tokens_left); });
+  if (max <= 0) { return null; }
+
+  var index = {};
+  daily.forEach(function (row, i) { index[row.day] = i; });
+  var step = daily.length > 1 ? plotWidth / (daily.length - 1) : 0;
+  function x(i) { return padLeft + i * step; }
+  function y(value) { return padTop + plotHeight - (value / max) * plotHeight; }
+
+  var chart = svg("svg", {
+    "class": "chart", viewBox: "0 0 " + width + " " + height, role: "img",
+    "aria-label": "Lowest remaining context per day, with compaction occasions marked"
+  });
+  chart.appendChild(svg("line", {
+    x1: padLeft, y1: padTop + plotHeight, x2: width - padRight, y2: padTop + plotHeight,
+    stroke: "currentColor", "stroke-opacity": "0.25"
+  }));
+
+  /* Every day a compaction happened, behind the line rather than over it. */
+  var marked = {};
+  (compactions || []).forEach(function (event) {
+    var day = (event.ts || "").slice(0, 10);
+    if (!(day in index) || marked[day]) { return; }
+    marked[day] = true;
+    chart.appendChild(svg("line", {
+      x1: x(index[day]), y1: padTop, x2: x(index[day]), y2: padTop + plotHeight,
+      stroke: "var(--accent)", "stroke-opacity": "0.55", "stroke-dasharray": "3 3"
+    }));
+  });
+
+  var points = daily.map(function (row, i) {
+    return x(i).toFixed(1) + "," + y(row.min_tokens_left).toFixed(1);
+  }).join(" ");
+  chart.appendChild(svg("polyline", {
+    points: points, fill: "none", stroke: "var(--accent)", "stroke-width": "2"
+  }));
+
+  [[max, padTop + 4], [0, padTop + plotHeight]].forEach(function (pair) {
+    var tick = svg("text", { x: padLeft - 8, y: pair[1], "text-anchor": "end",
+                             "font-size": "11", fill: "currentColor",
+                             "fill-opacity": "0.6" });
+    tick.textContent = group(pair[0]);
+    chart.appendChild(tick);
+  });
+  [[daily[0].day, padLeft, "start"],
+   [daily[daily.length - 1].day, width - padRight, "end"]].forEach(function (pair) {
+    var stamp = svg("text", { x: pair[1], y: height - 8, "text-anchor": pair[2],
+                              "font-size": "11", fill: "currentColor",
+                              "fill-opacity": "0.6" });
+    stamp.textContent = pair[0];
+    chart.appendChild(stamp);
+  });
+  return chart;
+}
+
 /* Every interactive element this surface offers against a session is built here and nowhere
    else, and every one carries data-action naming its entry in the server's ACTIONS registry.
    S-019 is an enumeration claim, so the enumeration has to be derivable rather than
@@ -262,6 +354,78 @@ function figure(value, caption) {
   return el("div", { "class": "figure" }, [
     el("strong", { text: String(value) }), el("span", { text: caption })
   ]);
+}
+
+/* Milliseconds are what the store holds and what nobody reads at a glance. Unknown stays the
+   word "unknown" rather than becoming 0s, which would be a duration nobody measured. */
+function duration(millis) {
+  if (millis === null || millis === undefined) { return "unknown"; }
+  var seconds = Math.round(millis / 1000);
+  if (seconds < 60) { return seconds + "s"; }
+  var minutes = Math.floor(seconds / 60);
+  if (minutes < 60) { return minutes + "m " + (seconds % 60) + "s"; }
+  return Math.floor(minutes / 60) + "h " + (minutes % 60) + "m";
+}
+
+/* A figure and where it came from, never one without the other. An exact figure the harness
+   reported and one derived from the agent's own messages must not share a column in silence:
+   the second is close and not exact, and a reader shown only the number cannot tell. */
+function withBasis(text, basis) {
+  if (basis === "unknown") { return "unknown"; }
+  return text + (basis === "reported" ? "" : " ~");
+}
+
+/* A wave's total carries one thing a run's figure does not: it can be assembled from some of
+   its members rather than all of them. A sum over three of five members is not the wave's
+   cost, and rendered bare it is indistinguishable from one that is, so the count travels
+   with the figure whenever the two disagree. */
+function waveTotal(value, basis, known, size) {
+  if (value === null) { return "unknown"; }
+  var shown = withBasis(String(value), basis);
+  return known < size ? shown + " (" + known + " of " + size + ")" : shown;
+}
+
+/* A corpus timestamp, trimmed to what a reader uses. Trimming rather than reformatting, so
+   the page does no date arithmetic of its own and cannot invent a time zone. */
+function shortTime(ts) {
+  if (!ts) { return "not recorded"; }
+  return String(ts).replace("T", " ").slice(0, 19);
+}
+
+/* One wave's members on a shared timeline. Hand-rolled inline SVG, because a chart library
+   would be a dependency and a fetch, and S-022 forbids the second.
+
+   The arithmetic is the server's. Every member carries `bar`, the offset and width the server
+   computed as fractions of its wave's span, so this multiplies by a pixel width and does no
+   date maths at all. That is deliberate: the page's script has no execution coverage here, and
+   sums nothing can run are sums nobody can check. */
+function waveStrip(wave) {
+  var rowHeight = 10, pad = 4, width = 240;
+  var height = wave.members.length * rowHeight + pad * 2;
+  var chart = svg("svg", {
+    "class": "strip", viewBox: "0 0 " + width + " " + height,
+    role: "img",
+    "aria-label": "When each of this wave's " + wave.members.length
+                + " agents was active, across the wave's own span"
+  });
+  wave.members.forEach(function (member, index) {
+    var y = pad + index * rowHeight;
+    if (!member.bar) {
+      /* No start time, so no position. A hollow tick at the left says the member exists and
+         claims no place on the timeline, which is different from a zero-length bar. */
+      chart.appendChild(svg("rect", {
+        x: 0, y: y + 1, width: 2, height: rowHeight - 3,
+        fill: "none", stroke: "var(--zero)", "stroke-width": "1"
+      }));
+      return;
+    }
+    chart.appendChild(svg("rect", {
+      x: member.bar.offset * width, y: y + 1,
+      width: Math.max(member.bar.width * width, 2), height: rowHeight - 3, rx: "2",
+      fill: member.worktree_path ? "var(--accent)" : "var(--zero)"
+    }));
+  });
+  return chart;
 }
 
 /* Each report adds one function here, keyed by its id in the server's REPORTS registry.
@@ -417,6 +581,532 @@ var RENDERERS = {
         el("th", { text: "Skill" }), el("th", { text: "Uses" }), el("th", { text: "Roster" })
       ])]),
       body
+    ]));
+  },
+
+  waves: function (data, into) {
+    if (data.store_present === false) {
+      into.appendChild(el("p", { text: data.message }));
+      return;
+    }
+    into.appendChild(el("h2", { text: "Waves" }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "What each dispatched agent cost, and the wave it belonged to. A figure marked "
+          + "with a tilde is derived from the agent's own messages rather than reported by "
+          + "the harness, and is close rather than exact."
+    }));
+
+    var totals = data.totals;
+    into.appendChild(el("div", { "class": "figures" }, [
+      figure(totals.runs, "agents dispatched"),
+      figure(totals.waves_of_several, "waves of two or more"),
+      figure(totals.single_dispatches, "single dispatches"),
+      figure(totals.isolated_runs, "into an isolated workspace"),
+      figure(totals.outcomes.completed, "completed"),
+      figure(totals.outcomes.launched + totals.outcomes.unrecorded, "outcome not recorded")
+    ]));
+
+    /* The rule and its bound, on the page rather than only in the code. A reader who cannot
+       tell a wave from a sequence of unrelated dispatches will read the grouping as stronger
+       than it is, which is the failure LIVENESS_POLICY exists to prevent on the fleet tab. */
+    into.appendChild(el("p", { "class": "muted", text: data.wave_rule }));
+    into.appendChild(el("p", { "class": "muted", text: data.wave_rule_bound }));
+    into.appendChild(el("p", { "class": "muted", text: data.outcome_policy }));
+    into.appendChild(el("p", { "class": "muted", text: data.nesting_policy }));
+
+    into.appendChild(el("h2", { text: "By project" }));
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Project" }), el("th", { text: "Waves" }),
+        el("th", { text: "Agents" }), el("th", { text: "Isolated" })
+      ])]),
+      el("tbody", {}, data.projects.map(function (row) {
+        return el("tr", {}, [
+          el("td", { text: row.project }),
+          el("td", { "class": "n", text: String(row.waves) }),
+          el("td", { "class": "n", text: String(row.runs) }),
+          el("td", { "class": "n", text: String(row.isolated) })
+        ]);
+      }))
+    ]));
+
+    into.appendChild(el("h2", { text: "Waves, most recent first" }));
+    var waveScroller = el("div", { "class": "scroller" });
+    waveScroller.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Started" }), el("th", { text: "Project" }),
+        el("th", { text: "Agents" }), el("th", { text: "Isolated" }),
+        el("th", { text: "Span" }), el("th", { text: "Tokens" }),
+        el("th", { text: "Tool calls" }), el("th", { text: "Depth" }),
+        el("th", { text: "When each ran" })
+      ])]),
+      el("tbody", {}, data.waves.map(function (wave) {
+        return el("tr", {}, [
+          el("td", { text: shortTime(wave.started) }),
+          el("td", { text: wave.project }),
+          el("td", { "class": "n", text: String(wave.size) }),
+          el("td", { "class": "n", text: String(wave.isolated) }),
+          el("td", { "class": "n",
+                     text: withBasis(duration(wave.span_ms), wave.span_basis) }),
+          el("td", { "class": "n",
+                     text: waveTotal(wave.tokens, wave.tokens_basis,
+                                     wave.tokens_known, wave.size) }),
+          el("td", { "class": "n",
+                     text: waveTotal(wave.tool_calls, wave.tool_calls_basis,
+                                     wave.tool_calls_known, wave.size) }),
+          el("td", { "class": "n",
+                     text: wave.max_depth === null ? "unknown" : String(wave.max_depth) }),
+          el("td", {}, [waveStrip(wave)])
+        ]);
+      }))
+    ]));
+    into.appendChild(waveScroller);
+
+    into.appendChild(el("h2", { text: "Every dispatched agent" }));
+    var runScroller = el("div", { "class": "scroller" });
+    runScroller.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Outcome" }), el("th", { text: "Type" }),
+        el("th", { text: "Model" }), el("th", { text: "What it was given" }),
+        el("th", { text: "Started" }), el("th", { text: "Ended" }),
+        el("th", { text: "Duration" }), el("th", { text: "Tokens" }),
+        el("th", { text: "Tool calls" }), el("th", { text: "Depth" }),
+        el("th", { text: "Workspace" }), el("th", { text: "Branch" })
+      ])]),
+      el("tbody", {}, data.runs.map(function (run) {
+        return el("tr", { "data-outcome": run.outcome }, [
+          el("td", {}, [el("span", { "class": "tag", text: run.outcome })]),
+          el("td", { text: run.agent_type || "not recorded" }),
+          el("td", { text: run.resolved_model || "not recorded" }),
+          el("td", { text: run.description || run.agent_id }),
+          el("td", { text: shortTime(run.started) }),
+          el("td", { text: shortTime(run.ended) }),
+          el("td", { "class": "n",
+                     text: withBasis(duration(run.duration_ms), run.duration_basis) }),
+          el("td", { "class": "n",
+                     text: withBasis(String(run.tokens), run.tokens_basis) }),
+          el("td", { "class": "n",
+                     text: withBasis(String(run.tool_calls), run.tool_calls_basis) }),
+          el("td", { "class": "n",
+                     text: run.spawn_depth === null ? "unknown" : String(run.spawn_depth) }),
+          el("td", {}, [el("code", { text: run.worktree_path || "none" })]),
+          el("td", { text: run.worktree_branch || "none" })
+        ]);
+      }))
+    ]));
+    into.appendChild(runScroller);
+
+    /* Three columns, not two: the tag column is what a run row actually shows, and the
+       wording beside it is what the documentation calls that outcome. Rendering only one of
+       the pair leaves a reader mapping `launched` onto "launched, outcome unrecorded" by
+       guessing that one is a prefix of the other. */
+    into.appendChild(el("h2", { text: "What each outcome means" }));
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Outcome" }), el("th", { text: "In full" }),
+        el("th", { text: "What it says" })
+      ])]),
+      el("tbody", {}, data.outcomes_legend.map(function (entry) {
+        return el("tr", {}, [
+          el("td", {}, [el("span", { "class": "tag", text: entry.id })]),
+          el("td", { text: entry.label }), el("td", { text: entry.meaning })
+        ]);
+      }))
+    ]));
+
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Basis" }), el("th", { text: "Where the figure came from" })
+      ])]),
+      el("tbody", {}, data.bases_legend.map(function (entry) {
+        return el("tr", {}, [
+          el("td", { text: entry.id }), el("td", { text: entry.meaning })
+        ]);
+      }))
+    ]));
+    into.appendChild(el("p", { "class": "muted", text: data.derivation_note }));
+  },
+
+  cost: function (data, into) {
+    if (data.store_present === false) {
+      into.appendChild(el("p", { text: data.message }));
+      return;
+    }
+    var rates = data.rates, cost = data.cost, tokens = data.tokens, cache = data.cache;
+    var context = data.pressure.context, quota = data.pressure.quota;
+    /* S-010's Then, in the one place it has to hold: the date the rates were recorded travels
+       with the figure itself, in its caption, rather than sitting in a footnote a reader can
+       skip. A stale table misstates every cost here while the page looks exactly as correct as
+       the day the rates were right. */
+    var dated = rates.as_of ? "estimated, rates of " + rates.as_of
+                            : "estimated, rates undated";
+
+    into.appendChild(el("h2", { text: "Cost and pressure" }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "What was consumed, and how close to a limit."
+    }));
+    into.appendChild(el("p", { text: data.estimate_label }));
+
+    into.appendChild(el("div", { "class": "figures" }, [
+      figure((rates.currency || "") + " " + usd(cost.estimated_usd), dated),
+      figure(group(tokens.total), "tokens"),
+      figure(pct(cache.served_share), "served from cache"),
+      figure(group(tokens.messages), "messages")
+    ]));
+
+    /* Not muted when the total is incomplete. S-011 requires a total covering unpriced
+       sessions to say so, and a grey line under a big number is not saying so. */
+    into.appendChild(el("p", { "class": cost.complete ? "muted" : "", text: cost.note }));
+    into.appendChild(el("p", { "class": "muted", text: data.unpriced_policy }));
+    into.appendChild(el("p", { "class": "muted", text: data.historical_note }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: rates.note + " Source: " + (rates.source || "none recorded")
+          + " It is read from disk on every request and is never fetched."
+    }));
+
+    /* A rate can be correct and temporary at the same time, and the number cannot say so.
+       Not muted, and above the tables rather than under them: a reader who is about to
+       compare per-model costs needs to know which of those rates has a date on it before
+       they read the column, not after. */
+    if (rates.rate_notes && rates.rate_notes.length) {
+      into.appendChild(el("h2", { text: "Rates with a limited life" }));
+      into.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "Model" }), el("th", { text: "In force until" }),
+          el("th", { text: "What it is" })
+        ])]),
+        el("tbody", {}, rates.rate_notes.map(function (entry) {
+          return el("tr", {}, [
+            el("td", {}, [el("code", { text: entry.model })]),
+            el("td", { text: entry.expires || "no date recorded" }),
+            el("td", { text: entry.note })
+          ]);
+        }))
+      ]));
+    }
+
+    into.appendChild(el("h2", { text: "Tokens by kind" }));
+    var kinds = [["Input", tokens.input], ["Output", tokens.output],
+                 ["Cache read", tokens.cache_read],
+                 ["Cache creation", tokens.cache_creation]];
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Kind" }), el("th", { text: "Tokens" }),
+        el("th", { text: "Share of total" })
+      ])]),
+      el("tbody", {}, kinds.map(function (pair) {
+        return el("tr", {}, [
+          el("td", { text: pair[0] }),
+          el("td", { "class": "n", text: group(pair[1]) }),
+          el("td", { "class": "n",
+                     text: tokens.total ? pct(pair[1] / tokens.total) : "unknown" })
+        ]);
+      }).concat([
+        el("tr", { "data-memo": "true" }, [
+          el("td", { text: "of which thinking" }),
+          el("td", { "class": "n", text: group(tokens.thinking_within_output) }),
+          el("td", { text: "already inside output, so never priced a second time" })
+        ])
+      ]))
+    ]));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Served from cache: " + pct(cache.served_share) + " of "
+          + group(cache.input_side_tokens) + " input-side tokens. The basis is "
+          + cache.basis
+    }));
+
+    into.appendChild(el("h2", { text: "By model" }));
+    var models = el("div", { "class": "scroller" });
+    models.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Model" }), el("th", { text: "Messages" }),
+        el("th", { text: "Input" }), el("th", { text: "Output" }),
+        el("th", { text: "Cache read" }), el("th", { text: "Cache creation" }),
+        el("th", { text: "Estimated cost" })
+      ])]),
+      el("tbody", {}, data.models.map(function (row) {
+        /* An unpriced model shows the word, never a number. A blank cell or a zero here is
+           the whole of what S-011 forbids. */
+        var money = row.priced
+          ? el("td", { "class": "n", text: usd(row.cost_usd) })
+          : el("td", {}, [el("span", { "class": "tag",
+                                       text: "unpriced: unknown, not zero" })]);
+        return el("tr", { "data-priced": String(row.priced) }, [
+          el("td", { text: row.model }),
+          el("td", { "class": "n", text: group(row.messages) }),
+          el("td", { "class": "n", text: group(row.input_tokens) }),
+          el("td", { "class": "n", text: group(row.output_tokens) }),
+          el("td", { "class": "n", text: group(row.cache_read_tokens) }),
+          el("td", { "class": "n", text: group(row.cache_creation_tokens) }),
+          money
+        ]);
+      }))
+    ]));
+    into.appendChild(models);
+
+    into.appendChild(el("h2", { text: "Context pressure" }));
+    if (!context.available) {
+      into.appendChild(el("p", { "class": "muted", text: context.reason }));
+    } else {
+      into.appendChild(el("div", { "class": "figures" }, [
+        figure(group(context.samples), "context readings"),
+        figure(group(context.sessions), "sessions with readings"),
+        figure(group(context.compaction_count), "compactions"),
+        figure(context.lowest.length ? group(context.lowest[0].tokens_left) : "none",
+               "lowest context left")
+      ]));
+      into.appendChild(el("p", {
+        "class": "muted",
+        text: "The series is " + context.source
+            + ". The line is the lowest remaining context seen on each day; a dashed tick "
+            + "marks a day on which a session was compacted."
+      }));
+      var chart = pressureChart(context.daily, context.compactions);
+      if (chart) {
+        var holder = el("div", { "class": "scroller" });
+        holder.appendChild(chart);
+        into.appendChild(holder);
+      }
+      into.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "Day" }), el("th", { text: "Readings" }),
+          el("th", { text: "Lowest left" }), el("th", { text: "Highest left" })
+        ])]),
+        el("tbody", {}, context.daily.map(function (row) {
+          return el("tr", {}, [
+            el("td", { text: row.day }),
+            el("td", { "class": "n", text: group(row.samples) }),
+            el("td", { "class": "n", text: group(row.min_tokens_left) }),
+            el("td", { "class": "n", text: group(row.max_tokens_left) })
+          ]);
+        }))
+      ]));
+      into.appendChild(el("h2", { text: "Compaction occasions" }));
+      if (!context.compactions.length) {
+        into.appendChild(el("p", {
+          "class": "muted",
+          text: "None in scope. A compaction is recorded by a compact_boundary record, and "
+              + "the corpus carries no other marker for one."
+        }));
+      } else {
+        into.appendChild(el("table", {}, [
+          el("thead", {}, [el("tr", {}, [
+            el("th", { text: "When" }), el("th", { text: "Session" })
+          ])]),
+          el("tbody", {}, context.compactions.map(function (row) {
+            return el("tr", {}, [
+              el("td", { text: row.ts }),
+              el("td", {}, [el("code", { text: row.session_id })])
+            ]);
+          }))
+        ]));
+      }
+    }
+
+    into.appendChild(el("h2", { text: "Quota pressure" }));
+    if (!quota.available) {
+      /* Not an error, and not silence either. The contract marks this source optional, so its
+         absence degrades S-017 to its context half and the page says which half it is
+         showing. */
+      into.appendChild(el("p", { text: quota.reason }));
+      into.appendChild(el("p", { "class": "muted", text: quota.provenance }));
+      into.appendChild(el("p", { "class": "muted",
+                                 text: "Expected format: " + quota.format }));
+    } else {
+      into.appendChild(el("p", { "class": "muted", text: quota.reason }));
+      into.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "Window" }), el("th", { text: "Samples" }),
+          el("th", { text: "First" }), el("th", { text: "Latest" }),
+          el("th", { text: "Latest used" }), el("th", { text: "Peak used" })
+        ])]),
+        el("tbody", {}, quota.windows.map(function (row) {
+          return el("tr", {}, [
+            el("td", { text: row.window }),
+            el("td", { "class": "n", text: group(row.samples) }),
+            el("td", { text: row.first_ts }),
+            el("td", { text: row.last_ts }),
+            el("td", { "class": "n", text: row.latest_used_percent + "%" }),
+            el("td", { "class": "n", text: row.peak_used_percent + "%" })
+          ]);
+        }))
+      ]));
+      if (quota.unreadable) {
+        into.appendChild(el("p", {
+          "class": "muted",
+          text: quota.unreadable + " line(s) in the quota series could not be read and are "
+              + "reported rather than dropped silently."
+        }));
+      }
+    }
+  },
+
+  health: function (data, into) {
+    if (data.store_present === false) {
+      into.appendChild(el("p", { text: data.message }));
+      return;
+    }
+    into.appendChild(el("h2", { text: "Health" }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "What failed, and how often. A hook that failed, with the status it exited on; "
+          + "an API error, with the number of attempts the request took; and a run the "
+          + "corpus marks as having ended abnormally."
+    }));
+
+    var totals = data.totals;
+    into.appendChild(el("div", { "class": "figures" }, [
+      figure(totals.hook_failures, "hook failures"),
+      figure(totals.api_errors, "API errors"),
+      figure(totals.worst_attempts, "most attempts one request took"),
+      figure(totals.abnormal_runs, "runs that ended abnormally"),
+      figure(totals.sessions_affected, "sessions with a health record")
+    ]));
+
+    /* The qualification sits with the figures rather than under them. A clean health report
+       is the one result a reader is most likely to over-read, so what it does not cover is
+       stated where they meet the number and not in a footnote they may not reach. */
+    into.appendChild(el("p", { "class": "muted", text: data.blind_spot }));
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: data.replay_policy + " Here that is " + totals.events + " events written as "
+          + totals.records + " records."
+    }));
+
+    /* An empty report says so. A panel with four zeroes and no tables is indistinguishable
+       from a panel that failed to load, and the difference is the whole of what this report
+       would be telling a reader on a corpus where nothing went wrong. */
+    if (data.empty) {
+      into.appendChild(el("p", {
+        text: "Nothing failed in what this report can see: no hook failure, no API error, "
+            + "and no run marked as having ended abnormally, over " + totals.events
+            + " health events in scope. That is an empty result rather than an absent one, "
+            + "and the sentence above says what it does not cover."
+      }));
+    }
+
+    into.appendChild(el("h2", { text: "Hook failures" }));
+    if (!data.hook_failures.length) {
+      into.appendChild(el("p", { "class": "muted",
+        text: "None recorded, out of " + totals.hook_events + " hook events in scope." }));
+    } else {
+      var hooks = el("div", { "class": "scroller" });
+      hooks.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "When" }), el("th", { text: "Project" }),
+          el("th", { text: "Session" }), el("th", { text: "Hook" }),
+          el("th", { text: "Event" }), el("th", { text: "Exit" }),
+          el("th", { text: "What it reported" })
+        ])]),
+        el("tbody", {}, data.hook_failures.map(function (row) {
+          var what = el("td", { text: row.command || "" });
+          if (row.detail) {
+            what.appendChild(el("div", { "class": "why", text: row.detail }));
+          }
+          if (row.replays) {
+            what.appendChild(el("div", { "class": "why",
+              text: "Also written into " + row.replays + " replayed transcript(s), and "
+                  + "counted once." }));
+          }
+          return el("tr", {}, [
+            el("td", { text: row.ts || "not recorded" }),
+            el("td", { text: row.project }),
+            el("td", { text: row.session_title || row.session_id }),
+            el("td", { text: row.hook_name || "not recorded" }),
+            el("td", { text: row.hook_event || "not recorded" }),
+            el("td", { "class": "n",
+                       text: row.exit_code === null ? "not recorded"
+                                                    : String(row.exit_code) }),
+            what
+          ]);
+        }))
+      ]));
+      into.appendChild(hooks);
+    }
+
+    into.appendChild(el("h2", { text: "API errors and their retries" }));
+    if (!data.retry_episodes.length) {
+      into.appendChild(el("p", { "class": "muted", text: "None recorded." }));
+    } else {
+      into.appendChild(el("p", {
+        "class": "muted",
+        text: "One row per request that erred, however many times it was retried. The "
+            + "attempts column is what the request cost, not whether it eventually "
+            + "succeeded: the corpus records the retries and not the verdict."
+      }));
+      var retries = el("div", { "class": "scroller" });
+      retries.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "First attempt" }), el("th", { text: "Last attempt" }),
+          el("th", { text: "Project" }), el("th", { text: "Session" }),
+          el("th", { text: "Attempts" }), el("th", { text: "What it reported" })
+        ])]),
+        el("tbody", {}, data.retry_episodes.map(function (row) {
+          var what = el("td", {});
+          what.appendChild(el("div", { "class": "why", text: row.detail || "not recorded" }));
+          return el("tr", {}, [
+            el("td", { text: row.first_ts || "not recorded" }),
+            el("td", { text: row.last_ts || "not recorded" }),
+            el("td", { text: row.project }),
+            el("td", { text: row.session_title || row.session_id }),
+            el("td", { "class": "n", text: String(row.attempts) }),
+            what
+          ]);
+        }))
+      ]));
+      into.appendChild(retries);
+    }
+
+    into.appendChild(el("h2", { text: "Runs that ended abnormally" }));
+    if (!data.abnormal_runs.length) {
+      into.appendChild(el("p", { "class": "muted", text: "None recorded." }));
+    } else {
+      var abnormal = el("div", { "class": "scroller" });
+      abnormal.appendChild(el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "When" }), el("th", { text: "Project" }),
+          el("th", { text: "Session" }), el("th", { text: "Ended" }),
+          el("th", { text: "Status" }), el("th", { text: "Model" }),
+          el("th", { text: "What it reported" })
+        ])]),
+        el("tbody", {}, data.abnormal_runs.map(function (row) {
+          return el("tr", {}, [
+            el("td", { text: row.ts || "not recorded" }),
+            el("td", { text: row.project }),
+            el("td", { text: row.session_title || row.session_id }),
+            el("td", { text: row.markers.join(" and ") }),
+            el("td", { text: row.status || "not recorded" }),
+            el("td", { text: row.model || "not recorded" }),
+            el("td", {}, [el("div", { "class": "why",
+                                      text: row.detail || "not recorded" })])
+          ]);
+        }))
+      ]));
+      into.appendChild(abnormal);
+    }
+
+    /* Every kind of health record in scope, including the ones this report does not treat as
+       a failure. Filtering them out here would leave a reader unable to tell a kind that
+       counted nothing from a kind that was never looked at, and one of them is a recorded
+       bound rather than an absence. */
+    into.appendChild(el("h2", { text: "What was read, and what it counted for" }));
+    into.appendChild(el("table", {}, [
+      el("thead", {}, [el("tr", {}, [
+        el("th", { text: "Kind" }), el("th", { text: "Events" }),
+        el("th", { text: "Records" }), el("th", { text: "What this report does with it" })
+      ])]),
+      el("tbody", {}, data.kinds.map(function (row) {
+        return el("tr", { "data-unused": String(row.events === 0) }, [
+          el("td", { text: row.kind }),
+          el("td", { "class": "n", text: String(row.events) }),
+          el("td", { "class": "n", text: String(row.records) }),
+          el("td", { text: row.role })
+        ]);
+      }))
     ]));
   }
 };

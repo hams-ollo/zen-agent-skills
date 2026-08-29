@@ -1,0 +1,67 @@
+{
+  "_readme": [
+    "The observatory's rate table. Local data with a recorded date, never fetched: the",
+    "contract's Constraints forbid network access at any point (S-022), so a rate that",
+    "cannot be sourced from something already on this machine is left out and the model is",
+    "reported unpriced (S-011). Zero and unknown are different answers.",
+    "",
+    "Updating this file is a normal maintenance task, which is the recommendation Open",
+    "Question 1 of docs/spec/agent-observatory.md records. Change a rate, change `as_of` and",
+    "`transcribed` with it, and re-render: nothing is persisted, so no backfill is needed.",
+    "",
+    "One rate per model, applied to the whole corpus. That is wrong for old sessions and is",
+    "the right simplification anyway: rates change, the corpus spans months, and there is no",
+    "per-date rate history that can be fetched. The report says so beside every figure rather",
+    "than leaving a reader to assume otherwise."
+  ],
+
+  "as_of": "2026-06-24",
+  "transcribed": "2026-08-29",
+  "currency": "USD",
+  "unit": "per million tokens",
+
+  "source": "The Current Models table in Anthropic's bundled `claude-api` skill, which carries the marker `## Current Models (cached: 2026-06-24)`.",
+  "source_author": "Anthropic",
+  "source_kind": "local, bundled with the harness. Read from disk, never fetched.",
+
+  "as_of_note": "`as_of` is the source table's own cached date, not the day it was copied here, so the figure a reader sees is never fresher than the rates behind it. `transcribed` is the day it was copied. The older of the two is what the report shows.",
+
+  "provenance_note": "No formal provenance block, and that is deliberate rather than an omission. The convention in AGENTS.md requires a re-fetchable raw URL and a sha256 of the retrieved bytes, and `scripts/check-provenance.py` scans only `.md` and `.py`. This source is a skill bundled with the harness on this machine, at a path that is version-stamped and local; it has no URL that checker could fetch, so a block here would either dangle or carry a digest nobody could reproduce. The fields above record the same facts in a form that does not pretend to be checkable.",
+
+  "cache_multipliers": {
+    "cache_read": 0.1,
+    "cache_creation": 1.25,
+    "note": "Against the model's own input rate. Source: the Economics paragraph of the same skill's `shared/prompt-caching.md`, which states cache reads cost about 0.1x base input, and cache writes 1.25x for the 5-minute TTL and 2x for the 1-hour TTL.",
+    "ttl_bound": "The store carries one `cache_creation_tokens` column, taken from the corpus's `cache_creation_input_tokens`, which does not distinguish the two TTLs. The 5-minute multiplier is used, so any 1-hour cache write is under-priced and the estimate is a lower bound in that respect. Stated rather than smoothed over."
+  },
+
+  "thinking_note": "The store's `thinking_tokens` come from `output_tokens_details` and are a breakdown of `output_tokens`, not a fifth billable kind. They are reported as a memo and are deliberately absent from every cost figure; adding them would double-count output.",
+
+  "models": {
+    "claude-fable-5": {"input": 10.0, "output": 50.0},
+    "claude-mythos-5": {"input": 10.0, "output": 50.0},
+    "claude-opus-5": {"input": 5.0, "output": 25.0},
+    "claude-opus-4-8": {"input": 5.0, "output": 25.0},
+    "claude-opus-4-7": {"input": 5.0, "output": 25.0},
+    "claude-opus-4-6": {"input": 5.0, "output": 25.0},
+    "claude-sonnet-5": {"input": 2.0, "output": 10.0,
+      "note": "Introductory rate, which the source table gives as running through 2026-08-31. The standard rate behind it is $3.00 input and $15.00 output. The intro figure is the one applied here because every session in this corpus ran inside that window, so it is the rate those sessions were actually billed at; from 2026-09-01 it is the wrong rate for new work and this note is how a reader knows before the figure misleads them.",
+      "expires": "2026-08-31",
+      "standard_after_expiry": {"input": 3.0, "output": 15.0}},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
+    "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0}
+  },
+
+  "rate_notes_note": "A model entry may carry `note`, `expires`, and `standard_after_expiry` beside its rates. Only `input` and `output` are ever priced with; the other three are carried to the report and rendered, never arithmetic. They exist because a rate can be correct and temporary at the same time, and a table that records only the number cannot say so: the figure keeps looking exactly as right as it did the day it was true. `expires` is a date this file states, not a date anything compares against a clock, because the report derives everything it says from the corpus and introducing `today` would make its output depend on when it ran.",
+
+  "models_note": "Keyed by the exact string the corpus records in `message.model`. No prefix matching and no normalisation at read time: a key is either present or the model is unpriced. `claude-haiku-4-5-20251001` is its own entry rather than a fuzzy match onto `claude-haiku-4-5`, and it is priced identically because the same skill's `shared/models.md` names it as that model's Full ID in the Full ID column of its Current Models table.",
+
+  "deliberately_unpriced": {
+    "<synthetic>": "The harness's marker on a locally generated message rather than a model. 37 such messages carrying 0 tokens in this maintainer's corpus on 2026-08-29, and the one unpriced model a real run currently reports.",
+    "opus": "An alias rather than a model id. Which model it resolved to at the time is recorded nowhere, so any rate would be a guess. It does not appear on `message.model` in this corpus, only elsewhere in it, and is listed here because it is the shape a future one would take.",
+    "sonnet": "An alias, as above.",
+    "haiku": "An alias, as above.",
+    "note": "This map is documentation and is never consulted at read time. A model is priced if and only if it has an entry in `models` above, so a name moved into that map takes effect and a name listed here never becomes a hidden zero. Legacy models (`claude-opus-4-5`, `claude-opus-4-1`, `claude-sonnet-4-5`) are absent from `models` for the same reason: the source table above carries no rate for them, and inventing one is the failure S-011 exists to prevent."
+  }
+}
