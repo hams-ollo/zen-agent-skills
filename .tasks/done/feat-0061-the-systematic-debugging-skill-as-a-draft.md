@@ -2,7 +2,7 @@
 id: feat-0061
 title: Build the systematic-debugging skill against its contract, shipped as a draft
 type: feat
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic C #5 systematic-debugging"
 depends_on: [chore-0078]
@@ -31,7 +31,7 @@ implement it.
 That failure is not hypothetical here. `new-task`'s own skill body records two occasions where a task
 file asserted something false about the code and the implementing agent had to catch it mid-batch.
 
-[`systematic-debugging.md`](../docs/spec/systematic-debugging.md) is the contract, approved
+[`systematic-debugging.md`](../../docs/spec/systematic-debugging.md) is the contract, approved
 2026-08-19 and amended 2026-08-29 by `chore-0078`, fifteen scenarios. Nothing implements it.
 
 ## Scope
@@ -42,7 +42,7 @@ file asserted something false about the code and the implementing agent had to c
   three verdicts, its diagnosis record, and its four inputs.
 - **Shipped as a draft.** `metadata: status: draft` in the block form `install.py` parses, so no
   profile places it, including `all`. Mirror
-  [`agent-observatory`](../.agents/skills/agent-observatory/SKILL.md), which is the kit's only other
+  [`agent-observatory`](../../.agents/skills/agent-observatory/SKILL.md), which is the kit's only other
   draft and the precedent for this exact shape.
 - Structural tests in `tests/test_systematic_debugging.py`, one per scenario, named so the scenario
   is identifiable.
@@ -74,7 +74,7 @@ file asserted something false about the code and the implementing agent had to c
 body is instructions to a model, so a test can assert the declining instruction is present and cannot
 assert a model obeyed it. `feat-0060` hit exactly this on `S-020` and stated it up front rather than
 letting a verifier discover it; do the same. The precedent to mirror is
-`TestTheCompanionSkillDeclines` in [`tests/test_observatory_serve.py`](../tests/test_observatory_serve.py),
+`TestTheCompanionSkillDeclines` in [`tests/test_observatory_serve.py`](../../tests/test_observatory_serve.py),
 whose docstring states the bound in the class it applies to.
 
 What a structural test can still decide, and should:
@@ -125,21 +125,99 @@ plus a hook whose divergence breaks a gate rather than a test.
 
     python scripts/run-checks.py
 
-- [ ] A test per scenario, `S-001` through `S-015`, named so the scenario it proves is identifiable.
-- [ ] The three verdicts are asserted as an exact set, so a fourth fails.
-- [ ] Every record field is asserted with its presence condition, including the two the contract
+- [x] A test per scenario, `S-001` through `S-015`, named so the scenario it proves is identifiable.
+- [x] The three verdicts are asserted as an exact set, so a fourth fails.
+- [x] Every record field is asserted with its presence condition, including the two the contract
       requires to be **absent** on `S-010`.
-- [ ] `install.py --dry-run` proves the skill is placed by no profile, including `all`.
-- [ ] `validate-skills.py` passes, including the link-escape rule.
-- [ ] A provenance block records the fold-in source with a re-fetchable raw URL and a sha256 of the
+- [x] `install.py --dry-run` proves the skill is placed by no profile, including `all`.
+- [x] `validate-skills.py` passes, including the link-escape rule.
+- [x] A provenance block records the fold-in source with a re-fetchable raw URL and a sha256 of the
       retrieved bytes, and `check-provenance.py` reports it.
-- [ ] `docs/spec/systematic-debugging.conformance.md` exists with the coverage arithmetic stated:
+- [x] `docs/spec/systematic-debugging.conformance.md` exists with the coverage arithmetic stated:
       conformed + diverged + not-built = 15.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+
+## Closeout, 2026-08-29
+
+Acceptance run: `python scripts/run-checks.py`. Result, verbatim tail: `8 passed, 0 failed, 0 could
+not run.` 914 tests, 22 skills, 191 task files.
+
+The skill is [`systematic-debugging`](../../.agents/skills/systematic-debugging/SKILL.md), 310 lines,
+shipped as a draft. Its contract carries fifteen scenarios rather than thirteen: `chore-0078` settled
+both Open Questions on 2026-08-29 before this task started, which is why the frontmatter and two
+acceptance criteria here read 15.
+
+### What the independent verification changed
+
+Recorded in full at
+[`systematic-debugging.verification.md`](../../docs/spec/systematic-debugging.verification.md).
+Verdict `pass`, with five findings, and **all five were reproduced here against the real tree before
+being accepted**, on copies with the tracked file never edited. A sixth turned up while reproducing
+them.
+
+The finding behind the findings is one shape rather than five defects. **Every mutation this task's
+author designed was a deletion or a replacement of asserted text, and a presence assertion cannot see
+an addition that contradicts it.** An escape hatch appended to Procedure step 3, permitting in-place
+instrumentation with a restore before exit, left every asserted sentence intact and passed all 31
+tests, which is exactly the alternative `chore-0078` rejected. So did a fourth verdict instructed in
+Procedure step 6 while the `## Verdicts` table stayed correct. Four new assertions close the class;
+the suite went 31 to 35 tests, and all twenty mutations now fail it.
+
+**The per-sentence exclusion is the part worth carrying forward.** Forbidding the word "restore" in
+that section is the obvious fix and is wrong: the section legitimately uses "cleaning up afterwards"
+in the sentence that rejects it, so a bare-word check would have been broken by the prose explaining
+the rule. That is this kit's fourth recorded instance of an assertion matching a bare word in source
+text. The assertion pairs a permission or an undo with a mention of the tracked files inside one
+sentence, which the rejecting prose never produces.
+
+### Two things the audit changed rather than recorded
+
+**The skill gained two `When not to use` bullets.** Auditing the contract's Non-Goals found the skill
+covered five of seven and was silent on two: that it does not diagnose the agent's own reasoning
+failures, and that it does not decide whether a defect is worth fixing. Silence there is not neutral,
+because that section is what a reader checks before invoking a skill.
+
+**A reference to the autonomy lens was written and then removed.**
+`test_autonomy_is_composed_by_exactly_the_five_skills_it_cites` pins a bidirectional invariant: a
+skill references the lens if and only if the lens cites one of that skill's rules. Adding a sixth
+reference without the lens citing back is what that test forbids, and amending the lens would breach
+its own evidence gate, since nothing here has run unattended yet. The Notes bullet states the
+principle in the skill's own words instead.
+
+### Disclosed work beyond the files this task named
+
+- **`tests/test_check_provenance.py`**, two pinned counts moved from 8 records across 7 files to 9
+  across 8, and one test renamed to match. Both new numbers were recomputed from `cp.collect()`
+  rather than incremented, and the verification recomputed them again independently. No assertion was
+  weakened: both counts stay pinned in both directions and `assertEqual(unreadable, [])` is untouched.
+- **`docs/spec/README.md`**, listed here because this task's `doc-sync` step initially missed it and
+  the verification caught it. The index still said this matrix did not exist. Recomputing its
+  arithmetic then falsified a figure the finding itself had accepted: the standing claim that
+  `install`'s matrix "covers 15 of its 18 scenarios" does not survive a check, since that matrix cites
+  17 of the 18 scenario ids. The derived count of classified scenarios is now **not stated** rather
+  than restated at a new wrong value, with the reason written where the number was. `chore-0075` stays
+  open and this is the second figure it would have caught.
+- **`.tasks/.scaffold.json`**, chore high-water mark 78 to 79.
+
+### Findings
+
+**One, filed rather than fixed.** `docs/CATALOG.md` has no slot for a skill that is built but not
+blessed, and two skills are now in that state: `agent-observatory` and this one. Its opening states a
+binary, shipped or planned, and neither is true of a draft. Inventing a third status in a
+reader-facing document is a documentation decision rather than a knock-on of adding a skill, so it is
+[`chore-0079`](../chore-0079-the-catalog-has-no-slot-for-a-skill-that-is-built-but-not-blessed.md)
+rather than an edit made here.
+
+### What is still owed
+
+Everything the tests cannot decide. They assert the body contains an instruction; they cannot assert
+a model followed one. `feat-0062` runs the skill on a real defect, which is the only thing that
+closes it, and until then the skill stays a draft placed by no profile. That is the contribution bar
+working rather than caution.

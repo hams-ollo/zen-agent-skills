@@ -158,6 +158,7 @@ KIT_SKILL_NAMES = frozenset({
     "spec-conformance",
     "spec-plan-readiness",
     "spec-quality",
+    "systematic-debugging",
     "test-author",
     "test-quality",
     "verifier-agent",
