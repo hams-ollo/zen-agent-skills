@@ -7,7 +7,7 @@ priority: P1
 parent: "ROADMAP Epic C #5 systematic-debugging"
 depends_on: [chore-0078]
 spec: docs/spec/systematic-debugging.md
-scenarios: [S-001, S-002, S-003, S-004, S-005, S-006, S-007, S-008, S-009, S-010, S-011, S-012, S-013]
+scenarios: [S-001, S-002, S-003, S-004, S-005, S-006, S-007, S-008, S-009, S-010, S-011, S-012, S-013, S-014, S-015]
 # Directories where this task creates files, exact paths where they already exist. The
 # backlog gate runs `--strict`, so a path declared before it exists is an error; the
 # precedent is `feat-0056` and `feat-0060`, which both created files this way.
@@ -32,11 +32,11 @@ That failure is not hypothetical here. `new-task`'s own skill body records two o
 file asserted something false about the code and the implementing agent had to catch it mid-batch.
 
 [`systematic-debugging.md`](../docs/spec/systematic-debugging.md) is the contract, approved
-2026-08-19, thirteen scenarios. Nothing implements it.
+2026-08-19 and amended 2026-08-29 by `chore-0078`, fifteen scenarios. Nothing implements it.
 
 ## Scope
 
-**In scope:** the skill, covering all thirteen scenarios, shipped as a draft.
+**In scope:** the skill, covering all fifteen scenarios, shipped as a draft.
 
 - `.agents/skills/systematic-debugging/SKILL.md`, a workflow-shaped skill implementing the contract's
   three verdicts, its diagnosis record, and its four inputs.
@@ -94,6 +94,13 @@ What a structural test can still decide, and should:
 intentions. `S-013` in particular has a checkable pair: no destination means no file created, a
 destination means the same record written there.
 
+`S-014` and `S-015` arrived from `chore-0078` and are the settled answer to Open Question 1. What a
+structural test can decide about them: that `S-014`'s bound is **at no point during the run** rather
+than at its end, since the whole reason instrument-in-place-then-clean-up was rejected is that it
+satisfies the weaker phrasing on every run that completes; and that `S-015`'s no-copy path is
+present as a stated behavior rather than as an omission, because a skill body that simply never
+mentions the case reads exactly like one that handles it.
+
 `validate-skills.py` enforces the schema, the description budget, and the link-escape rule, so no
 link in the skill body may point outside the skill tree. The contract, which lives in `docs/spec/`,
 therefore has to be named in prose rather than linked. `agent-observatory` does this and is the
@@ -118,7 +125,7 @@ plus a hook whose divergence breaks a gate rather than a test.
 
     python scripts/run-checks.py
 
-- [ ] A test per scenario, `S-001` through `S-013`, named so the scenario it proves is identifiable.
+- [ ] A test per scenario, `S-001` through `S-015`, named so the scenario it proves is identifiable.
 - [ ] The three verdicts are asserted as an exact set, so a fourth fails.
 - [ ] Every record field is asserted with its presence condition, including the two the contract
       requires to be **absent** on `S-010`.
@@ -127,7 +134,7 @@ plus a hook whose divergence breaks a gate rather than a test.
 - [ ] A provenance block records the fold-in source with a re-fetchable raw URL and a sha256 of the
       retrieved bytes, and `check-provenance.py` reports it.
 - [ ] `docs/spec/systematic-debugging.conformance.md` exists with the coverage arithmetic stated:
-      conformed + diverged + not-built = 13.
+      conformed + diverged + not-built = 15.
 - [ ] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
