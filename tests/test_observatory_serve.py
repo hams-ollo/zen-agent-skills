@@ -45,6 +45,24 @@ from scripts.observatory import db, ingest, serve      # noqa: E402
 UI_INDEX = REPO_ROOT / "scripts" / "observatory" / "ui" / "index.html"
 COMPANION_SKILL = REPO_ROOT / ".agents" / "skills" / "agent-observatory" / "SKILL.md"
 
+RENDERER_KEY = re.compile(r"\n  \w+: function \(data, into\) \{")
+
+
+def renderer_source(name: str) -> str:
+    """The body of `RENDERERS.<name>` in the page, from its key to the next renderer's.
+
+    Bounded at the next member rather than at the end of the registry, because a renderer
+    added below would otherwise be swallowed into the previous one's body and every assertion
+    about that body would quietly begin covering two functions. `feat-0055` hit the same trap
+    from the other side, when a renderer added *above* a fixed positional slice made it assert
+    about the wrong function, and `feat-0058` reached it from below by adding one at the end.
+    """
+    html = UI_INDEX.read_text(encoding="utf-8")
+    start = html.index(f"  {name}: function (data, into) {{")
+    following = RENDERER_KEY.search(html, start + 1)
+    end = following.start() if following else html.index("\n};", start)
+    return html[start:end]
+
 
 class ServeTestCase(unittest.TestCase):
     """A corpus, a store built from it, and the roster the report counts against.
@@ -354,15 +372,14 @@ class TestPageBehaviour(ServerTestCase):
     """
 
     def renderer_body(self) -> str:
-        """The body of `RENDERERS.skills`, from its key to the end of the registry.
+        """The body of `RENDERERS.skills`, from its key to the next renderer's.
 
         Anchored on the skills key rather than on `var RENDERERS` plus a fixed span, because
         the registry gained a renderer above this one in `feat-0055` and a positional slice
-        silently began asserting about the wrong function.
+        silently began asserting about the wrong function. Bounded at the next renderer for
+        the mirror-image reason, once `feat-0058` added one below it.
         """
-        html = UI_INDEX.read_text(encoding="utf-8")
-        start = html.index("  skills: function (data, into) {")
-        return html[start:html.index("\n};", start)]
+        return renderer_source("skills")
 
     def test_the_skills_renderer_maps_every_returned_row_without_filtering(self):
         """Kills the mutation that drops zero-count rows at the surface while the API still
@@ -649,9 +666,22 @@ class TestPageShell(ServerTestCase):
                                  "a report is both built and owed, or neither")
 
     def test_the_unbuilt_reports_name_the_task_that_owes_them(self):
+        """The set shrinks as reports land. `feat-0058` built the health report, so `health`
+        left it; `waves` and `cost` are still owed and must still name their owner."""
         owed = {r["id"]: r["owner"] for r in serve.REPORTS if r["endpoint"] is None}
-        self.assertEqual(owed, {"waves": "feat-0056", "cost": "feat-0057",
-                                "health": "feat-0058"})
+        # Every report in the contract's Proposed Surface is now built, so this map is empty
+        # and the equality alone no longer proves anything: an empty expectation is satisfied
+        # by a registry that lost the `owner` field entirely. The invariant below is what the
+        # test is actually for, and it survives the map being empty: a report is owed if and
+        # only if it names the task that owes it, so a sixth report added without an endpoint
+        # and without an owner fails here rather than rendering a blank panel.
+        self.assertEqual(owed, {})
+        for report in serve.REPORTS:
+            with self.subTest(report=report["id"]):
+                self.assertEqual(
+                    report["endpoint"] is None, report["owner"] is not None,
+                    f"report {report['id']} either serves nothing and names nobody, or "
+                    f"serves a route while still claiming to be owed")
 
     def test_the_shell_renders_navigation_from_the_registry_not_from_markup(self):
         """A shell that hardcoded its tabs would make each later task edit the markup, which is
@@ -1490,10 +1520,16 @@ class TestHostHeader(ServerTestCase):
             conn.close()
 
     def test_a_foreign_host_header_is_refused_on_every_route(self):
+        """The report routes are derived from `REPORTS` rather than listed here, so a report
+        added later is covered without this test being edited. It was a hand-written list, and
+        `feat-0058` added `/api/health` to a guard that would have gone on asserting about
+        four routes while a fifth served the corpus to any origin that asked."""
         self.build_store([self.record("a1", sid="s1", skill="doc-sync")])
         server = self.serve_on_loopback(roster=[])
+        reports = [r["endpoint"] for r in serve.REPORTS if r["endpoint"]]
+        self.assertIn("/api/health", reports, "the health report declares no endpoint")
 
-        for route in ("/", "/api/meta", "/api/skills", "/api/fleet", "/api/reports"):
+        for route in ["/", "/api/meta", "/api/reports"] + reports:
             with self.subTest(route=route):
                 status, body = self.fetch_with_host(server, route, "evil.example.com")
                 self.assertEqual(status, 403,
@@ -2221,6 +2257,660 @@ class TestLiveOverHttp(ServerTestCase):
             self.assertEqual(conn.getresponse().status, 403)
         finally:
             conn.close()
+
+
+class HealthTestCase(ServerTestCase):
+    """Fixtures for the health report (`feat-0058`, `S-016`).
+
+    Every record shape below was read off this maintainer's real corpus on 2026-08-29 rather
+    than invented, because a fixture that agrees only with the ingester proves the two agree
+    and nothing about whether either matches what the harness writes. What was confirmed: a
+    hook outcome is an `attachment` whose `attachment.type` starts `hook_`, carrying
+    `hookName`, `hookEvent`, `stderr`, `exitCode`, `command`, and `durationMs`; an API error is
+    a `system` record with `subtype: api_error` carrying `error` and `retryAttempt`; and a run
+    that ended abnormally is an `assistant` record carrying `isApiErrorMessage` with
+    `apiErrorStatus`, or `isAbortedMidStream`.
+    """
+
+    def hook_record(self, uuid, sid="s1", ts="2026-08-01T10:00:00.000Z",
+                    kind="hook_non_blocking_error", exit_code=49,
+                    stderr="Failed with non-blocking status code: Python was not found",
+                    hook_name="SessionStart:startup", hook_event="SessionStart",
+                    command="python3 .agents/hooks/skill-reachability-reminder.py",
+                    duration_ms=206, tool_use_id=None):
+        """One hook outcome. `exit_code=None` omits the field, which is what the harness does
+        for a hook that contributed context rather than exiting on a status."""
+        attachment = {"type": kind, "hookName": hook_name, "hookEvent": hook_event,
+                      "toolUseID": tool_use_id or (uuid + "-tool"), "stderr": stderr,
+                      "stdout": ""}
+        if exit_code is not None:
+            attachment["exitCode"] = exit_code
+            attachment["command"] = command
+            attachment["durationMs"] = duration_ms
+        return {"type": "attachment", "uuid": uuid, "parentUuid": None, "sessionId": sid,
+                "timestamp": ts, "cwd": "D:\\demo", "gitBranch": "main",
+                "entrypoint": "claude-desktop", "attachment": attachment}
+
+    def api_error_record(self, uuid, sid="s1", ts="2026-08-01T10:00:00.000Z", attempt=1,
+                         message="Connection error."):
+        return {"type": "system", "subtype": "api_error", "level": "error", "uuid": uuid,
+                "parentUuid": None, "sessionId": sid, "timestamp": ts, "cwd": "D:\\demo",
+                "gitBranch": "main", "entrypoint": "claude-desktop",
+                "error": {"message": message, "status": 500, "formatted": message},
+                "retryInMs": 607, "retryAttempt": attempt, "maxRetries": 10,
+                "source": "request_retry"}
+
+    def abnormal_record(self, uuid, sid="s1", ts="2026-08-01T10:00:00.000Z",
+                        api_error=True, status=429, aborted=False, error="rate_limit"):
+        record = self.record(uuid, sid=sid, ts=ts)
+        if api_error:
+            record["isApiErrorMessage"] = True
+            record["apiErrorStatus"] = status
+            record["error"] = error
+        if aborted:
+            record["isAbortedMidStream"] = True
+        return record
+
+    def compact_record(self, uuid, sid="s1", ts="2026-08-01T10:00:00.000Z"):
+        return {"type": "system", "subtype": "compact_boundary", "uuid": uuid,
+                "parentUuid": None, "sessionId": sid, "timestamp": ts, "cwd": "D:\\demo",
+                "gitBranch": "main", "entrypoint": "claude-desktop",
+                "content": "Conversation compacted",
+                "compactMetadata": {"trigger": "auto", "preTokens": 999216}}
+
+    def health(self, project=None):
+        conn = db.connect(self.store)
+        try:
+            return serve.health_report(conn, project)
+        finally:
+            conn.close()
+
+
+class TestHealthHookFailures(HealthTestCase):
+    """S-016, first part: a hook failure with its session, its time, and its exit status."""
+
+    def test_s016_a_hook_failure_is_reported_with_its_session_time_exit_status_and_output(
+            self):
+        """S-016's Then, over a hook, field by field. The exit status is named in the
+        scenario's own wording, which is why it is asserted as a value rather than as
+        presence."""
+        self.build_store([self.hook_record("h1", sid="s1",
+                                           ts="2026-08-01T10:00:00.000Z")])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+        failure = payload["hook_failures"][0]
+        self.assertEqual(failure["session_id"], "s1")
+        self.assertEqual(failure["ts"], "2026-08-01T10:00:00.000Z")
+        self.assertEqual(failure["exit_code"], 49)
+        self.assertEqual(failure["hook_name"], "SessionStart:startup")
+        self.assertEqual(failure["hook_event"], "SessionStart")
+        self.assertEqual(failure["command"],
+                         "python3 .agents/hooks/skill-reachability-reminder.py")
+        self.assertIn("Python was not found", failure["detail"])
+
+    def test_s016_a_hook_that_exited_zero_is_a_run_and_not_a_failure(self):
+        """The two must not collapse into each other. A report that counted every hook record
+        as a failure would read as 296 failures on this maintainer's corpus rather than 14,
+        and one that counted none would read as zero: both are one predicate away."""
+        self.build_store([
+            self.hook_record("h1", kind="hook_success", exit_code=0, stderr=""),
+            self.hook_record("h2", kind="hook_non_blocking_error", exit_code=49),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_events"], 2)
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+        self.assertEqual([row["kind"] for row in payload["hook_failures"]],
+                         ["hook_non_blocking_error"])
+
+    def test_s016_the_hook_denominator_counts_hooks_and_not_every_health_record(self):
+        """`hook_events` is the denominator the page prints beside a zero-failure result:
+        "None recorded, out of N hook records in scope." It is the number a reader uses to
+        decide whether that zero means anything, so it has to be hooks.
+
+        Every other fixture in this class is made of hook records alone, where counting hooks
+        and counting everything give the same answer. This one deliberately mixes kinds, which
+        is the only shape that can tell the two apart: on this maintainer's corpus the wrong
+        rule reads 347 rather than 298, and every assertion elsewhere still passes.
+        """
+        self.build_store([
+            self.hook_record("h1", kind="hook_success", exit_code=0, stderr=""),
+            self.hook_record("h2", kind="hook_non_blocking_error", exit_code=49),
+            self.api_error_record("e1"),
+            self.abnormal_record("r1"),
+            self.compact_record("c1"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_events"], 2,
+                         "the hook denominator counted records that are not hooks, so a "
+                         "zero-failure result is judged against the wrong population")
+        self.assertEqual(payload["totals"]["events"], 4,
+                         "the unrestricted event count went missing while hooks were "
+                         "filtered, so the two figures no longer describe the same corpus")
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+
+    def test_s016_the_affected_session_count_is_the_union_of_every_kind_of_trouble(self):
+        """A headline figure with no test is a headline figure that can be anything.
+
+        `sessions_affected` is rendered beside the counts as "sessions with a health record",
+        and it is a union over two populations that overlap: the sessions events touched and
+        the sessions abnormal runs touched. Two things it must not be, and both leave every
+        other assertion in this file green: the event half alone, which drops a session whose
+        only trouble was an abnormal run, and a count of events, which is not a count of
+        sessions at all.
+
+        Built so that no two of the three candidate answers agree, which is the only shape
+        that can tell them apart: five health events fall in three sessions, and a fourth
+        session is reached only through an abnormal run. So the union is 4, the event half
+        alone is 3, and the event count is 5, and a fixture where any two of those coincided
+        would pass under the wrong rule.
+        """
+        self.build_store([
+            self.hook_record("h1", sid="s1", ts="2026-08-01T10:00:01.000Z",
+                             kind="hook_non_blocking_error", exit_code=49),
+            self.hook_record("h2", sid="s2", ts="2026-08-01T10:00:02.000Z",
+                             kind="hook_non_blocking_error", exit_code=49),
+            self.api_error_record("e1", sid="s2", ts="2026-08-01T10:00:03.000Z"),
+            self.api_error_record("e2", sid="s3", ts="2026-08-01T10:00:04.000Z"),
+            self.api_error_record("e3", sid="s3", ts="2026-08-01T10:00:05.000Z"),
+            self.abnormal_record("r1", sid="s4", ts="2026-08-01T10:00:06.000Z"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["sessions_affected"], 4,
+                         "the affected-session count is not the union of the four sessions "
+                         "in trouble, so the page's headline names the wrong number")
+        self.assertEqual(payload["totals"]["events"], 5,
+                         "five health events over three sessions, plus an abnormal run in a "
+                         "fourth: if this figure equals the count above, the headline is "
+                         "counting events and not sessions")
+        self.assertEqual(payload["totals"]["abnormal_runs"], 1,
+                         "s4 reaches the union only through its abnormal run, so this is the "
+                         "half a rule that forgot abnormal runs would drop")
+
+    def test_s016_a_hook_with_no_exit_status_is_not_reported_as_having_succeeded(self):
+        """All 205 `hook_additional_context` records on this maintainer's corpus carry no
+        exit status at all, so a rule reading a missing status as zero would silently assert
+        success for two thirds of every hook record in the store."""
+        self.build_store([self.hook_record("h1", kind="hook_additional_context",
+                                           exit_code=None, stderr="")])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_events"], 1)
+        self.assertEqual(payload["totals"]["hook_failures"], 0)
+        ledger = {row["kind"]: row for row in payload["kinds"]}
+        self.assertEqual(ledger["hook_additional_context"]["events"], 1)
+        conn = db.connect(self.store)
+        try:
+            self.assertIsNone(serve.health_events(conn)[0]["exit_code"],
+                              "a missing exit status was invented rather than left "
+                              "unrecorded")
+        finally:
+            conn.close()
+
+    def test_s016_a_kind_naming_an_error_is_a_failure_even_with_no_exit_status(self):
+        """The half of the rule an exit-code test cannot reach. A hook whose record names an
+        error and carries no status is a failure the corpus told us about directly."""
+        self.build_store([self.hook_record("h1", kind="hook_blocking_error",
+                                           exit_code=None, stderr="blew up")])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+        self.assertEqual(payload["hook_failures"][0]["kind"], "hook_blocking_error")
+
+    def test_s016_a_hook_that_exited_non_zero_is_a_failure_whatever_its_kind_is_called(self):
+        """The other half, and the one every other test here reached only by accident.
+
+        Found by mutation: deleting the exit-status branch outright left every assertion in
+        this file green, because every failing fixture used a kind whose name contains
+        "error" and the kind rule alone still classified it. On this corpus the two halves
+        agree, which is exactly why nothing noticed. The scenario names the exit status, so
+        the case where only the status says so has to be constructed deliberately.
+        """
+        self.build_store([self.hook_record("h1", kind="hook_success", exit_code=3,
+                                           stderr="the hook fell over")])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 1,
+                         "a hook that exited non-zero was read as a success because its "
+                         "record is not called an error")
+        failure = payload["hook_failures"][0]
+        self.assertEqual(failure["kind"], "hook_success")
+        self.assertEqual(failure["exit_code"], 3)
+
+
+class TestHealthApiRetries(HealthTestCase):
+    """S-016, second part: an API error with its retry count."""
+
+    def test_s016_a_retried_api_error_is_reported_with_its_attempt_count(self):
+        """The scenario names the retry count, so the figure is asserted as a number. A report
+        that listed four attempts as four unrelated errors would state the same facts and
+        answer a different question."""
+        self.build_store([
+            self.api_error_record(f"e{n}", sid="s1", attempt=n,
+                                  ts=f"2026-08-01T10:00:0{n}.000Z")
+            for n in (1, 2, 3, 4)
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["api_errors"], 4)
+        self.assertEqual(payload["totals"]["retry_episodes"], 1)
+        self.assertEqual(payload["totals"]["worst_attempts"], 4)
+        episode = payload["retry_episodes"][0]
+        self.assertEqual(episode["session_id"], "s1")
+        self.assertEqual(episode["attempts"], 4)
+        self.assertEqual(episode["events"], 4)
+        self.assertEqual(episode["first_ts"], "2026-08-01T10:00:01.000Z")
+        self.assertEqual(episode["last_ts"], "2026-08-01T10:00:04.000Z")
+        self.assertIn("Connection error", episode["detail"])
+
+    def test_s016_a_retry_count_that_stops_rising_starts_a_new_episode(self):
+        """Two requests that each took two attempts are two episodes of two, not one of four
+        and not four of one. Nothing but the counter resetting separates them."""
+        self.build_store([
+            self.api_error_record("e1", attempt=1, ts="2026-08-01T10:00:01.000Z"),
+            self.api_error_record("e2", attempt=2, ts="2026-08-01T10:00:02.000Z"),
+            self.api_error_record("e3", attempt=1, ts="2026-08-01T11:00:01.000Z"),
+            self.api_error_record("e4", attempt=2, ts="2026-08-01T11:00:02.000Z"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["api_errors"], 4)
+        self.assertEqual(payload["totals"]["retry_episodes"], 2)
+        self.assertEqual([episode["attempts"] for episode in payload["retry_episodes"]],
+                         [2, 2])
+        self.assertEqual(payload["totals"]["worst_attempts"], 2)
+
+    def test_s016_an_error_that_was_retried_and_then_succeeded_is_still_reported(self):
+        """The acceptance criterion's "whether or not it eventually succeeded". The session
+        goes on to do ordinary work after the retries, and the episode is reported with its
+        attempt count all the same, because the interesting signal is the cost of the request
+        rather than its verdict."""
+        self.build_store([
+            self.api_error_record("e1", sid="s1", attempt=1,
+                                  ts="2026-08-01T10:00:01.000Z"),
+            self.api_error_record("e2", sid="s1", attempt=2,
+                                  ts="2026-08-01T10:00:02.000Z"),
+            self.record("a1", sid="s1", ts="2026-08-01T10:00:03.000Z"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["retry_episodes"], 1)
+        self.assertEqual(payload["retry_episodes"][0]["attempts"], 2)
+        self.assertEqual(payload["totals"]["abnormal_runs"], 0,
+                         "an ordinary message that followed retries was read as a failure")
+        self.assertFalse(payload["empty"])
+
+
+class TestHealthAbnormalRuns(HealthTestCase):
+    """S-016, third part: a run that ended abnormally."""
+
+    def test_s016_a_run_that_ended_abnormally_is_reported_as_such(self):
+        """Both markers the corpus carries, asserted separately, because they sit on different
+        fields and a report reading only one would be silently half-blind. 26 records carry
+        the first on this maintainer's corpus and 2 carry the second."""
+        self.build_store([
+            self.abnormal_record("m1", sid="s1", ts="2026-08-01T10:00:01.000Z",
+                                 api_error=True, status=429, error="rate_limit"),
+            self.abnormal_record("m2", sid="s1", ts="2026-08-01T10:00:02.000Z",
+                                 api_error=False, aborted=True),
+            self.record("a1", sid="s1", ts="2026-08-01T10:00:03.000Z"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["abnormal_runs"], 2)
+        runs = {run["uuid"]: run for run in payload["abnormal_runs"]}
+        self.assertEqual(runs["m1"]["markers"], ["API error"])
+        self.assertEqual(runs["m1"]["status"], "429")
+        self.assertEqual(runs["m1"]["session_id"], "s1")
+        self.assertEqual(runs["m1"]["ts"], "2026-08-01T10:00:01.000Z")
+        self.assertEqual(runs["m1"]["detail"], "rate_limit")
+        self.assertEqual(runs["m2"]["markers"], ["aborted mid stream"])
+        self.assertNotIn("a1", runs, "an ordinary message was reported as an abnormal end")
+
+    def test_s016_a_run_carrying_both_markers_is_reported_with_both(self):
+        """A record may carry both, which is why the report names them as a list rather than
+        picking one and calling it the kind."""
+        self.build_store([self.abnormal_record("m1", api_error=True, aborted=True)])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["abnormal_runs"], 1)
+        self.assertEqual(payload["abnormal_runs"][0]["markers"],
+                         ["API error", "aborted mid stream"])
+
+
+class TestHealthCounting(HealthTestCase):
+    """The counting rule, which is the difference between 14 hook failures and 19."""
+
+    def replayed_hook_failure(self):
+        """One hook failure, written into two transcripts under two session ids.
+
+        This is what a forked or resumed session does: it replays earlier records verbatim
+        into a new transcript. On this maintainer's corpus 428 `health_event` rows carry 345
+        distinct events for exactly this reason, and the 19 rows that look like hook failures
+        are 14 real ones.
+        """
+        failure = self.hook_record("h1", sid="s1", ts="2026-08-01T10:00:00.000Z")
+        self.write_transcript([failure], name="original.jsonl")
+        forked = json.loads(json.dumps(failure))
+        forked["sessionId"] = "s2"
+        self.write_transcript([forked], name="forked.jsonl")
+        return ingest.ingest(self.corpus, self.store)
+
+    def test_s016_a_failure_replayed_into_a_forked_session_is_counted_once(self):
+        """The trap this component has hit before, arriving at a table with no
+        canonical-versus-occurrence split to lean on. Counting rows overstates by however much
+        history has been replayed."""
+        self.replayed_hook_failure()
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 1,
+                         "a replayed failure was counted twice")
+        self.assertEqual(payload["totals"]["events"], 1)
+        self.assertEqual(payload["totals"]["records"], 2,
+                         "the report no longer says how many records the event was written "
+                         "as, so the gap it deduplicated is invisible")
+        failure = payload["hook_failures"][0]
+        self.assertEqual(failure["sessions"], ["s1", "s2"],
+                         "the report names one session and hides the other")
+        self.assertEqual(failure["replays"], 1)
+
+    def test_s016_the_record_count_equals_the_rows_the_store_holds(self):
+        """The identity that makes the deduplication checkable rather than asserted: the
+        events reported, expanded by their replays, are exactly the rows in the store."""
+        self.replayed_hook_failure()
+        conn = db.connect(self.store)
+        try:
+            rows = conn.execute("SELECT COUNT(*) AS n FROM health_event").fetchone()["n"]
+        finally:
+            conn.close()
+
+        self.assertEqual(self.health()["totals"]["records"], rows)
+
+    def test_s016_an_abnormal_run_replayed_into_a_forked_session_names_both_sessions(self):
+        """The same replay, over the other source. `message` is canonical per uuid, so the
+        count was right without anything being done about it, and the session list was not:
+        found by mutation, which showed that dropping the occurrence lookup entirely and
+        naming only the canonical row's own session left every assertion here green. One of
+        the 28 abnormal runs on this maintainer's corpus is in that position.
+        """
+        abnormal = self.abnormal_record("m1", sid="s1", ts="2026-08-01T10:00:00.000Z")
+        self.write_transcript([abnormal], name="original.jsonl")
+        forked = json.loads(json.dumps(abnormal))
+        forked["sessionId"] = "s2"
+        self.write_transcript([forked], name="forked.jsonl")
+        ingest.ingest(self.corpus, self.store)
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["abnormal_runs"], 1,
+                         "a replayed abnormal run was counted twice")
+        run = payload["abnormal_runs"][0]
+        self.assertEqual(run["sessions"], ["s1", "s2"],
+                         "the report names one session and hides the other, so a run "
+                         "replayed into a fork looks like it happened in one place")
+        self.assertEqual(run["replays"], 1)
+
+    def test_s016_two_genuinely_distinct_failures_are_not_collapsed_into_one(self):
+        """The other direction, and the one an over-eager identity would break. Two failures
+        differing only in when they happened are two failures."""
+        self.build_store([
+            self.hook_record("h1", sid="s1", ts="2026-08-01T10:00:01.000Z"),
+            self.hook_record("h2", sid="s1", ts="2026-08-01T10:00:02.000Z"),
+        ])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 2)
+        self.assertEqual(payload["totals"]["events"], 2)
+
+
+class TestHealthEmptyAndBounds(HealthTestCase):
+    """What the report says when it has nothing to say, and what it says it cannot see."""
+
+    def test_s016_a_corpus_with_no_health_events_is_reported_as_explicitly_empty(self):
+        """A panel of four zeroes and no tables is indistinguishable from one that failed to
+        load, and telling a reader that nothing failed is the whole of what this report does
+        on a healthy corpus."""
+        self.build_store([self.record("a1", sid="s1")])
+
+        payload = self.health()
+
+        self.assertTrue(payload["empty"])
+        self.assertEqual(payload["totals"]["events"], 0)
+        self.assertEqual(payload["hook_failures"], [])
+        self.assertEqual(payload["retry_episodes"], [])
+        self.assertEqual(payload["abnormal_runs"], [])
+        self.assertTrue(payload["blind_spot"],
+                        "an empty report drops the sentence saying what it cannot see, which "
+                        "is the one report where that sentence matters most")
+
+    def test_s016_health_records_that_are_not_failures_still_read_as_an_empty_report(self):
+        """`empty` is not "no records". A corpus can carry hook outcomes that all succeeded,
+        and that is a clean health report rather than a populated one."""
+        self.build_store([
+            self.hook_record("h1", kind="hook_success", exit_code=0, stderr=""),
+            self.compact_record("c1"),
+        ])
+
+        payload = self.health()
+
+        self.assertTrue(payload["empty"], "records that are not failures were read as some")
+        self.assertEqual(payload["totals"]["events"], 2)
+        self.assertEqual(payload["totals"]["hook_failures"], 0)
+
+    def test_s016_the_report_states_that_a_failure_leaving_no_record_is_invisible_to_it(self):
+        """Asserted as a served field the page consumes, not as a word appearing somewhere in
+        the source. This repository has twice had an assertion on a bare word satisfied by a
+        docstring and broken by a comment, so the claim here is that the sentence reaches a
+        reader, which is a statement about the wiring rather than about the prose."""
+        self.build_store([self.record("a1", sid="s1")])
+        server = self.serve_on_loopback(roster=[])
+
+        _, payload = self.fetch_json(server, "/api/health")
+
+        self.assertEqual(payload["blind_spot"], serve.HEALTH_BLIND_SPOT)
+        self.assertIn("data.blind_spot", renderer_source("health"),
+                      "the page no longer renders the qualification the server serves, so a "
+                      "reader meets the figures without it")
+
+        # The equality above moves with the constant, so on its own it proves the sentence
+        # arrives and never what it says: rewriting `HEALTH_BLIND_SPOT` to "Everything is
+        # fine." satisfies it completely, and the page then prints that in the exact slot the
+        # caveat is reserved for. These two assert the claim rather than the delivery. They
+        # are on the constant itself, not on a scan of the file, so the failure that has bitten
+        # this component twice, a bare phrase matched inside a comment or a docstring, cannot
+        # reach them.
+        stated = payload["blind_spot"].lower()
+        self.assertIn("record", stated,
+                      "the blind-spot sentence does not mention records, so it cannot be "
+                      "saying that a failure leaving none is invisible here")
+        self.assertIn("not evidence", stated,
+                      "the blind-spot sentence never tells the reader what they may not "
+                      "conclude, which is the whole of what the criterion asks it to say")
+
+    def test_s016_a_kind_the_report_does_not_count_is_listed_rather_than_dropped(self):
+        """A record silently dropped from a report about failures is the failure this report
+        exists to stop. Compaction is not a failure and belongs to `S-017`, and a reader must
+        be able to see that it was read and not counted."""
+        self.build_store([self.compact_record("c1"), self.hook_record("h1")])
+
+        payload = self.health()
+
+        ledger = {row["kind"]: row for row in payload["kinds"]}
+        self.assertIn("compact_boundary", ledger)
+        self.assertEqual(ledger["compact_boundary"]["events"], 1)
+        self.assertFalse(ledger["compact_boundary"]["counted"])
+        self.assertIn("S-017", ledger["compact_boundary"]["role"])
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+        self.assertEqual(payload["totals"]["api_errors"], 0)
+        self.assertEqual(payload["totals"]["abnormal_runs"], 0)
+
+    def test_s016_a_kind_the_ingester_can_write_and_this_corpus_lacks_is_listed_at_zero(self):
+        """`feat-0053`'s verification recorded that every `stop_hook_summary` record on this
+        maintainer's corpus carries empty `hookErrors` and false `preventedContinuation`, so
+        the ingester's branch for it writes no row and `prevented_continuation` is NULL
+        everywhere. **That is a bound, not a repair**, and a ledger built only from what the
+        store happens to hold would show it as nothing rather than as zero."""
+        self.build_store([self.hook_record("h1")])
+
+        ledger = {row["kind"]: row for row in self.health()["kinds"]}
+
+        self.assertIn("stop_hook_summary", ledger,
+                      "a kind the ingester can write vanished from the ledger because this "
+                      "corpus has none of it, which is what makes a bound look like an "
+                      "absence")
+        self.assertEqual(ledger["stop_hook_summary"]["events"], 0)
+        self.assertIn("bound", ledger["stop_hook_summary"]["role"])
+
+    def test_s016_a_stop_hook_summary_that_did_report_something_is_counted_as_a_failure(self):
+        """The branch that is filtered to zero on this corpus, exercised against a record the
+        ingester would actually write one for.
+
+        **This does not lift the bound and must not be read as doing so.** The corpus is where
+        the branch contributes nothing, and a fixture cannot change that; what this pins is
+        that the report classifies such a row correctly if one ever arrives, so the zero is a
+        statement about the corpus rather than about untested code.
+        """
+        self.build_store([{
+            "type": "system", "subtype": "stop_hook_summary", "uuid": "sh1",
+            "parentUuid": None, "sessionId": "s1", "timestamp": "2026-08-01T10:00:00.000Z",
+            "cwd": "D:\\demo", "gitBranch": "main", "entrypoint": "claude-desktop",
+            "hookErrors": ["Stop hook blew up"], "preventedContinuation": False,
+            "toolUseID": "t1",
+        }])
+
+        payload = self.health()
+
+        self.assertEqual(payload["totals"]["hook_failures"], 1)
+        failure = payload["hook_failures"][0]
+        self.assertEqual(failure["kind"], "stop_hook_summary")
+        self.assertEqual(failure["session_id"], "s1")
+        self.assertIn("Stop hook blew up", failure["detail"])
+
+
+class TestHealthOverHttpAndScope(HealthTestCase):
+    """The report through the real surface, and under the shell's scope selector."""
+
+    def test_s016_the_report_is_served_over_http_and_matches_the_store(self):
+        """The registry, the route, and the report have to agree. A report function nothing
+        routes to is not a report anyone can read."""
+        self.build_store([self.hook_record("h1"), self.api_error_record("e1"),
+                          self.abnormal_record("m1")])
+        server = self.serve_on_loopback(roster=[])
+
+        status, payload = self.fetch_json(server, "/api/health")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["report"], "health")
+        self.assertTrue(payload["store_present"])
+        self.assertEqual(payload["totals"], self.health()["totals"])
+        health = [r for r in serve.REPORTS if r["id"] == "health"][0]
+        self.assertEqual(health["endpoint"], "/api/health")
+        self.assertIsNone(health["owner"], "a built report still names a task that owes it")
+
+    def test_s016_the_scope_selector_restricts_the_health_report_to_one_project(self):
+        """The shell sends the selected project with every report request, so a report that
+        ignored it would leave the selector visibly present and silently inert."""
+        other = self.corpus / "D--other"
+        self.write_transcript([self.hook_record("h1", sid="s1")], name="a.jsonl")
+        self.write_transcript([self.hook_record("h2", sid="s2")], name="b.jsonl",
+                              project=other)
+        ingest.ingest(self.corpus, self.store)
+
+        everything = self.health()
+        scoped = self.health("D--demo")
+
+        self.assertEqual(everything["totals"]["hook_failures"], 2)
+        self.assertEqual(scoped["totals"]["hook_failures"], 1)
+        self.assertEqual(scoped["hook_failures"][0]["session_id"], "s1")
+        self.assertEqual(scoped["project"], "D--demo")
+
+    def test_s018_the_per_project_health_figures_sum_to_the_unrestricted_figures(self):
+        """The same arithmetic the fleet report holds, over this report's figures. Not
+        `S-016`'s, but the property the scope selector is worth having only if it has."""
+        other = self.corpus / "D--other"
+        self.write_transcript([self.hook_record("h1", sid="s1"),
+                               self.api_error_record("e1", sid="s1"),
+                               self.abnormal_record("m1", sid="s1")], name="a.jsonl")
+        self.write_transcript([self.hook_record("h2", sid="s2"),
+                               self.abnormal_record("m2", sid="s2")], name="b.jsonl",
+                              project=other)
+        ingest.ingest(self.corpus, self.store)
+
+        everything = self.health()["totals"]
+        parts = [self.health(name)["totals"] for name in ("D--demo", "D--other")]
+
+        for figure in ("events", "records", "hook_events", "hook_failures", "api_errors",
+                       "abnormal_runs"):
+            with self.subTest(figure=figure):
+                self.assertEqual(sum(part[figure] for part in parts), everything[figure],
+                                 f"the per-project {figure} no longer sum to the total")
+
+
+class TestHealthPageBehaviour(HealthTestCase):
+    """Structural assertions over the health renderer, carrying the bound `feat-0054` stated:
+    the standard library has no JavaScript engine and this repository ships no dependency to
+    add one, so these pin specific regressions rather than the page's behaviour in general.
+    """
+
+    def renderer_body(self) -> str:
+        return renderer_source("health")
+
+    def test_the_health_renderer_maps_every_returned_row_without_filtering(self):
+        """Kills the mutation that drops rows at the surface while the API still returns them.
+        An independent verification of `feat-0054` demonstrated exactly this shape: the skills
+        renderer could drop every zero-count row with the whole suite green."""
+        body = self.renderer_body()
+        for collection in ("data.hook_failures", "data.retry_episodes",
+                           "data.abnormal_runs", "data.kinds"):
+            with self.subTest(collection=collection):
+                self.assertIn(collection + ".map(", body,
+                              f"the renderer no longer maps the {collection} the API "
+                              f"returned")
+                for hostile in (".filter(", ".slice(", ".splice("):
+                    self.assertNotIn(
+                        collection + hostile, body,
+                        f"the renderer applies {hostile} to {collection} before rendering, "
+                        f"so a failure the report counted can be missing from the page")
+
+    def test_the_health_renderer_states_the_empty_case_rather_than_rendering_nothing(self):
+        """The acceptance criterion in the page's own terms: the server says `empty` and the
+        renderer has to do something with it, or a clean corpus renders as a blank panel."""
+        body = self.renderer_body()
+        self.assertIn("data.empty", body,
+                      "the renderer ignores the server's empty flag, so a corpus with no "
+                      "health events renders as a blank panel")
+        self.assertIn("data.blind_spot", body)
+        self.assertIn("data.replay_policy", body)
+
+    def test_the_health_renderer_builds_no_interactive_element_of_its_own(self):
+        """`S-019`'s enumeration is derived from one tagged construction site, and an element
+        built anywhere else escapes it. This report renders per-session rows, which is the
+        shape the guard was widened for."""
+        body = self.renderer_body()
+        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', 'el("input"',
+                          'el("select"', "addEventListener", "location.href", "window.open",
+                          "fetch("):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, body,
+                                 f"the health renderer builds {forbidden} directly, so it is "
+                                 f"outside the enumeration S-019 is proven by")
 
 
 if __name__ == "__main__":
