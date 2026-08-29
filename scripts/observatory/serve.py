@@ -185,6 +185,40 @@ def loopback_address(host: str) -> str:
     return str(address)
 
 
+def host_is_loopback(header) -> bool:
+    """Whether a `Host` header names this machine's loopback interface.
+
+    Binding a loopback address stops another machine reaching this server and does nothing
+    about a browser on this one. The `Host` header is attacker-controlled, so a page on any
+    origin can point a name it owns at 127.0.0.1, have the browser send that name here, and
+    read every route. That is DNS rebinding, and what it reads is one maintainer's entire
+    session history: session ids, project names, working directories, branches.
+
+    `feat-0054` recorded this as a local-attacker concern outside `S-022`'s wording, which
+    is about outbound connections, and left it to whichever task defined the surface's
+    boundary. This is that task.
+
+    An absent header is allowed. HTTP/1.0 clients and some command-line tools omit it, and
+    no browser does, so refusing it would break the honest callers and stop none of the
+    dishonest ones.
+    """
+    if header is None:
+        return True
+    host = str(header).strip()
+    if host.startswith("["):                  # [::1] or [::1]:8787
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:                # 127.0.0.1:8787 or name:8787
+        host = host.rsplit(":", 1)[0]
+    if not host:
+        return False
+    if host.rstrip(".").lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def skill_roster(skills_dir: Path | None = None) -> list[str]:
     """Every skill the report counts against, whether or not the corpus mentions it.
 
@@ -526,6 +560,14 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
     # -- routes -----------------------------------------------------------------------
 
     def do_GET(self) -> None:               # noqa: N802 (BaseHTTPRequestHandler's name)
+        # Before routing, not after: a rebound request must not reach a report at all.
+        if not host_is_loopback(self.headers.get("Host")):
+            return self._json({
+                "error": f"Host {self.headers.get('Host')!r} is not this machine's loopback "
+                         f"interface. This surface answers only to a loopback name, because "
+                         f"the Host header is attacker-controlled and what it would return "
+                         f"is the whole session corpus."
+            }, 403)
         parts = urlsplit(self.path)
         query = parse_qs(parts.query)
         project = (query.get("project") or [None])[0] or None

@@ -1334,6 +1334,53 @@ class TestActionBoundary(ServerTestCase):
                                  f"which is a route to a session rather than navigation or "
                                  f"a command presented for a person to run")
 
+    # The renderers and helpers permitted to build an interactive element, and what each is
+    # for. `renderNav` builds the report tabs, which are page chrome and reference no session;
+    # `actionControl` builds every session-directed control and tags each one. Anything else
+    # building a control is unreviewed surface, which is what the widened check below catches.
+    INTERACTIVE_BUILDERS = {"renderNav", "actionControl"}
+    INTERACTIVE_TAGS = ("a", "button", "form", "input", "select", "textarea")
+
+    def script_blocks(self) -> dict:
+        """Every named function body in the page's script, renderers included.
+
+        Renderers are object-literal members (`  fleet: function (data, into) {`) rather than
+        top-level declarations, so both forms are recognised. Splitting by name is what makes
+        the assertion below name the offender instead of just failing.
+        """
+        html = self.page()
+        script = html[html.index("<script>"):html.index("</script>")]
+        marks = list(re.finditer(r"\n(?:function (\w+)\(|  (\w+): function \()", script))
+        blocks = {}
+        for index, mark in enumerate(marks):
+            end = marks[index + 1].start() if index + 1 < len(marks) else len(script)
+            blocks[mark.group(1) or mark.group(2)] = script[mark.start():end]
+        return blocks
+
+    def test_s019_no_part_of_the_page_builds_a_control_outside_the_tagged_site(self):
+        """The task's Risks section says `S-019` "is one added button away from being false.
+        The enumeration test is the guard."
+
+        An outside verification showed the guard was narrower than that: it covered
+        `actionControl` and the fleet renderer, so an untagged control added to any of the
+        other four renderers survived the whole suite. That is not hypothetical for long,
+        because `feat-0056`'s waves report renders per-session rows.
+
+        So the check is over the whole script and names which function offended. A renderer
+        that grows a control appears in this set and fails without the test being edited.
+        """
+        blocks = self.script_blocks()
+        self.assertIn("actionControl", blocks, "the script no longer parses as expected")
+
+        building = {name for name, body in blocks.items()
+                    if any(f'el("{tag}"' in body for tag in self.INTERACTIVE_TAGS)}
+
+        self.assertEqual(
+            building, self.INTERACTIVE_BUILDERS,
+            "a function outside the permitted set builds an interactive element. Every "
+            "session-directed control must come from actionControl, which tags it, or "
+            "S-019's enumeration no longer covers the page")
+
     def test_s019_the_actions_reach_the_page_from_the_server_registry(self):
         """The page must not carry its own copy of the list, or the two drift and the
         enumeration stops meaning anything."""
@@ -1394,6 +1441,83 @@ class TestActionBoundary(ServerTestCase):
         html = self.page()
         start = html.index("  fleet: function (data, into) {")
         return html[start:html.index("  skills: function (data, into) {", start)]
+
+
+class TestHostHeader(ServerTestCase):
+    """A rebound request must not reach a report.
+
+    Binding a loopback address stops another machine reaching this server and does nothing
+    about a browser on this one. The `Host` header is attacker-controlled, so a page on any
+    origin can point a name it owns at 127.0.0.1 and read every route here, and what it reads
+    is one maintainer's whole session history.
+
+    `feat-0054` recorded this as outside `S-022`'s wording, which is about outbound
+    connections, and left it to whichever task defined the surface's boundary. It was then
+    missed by that task and found by an outside verification, which demonstrated a foreign
+    `Host` returning 155 sessions with their working directories.
+    """
+
+    def fetch_with_host(self, server, path, host_header):
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", path, headers={"Host": host_header})
+            response = conn.getresponse()
+            return response.status, response.read()
+        finally:
+            conn.close()
+
+    def test_a_foreign_host_header_is_refused_on_every_route(self):
+        self.build_store([self.record("a1", sid="s1", skill="doc-sync")])
+        server = self.serve_on_loopback(roster=[])
+
+        for route in ("/", "/api/meta", "/api/skills", "/api/fleet", "/api/reports"):
+            with self.subTest(route=route):
+                status, body = self.fetch_with_host(server, route, "evil.example.com")
+                self.assertEqual(status, 403,
+                                 f"{route} answered a request naming another origin's host")
+                self.assertNotIn(b"doc-sync", body,
+                                 "the refusal leaked report content anyway")
+
+    def test_a_loopback_host_header_is_served(self):
+        """The refusal must not break the honest caller, which is a browser on this machine
+        sending the address or name it was given."""
+        self.build_store([self.record("a1", sid="s1", skill="doc-sync")])
+        server = self.serve_on_loopback(roster=[])
+        port = server.server_address[1]
+
+        for header in (f"127.0.0.1:{port}", "127.0.0.1", "localhost", f"localhost:{port}",
+                       "[::1]", f"[::1]:{port}", "127.0.0.2"):
+            with self.subTest(host=header):
+                status, _ = self.fetch_with_host(server, "/api/skills", header)
+                self.assertEqual(status, 200, f"a loopback host {header!r} was refused")
+
+    def test_the_host_check_decides_the_header_without_a_server(self):
+        """The unit form, so every shape is covered cheaply and the parse is pinned."""
+        for header in (None, "localhost", "localhost.", "LOCALHOST", "127.0.0.1",
+                       "127.0.0.1:8787", "127.1.2.3", "[::1]", "[::1]:8787", "::1"):
+            with self.subTest(allowed=header):
+                self.assertTrue(serve.host_is_loopback(header), f"{header!r} was refused")
+        # The suffix forms are here because a mutation replacing the equality with
+        # `endswith("localhost")` survived without them. `attacker.localhost` and
+        # `notlocalhost` are what that mutation would let through, and the strict equality
+        # is a decision this pins rather than a detail: widening to `*.localhost` later
+        # means changing the code and this list together, deliberately.
+        for header in ("evil.example.com", "evil.example.com:8787", "example.invalid",
+                       "192.168.1.10", "10.0.0.1", "[2001:db8::1]", "", "   ",
+                       "localhost.evil.com", "attacker.localhost", "notlocalhost",
+                       "0.0.0.0"):
+            with self.subTest(refused=header):
+                self.assertFalse(serve.host_is_loopback(header), f"{header!r} was allowed")
+
+    def test_the_check_runs_before_the_route_is_resolved(self):
+        """A rebound request must not reach a report even on a route that does not exist, or
+        the 404 becomes an oracle for which routes are there."""
+        server = self.serve_on_loopback(roster=[])
+        status, _ = self.fetch_with_host(server, "/api/nothing-here", "evil.example.com")
+        self.assertEqual(status, 403,
+                         "an unknown route answered 404 rather than refusing the host, "
+                         "which tells a rebound page which routes exist")
 
 
 class TestControlDegradesWithoutTheHarness(ServeTestCase):

@@ -156,10 +156,14 @@ lines would report every one of them twice.
 - **It never reaches the network.** No rate lookup, no font, no chart library, no content delivery
   network. The page carries its own styles and its own script inline and requests no subresource at
   all, so it renders with the network unavailable, and every chart is hand-rolled inline SVG.
-- **It never binds beyond loopback.** `serve.py` refuses any address that is not a loopback
-  address, before it binds rather than after. A server on all interfaces would publish the whole
-  session corpus to whatever network the machine is on, and that is the one failure here with a
-  consequence outside this repository.
+- **It never binds beyond loopback, and never answers to another origin's name.** `serve.py`
+  refuses any address that is not a loopback address, before it binds rather than after. A server
+  on all interfaces would publish the whole session corpus to whatever network the machine is on,
+  and that is the one failure here with a consequence outside this repository. Binding loopback
+  stops another machine and does nothing about a browser on this one, so the `Host` header is
+  checked too: a page on any origin can point a name it owns at `127.0.0.1` and have your browser
+  send that name here, which is DNS rebinding. A request naming anything but a loopback address or
+  `localhost` is refused with 403 before it reaches a report.
 - **It never writes to anything the harness owns.** Transcripts are opened read-only and the store
   lives outside the corpus. The page performs no write at all: every route is a read, and a request
   method that exists to change something is declined.
