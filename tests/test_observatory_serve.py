@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -1620,6 +1621,512 @@ class TestControlDegradesWithoutTheHarness(ServeTestCase):
 
         self.assertEqual(counts.get("agent-observatory"), 0,
                          "the new skill is missing from the roster the report counts against")
+
+
+class TestLiveWatcher(ServeTestCase):
+    """S-013 and S-015 at the level where they are decidable.
+
+    The watcher is driven a tick at a time rather than left to its thread, because a test
+    that sleeps and hopes is a test that fails on a slow machine and passes on a fast one
+    while proving the same nothing. The thread is exercised once, end to end, in
+    `TestLiveOverHttp`.
+    """
+
+    def watcher(self, poll_seconds=0.01):
+        return serve.LiveWatcher(self.store, self.corpus,
+                                 self.tmp / "events.jsonl", poll_seconds)
+
+    def append_record(self, uuid, sid="s-live", name="session.jsonl"):
+        path = self.project / name
+        with path.open("ab") as handle:
+            handle.write((json.dumps(self.record(uuid, sid=sid)) + "\n").encode("utf-8"))
+
+    def spool(self, *events):
+        path = self.tmp / "events.jsonl"
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            for event in events:
+                handle.write(json.dumps(event) + "\n")
+        return path
+
+    def test_s013_appended_records_produce_an_event_without_anyone_asking(self):
+        """S-013's Then: the open report reflects the new work without being requested
+        again. The event is what carries "without being requested", and the store holding
+        the record is what makes the re-read show it."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+
+        self.assertIsNone(watcher.poll_once(),
+                          "the first look folded nothing in, so it had nothing to announce")
+        self.append_record("a2")
+        event = watcher.poll_once()
+
+        self.assertIsNotNone(event, "an appended record produced no event")
+        self.assertEqual(event["type"], "change")
+        self.assertEqual(event["source"], "corpus")
+        self.assertEqual(event["records"], 1, "the appended record was not folded in")
+
+        conn = db.connect(self.store)
+        try:
+            seen = conn.execute("SELECT COUNT(*) AS n FROM message").fetchone()["n"]
+        finally:
+            conn.close()
+        self.assertEqual(seen, 2, "the store does not hold the record the event announced")
+
+    def test_an_unchanged_corpus_is_not_ingested_at_all(self):
+        """The cheap fingerprint exists so an idle tick costs 38 milliseconds instead of
+        167. Removing that guard leaves the *output* correct, because a second guard drops
+        an event with no records, so only counting the ingests catches it."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        calls = []
+        real = ingest.ingest
+        ingest.ingest = lambda *a, **kw: (calls.append(a), real(*a, **kw))[1]
+        try:
+            watcher.poll_once()
+            watcher.poll_once()
+        finally:
+            ingest.ingest = real
+
+        self.assertEqual(calls, [],
+                         "an unchanged corpus was ingested anyway, so the cheap probe is "
+                         "not saving the work it exists to save")
+
+    def test_s013_an_unchanged_corpus_produces_no_event(self):
+        """An event per tick would make the page re-fetch forever and would tell a reader
+        nothing. Silence is the correct output for nothing happening."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        self.assertIsNone(watcher.poll_once())
+        self.assertIsNone(watcher.poll_once())
+
+    def test_s014_the_watcher_works_with_no_spool_present_and_reports_no_error(self):
+        """S-014: with no optional source configured, the report still reflects the work and
+        nothing reports an error attributable to the missing source."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = serve.LiveWatcher(self.store, self.corpus,
+                                    self.tmp / "nothing-here.jsonl", 0.01)
+        watcher.poll_once()
+        self.append_record("a2")
+
+        event = watcher.poll_once()
+
+        self.assertIsNotNone(event, "the default path needs the optional source to work")
+        self.assertEqual(event["source"], "corpus")
+        self.assertEqual(event["hook_events"], 0)
+        self.assertFalse((self.tmp / "nothing-here.jsonl").exists(),
+                         "looking for an absent spool created one")
+
+    def test_s014_the_stated_delay_is_a_number_and_the_page_and_document_agree(self):
+        """S-014 requires the delay to be stated rather than left as "slower". A reader
+        cannot judge slower without knowing by how much, so the number lives in one place
+        and both the page and the document take it from there."""
+        self.assertIsInstance(serve.DEFAULT_POLL_SECONDS, float)
+        self.assertGreater(serve.DEFAULT_POLL_SECONDS, 0)
+
+        page = UI_INDEX.read_text(encoding="utf-8")
+        self.assertIn("poll_seconds", page,
+                      "the page does not state the delay it was told")
+        # Defining live() and never calling it leaves every other assertion here true and
+        # the page dead, which is what commenting out the call proved.
+        boot = page[page.index("function boot("):]
+        # Anchored, not a substring: commenting the call out leaves "live();" inside
+        # "// live();" and satisfied the first version of this assertion.
+        self.assertRegex(boot, r"(?m)^\s*live\(\);",
+                         "boot() never opens the live channel, so the page defines it and "
+                         "then does not follow anything")
+
+        doc = (REPO_ROOT / "docs" / "OBSERVATORY.md").read_text(encoding="utf-8")
+        stated = f"{serve.DEFAULT_POLL_SECONDS:g}"
+        # The number in a sentence, not the digit anywhere. Asserting on the bare digit
+        # passed against every date in the document, which is an assertion that cannot
+        # fail, and this component has now shipped two of those.
+        self.assertIn(f"within about {stated} seconds", doc,
+                      f"docs/OBSERVATORY.md does not state the {stated} second delay in a "
+                      f"sentence, so a reader is told the default path is slower without "
+                      f"being told by how much")
+
+    def test_s015_an_event_from_the_spool_is_attributed_to_the_hook(self):
+        """S-015: events are attributed to the source they arrived from. There are exactly
+        two, and the difference is what a reader needs to know whether the optional source
+        is doing anything."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        self.append_record("a2")
+        self.spool({"ts": "2026-08-29T00:00:00Z", "source": "hook", "session_id": "s-live"})
+        event = watcher.poll_once()
+
+        self.assertEqual(event["source"], "hook")
+        self.assertEqual(event["hook_events"], 1)
+
+    def test_s015_the_optional_source_changes_no_figure(self):
+        """S-015's Then, as an equality rather than a description: the reported figures with
+        the source active are identical to a corpus-only run over the same work.
+
+        It holds by construction because an event is a hint to look and never a datum, and
+        this is the test that would catch anyone making it a datum.
+        """
+        records = [self.record("a1", sid="s1", skill="doc-sync"),
+                   self.record("a2", sid="s1", skill="doc-sync"),
+                   self.record("a3", sid="s1", skill="new-task")]
+
+        # Run A: the corpus alone, ingested the ordinary way.
+        self.build_store(records)
+        corpus_only = self.report(roster=["doc-sync", "new-task"])
+
+        # Run B: the same work, a fresh store, and the hook shouting about all of it.
+        second = self.tmp / "with-events.db"
+        watcher = serve.LiveWatcher(second, self.corpus, self.tmp / "events.jsonl", 0.01)
+        self.spool(*[{"ts": "2026-08-29T00:00:0%dZ" % i, "source": "hook",
+                      "session_id": "s1"} for i in range(3)])
+        watcher.poll_once()
+        watcher.poll_once()
+
+        conn = db.connect(second)
+        try:
+            with_events = serve.skills_report(conn, None, ["doc-sync", "new-task"])
+        finally:
+            conn.close()
+
+        self.assertEqual(corpus_only["total_uses"], 3,
+                         "the fixture no longer carries the work this compares")
+        self.assertEqual(self.uses(with_events), self.uses(corpus_only),
+                         "the optional source changed a figure, which S-015 forbids")
+        self.assertEqual(with_events["total_uses"], corpus_only["total_uses"])
+
+    def test_s015_the_reconciliation_rule_is_stated_where_a_reader_meets_it(self):
+        """The rule is the whole defence against double counting, so it is served rather
+        than left in a comment somebody has to find."""
+        self.assertIn("hint to look", serve.EVENT_POLICY)
+        self.assertIn("never a datum", serve.EVENT_POLICY)
+
+    def test_the_spool_is_consumed_so_one_event_does_not_fire_forever(self):
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+        self.spool({"source": "hook"})
+
+        first = watcher.poll_once()
+        second = watcher.poll_once()
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second, "the same spooled event fired twice")
+
+    def test_a_half_written_spool_line_is_left_for_the_next_look(self):
+        """The hook writes from inside a live session and may be mid-append, so the spool
+        reader stops at the last newline for the same reason the corpus reader does."""
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher()
+        watcher.poll_once()
+
+        path = self.tmp / "events.jsonl"
+        path.write_text('{"source": "hook"}\n{"source": "ho', encoding="utf-8",
+                        newline="\n")
+        first = watcher.poll_once()
+        self.assertEqual(first["hook_events"], 1, "the partial line was consumed")
+
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write('ok"}\n')
+        self.assertEqual(watcher.poll_once()["hook_events"], 1,
+                         "the completed line was skipped")
+
+    def test_the_watcher_runs_only_while_something_is_listening(self):
+        """A background loop that polls with nobody watching is a cost with no reader, and
+        this component's whole posture is that it costs nothing when unused."""
+        watcher = self.watcher(poll_seconds=0.01)
+        self.assertEqual(watcher.listeners(), 0)
+        self.assertIsNone(watcher._thread)
+
+        channel = watcher.subscribe()
+        self.assertEqual(watcher.listeners(), 1)
+        self.assertTrue(watcher._thread.is_alive())
+
+        watcher.unsubscribe(channel)
+        watcher._thread.join(timeout=5)
+        self.assertEqual(watcher.listeners(), 0)
+        self.assertFalse(watcher._thread.is_alive(),
+                         "the watcher kept polling after the last page closed")
+
+    def test_a_fingerprint_is_cheaper_than_an_ingest_and_notices_both_kinds_of_change(self):
+        """The probe has to see an append that keeps the size the same and a rewrite that
+        keeps the timestamp the same, or the watcher misses work."""
+        self.build_store([self.record("a1", sid="s-live")])
+        spool = self.tmp / "events.jsonl"
+        before = serve.corpus_fingerprint(self.corpus, spool)
+
+        self.append_record("a2")
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), before)
+
+        after_corpus = serve.corpus_fingerprint(self.corpus, spool)
+        self.spool({"source": "hook"})
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), after_corpus,
+                            "a spooled event did not change the fingerprint")
+
+    def test_an_absent_corpus_is_an_empty_fingerprint_rather_than_a_crash(self):
+        """Both degenerate inputs, and a bound worth stating.
+
+        `pathlib` yields nothing for a missing directory and for a path that is a file, on
+        this platform, rather than raising. So the `except OSError` inside
+        `corpus_fingerprint` is a guard for a case nothing here reaches: removing it changes
+        no observable behaviour and no test can see the difference. That is recorded rather
+        than covered up, because a mutation surviving is only acceptable when the reason is
+        known.
+        """
+        a_file = self.tmp / "not-a-directory.txt"
+        a_file.write_text("x", encoding="utf-8", newline="\n")
+
+        self.assertEqual(serve.corpus_fingerprint(self.tmp / "no-corpus"), {})
+        self.assertEqual(serve.corpus_fingerprint(a_file), {})
+        self.assertFalse((self.tmp / "no-corpus").exists(),
+                         "looking at an absent corpus created one")
+
+
+class TestObservatoryHook(ServeTestCase):
+    """The optional event source, which is the one part of this component that runs inside
+    somebody else's session.
+
+    Everything here is about it not mattering when it goes wrong. A dashboard that can slow
+    or break a coding session is worse than no dashboard, so the criteria are that it always
+    exits 0, never writes to stdout, and never touches anything the harness owns.
+    """
+
+    HOOK = REPO_ROOT / ".agents" / "hooks" / "observatory-event.py"
+
+    def load(self):
+        """Import the hook by path, the way the harness runs it: no package, no repo."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("observatory_event", self.HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def run_hook(self, payload, env=None):
+        module = self.load()
+        out = io.StringIO()
+        code = module.main(stdin=io.StringIO(json.dumps(payload)), stdout=out)
+        return code, out.getvalue()
+
+    def test_the_hook_appends_one_line_and_says_nothing(self):
+        code, out = self.run_hook({"session_id": "s1", "cwd": str(self.tmp),
+                                   "hook_event_name": "Stop"})
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "", "the hook wrote to stdout, which the harness parses")
+        spool = self.tmp / ".observatory" / "events.jsonl"
+        self.assertTrue(spool.exists(), "no event was spooled")
+        lines = spool.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        event = json.loads(lines[0])
+        self.assertEqual(event["source"], "hook")
+        self.assertEqual(event["session_id"], "s1")
+
+    def test_the_hook_exits_zero_on_anything_it_is_given(self):
+        """Every failure path returns 0. This hook has nothing to say that is worth one
+        interrupted run."""
+        module = self.load()
+        for stdin_text in ("", "not json at all", "[]", "null", '{"cwd": 12345}'):
+            with self.subTest(stdin=stdin_text[:20]):
+                out = io.StringIO()
+                self.assertEqual(
+                    module.main(stdin=io.StringIO(stdin_text), stdout=out), 0)
+                self.assertEqual(out.getvalue(), "")
+
+    def test_the_spool_append_reports_failure_rather_than_raising(self):
+        """`append` documents that it never raises. `main` has its own guard, so narrowing
+        this one is invisible from the outside: the contract has to be asserted here."""
+        module = self.load()
+        blocked = self.tmp / "blocked-file"
+        blocked.write_text("not a directory", encoding="utf-8", newline="\n")
+
+        self.assertIs(module.append(blocked / "x" / "events.jsonl", {"a": 1}), False,
+                      "append raised or claimed success on an unwritable path")
+
+    def test_the_hook_exits_zero_when_the_spool_cannot_be_written(self):
+        """The case that matters: something is wrong with the disk or the path, and the
+        session must not notice."""
+        module = self.load()
+        blocked = self.tmp / "blocked"
+        blocked.write_text("i am a file, not a directory", encoding="utf-8", newline="\n")
+        out = io.StringIO()
+
+        code = module.main(
+            stdin=io.StringIO(json.dumps({"session_id": "s1", "cwd": str(blocked)})),
+            stdout=out)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_the_hook_never_writes_where_the_harness_lives(self):
+        """S-009 covers everything the harness owns, and this is the only piece of the
+        observatory with the access to break it."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        for forbidden in (".claude", "projects", "sessions"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(f'"{forbidden}"', source,
+                                 f"the hook names {forbidden!r} as a path component")
+        self.assertIn(".observatory", source)
+
+    def test_the_hook_opens_no_socket_and_imports_nothing_from_this_repository(self):
+        """A file append cannot block on a connect or wait out a read timeout. That is the
+        whole reason the event source is a spool file rather than a request."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        # Import statements, not bare words. The first version of this matched "socket" and
+        # "subprocess" in the docstring that explains why neither is used, which is the same
+        # defect as an assertion prose can satisfy, arriving from the other direction.
+        imports = re.findall(r"(?m)^\s*(?:import|from)\s+([\w.]+)", source)
+        for forbidden in ("socket", "urllib", "http", "requests", "subprocess",
+                          "scripts", "asyncio", "ssl"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, [name.split(".")[0] for name in imports],
+                                 f"the hook imports {forbidden}, which can block inside "
+                                 f"somebody else's session")
+        self.assertEqual(sorted(imports),
+                         ["__future__", "datetime", "json", "os", "pathlib", "sys"],
+                         "the hook's import list changed; every entry must be standard "
+                         "library and none may block")
+
+    def test_the_spool_is_capped_so_nothing_grows_without_bound_in_a_session(self):
+        """Nobody may ever drain it. Losing an old hint costs nothing, because a hint is
+        not a datum."""
+        module = self.load()
+        spool = self.tmp / ".observatory" / "events.jsonl"
+        spool.parent.mkdir(parents=True)
+        spool.write_text("x" * (module.MAX_SPOOL_BYTES + 10), encoding="utf-8",
+                         newline="\n")
+
+        module.main(stdin=io.StringIO(json.dumps({"cwd": str(self.tmp)})),
+                    stdout=io.StringIO())
+
+        self.assertLess(spool.stat().st_size, module.MAX_SPOOL_BYTES,
+                        "the spool grew past its cap inside a live session")
+
+    def test_the_spool_location_follows_the_session_and_can_be_overridden(self):
+        module = self.load()
+        payload = {"cwd": str(self.tmp / "projectA")}
+        self.assertEqual(module.spool_path(payload, env={}),
+                         self.tmp / "projectA" / ".observatory" / "events.jsonl")
+        self.assertEqual(module.spool_path(payload, env={"OBSERVATORY_SPOOL": "X.jsonl"}),
+                         Path("X.jsonl"))
+
+    def test_the_hook_spools_no_conversation_content(self):
+        """The contract excludes reconstructing conversation content, and a hook that
+        spooled a prompt would put it in a file the contract never described."""
+        code, _ = self.run_hook({"session_id": "s1", "cwd": str(self.tmp),
+                                 "prompt": "SECRET PROMPT TEXT",
+                                 "tool_input": {"command": "SECRET COMMAND"}})
+        self.assertEqual(code, 0)
+        spooled = (self.tmp / ".observatory" / "events.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn("SECRET", spooled,
+                         "the hook spooled conversation content")
+
+
+class TestLiveOverHttp(ServerTestCase):
+    """S-013 through the channel a page actually opens, once, end to end."""
+
+    def read_events(self, server, seconds=10.0):
+        """Open the stream and collect parsed events until the deadline."""
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=seconds)
+        conn.request("GET", "/api/events")
+        response = conn.getresponse()
+        collected, deadline = [], time.monotonic() + seconds
+        try:
+            while time.monotonic() < deadline:
+                line = response.fp.readline()
+                if not line:
+                    break
+                if line.startswith(b"data: "):
+                    collected.append(json.loads(line[6:].decode("utf-8")))
+                    if len(collected) >= 2:
+                        break
+        finally:
+            conn.close()
+        return collected
+
+    def test_s013_an_open_stream_is_told_about_work_it_did_not_ask_for(self):
+        self.build_store([self.record("a1", sid="s-live")])
+        server = self.serve_on_loopback(roster=[])
+        server.watcher.poll_seconds = 0.05
+
+        appended = threading.Event()
+
+        def append_after_a_moment():
+            time.sleep(0.6)                  # let the baseline tick happen first
+            path = self.project / "session.jsonl"
+            with path.open("ab") as handle:
+                handle.write((json.dumps(self.record("a2", sid="s-live")) + "\n")
+                             .encode("utf-8"))
+            appended.set()
+
+        threading.Thread(target=append_after_a_moment, daemon=True).start()
+        events = self.read_events(server)
+
+        self.assertTrue(appended.wait(10), "the fixture never appended")
+        self.assertTrue(events, "the stream delivered nothing at all")
+        self.assertEqual(events[0]["type"], "open",
+                         "the stream did not announce itself, so a page cannot tell it is "
+                         "following rather than silently dead")
+        self.assertEqual(events[0]["poll_seconds"], 0.05)
+        self.assertTrue(any(e.get("type") == "change" for e in events),
+                        "appending a record produced no change event on an open stream")
+
+    def test_the_stream_declares_itself_as_an_event_stream(self):
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("HEAD", "/api/events")
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertIn("text/event-stream", response.getheader("Content-Type"))
+            self.assertEqual(response.getheader("Cache-Control"), "no-store")
+        finally:
+            conn.close()
+
+    def test_a_head_on_the_stream_returns_rather_than_holding_a_thread(self):
+        """`do_HEAD` is `do_GET`, so without a guard a HEAD here would block until the
+        process ended. The test is that the request completes at all."""
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        finished = threading.Event()
+
+        def ask():
+            conn = http.client.HTTPConnection(host, port, timeout=5)
+            try:
+                conn.request("HEAD", "/api/events")
+                conn.getresponse().read()
+                finished.set()
+            finally:
+                conn.close()
+
+        threading.Thread(target=ask, daemon=True).start()
+        self.assertTrue(finished.wait(8), "a HEAD on the event stream never returned")
+
+        # The client returns for a HEAD whether or not the server thread does, because
+        # http.client knows a HEAD has no body. The property that matters is server-side:
+        # the handler must not subscribe and sit in the loop.
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline and server.watcher.listeners():
+            time.sleep(0.05)
+        self.assertEqual(server.watcher.listeners(), 0,
+                         "a HEAD subscribed to the stream and held a thread in the loop")
+
+    def test_the_stream_is_refused_to_a_rebound_host_like_every_other_route(self):
+        """A long-lived channel handing the corpus to a rebound page would be worse than a
+        single response doing it, not better."""
+        server = self.serve_on_loopback(roster=[])
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", "/api/events", headers={"Host": "evil.example.com"})
+            self.assertEqual(conn.getresponse().status, 403)
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

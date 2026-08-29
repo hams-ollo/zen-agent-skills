@@ -25,18 +25,20 @@ Then open `http://127.0.0.1:8787/`.
 
 `ingest.py` is incremental: the first run reads the whole corpus (401 MB and about two minutes on
 this maintainer's machine), and every run after it reads only what has been appended since. Run it
-again whenever you want the page to reflect newer work. The page renders whatever the store held
-when the request was made, and the fleet report additionally reads the live-session registry on each
-request, so both are correct as of when you asked and no more. A report that updates while a session
-is running is `feat-0059`'s.
+again whenever you want a full pass over the corpus. **You do not have to run it to keep an open
+page current**: the server follows the corpus while a page is open and folds in what appears, which
+is the next section. The fleet report also reads the live-session registry on every request, so
+running-versus-ended is correct as of the moment you asked.
 
 | Option | Applies to | Default |
 |---|---|---|
 | `--corpus DIR` | both | `~/.claude/projects`. `serve.py` reads it for one thing only: placing a live session the store has not seen yet. |
 | `--store PATH` | both | `.observatory/store.db`, gitignored |
 | `--registry DIR` | `serve.py` | `~/.claude/sessions`, the harness's own list of running sessions |
-| `--host ADDR` | `serve.py` | `127.0.0.1`. A non-loopback address is refused. |
+| `--host ADDR` | `serve.py` | `127.0.0.1`. A non-loopback address is refused, and so is a request naming another origin's host. |
 | `--port N` | `serve.py` | `8787` |
+| `--poll-seconds N` | `serve.py` | `2`. How often the open page is brought up to date, and so the delay before new work shows. |
+| `--spool PATH` | `serve.py` | `events.jsonl` beside the store, where the optional hook appends. Absent is not an error. |
 
 The store is derived data with the corpus as its authoritative source, so it is always safe to
 delete and rebuild. Deleting it is also the fix for the one error `ingest.py` refuses to work
@@ -83,6 +85,48 @@ is reported ended**, and every entry observed so far has been an interactive ses
 background or cloud session registers at all is unverified here. And **a session that started since
 the last ingest** has no store row yet, so it is reported running with its project taken from the
 transcript beside it, and its branch and last activity shown as not yet ingested.
+
+## Following a running session
+
+The page follows the corpus while it is open. A session that writes records appears without
+anyone pressing anything, and the footer says whether the page is following or not.
+
+**Newly appended records reach an open report within about 2 seconds.** That number is the
+whole of the default path's latency, and it is stated because "slower" is not something a
+reader can judge. It holds with nothing installed and nothing configured: the server looks
+at the corpus on a timer, folds in whatever is new using the same incremental read the
+ingester uses, and tells every open page. Change it with `--poll-seconds`.
+
+Three properties are worth knowing:
+
+- **It costs nothing when nobody is watching.** The watcher starts when a page opens the
+  event stream and stops when the last one closes. A server sitting idle polls nothing.
+- **The probe is cheaper than an ingest.** Looking costs about 38 milliseconds over this
+  maintainer's corpus against 167 for a full incremental pass, so the timer walks and stats
+  and only reads when something actually moved.
+- **The store gains a second writer.** `ingest.py` is no longer the only thing that writes
+  to it, because an open report cannot reflect new work unless something folds that work in.
+  Nothing the harness owns is written by either: the corpus is opened read-only.
+
+### The optional event source
+
+There is a hook, [`observatory-event.py`](../.agents/hooks/observatory-event.py), that lowers
+the delay. It is optional in the strong sense: **without it nothing is missing and nothing
+reports an error**, you simply wait up to the poll interval instead of hearing immediately.
+
+It appends one line to `.observatory/events.jsonl` and does nothing else. No socket, so it
+cannot hang inside a session; no figure, so it cannot change one. The rule that makes that
+last part true is worth stating plainly:
+
+> An event is a hint to look, never a datum. Every figure is derived from the corpus, so the
+> optional source changes when a figure appears and never which figures exist.
+
+That is why running the hook and not running it produce identical numbers, which is asserted
+by comparing both rather than reasoned about.
+
+Install it with `python scripts/install.py --with-hooks`, which places the file and prints
+the registration for you to paste. It is not registered for you, and this repository's own
+[`.claude/settings.json`](../.claude/settings.json) is untouched.
 
 ## What the page can do to a session, in full
 
@@ -182,6 +226,7 @@ lines would report every one of them twice.
 | [`scripts/observatory/ingest.py`](../scripts/observatory/ingest.py) | The incremental reader, from the corpus into the store, and the reader for the live-session registry. |
 | [`scripts/observatory/serve.py`](../scripts/observatory/serve.py) | The loopback server, the report registry, and the fleet and skills reports. |
 | [`scripts/observatory/ui/index.html`](../scripts/observatory/ui/index.html) | The page shell every report renders into. One file, no build step. |
+| [`.agents/hooks/observatory-event.py`](../.agents/hooks/observatory-event.py) | The optional event source: appends one line and does nothing else. Opt-in, and placed by `install.py --with-hooks`. |
 | [`tests/test_observatory.py`](../tests/test_observatory.py) | The store, ingester, and live-registry tests. |
 | [`tests/test_observatory_serve.py`](../tests/test_observatory_serve.py) | The server, page shell, and report tests. |
 

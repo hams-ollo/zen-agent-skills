@@ -110,6 +110,17 @@ export const ZenHooks = async ({ worktree, directory, client }) => {
       const tool = input?.tool;
       const rootDir = root();
 
+      // The observatory's optional event source. Claude Code fires this on `Stop`, once
+      // per finished turn; opencode exposes no end-of-turn event, so the closest honest
+      // mapping is after any tool, which means more lines for the same hint. That costs
+      // nothing: the hook appends to a capped spool and an event is a hint to look, never
+      // a datum, so a duplicate changes no figure. Fired before the branches below and
+      // never awaited for a decision, because it can only ever report.
+      await note(client, runHook("observatory-event.py", {
+        hook_event_name: "Stop",
+        cwd: rootDir,
+      }, rootDir));
+
       // The payloads below are normalized to the shape every hook in the module reads, so
       // the Python stays harness-agnostic and this adapter owns the translation.
       if (tool === "task") {
