@@ -112,6 +112,10 @@ def main(stdin=None, stdout=None) -> int:
     no dashboard, and this hook has nothing to say that is worth a single interrupted run.
     """
     stdin = sys.stdin if stdin is None else stdin
+    # Bound although nothing is written to it, which is the point: the module's other four
+    # hooks bind it and write through it, and taking the parameter without binding it made
+    # every assertion about this hook's silence unfalsifiable.
+    stdout = sys.stdout if stdout is None else stdout
     try:
         payload = json.load(stdin)
     except Exception:                                        # noqa: BLE001

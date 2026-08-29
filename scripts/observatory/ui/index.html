@@ -276,8 +276,13 @@ var RENDERERS = {
     into.appendChild(el("h2", { text: "Fleet" }));
     into.appendChild(el("p", {
       "class": "muted",
-      text: "Which sessions exist, where, and which are running. Correct as of when this "
-          + "report was requested, not live: press Refresh to ask again."
+      /* Derived from the same state the footnote uses, so the two cannot disagree again.
+         This sentence said "not live: press Refresh to ask again" while the footer said
+         the page was following the corpus, and both were on screen at once. */
+      text: "Which sessions exist, where, and which are running. "
+          + (STATE.live
+              ? "Following the corpus: new work appears here on its own."
+              : "Correct as of when this report was requested. Press Refresh to ask again.")
     }));
 
     var totals = data.totals;

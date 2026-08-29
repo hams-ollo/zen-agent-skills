@@ -1222,6 +1222,27 @@ class TestFleetPageBehaviour(ServerTestCase):
         self.assertIn("actionCell(row)", body,
                       "the renderer no longer offers the declared actions at all")
 
+    def test_the_fleet_renderer_does_not_contradict_the_footnote_about_being_live(self):
+        """Both sentences are on screen at once, so they cannot be allowed to disagree.
+
+        An outside verification read "Correct as of when this report was requested, not
+        live: press Refresh to ask again" directly above a footer saying "Following the
+        corpus live", and then watched the page re-fetch on its own, which made the first
+        sentence false rather than merely stale.
+        """
+        body = self.renderer_body()
+        # Comments stripped first. The phrase appears in the comment that explains this very
+        # fix, so asserting on the raw body matched prose rather than code, which is the
+        # third time in this component that an assertion has been satisfied or broken by a
+        # sentence rather than by a statement.
+        code = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+
+        self.assertIn("STATE.live", code,
+                      "the fleet subtitle does not consult whether the page is following, "
+                      "so it can claim the opposite of what the footnote says")
+        self.assertNotIn("not live", code,
+                         "the fleet subtitle still asserts the page is not live")
+
     def test_the_fleet_renderer_reports_the_state_the_server_established(self):
         """Kills the mutation that derives liveness page-side, for instance from whether a
         row carries a pid, which would put the decision somewhere no test can reach."""
@@ -1857,15 +1878,57 @@ class TestLiveWatcher(ServeTestCase):
         keeps the timestamp the same, or the watcher misses work."""
         self.build_store([self.record("a1", sid="s-live")])
         spool = self.tmp / "events.jsonl"
+        path = self.project / "session.jsonl"
+
+        # A rewrite that keeps the byte count. Size alone cannot see it.
         before = serve.corpus_fingerprint(self.corpus, spool)
+        body = path.read_bytes()
+        path.write_bytes(body.replace(b'"a1"', b'"a9"'))
+        self.assertEqual(path.stat().st_size, len(body),
+                         "the fixture changed the size, so it no longer isolates mtime")
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), before,
+                            "an equal-length rewrite was missed, so the probe keys on size "
+                            "alone and a transcript replaced in place is invisible")
 
-        self.append_record("a2")
-        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), before)
+        # An append whose timestamp is put back. Mtime alone cannot see it.
+        before_append = serve.corpus_fingerprint(self.corpus, spool)
+        stat_before = path.stat()
+        with path.open("ab") as handle:
+            handle.write((json.dumps(self.record("a3", sid="s-live")) + "\n")
+                         .encode("utf-8"))
+        os.utime(path, ns=(stat_before.st_atime_ns, stat_before.st_mtime_ns))
 
-        after_corpus = serve.corpus_fingerprint(self.corpus, spool)
+        self.assertEqual(path.stat().st_mtime_ns, stat_before.st_mtime_ns,
+                         "the fixture could not hold the timestamp, so it no longer "
+                         "isolates size")
+        self.assertNotEqual(
+            serve.corpus_fingerprint(self.corpus, spool), before_append,
+            "an append with an unchanged timestamp was missed, so the probe keys on mtime "
+            "alone and a same-second append is invisible")
+
+        # And the spool, which is the third thing the probe has to see.
+        after = serve.corpus_fingerprint(self.corpus, spool)
         self.spool({"source": "hook"})
-        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), after_corpus,
+        self.assertNotEqual(serve.corpus_fingerprint(self.corpus, spool), after,
                             "a spooled event did not change the fingerprint")
+
+    def test_the_default_spool_is_never_placed_inside_the_corpus(self):
+        """S-009 forbids adding a file to anything the harness owns, and the spool is the
+        one file this component creates. The rule was a comment until a mutation moving the
+        default into the corpus survived the whole suite."""
+        server = serve.make_server(self.store, serve.DEFAULT_HOST, 0, roster=[],
+                                   quiet=True, registry=self.registry,
+                                   corpus=self.corpus)
+        try:
+            spool = Path(server.spool).resolve()
+        finally:
+            server.server_close()
+
+        self.assertEqual(spool.parent, self.store.parent.resolve(),
+                         "the default spool no longer sits beside the store")
+        self.assertNotIn(self.corpus.resolve(), spool.parents,
+                         "the default spool sits inside the corpus, which is the one tree "
+                         "S-009 says must be byte-for-byte unchanged")
 
     def test_an_absent_corpus_is_an_empty_fingerprint_rather_than_a_crash(self):
         """Both degenerate inputs, and a bound worth stating.
@@ -1924,6 +1987,37 @@ class TestObservatoryHook(ServeTestCase):
         event = json.loads(lines[0])
         self.assertEqual(event["source"], "hook")
         self.assertEqual(event["session_id"], "s1")
+
+    def test_the_hook_writes_nothing_to_the_real_stdout_the_harness_reads(self):
+        """Run as a subprocess, because that is how the harness runs it and because an
+        injected stream cannot see a bare `print`.
+
+        An outside verification showed what that costs: a hook emitting
+        `{"decision": "block", "reason": "..."}`, which is precisely how a `Stop` hook tells
+        the harness to block a session, survived the whole suite under an assertion whose
+        failure message was "the hook wrote to stdout, which the harness parses".
+        """
+        result = subprocess.run(
+            [sys.executable, str(self.HOOK)],
+            input=json.dumps({"session_id": "s1", "cwd": str(self.tmp),
+                              "hook_event_name": "Stop"}),
+            capture_output=True, text=True, timeout=30)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "",
+                         "the hook wrote to the stdout the harness parses, which is how a "
+                         "Stop hook blocks a session")
+        self.assertEqual(result.stderr, "", "the hook wrote to stderr")
+        self.assertTrue((self.tmp / ".observatory" / "events.jsonl").exists(),
+                        "the subprocess run spooled nothing, so this asserted nothing")
+
+    def test_the_hook_binds_stdout_like_every_other_hook_in_the_module(self):
+        """The module's contract gives every hook an injectable `stdout`, and the other four
+        bind it. Taking the parameter and dropping it is what made silence untestable."""
+        source = self.HOOK.read_text(encoding="utf-8")
+        self.assertIn("stdout = sys.stdout if stdout is None else stdout", source,
+                      "main() takes a stdout parameter and never binds it, so every "
+                      "assertion about what it writes there is unfalsifiable")
 
     def test_the_hook_exits_zero_on_anything_it_is_given(self):
         """Every failure path returns 0. This hook has nothing to say that is worth one
