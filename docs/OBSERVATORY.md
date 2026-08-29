@@ -74,7 +74,7 @@ operating system before anything is called running, and the page says which chec
 
 | Outcome | What was established |
 |---|---|
-| running | The entry's process is confirmed. On Windows that is process **identity**: the pid exists and its start time matches the one the entry recorded, so a pid the operating system has since handed to another program is not mistaken for the session. On macOS and Linux it is **presence** only, because the recorded start time's meaning there is unverified, and a reused pid would read as running. |
+| running | The entry's process is confirmed. On Windows the pid must exist, and **wherever the entry records a start time it must match**, so a pid the operating system has since handed to another program is not mistaken for the session. An entry carrying no start time is confirmed on presence alone. On macOS and Linux it is **presence** only, because the recorded start time's meaning there is unverified, and a reused pid would read as running. |
 | ended | Either there is no entry, or there is one and its process is gone. The second case is counted separately as a stale entry rather than folded quietly into the first. |
 | unverified | There is an entry and the check could not be run, for instance because it was written by another machine. Never reported as running. |
 
@@ -83,6 +83,27 @@ is reported ended**, and every entry observed so far has been an interactive ses
 background or cloud session registers at all is unverified here. And **a session that started since
 the last ingest** has no store row yet, so it is reported running with its project taken from the
 transcript beside it, and its branch and last activity shown as not yet ingested.
+
+## What the page can do to a session, in full
+
+Three things, and this list is the whole of it:
+
+| Action | What it does | Why it cannot reach a session |
+|---|---|---|
+| Open the pull request | Follows a link to the session's pull request | A link you choose to follow is a request your browser makes, not one this page makes |
+| Copy the working directory | Puts the path on your clipboard | A `file://` link from an `http://` page is blocked by browsers, so the path is offered as text |
+| Copy a resume command | Puts `claude --resume <session>` on your clipboard | Presenting a command is not running it, and running it is yours to do |
+
+**The list is enforced rather than promised.** The three live in a registry in the server, the page
+builds every one of them in a single place and tags each with the action it came from, and a test
+resolves the two against each other. A button added to the page without an entry in that registry
+fails the suite; so does an entry whose kind is anything other than navigation or a command to copy.
+That is what makes "this surface changes no session" a claim you can check instead of a promise you
+have to trust.
+
+Starting, resuming, interrupting, and ending a session are excluded by the contract itself, not by
+this page's implementation. Where those are possible at all, they are the companion skill's, and it
+runs inside a session rather than in this page.
 
 ## Every project, in one place
 
@@ -115,8 +136,11 @@ cannot come to disagree about what the installed set is.
 Two consequences worth stating plainly, because "never used" means nothing without them:
 
 - **A skill in the roster and absent from the corpus is reported with a count of zero**, not left
-  out. As of 2026-08-28 that is eight of twenty: `doc-author`, `doc-revise`, `house-review`,
-  `project-bootstrap`, `review-depth`, `test-author`, `test-quality`, and `verifier-agent`.
+  out. As of 2026-08-29 that is nine of twenty-one: `agent-observatory`, `doc-author`,
+  `doc-revise`, `house-review`, `project-bootstrap`, `review-depth`, `test-author`,
+  `test-quality`, and `verifier-agent`. The first of those is this component's own companion
+  skill, which is a draft and has not been used yet, so the report counting it at zero is the
+  contribution bar working rather than a gap.
 - **A skill in the corpus and absent from the roster is still reported**, marked as not in the
   roster. The harness also attributes messages to skills this kit does not ship, such as
   `code-review`, `claude-api`, and `anthropic-skills:brain-dump`. Dropping them would understate
@@ -139,9 +163,10 @@ lines would report every one of them twice.
 - **It never writes to anything the harness owns.** Transcripts are opened read-only and the store
   lives outside the corpus. The page performs no write at all: every route is a read, and a request
   method that exists to change something is declined.
-- **It never touches a session.** No start, resume, interrupt, or end. The surface offers no action
-  against a session in any form; `feat-0060` is where a navigation action would be defined, and
-  until then there is none.
+- **It never touches a session.** No start, resume, interrupt, or end. It offers exactly three
+  actions against a session and every one of them is non-mutating: open the pull request, copy the
+  working directory, and copy a resume command for you to run. See the section below, which is the
+  enumeration rather than a summary of one.
 - **It adds no dependency.** No package manager, no lockfile, no bundler, no framework. Standard
   library on the Python side and nothing at all on the page's.
 

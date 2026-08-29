@@ -94,6 +94,13 @@
     background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
   }
   td .why { color: var(--muted); font-size: 11px; margin-top: 2px; max-width: 34em; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .acts a, .acts button {
+    font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 5px;
+    border: 1px solid var(--rule); background: var(--panel); color: var(--ink);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .acts code { font-size: 11px; color: var(--muted); word-break: break-all; }
   .tag {
     font-size: 11px; padding: 1px 6px; border-radius: 4px;
     border: 1px solid var(--rule); color: var(--muted);
@@ -126,7 +133,7 @@
 <script>
 "use strict";
 
-var STATE = { reports: [], current: "", project: "", store: "", roster: "" };
+var STATE = { reports: [], current: "", project: "", store: "", roster: "", actions: [] };
 
 function el(tag, attrs, children) {
   var node = document.createElement(tag);
@@ -195,6 +202,59 @@ function barChart(rows, labelKey, valueKey) {
     chart.appendChild(count);
   });
   return chart;
+}
+
+/* Every interactive element this surface offers against a session is built here and nowhere
+   else, and every one carries data-action naming its entry in the server's ACTIONS registry.
+   S-019 is an enumeration claim, so the enumeration has to be derivable rather than
+   maintained by hand: one construction site plus one tag is what makes it derivable. A
+   renderer that builds its own button is caught by the test, not by a reviewer remembering.
+
+   Both kinds are non-mutating by construction. A navigate action is an anchor the viewer
+   follows; a copy-command puts text on their clipboard for them to run. Neither can reach a
+   session, and there is no third kind. */
+function actionControl(action, row) {
+  var value = row[action.field];
+  if (!value) { return null; }
+
+  if (action.kind === "navigate") {
+    /* noreferrer keeps the loopback URL from reaching the destination. The report itself
+       still requests nothing: this is a link the viewer chooses to follow. */
+    return el("a", {
+      "data-action": action.id, href: value, target: "_blank",
+      rel: "noreferrer noopener", text: action.label, title: action.note
+    });
+  }
+
+  var text = action.template.replace("{" + action.field + "}", value);
+  if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+    /* No clipboard API, so present the command as selectable text instead of a button that
+       would do nothing. S-019 asks that the command reach a person, not that a button exist. */
+    return el("code", { "data-action": action.id, text: text, title: action.note });
+  }
+  var button = el("button", {
+    "data-action": action.id, type: "button", text: action.label, title: text
+  });
+  button.addEventListener("click", function () {
+    navigator.clipboard.writeText(text).then(function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = action.label; }, 1200);
+    }, function () {
+      button.textContent = "Copy failed";
+      setTimeout(function () { button.textContent = action.label; }, 1200);
+    });
+  });
+  return button;
+}
+
+function actionCell(row) {
+  var cell = el("td", {}, [el("div", { "class": "acts" })]);
+  var holder = cell.firstChild;
+  STATE.actions.forEach(function (action) {
+    var control = actionControl(action, row);
+    if (control) { holder.appendChild(control); }
+  });
+  return cell;
 }
 
 function figure(value, caption) {
@@ -269,12 +329,25 @@ var RENDERERS = {
     ]));
 
     into.appendChild(el("h2", { text: "Sessions" }));
+    /* The surface stating its own boundary. S-019 is answered by enumerating what is offered,
+       so the enumeration is shown rather than left for a reader to infer from the buttons. */
+    into.appendChild(el("p", {
+      "class": "muted",
+      text: "Everything this surface can do to a session, in full: "
+          + STATE.actions.map(function (action) {
+              return action.label + " (" + action.kind + ")";
+            }).join(", ")
+          + ". None of them changes a session. Starting, resuming, interrupting, and ending "
+          + "one are the contract's Non-Goals, so a command is presented for you to run "
+          + "rather than run for you."
+    }));
     var scroller = el("div", { "class": "scroller" });
     scroller.appendChild(el("table", {}, [
       el("thead", {}, [el("tr", {}, [
         el("th", { text: "State" }), el("th", { text: "Project" }),
         el("th", { text: "Branch" }), el("th", { text: "Last activity" }),
-        el("th", { text: "Session" }), el("th", { text: "Where" })
+        el("th", { text: "Session" }), el("th", { text: "Where" }),
+        el("th", { text: "Actions" })
       ])]),
       el("tbody", {}, data.sessions.map(function (row) {
         var state = el("td", {}, [el("span", { "class": "tag", text: row.state })]);
@@ -289,7 +362,8 @@ var RENDERERS = {
           el("td", { text: row.branch || "not recorded yet" }),
           el("td", { text: row.last_activity || "not ingested yet" }),
           el("td", { text: row.title || row.name || row.session_id }),
-          el("td", { text: (row.entrypoint || "") + (row.pid ? " pid " + row.pid : "") })
+          el("td", { text: (row.entrypoint || "") + (row.pid ? " pid " + row.pid : "") }),
+          actionCell(row)
         ]);
       }))
     ]));
@@ -397,6 +471,7 @@ function renderFootnote() {
 function boot() {
   get("/api/meta").then(function (meta) {
     STATE.reports = meta.reports || [];
+    STATE.actions = meta.actions || [];
     STATE.current = (STATE.reports[0] || {}).id || "";
     STATE.store = meta.store || "";
     var scope = document.getElementById("scope");

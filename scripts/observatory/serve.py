@@ -118,6 +118,41 @@ LIVENESS_POLICY = (
 # report exists to answer a question about now, so what is now goes at the top.
 STATE_ORDER = ("running", "unverified", "ended")
 
+# The two kinds of action this surface may offer against a session, and there is deliberately
+# no third. `S-019` permits exactly these: an action referencing a session must "resolve to
+# navigation or to a command presented for a person to run". Both are non-mutating by
+# construction rather than by review: `navigate` opens something in the viewer's browser, and
+# `copy-command` puts text on their clipboard. Neither can reach a session.
+#
+# Adding a kind here is the one edit that could make `S-019` false, which is why the set is a
+# constant a test can read rather than a convention a reviewer has to remember.
+ACTION_KINDS = ("navigate", "copy-command")
+
+# Every action the surface offers. `S-019` is an enumeration claim, and that is what makes it
+# testable: "nothing mutates a session" is untestable as prose and decidable as a list. The
+# list lives here, the page renders from it and tags each element with `data-action`, and a
+# test resolves the two against each other. A button added to the page without an entry here
+# fails that test rather than quietly widening the surface.
+#
+# `field` names the session row's key that supplies the value, so an action whose field is
+# empty on a given row is not offered for that row. `template` builds the text for a
+# `copy-command`; a `navigate` action uses the field's value as the target.
+ACTIONS = (
+    {"id": "open-pr", "kind": "navigate", "label": "Pull request", "field": "pr_url",
+     "template": None,
+     "note": "Opens the session's pull request. A link the viewer follows is a request their "
+             "browser makes, not one this report makes, so S-022 is untouched."},
+    {"id": "copy-cwd", "kind": "copy-command", "label": "Copy path", "field": "cwd",
+     "template": "{cwd}",
+     "note": "Copies the working directory. A file:// link from an http:// page is blocked "
+             "by browsers, so the path is offered as text rather than as a dead link."},
+    {"id": "copy-resume", "kind": "copy-command", "label": "Copy resume command",
+     "field": "session_id", "template": "claude --resume {session_id}",
+     "note": "Copies the command that would resume this session. S-019 permits presenting a "
+             "command for a person to run; running it is not this surface's to do. The flag "
+             "is the CLI's own, confirmed against `claude --help` rather than assumed."},
+)
+
 
 class NotLoopback(ValueError):
     """The requested address is not a loopback address, so binding it would publish the
@@ -345,7 +380,7 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
     found, live = live_sessions(conn, registry, corpus)
 
     def row(session_id, project_name, branch, first, last, title, entrypoint, cwd,
-            in_store):
+            in_store, pr_url=None, pr_number=None):
         state, registry_state, evidence = "ended", "absent", "no entry in the live registry"
         entry = {}
         seen = live.get(session_id)
@@ -361,6 +396,7 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
             "session_id": session_id, "project": project_name, "branch": branch,
             "first_activity": first, "last_activity": last, "title": title,
             "entrypoint": entrypoint, "cwd": cwd, "in_store": in_store,
+            "pr_url": pr_url, "pr_number": pr_number,
             "state": state, "registry": registry_state, "evidence": evidence,
             "pid": entry.get("pid"), "kind": entry.get("kind"),
             "name": entry.get("name"), "started_at": _started_at(entry),
@@ -369,10 +405,10 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
     rows = [
         row(stored["session_id"], stored["project"] or UNATTRIBUTED, stored["git_branch"],
             stored["first_ts"], stored["last_ts"], stored["title"], stored["entrypoint"],
-            stored["cwd"], True)
+            stored["cwd"], True, stored["pr_url"], stored["pr_number"])
         for stored in conn.execute(
             "SELECT session_id, project, cwd, git_branch, title, first_ts, last_ts, "
-            "entrypoint FROM session")
+            "entrypoint, pr_url, pr_number FROM session")
     ]
     # A live session the store has never seen. It is not an edge case: a session that started
     # minutes ago has written a transcript and the ingester has not read it yet, and dropping
@@ -505,6 +541,8 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
                 "projects": scope_options(conn, self.server.registry, self.server.corpus),
                 "roster_label": ROSTER_LABEL,
                 "reports": list(REPORTS),
+                "actions": list(ACTIONS),
+                "action_kinds": list(ACTION_KINDS),
             })
         if route == "/api/skills":
             return self._with_store(

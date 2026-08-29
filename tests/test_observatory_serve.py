@@ -42,6 +42,7 @@ from scripts import install                            # noqa: E402
 from scripts.observatory import db, ingest, serve      # noqa: E402
 
 UI_INDEX = REPO_ROOT / "scripts" / "observatory" / "ui" / "index.html"
+COMPANION_SKILL = REPO_ROOT / ".agents" / "skills" / "agent-observatory" / "SKILL.md"
 
 
 class ServeTestCase(unittest.TestCase):
@@ -1200,17 +1201,25 @@ class TestFleetPageBehaviour(ServerTestCase):
                         f"the renderer applies {hostile} to {collection} before rendering, "
                         f"so a session the report counted can be missing from the page")
 
-    def test_the_fleet_renderer_offers_no_action_against_a_session(self):
-        """`feat-0060` owns `S-019` and `S-020` and defines what a session-directed action
-        may be. Until it lands, this report names sessions and offers nothing to do to them,
-        which is a boundary in the task's Scope rather than a claim on those scenarios."""
+    def test_the_fleet_renderer_builds_no_interactive_element_of_its_own(self):
+        """The renderer must not construct an action directly, because `S-019`'s enumeration
+        is derived from one tagged construction site (`actionControl`) and an element built
+        anywhere else escapes it.
+
+        This assertion predates the actions and its reason has changed rather than weakened:
+        it used to mean the surface offered nothing, and now it means the surface offers only
+        what the registry declares.
+        """
         body = self.renderer_body()
-        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', "addEventListener",
-                          "location.href", "window.open", "fetch("):
+        for forbidden in ("<a ", 'el("a"', 'el("button"', 'el("form"', 'el("input"',
+                          "addEventListener", "location.href", "window.open", "fetch("):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, body,
-                                 f"the fleet renderer introduces {forbidden}, which is an "
-                                 f"action against a session this task must not offer")
+                                 f"the fleet renderer builds {forbidden} directly instead of "
+                                 f"going through actionControl, so it is outside the "
+                                 f"enumeration S-019 is proven by")
+        self.assertIn("actionCell(row)", body,
+                      "the renderer no longer offers the declared actions at all")
 
     def test_the_fleet_renderer_reports_the_state_the_server_established(self):
         """Kills the mutation that derives liveness page-side, for instance from whether a
@@ -1237,6 +1246,256 @@ class TestFleetPageBehaviour(ServerTestCase):
                          "the default report is hardcoded again")
         self.assertEqual(serve.REPORTS[0]["id"], "fleet",
                          "Fleet no longer leads the registry, so the default has moved")
+
+
+class TestActionBoundary(ServerTestCase):
+    """S-019: the reporting surface offers no session mutation.
+
+    "Nothing mutates a session" is untestable as prose and decidable as a list, which is why
+    the contract phrases it as an enumeration. The list is `serve.ACTIONS`, the page renders
+    from it and tags each element with `data-action`, and the assertions below resolve the two
+    against each other so a control added to the page without an entry is caught mechanically
+    rather than by a reviewer noticing.
+    """
+
+    def page(self) -> str:
+        return UI_INDEX.read_text(encoding="utf-8")
+
+    def construction_site(self) -> str:
+        """The body of `actionControl`, the one place an action element is built."""
+        html = self.page()
+        start = html.index("function actionControl(")
+        end = html.index("function actionCell(", start)
+        return html[start:end]
+
+    def test_s019_every_action_the_surface_offers_resolves_to_a_non_mutating_kind(self):
+        """S-019's Then, over the enumeration itself: an action referencing a session must
+        resolve to navigation or to a command presented for a person to run. Both permitted
+        kinds are that by construction, and there is deliberately no third."""
+        self.assertEqual(set(serve.ACTION_KINDS), {"navigate", "copy-command"},
+                         "a third action kind was introduced, and S-019 permits only "
+                         "navigation and a command presented for a person to run")
+        self.assertTrue(serve.ACTIONS, "the surface declares no actions, so this asserts "
+                                       "nothing and S-019 is vacuous again")
+        for action in serve.ACTIONS:
+            with self.subTest(action=action["id"]):
+                self.assertIn(action["kind"], serve.ACTION_KINDS)
+                for key in ("id", "kind", "label", "field", "note"):
+                    self.assertTrue(action.get(key) or key == "template",
+                                    f"action {action['id']} declares no {key}")
+
+    def test_s019_the_enumeration_is_derived_from_the_page_not_maintained_by_hand(self):
+        """The criterion the task states in those words: a newly added action must appear in
+        the enumeration without this test being edited.
+
+        It holds because every `data-action` the page carries has to resolve to a declared
+        action. A control tagged with an id nobody declared fails here; an untagged control
+        fails the next test.
+        """
+        declared = {action["id"] for action in serve.ACTIONS}
+        tagged = set(re.findall(r'"data-action":\s*([A-Za-z_.]+|"[^"]+")', self.page()))
+
+        self.assertTrue(tagged, "the page tags no element, so the enumeration is unenforced")
+        for token in tagged:
+            with self.subTest(token=token):
+                if token.startswith('"'):
+                    self.assertIn(token.strip('"'), declared,
+                                  "the page tags an element with an action id the server "
+                                  "does not declare")
+                else:
+                    self.assertEqual(
+                        token, "action.id",
+                        "the page tags an element from something other than the declared "
+                        "action, so the two lists can drift apart")
+
+    def test_s019_every_element_the_construction_site_returns_is_tagged(self):
+        """The other half. The enumeration is only complete if no element escapes it, which
+        holds because all three are built in one function and every one of its returns carries
+        the tag. Counting is the mechanical form of that claim."""
+        body = self.construction_site()
+        built = sum(body.count(f'el("{tag}"') for tag in ("a", "button", "code", "input",
+                                                          "form", "select", "textarea"))
+        tagged = body.count('"data-action"')
+
+        self.assertGreater(built, 0, "the construction site builds nothing")
+        self.assertEqual(built, tagged,
+                         f"actionControl builds {built} element(s) and tags {tagged}: an "
+                         f"untagged element is outside the enumeration S-019 is proven by")
+
+    def test_s019_the_construction_site_cannot_reach_a_session(self):
+        """A navigate action opens something and a copy-command writes to the clipboard.
+        Neither may acquire a way to talk to a session, which is what these would be."""
+        body = self.construction_site()
+        for forbidden in ("fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon",
+                          "location.href =", "document.forms", "method=\"post\""):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, body,
+                                 f"the action construction site introduces {forbidden}, "
+                                 f"which is a route to a session rather than navigation or "
+                                 f"a command presented for a person to run")
+
+    def test_s019_the_actions_reach_the_page_from_the_server_registry(self):
+        """The page must not carry its own copy of the list, or the two drift and the
+        enumeration stops meaning anything."""
+        self.build_store([self.record("a1", sid="s1")])
+        server = self.serve_on_loopback(roster=[])
+
+        _, meta = self.fetch_json(server, "/api/meta")
+
+        self.assertEqual([a["id"] for a in meta["actions"]],
+                         [a["id"] for a in serve.ACTIONS])
+        self.assertEqual(meta["action_kinds"], list(serve.ACTION_KINDS))
+        self.assertIn("STATE.actions = meta.actions", self.page(),
+                      "the page no longer takes its actions from the server's registry")
+
+    def test_s019_a_navigate_action_targets_stored_data_rather_than_a_composed_url(self):
+        """The one action that produces a remote target takes it from the store verbatim. A
+        template would let the page build a URL of its own, which is a different and much
+        larger claim to have to defend."""
+        navigate = [a for a in serve.ACTIONS if a["kind"] == "navigate"]
+        self.assertTrue(navigate)
+        for action in navigate:
+            with self.subTest(action=action["id"]):
+                self.assertIsNone(action["template"],
+                                  "a navigate action composes its target instead of taking "
+                                  "it from the store")
+        # The attribute, not the word. Asserting on the bare word passed against the comment
+        # that explains it, so removing the attribute survived the whole suite: found by
+        # mutation, which is the only thing that finds an assertion prose can satisfy.
+        self.assertIn('rel: "noreferrer noopener"', self.construction_site(),
+                      "the outbound link no longer suppresses the referrer, so following it "
+                      "hands the loopback URL to its destination")
+
+    def test_s019_a_mutating_method_is_declined_on_every_route_the_handler_defines(self):
+        """Derived from the handler rather than restated: every `do_*` it defines is either
+        one of the two readers or the refusal. A `do_POST` that did something would be caught
+        without this test being edited."""
+        handler = serve.ObservatoryHandler
+        methods = {name for name in dir(handler) if name.startswith("do_")}
+
+        self.assertEqual(methods, {"do_GET", "do_HEAD", "do_POST", "do_PUT", "do_PATCH",
+                                   "do_DELETE"})
+        for name in methods - {"do_GET", "do_HEAD"}:
+            with self.subTest(method=name):
+                self.assertIs(getattr(handler, name), handler._refuse,
+                              f"{name} is no longer the refusal, so this surface may write")
+
+    def test_s019_the_page_states_the_enumeration_rather_than_leaving_it_to_be_inferred(self):
+        """S-019 is answered by enumerating what is offered, so the surface says it. A reader
+        who has to infer the boundary from which buttons happen to be present has not been
+        told it."""
+        body = self.renderer_body_fleet()
+        self.assertIn("STATE.actions.map(", body,
+                      "the page no longer lists its own actions for a reader")
+        self.assertIn("Non-Goals", body,
+                      "the page states the enumeration without saying what is excluded")
+
+    def renderer_body_fleet(self) -> str:
+        html = self.page()
+        start = html.index("  fleet: function (data, into) {")
+        return html[start:html.index("  skills: function (data, into) {", start)]
+
+
+class TestControlDegradesWithoutTheHarness(ServeTestCase):
+    """S-020: control is available only where the harness exposes it, and its absence
+    degrades.
+
+    **These are structural assertions over the skill's prose, and that is a real bound rather
+    than an oversight.** A skill body is instructions to a model, so a test can assert the
+    declining instruction is present and cannot assert a model obeyed it. That is weaker than
+    execution, and it is stated here rather than left for a verifier to discover.
+    """
+
+    def body(self) -> str:
+        return COMPANION_SKILL.read_text(encoding="utf-8")
+
+    def test_s020_the_skill_declines_with_the_reason_stated(self):
+        body = self.body()
+        self.assertIn("declined", body,
+                      "the skill does not say a session-directed request is declined")
+        self.assertIn("no session-management capability", body,
+                      "the skill declines without stating the reason S-020 requires")
+
+    def test_s020_the_navigation_actions_remain_available_when_control_does_not(self):
+        """S-020's second clause: the `S-019` actions survive the absence of control, so the
+        skill has to name what is still there rather than only what is gone."""
+        body = self.body()
+        self.assertIn("still available", body)
+        for affordance in ("pull request", "working directory", "resume command"):
+            with self.subTest(affordance=affordance):
+                self.assertIn(affordance, body,
+                              f"the decline does not tell the reader {affordance} is still "
+                              f"available")
+
+    def test_s020_no_alternative_route_to_the_same_effect_is_attempted(self):
+        """The clause with teeth. The harness's live registry records a messaging path, and
+        writing to it is exactly the route S-020 has in mind."""
+        body = self.body()
+        self.assertIn("Attempt nothing else", body)
+        for route in ("shell out", "socket"):
+            with self.subTest(route=route):
+                self.assertIn(route, body,
+                              f"the skill does not rule out reaching a session by {route}")
+
+    def test_s020_the_harness_dependent_half_sits_in_a_labelled_optional_section(self):
+        """The portability contract requires it: no other harness exposes these tools, and a
+        body that assumes one is not portable."""
+        body = self.body()
+        self.assertRegex(body, r"(?m)^##\s+Optional:",
+                         "the harness-specific capability is not in a section labelled "
+                         "optional, so a body assuming one harness reads as universal")
+        optional = body[body.index("## Optional:"):]
+        self.assertIn("does not", optional,
+                      "the optional section does not say what happens without the capability")
+
+    def test_s020_the_skill_ends_no_session_and_says_so(self):
+        """Archiving stops the process, which is ending a session, and the contract's
+        Non-Goals exclude all four verbs. The skill names them rather than omitting them and
+        leaving the reader to assume."""
+        body = self.body()
+        for verb in ("start", "resume", "interrupt", "end"):
+            with self.subTest(verb=verb):
+                self.assertIn(verb, body.lower())
+        self.assertIn("Non-Goals", body,
+                      "the skill excludes the four verbs without saying on whose authority")
+
+    def test_the_companion_skill_is_a_draft_and_no_profile_places_it(self):
+        """The consequential risk the task names. A skill that is not excluded is placed into
+        user-scope discovery and starts triggering in unrelated sessions before it has been
+        used once. Proven against the real installer rather than by reading the frontmatter."""
+        self.assertRegex(self.body(), r"(?m)^metadata:\n\s+status:\s*draft\s*$",
+                         "the draft marker is absent or not in the block form install.py "
+                         "parses, so the skill would ship")
+
+        home = self.tmp / "install-home"
+        # Captured rather than left to print: a dry run over 21 skills times 2 tools buries
+        # the suite's own output, and the summary it prints is what this asserts on anyway.
+        stdout, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            placed = install.main(["--dry-run", "--profile", "all", "--home", str(home)])
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout.close()
+            sys.stdout = stdout
+
+        self.assertEqual(placed, 0)
+        self.assertIn("agent-observatory",
+                      [d.name for d in install.discover_skills()],
+                      "the skill is not discoverable at all, so its exclusion proves nothing")
+        self.assertIn("excluded from every profile, including 'all': agent-observatory",
+                      output, "the installer did not exclude the draft skill")
+        self.assertNotIn("copied    claude   agent-observatory", output,
+                         "the draft skill was placed into a discovery location")
+
+    def test_the_companion_skill_is_reported_by_the_observatory_as_never_used(self):
+        """The kit reports on itself, so adding a skill moves the observatory's own figure.
+        Asserted rather than left to surprise a reader of `docs/OBSERVATORY.md`."""
+        self.build_store([])
+        payload = self.report(roster=serve.skill_roster())
+        counts = {row["skill"]: row["uses"] for row in payload["skills"]}
+
+        self.assertEqual(counts.get("agent-observatory"), 0,
+                         "the new skill is missing from the roster the report counts against")
 
 
 if __name__ == "__main__":

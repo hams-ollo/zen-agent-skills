@@ -939,9 +939,32 @@ class TestProcessState(RegistryTestCase):
         self.assertTrue(ingest.liveness_check())
         self.assertTrue(ingest.liveness_check("some-future-os").startswith("none"))
         if os.name == "nt":
-            self.assertIn("identity", ingest.liveness_check())
+            # Both words, not just "identity". Identity needs a recorded start time to
+            # compare against, so a label promising it unconditionally is false for an
+            # entry that carries none. An automated review of pull request 76 caught the
+            # first published label doing exactly that, and this is what stops it coming
+            # back: the overstating string named only identity.
+            label = ingest.liveness_check()
+            self.assertIn("identity", label)
+            self.assertIn("presence", label,
+                          "the Windows label claims identity without naming the presence "
+                          "fallback an entry with no recorded start time actually gets")
         elif os.name == "posix":
             self.assertIn("presence", ingest.liveness_check())
+
+    @unittest.skipUnless(sys.platform == "win32",
+                         "the presence fallback is a Windows-path branch")
+    def test_an_entry_with_no_recorded_start_time_is_confirmed_on_presence_alone(self):
+        """The bound behind the Windows label, and the thing the first published wording
+        overstated. Identity needs something to compare against, so an entry carrying no
+        `procStart` gets the weaker check, and the evidence has to say the pid was not
+        matched rather than implying it was."""
+        state, evidence = ingest.process_state(os.getpid(), proc_start=None)
+
+        self.assertEqual(state, ingest.ALIVE)
+        self.assertIn("no comparable", evidence,
+                      "an entry with no recorded start time was reported as though its pid "
+                      "had been matched to the entry")
 
     @unittest.skipUnless(sys.platform == "win32",
                          "process identity is established from procStart, which is verified "

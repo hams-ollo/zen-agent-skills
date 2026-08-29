@@ -2,7 +2,7 @@
 id: feat-0060
 title: Prove the reporting surface mutates no session, and put the control actions where the harness actually exposes them
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: [feat-0054]
@@ -20,7 +20,7 @@ created: 2026-08-28
 
 The observatory reports on sessions belonging to a running program, and the natural next wish is to
 act on one. `S-019` and `S-020` in
-[`docs/spec/agent-observatory.md`](../docs/spec/agent-observatory.md) draw that boundary, and this
+[`docs/spec/agent-observatory.md`](../../docs/spec/agent-observatory.md) draw that boundary, and this
 task makes it a proven property rather than a stated intention.
 
 **The gap the design has to close is real.** The actions worth wanting (hand a message to a running
@@ -53,8 +53,8 @@ Read the contract for what must be true. It is not restated here.
 ## Implementation notes
 
 **The skill ships as a draft and is excluded from installs.** The contribution-bar section of
-[`AGENTS.md`](../AGENTS.md) forbids shipping a skill cold, and
-[`feat-0036`](done/feat-0036-installer-excludes-draft-skills.md) already gives `install.py` the
+[`AGENTS.md`](../../AGENTS.md) forbids shipping a skill cold, and
+[`feat-0036`](feat-0036-installer-excludes-draft-skills.md) already gives `install.py` the
 mechanism: a skill marked draft in its frontmatter metadata is not placed. Use it. Blessing is the
 author's call after the skill has been used on real work.
 
@@ -96,24 +96,29 @@ Reversible by reverting one commit. No schema change, no persisted format, nothi
 
     python scripts/run-checks.py
 
-- [ ] New tests cover S-019 and S-020, each named so the scenario it proves is identifiable.
-- [ ] A test enumerates every action the reporting surface offers and asserts none of them mutates a
+- [x] New tests cover S-019 and S-020, each named so the scenario it proves is identifiable.
+- [x] A test enumerates every action the reporting surface offers and asserts none of them mutates a
       session (S-019).
-- [ ] The enumeration is derived from the surface rather than hand-maintained, so a newly added action
+- [x] The enumeration is derived from the surface rather than hand-maintained, so a newly added action
       appears in it without the test being edited.
-- [ ] With no session-management capability available, a session-directed request is declined with the
+- [x] With no session-management capability available, a session-directed request is declined with the
       reason stated, navigation actions still work, and no alternative route is attempted (S-020).
-- [ ] `install.py --dry-run` does not place `agent-observatory`, proven against the real install cycle.
-- [ ] `python scripts/validate-skills.py` passes on the new skill, including the link-escape rule.
-- [ ] The harness-specific capability sits in a section labelled optional, and the skill degrades
+- [x] `install.py --dry-run` does not place `agent-observatory`, proven against the real install cycle.
+- [x] `python scripts/validate-skills.py` passes on the new skill, including the link-escape rule.
+- [x] The harness-specific capability sits in a section labelled optional, and the skill degrades
       rather than failing without it.
-- [ ] Nothing writes to the harness's session messaging channel, asserted by a test.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Nothing writes to the harness's session messaging channel, asserted by a test.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `agent-observatory` conformance matrix is updated for S-019 and S-020, completing all 22.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `agent-observatory` conformance matrix is updated for S-019 and S-020. **Corrected at
+      closeout**: this criterion read "completing all 22", which assumed this task ran last of the
+      six remaining. It ran second, so the matrix closes at 12 conformed + 0 diverged + 10
+      not-built = 22, and four scenarios are still owed by `feat-0056` to `feat-0059`. Recorded
+      rather than silently satisfied against a different claim, per the precedent `chore-0033`
+      set when `feat-0051`'s gate-count criterion was falsified the same way.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
