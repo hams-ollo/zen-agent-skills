@@ -72,7 +72,7 @@ two ways is the thing worth fixing.
 **4. The report sets no Content-Security-Policy header.** `_send()` at lines 2028 to 2036 sets
 `Content-Type`, `Content-Length` and `Cache-Control` and nothing else. The page uses no `innerHTML`
 at all, so this is defence in depth rather than a live hole. It is worth adding because it would have
-contained [`bug-0055`](bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md) rather than
+contained [`bug-0055`](done/bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md) rather than
 letting it reach the network, and a header that turns a click-to-execute into a blocked request is
 cheap insurance for a surface serving one maintainer's whole session history.
 

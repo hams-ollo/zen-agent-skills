@@ -397,9 +397,11 @@ ACTION_KINDS = ("navigate", "copy-command")
 # `copy-command`; a `navigate` action uses the field's value as the target.
 ACTIONS = (
     {"id": "open-pr", "kind": "navigate", "label": "Pull request", "field": "pr_url",
-     "template": None,
+     "template": None, "href_field": "pr_href",
      "note": "Opens the session's pull request. A link the viewer follows is a request their "
-             "browser makes, not one this report makes, so S-022 is untouched."},
+             "browser makes, not one this report makes, so S-022 is untouched. `field` carries "
+             "what the corpus recorded and is always displayed; `href_field` carries the same "
+             "value only when it is safe to point a browser at, and is None otherwise."},
     {"id": "copy-cwd", "kind": "copy-command", "label": "Copy path", "field": "cwd",
      "template": "{cwd}",
      "note": "Copies the working directory. A file:// link from an http:// page is blocked "
@@ -410,6 +412,53 @@ ACTIONS = (
              "command for a person to run; running it is not this surface's to do. The flag "
              "is the CLI's own, confirmed against `claude --help` rather than assumed."},
 )
+
+# The only schemes a `navigate` action may point a viewer's browser at. Everything in the
+# fleet report comes from a session transcript, which this repository did not write, and a
+# `navigate` value is the one field that reaches an interpreted context rather than a text
+# node. `javascript:` there is script execution in this surface's own origin, which can read
+# every route on this server: that is the whole session corpus (`bug-0055`).
+#
+# A constant rather than a literal in the check, for the reason `ACTION_KINDS` is one: it is
+# the edit that could make the guarantee false, so a test reads it instead of a reviewer
+# remembering it.
+ACTION_URL_SCHEMES = ("http:", "https:")
+
+
+def followable_url(value):
+    """`value` when a browser may be pointed at it, otherwise None.
+
+    The decision is made here rather than on the page, and that placement is the point. The
+    suite deliberately has no JavaScript runtime (a test asserts `node_modules` is never
+    introduced), so a check written in the page could only ever be asserted by reading its
+    source, while this one is executed by real tests against real ingested corpus values.
+    The page consumes the answer and carries no security logic it cannot be tested on.
+
+    Parsed rather than pattern-matched. `startswith("http")` admits `httpx://` and a
+    denylist of `javascript:` misses `data:` and `vbscript:`, so this is an allow-list over
+    the parsed scheme. `urlsplit` strips ASCII tab, carriage return and newline exactly as
+    browsers do, so `java\\nscript:` normalises to `javascript:` here and refuses, rather
+    than slipping past a naive prefix test and executing in the browser.
+
+    A relative or protocol-relative value has no scheme and is refused, which is correct
+    rather than incidental: this field records an absolute pull request URL, and `//evil/x`
+    resolved against this origin is a navigation the corpus never asked for.
+
+    Refusing returns None instead of raising, because a refused value is still displayed to
+    the viewer as text. Nothing the corpus recorded is hidden; it is only not made clickable.
+    """
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    try:
+        scheme = urlsplit(candidate).scheme.lower()
+    except ValueError:
+        # A value malformed enough that the parser refuses it is one no browser should be
+        # pointed at either. Fail closed.
+        return None
+    return candidate if f"{scheme}:" in ACTION_URL_SCHEMES else None
 
 
 class NotLoopback(ValueError):
@@ -688,7 +737,11 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
             "session_id": session_id, "project": project_name, "branch": branch,
             "first_activity": first, "last_activity": last, "title": title,
             "entrypoint": entrypoint, "cwd": cwd, "in_store": in_store,
-            "pr_url": pr_url, "pr_number": pr_number,
+            # `pr_url` is what the corpus recorded, unaltered, because this report is a
+            # record of the corpus and rewriting it here would make the row disagree with
+            # the transcript it summarises. `pr_href` is the same value only when a browser
+            # may be pointed at it, and None otherwise, so the page never has to decide.
+            "pr_url": pr_url, "pr_href": followable_url(pr_url), "pr_number": pr_number,
             "state": state, "registry": registry_state, "evidence": evidence,
             "pid": entry.get("pid"), "kind": entry.get("kind"),
             "name": entry.get("name"), "started_at": _started_at(entry),

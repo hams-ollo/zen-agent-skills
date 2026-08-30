@@ -2,22 +2,23 @@
 id: bug-0055
 title: A corpus-supplied pr_url becomes an href with no scheme check, so one click runs script in the report's origin
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
 spec: "docs/spec/agent-observatory.md"
 scenarios: [S-019, S-022]
 touched_files:
+  - scripts/observatory/serve.py
   - scripts/observatory/ui/index.html
-  - scripts/observatory/ingest.py
   - tests/test_observatory_serve.py
+  - docs/spec/agent-observatory.conformance.md
 created: 2026-08-29
 ---
 
 ## Problem
 
-[`index.html`](../scripts/observatory/ui/index.html) line 317, inside `actionControl()`, builds the
+[`index.html`](../../scripts/observatory/ui/index.html) line 317, inside `actionControl()`, builds the
 `open-pr` control:
 
 ```javascript
@@ -25,7 +26,7 @@ created: 2026-08-29
 ```
 
 `value` is `row[action.field]`, and `open-pr`'s field is `pr_url`. That value is unvalidated at every
-hop. [`ingest.py`](../scripts/observatory/ingest.py) line 199 stores it verbatim from the transcript:
+hop. [`ingest.py`](../../scripts/observatory/ingest.py) line 199 stores it verbatim from the transcript:
 
 ```python
             (sid, project, rec.get("prNumber"), rec.get("prUrl")),
@@ -72,7 +73,7 @@ it.
   the corpus and rewriting it there would make the ingester lie about what it read. The check belongs
   at the sink.
 - Adding a Content-Security-Policy header, which is worth doing and is filed separately as
-  [`chore-0082`](chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 4.
+  [`chore-0082`](../chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 4.
   It is defence in depth for this, not the fix for it.
 - Any change to `ACTIONS` or to the `S-019` enumeration claim. This adds no control and removes none.
 - The `copy-command` kinds, which put text on a clipboard and reach no interpreter.
@@ -104,6 +105,23 @@ without saying so.
   a record of what the corpus said, `ingest.py` is careful elsewhere to record rather than
   interpret, and a sanitising ingester would make `/api/fleet` disagree with the transcript it
   claims to summarise. The sink is where the interpretation happens and is where the check belongs.
+- **A premise that turned out false, and it moved the fix.** The Implementation notes above say to
+  do it in `actionControl()` with `new URL(value, window.location.href)`, and they name the choice
+  between a parser test over the emitted HTML and a documented gap. Neither was available: the suite
+  has no JavaScript runtime, and `test_observatory_serve.py` carries an assertion that
+  `node_modules` is never introduced, so adding one would be a new dependency for a stdlib-only
+  project across six CI cells. A check written in the page could therefore only ever be asserted by
+  reading its source, which is exactly the weak form this task warned against pinning. So the
+  decision moved to `followable_url()` in `serve.py`, where the tests execute it against values
+  driven from a real ingested transcript, and the page consumes the answer through a new
+  `href_field` on the action. `ingest.py` is consequently untouched and `serve.py` is not, which is
+  the reverse of the `touched_files` this task was filed with; the frontmatter records what was
+  actually changed.
+- **A seam left open deliberately.** The page still has one source-only assertion,
+  `test_the_page_takes_the_href_from_the_server_and_never_from_the_raw_field`, because the wiring
+  from `href_field` to the anchor is JavaScript and nothing here can run it. That is a real bound
+  and it is narrow: the policy is executed, only the wiring is read. Closing it needs a JavaScript
+  runtime in the suite, which is a decision about dependencies rather than about this defect.
 
 ## Risks and rollback
 
@@ -118,21 +136,21 @@ keeps today.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A `javascript:` value in `pr_url` does not become an anchor `href`. Drive it from an ingested
+- [x] A `javascript:` value in `pr_url` does not become an anchor `href`. Drive it from an ingested
       transcript rather than from a hand-built row, so the test covers the path the defect took.
-- [ ] A `data:` value is refused by the same route, proving the check is a scheme allow-list and not
+- [x] A `data:` value is refused by the same route, proving the check is a scheme allow-list and not
       a `javascript:` denylist.
-- [ ] An ordinary `https://github.com/...` value still renders as a followable link carrying
+- [x] An ordinary `https://github.com/...` value still renders as a followable link carrying
       `rel="noreferrer noopener"`.
-- [ ] A refused value is still visible to the viewer as text rather than dropped.
-- [ ] `/api/fleet` still returns the stored value unchanged, so the store and the report remain a
+- [x] A refused value is still visible to the viewer as text rather than dropped.
+- [x] `/api/fleet` still returns the stored value unchanged, so the store and the report remain a
       record of the corpus.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `agent-observatory` conformance matrix is brought up to date for `S-019` and `S-022`, or the deferral is recorded.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `agent-observatory` conformance matrix is brought up to date for `S-019` and `S-022`, or the deferral is recorded.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

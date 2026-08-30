@@ -108,7 +108,7 @@ as unattended-only.
 - A detector for injected instructions. `A10` rejects that approach explicitly and with citations,
   and reversing that decision is not this task's to make.
 - Hardening the one live instance of the class, which is filed as
-  [`bug-0055`](bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md).
+  [`bug-0055`](done/bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md).
 - The `house-style` pointer rule, which already exists and already works.
 
 ## Implementation notes
