@@ -86,7 +86,7 @@ cheap insurance for a surface serving one maintainer's whole session history.
   its docstring and is ROADMAP Epic B item 19's question.
 - Anything that makes the currency hook run the installer. Detect and report, never rewrite.
 - The `uninstall()` `KeyError`, filed as
-  [`bug-0053`](bug-0053-uninstall-deletes-then-raises-on-an-optional-manifest-key.md). Item 2 is
+  [`bug-0053`](done/bug-0053-uninstall-deletes-then-raises-on-an-optional-manifest-key.md). Item 2 is
   about entries the tool correctly declines to touch, not about entries it mishandles.
 - The `href` scheme check, filed as `bug-0055`. Item 4 is the second layer, not the fix.
 - Any change to `host_is_loopback()`'s behaviour, which was live-probed against seven header shapes

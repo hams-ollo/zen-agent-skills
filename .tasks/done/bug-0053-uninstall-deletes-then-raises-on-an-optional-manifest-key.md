@@ -2,7 +2,7 @@
 id: bug-0053
 title: uninstall deletes the target, then raises on a manifest key the validator calls optional
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -14,7 +14,7 @@ created: 2026-08-29
 
 ## Problem
 
-[`install.py`](../scripts/install.py) lines 1037 and 1039, inside `uninstall()`, subscript two
+[`install.py`](../../scripts/install.py) lines 1037 and 1039, inside `uninstall()`, subscript two
 manifest keys directly:
 
 ```python
@@ -69,7 +69,7 @@ consistent with the disk after any outcome.
   wanted, promoting the two keys to required is the alternative below, but it is a contract change
   and needs the `install` spec amended rather than a quiet edit.
 - Pruning entries for homes that no longer exist. That is a separate finding, filed as
-  [`chore-0082`](chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 2.
+  [`chore-0082`](../chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 2.
 - The `_beneath()` containment rule, which was exercised against `..`, a relative path, an empty
   string, and the home itself, and holds in every case.
 
@@ -82,7 +82,7 @@ Two shapes, and the first is preferred:
   than inventing a second one.
 - Promoting `tool` and `name` to required in `_validate_manifest()` is the alternative. It is more
   honest about what `uninstall()` needs and it costs an amendment to
-  [`install.md`](../docs/spec/install.md), whose `S-007` and `S-012` govern reversal.
+  [`install.md`](../../docs/spec/install.md), whose `S-007` and `S-012` govern reversal.
 
 Independently of which is chosen, **move `save_manifest()` so the record cannot outlive the
 deletion.** Writing it once at the end is what makes a mid-loop failure lose the record of every
@@ -99,6 +99,26 @@ dereferenced where, and a reader trusting it is how this shipped.
   consulted for a target the installer derived itself from `--home` and its own subpath table, never
   a source of paths. `uninstall()` is the one place a manifest value becomes a path acted on, and the
   containment check there holds.
+- **A rejected alternative, chosen against during implementation.** `try`/`finally` around the loop
+  rather than a `save_manifest()` per removal. Both make the record truthful; the `finally` writes
+  once and keeps the existing single-write shape, and it keeps the failure visible. An
+  `except OSError` was rejected outright: swallowing a failed `_rm` would report a successful
+  uninstall over files still on disk, which is this defect inverted and is the direction the task's
+  Risks section names.
+- **A premise of this task's own test that turned out false, and the test was narrowed rather than
+  the code changed.** The regression guard added here scans `install.py` for a bare subscript of any
+  key `_OPTIONAL_ENTRY_TYPES` lists. Its first version scanned the whole file and failed, on
+  `entry['name']` inside `_validate_manifest()`. That line is correct: it sits under an
+  `isinstance(entry.get("name"), str)` guard, and the validator is definitionally the one function
+  that inspects a shape before anything trusts it. Editing it to satisfy the assertion would have
+  been the wrong repair, so the assertion now excludes the validator and separately asserts the
+  guard it assumes is still there, which fails if that exclusion ever starts hiding something.
+- **A seam left open deliberately.** `test_a_target_recorded_under_another_home_is_untouched_by_the_failure`
+  passes against the unfixed code, because the old loop never reached `save_manifest()` at all and so
+  could not damage another home's entries either. It is kept because it guards the fix rather than
+  the defect: the `finally` now writes `others` back on every path, and that is the one way this
+  change could break the `S-007` and `S-012` scoping. Four of the five tests here fail without the
+  fix; this is the fifth and it is not evidence about the bug.
 
 ## Risks and rollback
 
@@ -114,19 +134,19 @@ same `save_manifest()` either way.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test builds a manifest entry carrying `target` but no `tool` and no `name`, runs
+- [x] A test builds a manifest entry carrying `target` but no `tool` and no `name`, runs
       `uninstall()` against a temporary home, and asserts it returns rather than raising.
-- [ ] A test asserts that after a mid-loop failure the saved manifest no longer claims a target that
+- [x] A test asserts that after a mid-loop failure the saved manifest no longer claims a target that
       was actually removed. Drive the failure through an entry the code cannot print, not through a
       patched `save_manifest`, so the test would still fail if the loop were restructured.
-- [ ] `--dry-run` over the same manifest completes and removes nothing.
-- [ ] The comment above `_OPTIONAL_ENTRY_TYPES` names every reader of every key it lists, including
+- [x] `--dry-run` over the same manifest completes and removes nothing.
+- [x] The comment above `_OPTIONAL_ENTRY_TYPES` names every reader of every key it lists, including
       `uninstall()`.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

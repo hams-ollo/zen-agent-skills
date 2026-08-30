@@ -297,9 +297,16 @@ class ManifestError(Exception):
 _OPTIONAL_ENTRY_TYPES = {
     "source": (str, "a string"),      # _check_entry: Path(entry.get("source", ""))
     "tool": (str, "a string"),        # check(): sort key and printed column
+                                      # uninstall(): printed column
     "name": (str, "a string"),        # check(): sort key, and the ADOPTED_ENTRY_NAMES test
+                                      # uninstall(): printed column
     "digests": (dict, "an object"),   # _compare(): iterated as a mapping
 }
+# Every reader named above reaches its key through `.get()`, and that is what makes the
+# optionality real rather than asserted. `uninstall()` was missing from this list and
+# subscripted both of its two, so a record this validator accepts killed it mid-loop, after
+# it had already deleted a target (bug-0053). A reader added here without a `.get()` puts
+# the same trap back, and the comment is the only place the two facts are stated together.
 
 
 def _describe(value) -> str:
@@ -1028,16 +1035,38 @@ def uninstall(home: Path, dry: bool) -> int:
         return 0
 
     removed = 0
-    for e in mine:
-        target = Path(e["target"])
-        if target.is_symlink() or target.exists():
-            if not dry:
-                _rm(target)
-            removed += 1
-            print(f"{tag}removed   {e['tool']:8} {e['name']}  ({target})")
-        else:
-            print(f"{tag}gone      {e['tool']:8} {e['name']}  ({target})")
-    save_manifest(others, dry)
+    # How many of `mine` have been dealt with, so the `finally` below can write a record
+    # that matches the disk whatever happens in the loop (bug-0053). Writing the record once
+    # after the loop is what let a failure part-way through lose every removal that had
+    # already happened: the files were gone and the manifest still claimed them, which is
+    # the over-claiming direction, and the next run reads that record to decide what it
+    # placed. An entry is counted here whether it was removed or already gone, because
+    # neither is installed any more and both leave the record.
+    handled = 0
+    try:
+        for e in mine:
+            target = Path(e["target"])
+            # `.get()`, not subscription. `_validate_manifest()` requires only `target` and
+            # treats `tool` and `name` as optional on purpose, so a record written by
+            # another version of this tool is readable rather than corrupt-looking. This
+            # function subscripted both and died on such a record *after* deleting its
+            # target. `check()` already reads them this way; this is the third reader
+            # agreeing with the other two. `(unnamed entry)` is the wording
+            # `install-currency-reminder.py` uses for the same gap.
+            label = f"{(e.get('tool') or '?'):8} {e.get('name') or '(unnamed entry)'}"
+            if target.is_symlink() or target.exists():
+                if not dry:
+                    _rm(target)
+                removed += 1
+                print(f"{tag}removed   {label}  ({target})")
+            else:
+                print(f"{tag}gone      {label}  ({target})")
+            handled += 1
+    finally:
+        # `finally` rather than `except`: the record is made truthful and the failure still
+        # surfaces. Swallowing an OSError from `_rm` would report a successful uninstall
+        # over files that are still there, which is this defect inverted.
+        save_manifest(others + mine[handled:], dry)
     print(f"\n{tag}Uninstalled {removed} target(s).")
     if others:
         print(f"{tag}Kept {len(others)} target(s) recorded under other homes.")

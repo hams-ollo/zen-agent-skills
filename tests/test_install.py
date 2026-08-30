@@ -2413,5 +2413,184 @@ class MalformedManifestInstallChoiceTests(unittest.TestCase):
                          "the damaged record must survive the run that refused it")
 
 
+class UninstallSurvivesAPartialRecordTests(unittest.TestCase):
+    """bug-0053: `uninstall()` deleted a target and then died on an optional key.
+
+    `_validate_manifest()` requires only `target`; `tool` and `name` are optional so that a
+    record written by another version of this tool reads as a record rather than as
+    corruption (`bug-0024`). `uninstall()` subscripted both, so a manifest this validator
+    accepts killed the run at the print statement, one line after `_rm()` had already taken
+    the file, and the `save_manifest()` at the end of the loop never ran. The file was gone
+    and the record still claimed it, which is the over-claiming direction and the one the
+    next run reads to decide what it placed.
+
+    These drive `uninstall()` directly rather than through the CLI, because the defect is in
+    the loop rather than in argument handling, and directly is where a mid-loop failure can
+    be induced without a subprocess.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        inst.MANIFEST = self._real_manifest
+
+    def _place(self, name):
+        """A directory under the home, as an install would leave one."""
+        target = self.home / ".claude" / "skills" / name
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("placed by the test\n", encoding="utf-8")
+        return target
+
+    def _record(self, entries):
+        inst.MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                                 encoding="utf-8")
+
+    def _entries(self):
+        return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+    def _uninstall(self, dry=False):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.uninstall(self.home, dry)
+        return code, buf.getvalue()
+
+    def _bare_entry(self, name):
+        """An entry the validator accepts and the old code could not print: `target` only."""
+        return {"target": str(self._place(name)),
+                "source": str(inst.SKILLS_DIR / name), "mode": "copy"}
+
+    def test_an_entry_with_no_tool_or_name_is_removed_rather_than_raising(self):
+        entry = self._bare_entry("doc-sync")
+        self._record([entry])
+        target = Path(entry["target"])
+
+        inst._validate_manifest({"entries": [entry]})    # the premise: this record is legal
+
+        code, out = self._uninstall()
+
+        self.assertEqual(code, 0, out)
+        self.assertFalse(target.exists(), "the recorded target was not removed")
+        self.assertEqual(self._entries(), [],
+                         "the record still claims a target that has been removed")
+        self.assertIn("(unnamed entry)", out,
+                      "an entry with no name is removed silently, so a reader cannot tell "
+                      "which record the line came from")
+
+    def test_the_dry_run_over_the_same_record_removes_nothing_and_does_not_raise(self):
+        """The preview a careful person takes first raised in the same place as the real
+        run, so the one step that exists to make this safe was the step that failed."""
+        entry = self._bare_entry("doc-sync")
+        self._record([entry])
+        target = Path(entry["target"])
+
+        code, out = self._uninstall(dry=True)
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(target.exists(), "a dry run removed the target")
+        self.assertEqual(len(self._entries()), 1, "a dry run rewrote the record")
+        self.assertIn("[dry-run]", out)
+
+    def test_a_failure_part_way_through_leaves_a_record_that_matches_the_disk(self):
+        """The property the fix is really about, and it is not about missing keys.
+
+        Whatever stops the loop, the record must claim exactly what is still on disk. The
+        failure is induced at `_rm` rather than by patching `save_manifest`, so this still
+        fails if the loop is restructured: a real `_rm` can fail on a permission error, a
+        file held open, or a full disk, and the old code lost the record of every removal
+        that had already succeeded.
+        """
+        first, second, third = (self._bare_entry(n) for n in ("a-skill", "b-skill",
+                                                              "c-skill"))
+        self._record([first, second, third])
+        doomed = Path(second["target"])
+        real_rm = inst._rm
+
+        def rm(target):
+            if Path(target) == doomed:
+                raise OSError(13, "permission denied")
+            return real_rm(target)
+
+        inst._rm = rm
+        self.addCleanup(lambda: setattr(inst, "_rm", real_rm))
+
+        buf = io.StringIO()
+        with self.assertRaises(OSError):
+            with contextlib.redirect_stdout(buf):
+                inst.uninstall(self.home, dry=False)
+
+        self.assertFalse(Path(first["target"]).exists(), "the first target survived")
+        self.assertTrue(doomed.exists(), "the target whose removal failed is gone anyway")
+        self.assertTrue(Path(third["target"]).exists(),
+                        "a target after the failure was removed")
+
+        remaining = [e["target"] for e in self._entries()]
+        self.assertNotIn(first["target"], remaining,
+                         "the record still claims a target this run removed, which is the "
+                         "over-claiming direction bug-0053 was filed for")
+        self.assertIn(second["target"], remaining,
+                      "the record dropped a target that is still on disk")
+        self.assertIn(third["target"], remaining,
+                      "the record dropped a target that was never reached")
+
+    def test_a_target_recorded_under_another_home_is_untouched_by_the_failure(self):
+        """The `finally` writes `others` back too, so a partial run must not take another
+        home's entries with it. That scoping is `S-007` and `S-012` and predates this fix."""
+        mine = self._bare_entry("a-skill")
+        elsewhere = {"target": str(self.root / "other-home" / ".claude" / "skills" / "x"),
+                     "tool": "claude", "name": "x", "mode": "copy"}
+        self._record([mine, elsewhere])
+        real_rm = inst._rm
+        inst._rm = lambda target: (_ for _ in ()).throw(OSError(13, "denied"))
+        self.addCleanup(lambda: setattr(inst, "_rm", real_rm))
+
+        buf = io.StringIO()
+        with self.assertRaises(OSError):
+            with contextlib.redirect_stdout(buf):
+                inst.uninstall(self.home, dry=False)
+
+        remaining = [e["target"] for e in self._entries()]
+        self.assertIn(elsewhere["target"], remaining,
+                      "another home's record was lost by a failure in this one")
+
+    def test_every_consumer_of_an_optional_key_reaches_it_through_get(self):
+        """The comment above `_OPTIONAL_ENTRY_TYPES` is the only statement of which reader
+        touches which key, and a reader trusting it is how this shipped. This asserts the
+        property that comment describes, over the source, so a fourth consumer added with a
+        subscript puts the trap back and fails here.
+
+        `_validate_manifest()` is excluded, and the exclusion is the point rather than a
+        convenience. It is the one function whose job is to inspect a shape before anything
+        trusts it, so it subscripts `name` inside an `isinstance(entry.get("name"), str)`
+        guard, which is correct and idiomatic there. Everywhere else the entry has already
+        been accepted and the key is optional by contract, so a bare subscript is a defect.
+        The first version of this assertion scanned the whole file and flagged that guarded
+        line; narrowing it was the right answer and editing the validator to satisfy it
+        would have been the wrong one.
+        """
+        source = Path(inst.__file__).read_text(encoding="utf-8")
+        start = source.index("def _validate_manifest(")
+        end = source.index("\ndef ", start)
+        consumers = source[:start] + source[end:]
+        self.assertIn("entry.get(\"name\")", source[start:end],
+                      "the validator no longer guards the subscript this exclusion assumes, "
+                      "so the exclusion is now hiding something")
+
+        for key in inst._OPTIONAL_ENTRY_TYPES:
+            for spelling in (f'e["{key}"]', f"e['{key}']",
+                             f'entry["{key}"]', f"entry['{key}']"):
+                with self.subTest(key=key, spelling=spelling):
+                    self.assertNotIn(
+                        spelling, consumers,
+                        f"{spelling} subscripts an optional manifest key, which "
+                        f"_validate_manifest does not require: read it through .get()")
+
+
 if __name__ == "__main__":
     unittest.main()
