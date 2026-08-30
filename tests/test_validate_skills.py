@@ -845,20 +845,170 @@ class TestLensComposition(unittest.TestCase):
         vs.check_lenses_are_composed(skills_dir.parent / "rules", skill_texts, errors)
         self.assertEqual(errors, [])
 
-    def test_autonomy_is_composed_by_exactly_the_five_skills_it_cites(self):
-        # feat-0048's own acceptance criterion, kept as a test because the wiring list is
-        # the lens's outbound links: a skill gets a reference if and only if the lens
-        # claims one of its rules. A sixth reference would make the lens look composed
-        # somewhere it is not load-bearing, and a fifth missing one leaves a cited skill
-        # unable to reach the module.
+    def test_autonomy_is_composed_by_every_skill_because_it_declares_universal_scope(self):
+        # This replaces feat-0048's acceptance criterion, which pinned the reference list to
+        # exactly the five skills the lens cited by name, on the premise that a skill gets a
+        # reference if and only if the lens claims one of its rules.
+        #
+        # feat-0064 superseded that premise rather than loosening it. `A10` is a rule about
+        # material an agent reads, which is every skill here, so a list of five was not a
+        # tight wiring rule but a rule that had not caught up with the lens's newest content.
+        # The lens now declares `**Scope: universal.**` and S-026 enforces the stronger claim,
+        # so the assertion moves with it: not "exactly the cited ones" but "all of them".
         skills_dir = REPO_ROOT / ".agents" / "skills"
+        every = sorted(d.name for d in skills_dir.iterdir() if d.is_dir())
         referencing = sorted(d.name for d in skills_dir.iterdir()
                              if d.is_dir()
                              and "autonomy.md" in (d / "SKILL.md").read_text(encoding="utf-8"))
-        self.assertEqual(
-            referencing,
-            ["doc-sync", "fix-batch", "pr-describe", "spec-conformance", "verifier-agent"],
-        )
+        self.assertEqual(referencing, every,
+                         "autonomy.md declares universal scope, so every skill must reference "
+                         "it: a lens reaches an agent only through a skill that points at it")
+
+    def test_review_quality_stays_topical_so_the_universal_rule_means_something(self):
+        # The negative half, and the one that keeps S-026 from collapsing into "every lens is
+        # universal". `review-quality.md` carries no scope declaration and is composed only by
+        # the skills that review. If this ever equals the full skill list, either the lens
+        # gained a declaration or the rule stopped discriminating, and both are worth failing.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        rules = REPO_ROOT / ".agents" / "rules"
+        self.assertFalse(
+            vs.declares_universal_scope((rules / "review-quality.md").read_text(encoding="utf-8")),
+            "review-quality.md now declares universal scope, which would require all "
+            "twenty-two skills to name a rubric only the reviewing ones apply")
+        referencing = sorted(d.name for d in skills_dir.iterdir()
+                             if d.is_dir()
+                             and "review-quality.md" in (d / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertTrue(referencing, "no skill composes the review lens, so S-023 is violated")
+        self.assertLess(len(referencing), len([d for d in skills_dir.iterdir() if d.is_dir()]),
+                        "every skill references the review lens, so the topical case this "
+                        "rule exists to protect no longer has an example in the tree")
+
+    def test_every_shipped_universal_lens_reaches_every_shipped_skill(self):
+        # S-026 against the real tree, which is the assertion that would have caught
+        # autonomy.md sitting at five of twenty-two for the twenty-one days after A10.
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        skill_texts = {d.name: (d / "SKILL.md").read_text(encoding="utf-8")
+                       for d in sorted(skills_dir.iterdir()) if d.is_dir()}
+        errors = []
+        vs.check_universal_lenses_reach_every_skill(
+            skills_dir.parent / "rules", skill_texts, errors)
+        self.assertEqual(errors, [])
+
+    def test_at_least_one_shipped_lens_declares_universal_scope(self):
+        # Without this the rule above passes over a tree where nothing is universal, which
+        # is the check-that-cannot-fail shape AGENTS.md names as the thing to buy by hand.
+        rules = REPO_ROOT / ".agents" / "rules"
+        declaring = sorted(p.name for p in rules.glob("*.md")
+                           if vs.declares_universal_scope(p.read_text(encoding="utf-8")))
+        self.assertEqual(declaring, ["autonomy.md", "house-style.md"],
+                         "the set of universal lenses changed, which is a decision about "
+                         "what every skill must compose: state it in the task that changes it")
+
+
+class TestUniversalLensScope(unittest.TestCase):
+    """S-026: a lens declaring universal scope must be referenced by every skill (feat-0064).
+
+    The bug population is a lens that some skills compose and others never name. That is not
+    a partially wired module: it is inert for exactly the skills that miss it, and the
+    failure is silent because every other skill still points at it and S-023 is satisfied by
+    any single referrer. `autonomy.md` sat at five of twenty-two for the twenty-one days
+    after `A10`, the kit's only rule about material an agent did not author, was added to it,
+    and every gate passed throughout.
+
+    The negative cases carry the weight here for the same reason they do for S-023. This rule
+    is strictly stronger, so a lens wrongly read as universal fails a whole tree at once, and
+    the cheap response to that is to delete the rule rather than satisfy it.
+    """
+
+    UNIVERSAL_LENS = (
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**, the fourth beside the other three.\n\n"
+        "**Scope: universal.** Every skill in this kit references this module.\n"
+    )
+    TOPICAL_LENS = (
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**, the fourth beside the other three.\n\n"
+        "It governs something only some skills do.\n"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.skills = self.root / "agents" / "skills"
+        self.rules = self.root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+
+    def _write_rules(self, name, text):
+        (self.rules / name).write_text(text, encoding="utf-8")
+
+    def _skill(self, name, references=False):
+        body = ("Follow [`example.md`](../../rules/example.md).\n" if references
+                else "This skill composes nothing.\n")
+        _write_skill(self.skills, name, GOOD_FM.format(name=name, desc=LONG_DESC), body=body)
+
+    def test_a_universal_lens_one_skill_never_names_fails_and_names_that_skill(self):
+        self._write_rules("example.md", self.UNIVERSAL_LENS)
+        self._skill("alpha", references=True)
+        self._skill("beta", references=False)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("declares universal scope but 1 of 2 skill(s) never reference it", out)
+        self.assertIn("beta", out)
+
+    def test_the_error_names_every_skill_that_misses_it_rather_than_the_first(self):
+        # One finding per lens carrying the whole list: the fix is one edit per named skill,
+        # and twenty-two findings for one unwired module is how output gets skimmed.
+        self._write_rules("example.md", self.UNIVERSAL_LENS)
+        self._skill("alpha", references=True)
+        for name in ("beta", "gamma", "delta"):
+            self._skill(name, references=False)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("3 of 4 skill(s)", out)
+        for name in ("beta", "gamma", "delta"):
+            with self.subTest(skill=name):
+                self.assertIn(name, out)
+        self.assertEqual(out.count("declares universal scope"), 1,
+                         "the lens is reported once, not once per skill that misses it")
+
+    def test_a_universal_lens_every_skill_names_passes(self):
+        self._write_rules("example.md", self.UNIVERSAL_LENS)
+        self._skill("alpha", references=True)
+        self._skill("beta", references=True)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_topical_lens_needs_only_one_referrer(self):
+        # The distinction the rule rests on. Without this, S-026 collapses into "every lens
+        # is universal" and the topical case stops being expressible.
+        self._write_rules("example.md", self.TOPICAL_LENS)
+        self._skill("alpha", references=True)
+        self._skill("beta", references=False)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_scope_declaration_inside_a_fence_does_not_count(self):
+        # Same reasoning as S-023's fence rule: inside a fence it is sample text showing what
+        # a declaration looks like rather than making one. A lens documenting the convention
+        # must not thereby opt every skill into composing it.
+        self._write_rules("example.md", self.TOPICAL_LENS
+                          + "\nA lens opts in by writing:\n\n```\n"
+                            "**Scope: universal.** Every skill references this.\n```\n")
+        self._skill("alpha", references=True)
+        self._skill("beta", references=False)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_rules_document_that_is_not_a_lens_is_not_conscripted_by_the_marker(self):
+        # Both gates have to hold. A directory README explaining the convention is not a lens
+        # and must not become one by quoting the marker outside a fence.
+        self._write_rules("README.md",
+                          "# What lives in this directory\n\n"
+                          "**Scope: universal.** is how a module opts every skill in.\n")
+        self._skill("alpha", references=False)
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
 
 
 class TestSupportingFileLinkChecks(unittest.TestCase):

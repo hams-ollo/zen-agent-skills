@@ -382,9 +382,15 @@ The rest:
   skill composes cannot be exercised, which means it cannot clear the contribution bar. This is the
   gating item under Epic E #3. Scoped as
   [`feat-0048`](.tasks/done/feat-0048-wire-the-autonomy-lens-into-the-skills.md) and **shipped
-  2026-08-19**: the lens is now referenced from exactly the five skills whose rules it holds
+  2026-08-19**: the lens was then referenced from exactly the five skills whose rules it holds
   (`doc-sync`, `fix-batch`, `pr-describe`, `spec-conformance`, `verifier-agent`), each naming the
-  specific rule it takes, and that set matches the lens's own outbound link list. The durable half is
+  specific rule it takes, and that set matched the lens's own outbound link list. **Superseded
+  2026-08-29 by [`feat-0064`](.tasks/done/feat-0064-make-a10-reach-the-skills-that-read-outside-content.md),
+  which took it to all twenty-two.** Five was a tight rule for a lens whose rules were about how an
+  agent behaves unattended, and the wrong rule once `A10` was added on 2026-08-27, since that one is
+  about material an agent reads and every skill reads something. The lens now declares
+  `**Scope: universal.**` and a second validator rule enforces it, so the wiring list is derived from
+  the lens rather than pinned to a set a later rule outgrew. The durable half is
   a new `validate-skills.py` rule, that a file under `.agents/rules/` declaring itself a lens must
   have an inbound reference; writing it found that `main()` had never opened `.agents/rules/` at all,
   which is why an unwired lens was invisible to every gate. **This closes the gate it names under

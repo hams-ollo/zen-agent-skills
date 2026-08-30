@@ -15,6 +15,20 @@ status-contradiction checking on 2026-07-25, and the 2026-07-27 review pass adde
 check now specified as S-011. Scenarios S-009 through S-016 close that gap. Re-approved by the
 author on 2026-07-27.
 
+**Amended 2026-08-29 (`feat-0064`) to state the universal-lens rule: a lens that declares universal
+scope in its own opening must be referenced by every skill, not merely by one. Scenario S-026, plus
+the "what it reads" surface entry admitting that the tool now reads a scope declaration out of a
+lens as well as a lens declaration.** This amendment is **pending the author's re-approval**. It is
+the first amendment here written *before* the behaviour rather than after it, which is a change from
+the four the notes below record, each of which wrote down a rule the implementation had already
+grown. The rule strengthens `S-023` rather than replacing it: that scenario asks whether **at least
+one** skill composes a lens, which is right for a topical one and too weak for a universal one,
+since a lens reaches an agent only through a skill that points at it and one missing from some
+bodies is inert for exactly those. Measured on 2026-08-29, before the rule: `house-style.md` was
+referenced by all twenty-two skills with nothing enforcing it, and `autonomy.md` by five, for the
+twenty-one days since `A10` was added to it. `status` is left reading `approved` per the convention
+in [`README.md`](README.md), for the reason the notes below give.
+
 **Amended 2026-08-27 (`chore-0065`) to state the non-skill `.agents/` markdown link rule: the
 markdown that ships in the tree the skills sit in, outside every skill directory, is link-checked
 from where it sits, and a link reaching above that tree is reported as non-portable rather than as
@@ -486,12 +500,48 @@ validator is the kit-level lint that enforces that bar.
   nobody asked it to lint, so a finding against a document whose author never opted into being a lens
   invites deleting the rule rather than satisfying it.
 
+### Scenario S-026: a lens declaring universal scope that some skill never references fails
+
+- **Given** a file in the sibling rules module that declares itself a lens and also declares
+  universal scope in its own opening, and at least one `SKILL.md` in the tree that does not
+  reference it
+- **When** the validator runs
+- **Then** it records an error naming that lens and every skill that misses it, and exits non-zero,
+  because a universal lens absent from some bodies is not partially wired: it is inert for exactly
+  those skills, and an adopter who rewrites it changes nothing there.
+
+  **This strengthens `S-023` and does not replace it.** That scenario asks whether at least one skill
+  composes a lens, which is the right question for a topical one. `review-quality.md` is composed
+  only by the skills that review, and requiring the rest to name a rubric they never apply would be
+  the noise that gets a rule ignored. So the two coexist: every lens must be composed by somebody,
+  and a lens that says it is universal must be composed by everybody.
+
+  **Universality is declared in the lens rather than listed in the validator**, for the reason the
+  lens declaration itself is derived rather than hardcoded: a list in the script passes the day a
+  fourth lens is added and nobody edits it, which is the failure `feat-0048` was filed for. Absence
+  of the declaration means topical, and that default is a decision rather than an omission. It is the
+  safe direction because the weaker rule still applies: a lens that should have been universal and
+  forgot to say so is still caught if nobody composes it at all.
+
+  **What counts as a reference is `S-023`'s definition**, unchanged: the lens's filename appearing in
+  a `SKILL.md` outside every fenced code block. Restating it here with any variation would create two
+  definitions of one thing, and the failure mode is that they drift.
+
+  **The error names every skill that misses it, in one finding per lens** rather than one per skill.
+  The fix is one edit per named skill and a reader wants the list; twenty-two findings for one
+  unwired module is the shape that gets a validator's output skimmed.
+
+  Measured on 2026-08-29, before this rule existed: `house-style.md` was referenced by all twenty-two
+  skills, which was discipline rather than a guarantee since `AGENTS.md` stated that rule and nothing
+  checked it, and `autonomy.md` by five, for the twenty-one days since `A10` was added to it. Both
+  facts were invisible to every gate.
+
 ## Proposed Surface
 
 | Element | Detail |
 |---|---|
 | Invocation | `python scripts/validate-skills.py` |
-| What it reads | every skill directory under the target skills directory, in full rather than its `SKILL.md` alone: the body, plus the files the kit distributes beside it, of which the markdown is read for S-024 and the rest is counted without being opened. Plus the rest of the distributed tree that skills directory sits in (`.agents/` for the default target, holding the rules module and the hooks module): its markdown is read for S-025, and a rules file is read for S-023 as well, while the rest is counted without being opened. Nothing above that tree is read. The walk outside the skills directory does not always run, and S-025 requires the run to say when it did not. |
+| What it reads | every skill directory under the target skills directory, in full rather than its `SKILL.md` alone: the body, plus the files the kit distributes beside it, of which the markdown is read for S-024 and the rest is counted without being opened. Plus the rest of the distributed tree that skills directory sits in (`.agents/` for the default target, holding the rules module and the hooks module): its markdown is read for S-025, and a rules file is read for S-023 and S-026 as well, while the rest is counted without being opened. A rules file is read for two declarations rather than one: whether it presents itself as a lens (S-023), and whether it claims universal scope (S-026). Both are read out of the file rather than listed here or in the tool, so a lens added later is governed without either being edited. Nothing above that tree is read. The walk outside the skills directory does not always run, and S-025 requires the run to say when it did not. |
 | Exit code | non-zero when any error is recorded, zero otherwise (warnings do not fail) |
 | Output | per-issue `WARN`/`ERROR` lines, then a `Checked N skill(s): E error(s), W warning(s).` summary, then a second line reporting how many supporting files were link-checked and how many were skipped, by reason (S-024), and on that same second line what the walk outside the skills directory covered (S-025). That second half must make the three outcomes S-025 names distinguishable from one another: a run that declined to look, a run that looked and found nothing shipped there, and a run that looked and link-checked none of what it found. What is fixed is that the three are told apart, not which words or numbers tell them apart. When the skills directory is absent, a missing-directory error instead of both summary lines; when it is present but empty, a no-skills-found line instead of both. The count `N` is of skills, so an S-023, S-024 or S-025 error raises the error count without changing it. |
 

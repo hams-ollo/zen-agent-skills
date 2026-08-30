@@ -5,6 +5,23 @@ This file is a **swappable module**, the third beside [`house-style.md`](house-s
 This one governs what an agent may do **when nobody is watching**: in a worktree, in a batch, in a
 cloud session, in any run where the answer to "should I?" cannot be a question put to a person.
 
+**One rule here is not scoped that way, and the exception is stated at the top because it was
+inherited rather than chosen.** `A10` governs what an agent may do with material it did not author,
+and that is a property of the material rather than of the run. An agent reading a hostile diff in an
+attended session acts on an embedded instruction exactly as one in a batch does, and the person
+watching sees a tool call rather than a provenance violation. `A10` was added under this module's
+unattended framing because its citation was an automated workflow, and the framing does not fit the
+rule as written. **`A10` applies to every run, attended or not.** `A1` to `A9` keep the scope above.
+Recorded 2026-08-29 by `feat-0064`, which found the rule reaching two of the eleven skills that read
+outside-authored material, and all five of its referrers introducing it with "when this runs
+unattended".
+
+**Scope: universal.** Every skill in this kit references this module, and `validate-skills.py` fails
+when one does not. A lens reaches an agent only through a skill that points at it, so a universal
+lens that some skills never name is silently inert for exactly those skills. This module sat at five
+of twenty-two referrers for the twenty-one days after `A10` landed, and every gate passed throughout,
+because the only rule about lens composition asked whether **at least one** skill pointed at a lens.
+
 It is separated from the skills so an adopter can retune the ceiling, or replace it with their own,
 without touching skill logic. If you are adopting this kit: keep it, empty it, or rewrite it.
 
