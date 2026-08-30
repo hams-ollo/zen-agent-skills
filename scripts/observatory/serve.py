@@ -89,6 +89,22 @@ INDEX = UI_DIR / "index.html"
 # the corpus, and a date object here would be the first step toward comparing against today.
 _ISO_DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
 
+# Every source the page needs is in the page. `default-src 'none'` then names the few it
+# actually uses, rather than `'self'` admitting whatever else the origin might later serve.
+# `connect-src 'self'` is the JSON routes and the event stream; `img-src data:` covers the
+# inline SVG charts the page draws itself. No `script-src` host is listed at all, so a
+# `javascript:` URI is blocked whatever else changes on the page.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'none'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "img-src 'self' data:; "
+    "base-uri 'none'; "
+    "form-action 'none'; "
+    "frame-ancestors 'none'"
+)
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 
@@ -340,8 +356,11 @@ ESTIMATE_LABEL = (
 )
 
 HISTORICAL_RATES_NOTE = (
-    "Historical sessions are priced at current rates. The table holds one rate per model and "
-    "the corpus spans months, so a session run when rates differed is priced at today's."
+    "A message is priced at the rate in force on its own date, where the table records one. "
+    "A model whose price never changed carries a single rate that applies to every date, so a "
+    "session run when that model cost something else is still priced at the one figure "
+    "recorded. The date compared is always the corpus's and never this machine's, so two runs "
+    "a month apart over the same corpus produce identical figures."
 )
 
 # `S-011` in one sentence, served to the page for the same reason `LIVENESS_POLICY` is: the
@@ -481,7 +500,12 @@ def loopback_address(host: str) -> str:
     machine whose hosts file points `localhost` somewhere else must not be able to talk this
     server onto a routable interface.
     """
-    if host.rstrip(".") == "localhost":
+    # Lowered, agreeing with `host_is_loopback()` below. These two answer different
+    # questions, what may this bind against what may this answer, and they were reading the
+    # same name two ways: `--host LOCALHOST` was refused here and accepted there. It failed
+    # closed, which is the right direction and not a reason to leave one name with two
+    # readings (chore-0082).
+    if host.rstrip(".").lower() == "localhost":
         return DEFAULT_HOST
     try:
         address = ipaddress.ip_address(host)
@@ -2235,6 +2259,18 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
         # The page is a view of a store that changes under it, so a cached answer is a wrong
         # answer rather than a stale nicety.
         self.send_header("Cache-Control", "no-store")
+        # Defence in depth rather than a fix for anything live: the page uses no `innerHTML`
+        # anywhere and `bug-0055` closed the one sink where a corpus value reached an
+        # interpreted context. This is the layer that would have contained that defect
+        # instead of letting it reach the network, on a surface serving one maintainer's
+        # whole session history.
+        #
+        # `'unsafe-inline'` is required and is not an oversight. Every style and every line
+        # of script in `ui/index.html` is inline, deliberately, because `S-022` forbids
+        # fetching a subresource and the page must render with the network unavailable.
+        # Extracting them would trade one contract property for another. Even with it,
+        # `script-src` blocks a `javascript:` URI, which is the containment this is for.
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)

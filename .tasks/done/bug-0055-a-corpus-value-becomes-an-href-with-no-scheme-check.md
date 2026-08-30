@@ -73,7 +73,7 @@ it.
   the corpus and rewriting it there would make the ingester lie about what it read. The check belongs
   at the sink.
 - Adding a Content-Security-Policy header, which is worth doing and is filed separately as
-  [`chore-0082`](../chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 4.
+  [`chore-0082`](chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 4.
   It is defence in depth for this, not the fix for it.
 - Any change to `ACTIONS` or to the `S-019` enumeration claim. This adds no control and removes none.
 - The `copy-command` kinds, which put text on a clipboard and reach no interpreter.

@@ -134,6 +134,15 @@ DRAFT_STATUS = "draft"
 METADATA_KEY_RE = re.compile(r"^metadata:\s*$")
 STATUS_FIELD_RE = re.compile(r"^\s+status:\s*(\S.*?)\s*$")
 
+# What this hook will digest before declining. A recorded `source` is a path read out of a
+# manifest, not one this hook derived, and this runs at every session start, so an entry
+# naming a large directory would turn every start into a full recursive read of it. Set far
+# above any module the kit ships (the largest is the hooks directory) so a correct install
+# can never reach them: the failure direction that costs more is a cap firing on a real
+# install, since `error` is a reporting verdict.
+MAX_DIGEST_FILES = 2000
+MAX_DIGEST_BYTES = 64 * 1024 * 1024
+
 # How many names to spell out before summarising. A reminder long enough to scroll is one
 # an agent learns to skip, and then says nothing on the start that mattered.
 MAX_NAMED = 6
@@ -160,22 +169,58 @@ def _digestable(rel: Path, path: Path) -> bool:
     return path.suffix != ".pyc" and "__pycache__" not in rel.parts
 
 
-def digest_tree(root: Path) -> dict:
+class TreeTooLarge(Exception):
+    """A recorded source is too big to digest at session start.
+
+    Not an error about the tree: it is this hook declining to spend a session start on it.
+    `classify()` turns it into the `error` verdict, which already means "could not be
+    compared at all" and is already in `REPORTING_VERDICTS`.
+    """
+
+
+def digest_tree(root: Path, max_files: int = None, max_bytes: int = None) -> dict:
     """SHA256 per file beneath `root`, keyed by its POSIX-relative path.
 
     Byte-for-byte the same derivation install.py records with, because a different one
     would disagree with the baseline it is being compared against. Bytes, never decoded
     text, and POSIX-relative keys so a record written on Windows reads on macOS and Linux.
+
+    Bounded, unlike install.py's copy, and the asymmetry is the point (`chore-0082`). That
+    one runs because a person invoked the installer and can watch it. This one runs at
+    **every session start**, on a path read out of a manifest rather than derived, and
+    `find_manifest()` walks upward, so a manifest at any ancestor of the session's working
+    directory decides what gets read. Past either bound this raises rather than finishing,
+    so a pathological entry costs a stat walk instead of a full recursive read.
+
+    The bounds are set far above any real module: the largest the kit ships is the hooks
+    directory at a handful of files and tens of kilobytes, so a correct install cannot reach
+    them. That direction matters more than the exact numbers, because `error` is a reporting
+    verdict and a cap set below a real install would fire this hook on every session start,
+    which is the crying-wolf failure its own docstring says gets it uninstalled in a week.
     """
+    # Read at call time rather than bound as default arguments. A default is evaluated once
+    # when the function is defined, so the constants above would be untunable and, worse,
+    # untestable: a test raising or lowering them would change the name and not the bound.
+    max_files = MAX_DIGEST_FILES if max_files is None else max_files
+    max_bytes = MAX_DIGEST_BYTES if max_bytes is None else max_bytes
     digests = {}
     if not root.is_dir():
         return digests
+    seen_bytes = 0
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
         if not _digestable(rel, path):
             continue
+        if len(digests) >= max_files:
+            raise TreeTooLarge(f"more than {max_files} files under {root}")
+        # Sized before reading, so an enormous single file is refused rather than held in
+        # memory. `stat` on a file that vanished mid-walk is an OSError, which `classify()`
+        # already treats as `error`.
+        seen_bytes += path.stat().st_size
+        if seen_bytes > max_bytes:
+            raise TreeTooLarge(f"more than {max_bytes} bytes under {root}")
         digests[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return digests
 
@@ -267,7 +312,11 @@ def classify(entry, cache=None) -> str:
             current = digest_tree(source)
             if cache is not None:
                 cache[key] = current
-    except OSError:
+    except (OSError, TreeTooLarge):
+        # `TreeTooLarge` is this hook declining to spend a session start on a recorded path
+        # that is too big to digest, not a fault in the tree. `error` already means "could
+        # not be compared at all" and is already reported, so it needs no seventh verdict
+        # (chore-0082).
         return "error"
 
     if current == recorded:

@@ -2592,5 +2592,96 @@ class UninstallSurvivesAPartialRecordTests(unittest.TestCase):
                         f"_validate_manifest does not require: read it through .get()")
 
 
+class OrphanedRecordTests(unittest.TestCase):
+    """chore-0082 item 2: a record of an install whose home is gone too.
+
+    Reversal is scoped to `--home` by design (`S-007`, `S-012`), so `uninstall()` rewrites
+    only the entries it did not remove. An entry for a home that was *deleted* rather than
+    uninstalled is never in `mine`, never pruned, and counted `diverged` forever, inflating
+    the one number a person reads as a currency signal.
+
+    Observed for real on 2026-08-29: twenty such entries under a throwaway `fakehome` from
+    another session, `0 of 20` targets still on disk. They were not merely noise in a count.
+    Registering `install-currency-reminder.py` made it report them as installed copies that
+    had "gone stale", naming real skills, when the actual install was current: a guardrail
+    asserting something false at every session start.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(setattr, inst, "MANIFEST", self._real_manifest)
+
+    def _entry(self, home, name, place):
+        target = home / ".claude" / "skills" / name
+        if place:
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("placed\n", encoding="utf-8")
+        return {"tool": "claude", "name": name, "mode": "copy", "target": str(target),
+                "source": str(inst.SKILLS_DIR / "doc-sync"),
+                "digests": {"SKILL.md": "0" * 64}}
+
+    def _check(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home)
+        return code, buf.getvalue()
+
+    def test_a_home_that_is_gone_reads_differently_from_a_target_that_is_gone(self):
+        # Both are `diverged`, and they need different things from a reader: one is a file
+        # somebody removed and re-installing restores it, the other is a record of an install
+        # that no longer exists anywhere and re-installing would recreate a tree nobody wants.
+        dead_home = self.root / "gone"
+        removed = self._entry(self.home, "alpha", place=False)
+        self.home.joinpath(".claude", "skills").mkdir(parents=True, exist_ok=True)
+        orphan = self._entry(dead_home, "beta", place=False)
+        inst.MANIFEST.write_text(json.dumps({"entries": [removed, orphan]}), encoding="utf-8")
+
+        # `check` is scoped to `--home`, so run it over the parent that holds both.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.check(self.root)
+        out = buf.getvalue()
+
+        self.assertIn("the installed target is gone: ", out)
+        self.assertIn("so is the home it sat in", out)
+        self.assertIn("nothing will prune them", out,
+                      "the summary does not tell a reader these will never leave the record")
+
+    def test_a_target_gone_from_a_live_home_is_not_called_an_orphan(self):
+        # The negative case. Calling a live install's missing file an orphan would invite
+        # deleting a record that a re-install would legitimately restore.
+        self.home.joinpath(".claude", "skills").mkdir(parents=True)
+        entry = self._entry(self.home, "alpha", place=False)
+        inst.MANIFEST.write_text(json.dumps({"entries": [entry]}), encoding="utf-8")
+
+        _, out = self._check()
+
+        self.assertIn("the installed target is gone", out)
+        self.assertNotIn("so is the home it sat in", out)
+        self.assertNotIn("nothing will prune them", out)
+
+    def test_home_derivation_walks_up_to_the_discovery_directory(self):
+        # The home is derived from the target rather than recorded, because the manifest has
+        # never carried it and a new key would be unreadable for every entry written before.
+        home = Path(self.root) / "somewhere"
+        for sub in ((".claude", "skills", "doc-sync"), (".agents", "rules"),
+                    (".claude", "hooks")):
+            with self.subTest(sub=sub):
+                self.assertEqual(inst._home_of(home.joinpath(*sub)), home)
+
+    def test_a_target_with_no_discovery_marker_reads_as_still_there(self):
+        # The safe direction: the only thing this decides is whether --check calls an entry
+        # litter, and calling real litter live costs a line where the reverse invites
+        # deleting a live record.
+        odd = self.root / "not-a-home" / "thing"
+        odd.mkdir(parents=True)
+        self.assertTrue(inst._home_of(odd).exists())
+
+
 if __name__ == "__main__":
     unittest.main()

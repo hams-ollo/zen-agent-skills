@@ -3059,5 +3059,102 @@ class TestHealthPageBehaviour(HealthTestCase):
                                  f"outside the enumeration S-019 is proven by")
 
 
+class ContentSecurityPolicyTests(ServerTestCase):
+    """chore-0082 item 4: the layer that would have contained bug-0055.
+
+    Defence in depth rather than a fix for anything live. The page uses no `innerHTML`
+    anywhere and `bug-0055` closed the one sink where a corpus value reached an interpreted
+    context. This is cheap insurance on a surface that serves one maintainer's whole session
+    history: it turns a click-to-execute into a blocked request.
+    """
+
+    def test_every_response_carries_the_policy(self):
+        self.build_store([self.record("u1")])
+        server = self.serve_on_loopback()
+        for route in ("/", "/api/meta", "/api/fleet", "/nope"):
+            with self.subTest(route=route):
+                header = self._header(server, route, "Content-Security-Policy")
+                self.assertEqual(header, serve.CONTENT_SECURITY_POLICY,
+                                 f"{route} carries no policy, so one route is exempt from "
+                                 f"the containment every other route has")
+
+    def _header(self, server, path, name):
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", path)
+            return conn.getresponse().getheader(name)
+        finally:
+            conn.close()
+
+    def test_the_policy_blocks_a_script_source_this_page_never_uses(self):
+        # The containment that matters for bug-0055's class: no host is listed for scripts,
+        # so a javascript: URI is blocked whatever else changes on the page.
+        policy = serve.CONTENT_SECURITY_POLICY
+        self.assertIn("default-src 'none'", policy,
+                      "the policy opens permissively, so a directive nobody thought to name "
+                      "is allowed rather than denied")
+        self.assertIn("script-src 'self' 'unsafe-inline'", policy)
+        self.assertNotIn("script-src *", policy)
+        for directive in ("base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"):
+            with self.subTest(directive=directive):
+                self.assertIn(directive, policy)
+
+    def test_unsafe_inline_is_required_by_a_contract_rather_than_an_oversight(self):
+        # S-022 forbids fetching a subresource, so every style and script in the page is
+        # inline by design and the policy has to permit that. Asserted against the page
+        # itself, so dropping `unsafe-inline` without extracting them fails here rather than
+        # in a browser.
+        html = UI_INDEX.read_text(encoding="utf-8")
+        self.assertIn("<style>", html)
+        self.assertIn("<script>", html)
+        self.assertIn("'unsafe-inline'", serve.CONTENT_SECURITY_POLICY,
+                      "the page is entirely inline by contract, so a policy without "
+                      "'unsafe-inline' would render nothing at all")
+
+    def test_the_page_requests_no_host_the_policy_would_have_to_allow(self):
+        # The policy is only honest if the page really is self-contained. `src=` or `href=`
+        # pointing anywhere off-origin would need a directive nobody has written.
+        html = UI_INDEX.read_text(encoding="utf-8")
+        for pattern in ("https://", "http://"):
+            for attribute in (f'src="{pattern}', f"src='{pattern}",
+                              f'href="{pattern}', f"href='{pattern}"):
+                with self.subTest(attribute=attribute):
+                    self.assertNotIn(attribute, html,
+                                     "the page fetches a subresource, which S-022 forbids "
+                                     "and this policy does not permit")
+
+
+class BindGuardCasingTests(unittest.TestCase):
+    """chore-0082 item 3: one name, two readings.
+
+    `loopback_address()` decides what may be bound and `host_is_loopback()` decides what may
+    be answered. They are separate on purpose, and they were reading `localhost` two ways:
+    the bind guard compared case-sensitively, so `--host LOCALHOST` was refused while the
+    same spelling in a `Host` header was accepted. It failed closed, which is the right
+    direction and not a reason to leave one name with two readings.
+    """
+
+    def test_an_uppercase_localhost_binds_rather_than_raising(self):
+        self.assertEqual(serve.loopback_address("LOCALHOST"), serve.DEFAULT_HOST)
+        self.assertEqual(serve.loopback_address("LocalHost."), serve.DEFAULT_HOST)
+
+    def test_the_two_guards_agree_on_every_spelling_of_the_name(self):
+        # The property, rather than the one case that was wrong: whatever this binds, that
+        # accepts. A future edit to either that reintroduces a disagreement fails here.
+        for spelling in ("localhost", "LOCALHOST", "LocalHost", "localhost.", "LOCALHOST."):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(serve.loopback_address(spelling), serve.DEFAULT_HOST)
+                self.assertTrue(serve.host_is_loopback(spelling))
+
+    def test_a_non_loopback_name_is_still_refused_by_both(self):
+        # The negative case. Lowering the comparison must not have widened what it accepts.
+        for spelling in ("localhost.evil.com", "notlocalhost", "example.com", "0.0.0.0"):
+            with self.subTest(spelling=spelling):
+                with self.assertRaises(serve.NotLoopback):
+                    serve.loopback_address(spelling)
+                self.assertFalse(serve.host_is_loopback(spelling))
+
+
 if __name__ == "__main__":
     unittest.main()

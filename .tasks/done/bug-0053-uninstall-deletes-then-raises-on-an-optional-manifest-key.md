@@ -69,7 +69,7 @@ consistent with the disk after any outcome.
   wanted, promoting the two keys to required is the alternative below, but it is a contract change
   and needs the `install` spec amended rather than a quiet edit.
 - Pruning entries for homes that no longer exist. That is a separate finding, filed as
-  [`chore-0082`](../chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 2.
+  [`chore-0082`](chore-0082-four-small-items-from-the-2026-08-29-pre-publication-review.md) item 2.
 - The `_beneath()` containment rule, which was exercised against `..`, a relative path, an empty
   string, and the home itself, and holds in every case.
 

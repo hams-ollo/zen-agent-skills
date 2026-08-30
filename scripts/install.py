@@ -1021,6 +1021,26 @@ def _beneath(target: str, home: Path) -> bool:
         return False
 
 
+def _home_of(target) -> Path:
+    """The install home a recorded target sits under, derived from the path itself.
+
+    A target is `<home>/.claude/skills/<name>` or `<home>/.claude/rules`, so the home is the
+    parent of the first `.claude` or `.agents` component walking up. Derived rather than
+    recorded because the manifest has never carried it, and a new key would be unreadable
+    for every entry written before it.
+
+    Falls back to the target's own parent when neither marker is present, which cannot match
+    a home this tool placed into and so reads as "still there". That is the safe direction:
+    the only thing this decides is whether `--check` calls an entry litter, and calling real
+    litter live costs a line of output where the reverse invites deleting a live record.
+    """
+    target = Path(target)
+    for parent in target.parents:
+        if parent.name in (".claude", ".agents"):
+            return parent.parent
+    return target.parent
+
+
 def uninstall(home: Path, dry: bool) -> int:
     try:
         manifest = load_manifest()
@@ -1153,6 +1173,18 @@ def _check_entry(entry) -> tuple:
         return "unknown", ("installed before digests were recorded, so whether it is "
                            "current is unknown. Re-install to establish a baseline.")
     if not (target.exists() or target.is_symlink()):
+        # Two ways to be gone, and they need different things from a reader (chore-0082).
+        # A target missing from a home that is still there is a file somebody removed, and
+        # re-installing restores it. A target whose whole home is gone is a record of an
+        # install that no longer exists anywhere, usually a throwaway `--home` deleted
+        # rather than uninstalled, and re-installing would recreate a tree nobody wants.
+        # Reversal is scoped to `--home` by design (`S-007`, `S-012`), so `--uninstall` will
+        # never reach it and it is counted `diverged` forever, inflating the one number a
+        # person reads as a currency signal.
+        if not _home_of(target).exists():
+            return "diverged", (f"the installed target is gone, and so is the home it sat "
+                                f"in, so this records an install that no longer exists "
+                                f"anywhere: {target}")
         return "diverged", f"the installed target is gone: {target}"
     if not source.is_dir():
         return "error", (f"the kit no longer has a source at {source}, so the installed "
@@ -1267,9 +1299,15 @@ def check(home: Path) -> int:
     # Tracked in this loop rather than re-derived from the manifest afterwards, so the two
     # answers cannot drift apart.
     unknown_kinds = set()
+    # Entries whose home is gone as well as their target. Counted apart from the rest of
+    # `diverged` because the remedy is different and because they never leave the record on
+    # their own: reversal is scoped to `--home`, so nothing prunes them.
+    orphaned = []
     for entry in sorted(scoped, key=lambda e: (e.get("tool", ""), e.get("name", ""))):
         status, message = _check_entry(entry)
         counts[status] += 1
+        if status == "diverged" and "so is the home it sat in" in message:
+            orphaned.append(entry)
         if status == "unknown":
             unknown_kinds.add("adopted" if entry.get("name") in ADOPTED_ENTRY_NAMES
                               else "derived")
@@ -1278,9 +1316,15 @@ def check(home: Path) -> int:
     print(f"\n{counts['ok']} current, {counts['diverged']} diverged, "
           f"{counts['linked']} linked, {counts['revised']} revised upstream, "
           f"{counts['unknown']} unknown, {counts['error']} error(s).")
-    if counts["diverged"]:
+    if counts["diverged"] > len(orphaned):
         print("An installed copy no longer matches this kit. Re-install to refresh it, or "
               "keep your version: this check never rewrites anything.")
+    if orphaned:
+        print(f"{len(orphaned)} of those {counts['diverged']} record an install whose home "
+              f"is gone too, so nothing is stale there and nothing will prune them: "
+              f"--uninstall is scoped to --home and never reaches a home that no longer "
+              f"exists. Remove them by hand, or re-run --uninstall with the same --home "
+              f"before deleting one next time.")
     if counts["revised"]:
         print("An adopted file's source has moved since you installed. Your copy is left "
               "alone; merge the kit's change only if you want it.")

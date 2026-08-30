@@ -2,7 +2,7 @@
 id: chore-0082
 title: Four small items from the 2026-08-29 pre-publication review, bundled because none is worth its own round trip
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -19,14 +19,14 @@ created: 2026-08-29
 ## Problem
 
 Four items from the
-[2026-08-29 pre-publication review](../docs/reviews/2026-08-29-pre-publication-review.md), each small
+[2026-08-29 pre-publication review](../../docs/reviews/2026-08-29-pre-publication-review.md), each small
 enough that four task files would cost more than the work. The bundling follows the precedent
-[`chore-0038`](chore-0038-five-small-upkeep-items-from-the-2026-08-08-review.md) set and its caveat
+[`chore-0038`](../chore-0038-five-small-upkeep-items-from-the-2026-08-08-review.md) set and its caveat
 applies here too: this is the exception rather than the pattern, and the reason is written down so a
 later reader does not take it as licence.
 
 **1. A session-start hook digests an unbounded tree named by a file it does not control.**
-`classify()` in [`install-currency-reminder.py`](../.agents/hooks/install-currency-reminder.py) line
+`classify()` in [`install-currency-reminder.py`](../../.agents/hooks/install-currency-reminder.py) line
 267 calls `digest_tree(source)`, where `source` is `Path(entry.get("source") or "")` read from the
 manifest. `digest_tree` walks `root.rglob("*")` and calls `read_bytes()` on every file, with no bound
 on count or size. The hook runs at every session start, and `find_manifest()` walks upward from the
@@ -63,7 +63,7 @@ still has no mechanism, so the next throwaway `--home` that is deleted rather th
 recreates the condition, and the next person to hit it has no `--prune` to reach for.
 
 **3. The bind guard matches `localhost` case-sensitively while the Host guard lowercases.** In
-[`serve.py`](../scripts/observatory/serve.py), `loopback_address()` line 428 reads
+[`serve.py`](../../scripts/observatory/serve.py), `loopback_address()` line 428 reads
 `if host.rstrip(".") == "localhost":` while `host_is_loopback()` line 472 reads
 `if host.rstrip(".").lower() == "localhost":`. So `--host LOCALHOST` is refused with `NotLoopback`
 rather than bound. It fails closed, which is the right direction; two functions reading the same name
@@ -72,7 +72,7 @@ two ways is the thing worth fixing.
 **4. The report sets no Content-Security-Policy header.** `_send()` at lines 2028 to 2036 sets
 `Content-Type`, `Content-Length` and `Cache-Control` and nothing else. The page uses no `innerHTML`
 at all, so this is defence in depth rather than a live hole. It is worth adding because it would have
-contained [`bug-0055`](done/bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md) rather than
+contained [`bug-0055`](bug-0055-a-corpus-value-becomes-an-href-with-no-scheme-check.md) rather than
 letting it reach the network, and a header that turns a click-to-execute into a blocked request is
 cheap insurance for a surface serving one maintainer's whole session history.
 
@@ -86,7 +86,7 @@ cheap insurance for a surface serving one maintainer's whole session history.
   its docstring and is ROADMAP Epic B item 19's question.
 - Anything that makes the currency hook run the installer. Detect and report, never rewrite.
 - The `uninstall()` `KeyError`, filed as
-  [`bug-0053`](done/bug-0053-uninstall-deletes-then-raises-on-an-optional-manifest-key.md). Item 2 is
+  [`bug-0053`](bug-0053-uninstall-deletes-then-raises-on-an-optional-manifest-key.md). Item 2 is
   about entries the tool correctly declines to touch, not about entries it mishandles.
 - The `href` scheme check, filed as `bug-0055`. Item 4 is the second layer, not the fix.
 - Any change to `host_is_loopback()`'s behaviour, which was live-probed against seven header shapes
@@ -118,6 +118,41 @@ and extracting them is out of scope. Say so in the header's comment rather than 
 wonder why `'unsafe-inline'` is there. Even with it, `javascript:` URIs are blocked by
 `script-src`, which is the containment this item is for.
 
+## Decisions
+
+- **A premise of item 1's own fix that turned out false, caught by its test.** The caps were first
+  written as default arguments (`max_files: int = MAX_DIGEST_FILES`). A default is evaluated once
+  when the function is defined, so a test raising or lowering the module constant changed the name
+  and not the bound, and `classify()` went on digesting the whole tree. They are read at call time
+  now. The test would have passed against an untunable cap had it asserted the constant instead of
+  the behaviour.
+- **A rejected alternative for item 2.** A `--prune` that removes orphaned entries, which this task
+  named as the preferred shape. Deleting a record of an install is the kind of thing the autonomy
+  module says a person decides, and the cheaper half satisfies the acceptance criterion: `--check`
+  now says which entries record a home that is gone, why nothing will ever prune them, and what to
+  do instead. The `--prune` remains unbuilt and is not filed, because the twenty real entries were
+  removed by hand and no others exist; a flag with no user is speculative work.
+- **The home is derived rather than recorded, and the fallback leans one way on purpose.** A
+  manifest has never carried the home, and a new key would be unreadable for every entry written
+  before it, so `_home_of()` walks up to the `.claude` or `.agents` component. A target with neither
+  marker falls back to its own parent, which cannot match a home this tool placed into and so reads
+  as "still there". That is the safe direction: this decides only whether `--check` calls an entry
+  litter, and calling real litter live costs a line of output where the reverse invites deleting a
+  live record.
+- **Item 4's acceptance criterion earned its keep, and found two defects that were not this task's.**
+  "The report page loads with no console errors" cannot be satisfied by reasoning, so the page was
+  loaded in a browser against the real store. It rendered under the policy with no console errors,
+  and it showed **"no date recorded"** in the rate table for both `claude-sonnet-5` rows, which
+  plainly carry dates. [`bug-0057`](bug-0057-a-flat-rate-table-understates-cost-after-an-expiry-it-records.md)
+  had replaced the `expires` field with per-period bounds and left the renderer reading the old key,
+  and it had left `HISTORICAL_RATES_NOTE` still claiming the table holds one rate per model. Both
+  are fixed here and both are disclosed as work beyond this task's four items, because no test
+  caught either: the page-side assertion pinned `entry.expires`, so it moved with the defect.
+- **Work beyond `touched_files`, disclosed.** `scripts/observatory/ui/index.html` and the two
+  `bug-0057` regressions above; `docs/spec/agent-observatory.conformance.md`, whose `S-010` row cited
+  a test this pass renamed and was re-derived rather than repointed, per the citation gate's own
+  advice when it caught it.
+
 ## Risks and rollback
 
 Touches a hook that fires at every session start, the installer, and the server, so it meets the
@@ -137,20 +172,20 @@ Each item is reversible by reverting one commit.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test drives `classify()` against a manifest entry whose source exceeds the file-count cap and
+- [x] A test drives `classify()` against a manifest entry whose source exceeds the file-count cap and
       asserts the verdict is `error` rather than a completed digest.
-- [ ] A test asserts the hook stays silent against this repository's own real install shape, so the
+- [x] A test asserts the hook stays silent against this repository's own real install shape, so the
       cap cannot have been set below a correct install.
-- [ ] Entries whose target and home are both gone are distinguishable in `--check`'s output from
+- [x] Entries whose target and home are both gone are distinguishable in `--check`'s output from
       entries that diverged in place, covered by a test.
-- [ ] `--host LOCALHOST` binds rather than raising `NotLoopback`, covered by a test.
-- [ ] Every response carries a `Content-Security-Policy` header, covered by a test, and the report
+- [x] `--host LOCALHOST` binds rather than raising `NotLoopback`, covered by a test.
+- [x] Every response carries a `Content-Security-Policy` header, covered by a test, and the report
       page loads with no console errors.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

@@ -326,15 +326,30 @@ class TestCostIsADatedEstimate(CostTestCase):
         self.assertEqual(cheap["cost"]["estimated_usd"], 65.0)
         self.assertEqual(dear["cost"]["estimated_usd"], 650.0)
 
-    def test_s010_the_report_states_that_history_is_priced_at_current_rates(self):
+    def test_s010_the_report_states_how_a_historical_session_is_priced(self):
         """One rate per model applied to a corpus spanning months is wrong for old sessions
         and is the right simplification anyway. It is only honest if the report says so."""
         self.priced_corpus()
 
         payload = self.cost(pricing=self.pricing_file({"test-model": PRICED}))
 
-        self.assertIn("current rates", payload["historical_note"])
-        self.assertIn("one rate per model", payload["historical_note"].lower())
+        # Unchanged in intent: the report must say how a session older than the table is
+        # priced, because that is the bound a reader has to know before trusting a figure.
+        # The answer itself changed with bug-0057, from "at current rates" to "at the rate in
+        # force on its own date", so the assertion follows the claim rather than the wording.
+        note = payload["historical_note"]
+        self.assertIn("rate in force on its own date", note)
+        self.assertIn("never this machine's", note,
+                      "the note no longer says the date compared is the corpus's, which is "
+                      "the property that keeps two runs over one corpus identical")
+        # The old note claimed the table holds "one rate per model", which bug-0057 made
+        # false. The bound a reader still has to be told is the one that survived: a model
+        # whose price never changed is priced at its single recorded figure whatever the
+        # session's date, so most of the table really is one rate applying to every date.
+        self.assertIn("single rate that applies to every date",
+                      payload["historical_note"].lower(),
+                      "the note no longer states the bound that survived, which is the one "
+                      "case where a session older than the rate is priced at it anyway")
 
     def test_s010_the_shipped_rate_table_records_a_date_and_a_source(self):
         """The artifact this task creates, checked as an artifact. A table with no date cannot
@@ -556,7 +571,7 @@ class TestUnpricedModels(CostTestCase):
 
         self.assertEqual(payload["rates"]["rate_notes"], [])
 
-    def test_s010_the_page_renders_a_time_bound_rate_where_the_reader_meets_the_rates(self):
+    def test_s010_the_page_renders_a_rates_window_where_the_reader_meets_the_rates(self):
         """Carried in the payload and never rendered would leave the reader exactly where the
         finding found them."""
         body = cost_renderer_body()
@@ -564,7 +579,11 @@ class TestUnpricedModels(CostTestCase):
         self.assertIn("rates.rate_notes", body,
                       "the page never reads the rate notes, so a rate with a known expiry "
                       "is priced with and never mentioned")
-        self.assertIn("entry.expires", body,
+        # `entry.expires` was replaced by the period's own bounds in bug-0057, and this
+        # assertion is what caught the renderer still reading the old field: the page showed
+        # "no date recorded" for two rows that plainly carried dates. Found by loading the
+        # page rather than by any test, which is why chore-0082 asked for that.
+        self.assertIn("rateWindow(entry)", body,
                       "the page renders a rate note without its date, which is the half of "
                       "the note a reader needs to know whether it still applies")
 
