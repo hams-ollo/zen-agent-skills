@@ -40,6 +40,15 @@ written anywhere. `--list` prints every URL a run would contact and fetches noth
 set is reviewable before any connection is made. A response is read under MAX_FETCH_BYTES
 and exceeding it is an error rather than a truncated digest.
 
+`https://` only means at both ends, and it did not always. `validate()` has always rejected
+an `http://` source, but `urlopen` follows redirects and the standard library's own
+allow-list admits `http`, so an `https` source answering `302 Location: http://...` was
+followed into plaintext, where a digest authenticates nothing (`bug-0054`). A redirect off
+`https` is now refused by `HttpsOnlyRedirectHandler`, installed on the opener `fetch()` uses
+rather than checked after the bytes have arrived. One that stays on `https` is followed,
+because upstream repositories get renamed, and the URL that answered is reported when it
+differs from the one recorded.
+
 Drift and errors both name the offending source and the file that records it, because a
 non-zero exit whose output does not say what moved costs the reader the whole investigation.
 
@@ -69,8 +78,10 @@ import hashlib
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -135,6 +146,74 @@ class ResponseTooLarge(ValueError):
     A ValueError, because check_record() already treats that as an unfetchable source, which
     is what this is: the bytes exist but were never read, so there is nothing to digest.
     """
+
+
+class InsecureRedirect(ValueError):
+    """A redirect left `https`, so the bytes past that hop authenticate nothing.
+
+    A ValueError for the same reason ResponseTooLarge is: check_record() already treats one
+    as an unfetchable source, and that is exactly what this is.
+
+    The rule this enforces is `validate()`'s, applied where it was missing. That function
+    rejects an `http://` source and says why: over plaintext the digest authenticates
+    nothing, so the record would read as verified provenance for bytes anyone on the path
+    could have written. But the check ran against the recorded string only, and
+    `urllib.request.urlopen` follows redirects by default, with the standard library's own
+    allow-list in `HTTPRedirectHandler.http_error_302` reading
+
+        if urlparts.scheme not in ('http', 'https', 'ftp', ''):
+
+    so an `https://` source answering `302 Location: http://...` was followed into plaintext,
+    which is the one thing that comment says must not happen (`bug-0054`).
+    """
+
+
+class HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only while it stays on `https`.
+
+    Enforced here rather than after the fact, because after the fact is too late: the
+    plaintext request has already been made and answered, and whatever was on the path has
+    already seen it and had its chance to write the reply.
+
+    Raising rather than returning `None`. Returning `None` is urllib's documented way to
+    decline a redirect and it re-raises the original `HTTPError`, which reaches a reader as
+    "HTTP Error 302: Found" and says nothing about why a checker refused. Raising a
+    ValueError subclass reaches `check_record()`'s existing `except` and carries both URLs
+    into the message.
+
+    Only the scheme is judged. A redirect to a different `https` host is allowed and is
+    reported by `check_record()` rather than refused, because upstream repositories are
+    renamed and moved, and a checker that fails on a moved file is one that gets disabled
+    inside a week.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        scheme = urllib.parse.urlsplit(newurl).scheme.lower()
+        if scheme != "https":
+            raise InsecureRedirect(
+                f"refused a redirect off https: {req.full_url} -> {newurl}. Past that hop "
+                f"the digest authenticates nothing, so this is reported rather than "
+                f"followed."
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+# Built once. `build_opener` drops its own default redirect handler when handed a subclass
+# of it, so this replaces the default rather than stacking a second one in front.
+_OPENER = urllib.request.build_opener(HttpsOnlyRedirectHandler)
+
+
+class Fetched(NamedTuple):
+    """What a fetch returned, and where it actually came from.
+
+    `url` is the URL after every redirect, which is the one the digest belongs to. It is
+    carried rather than discarded because a record whose `source:` no longer names what was
+    retrieved has drifted in the thing it pins, even when the bytes are identical, and
+    silently digesting the new location would let that record rot pointing at a redirect.
+    """
+
+    content: bytes
+    url: str
 
 
 def declared_lines(lines):
@@ -441,18 +520,24 @@ def validate(record):
 
 
 def fetch(url, timeout=30, max_bytes=MAX_FETCH_BYTES):
-    """The exact bytes a plain GET returns, up to `max_bytes`. Raises on any failure.
+    """The exact bytes a plain GET returns, up to `max_bytes`, and where they came from.
 
     Reads one byte past the bound rather than the whole body, so an enormous response is
     refused instead of held in memory, and raises ResponseTooLarge rather than returning
     what it managed to read.
+
+    Opened through `_OPENER` rather than `urllib.request.urlopen`, so a redirect off `https`
+    raises InsecureRedirect instead of being followed into plaintext (`bug-0054`). The
+    returned `url` is the one that actually answered, after any redirect, because that is
+    the URL the digest belongs to.
     """
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with _OPENER.open(request, timeout=timeout) as response:
         content = response.read(max_bytes + 1)
+        landed = response.geturl()
     if len(content) > max_bytes:
         raise ResponseTooLarge(f"response exceeds the {max_bytes} byte read bound")
-    return content
+    return Fetched(content, landed)
 
 
 def check_record(record, fetcher):
@@ -469,11 +554,23 @@ def check_record(record, fetcher):
         return "unlocatable", f"source not locatable: {record['source']}"
     url = record["source"]
     try:
-        content = fetcher(url)
+        fetched = fetcher(url)
     except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
         # Degrade cleanly. A traceback here would read as a defect in this script rather
         # than as the network being down, which is the common case by a wide margin.
+        # InsecureRedirect is a ValueError and arrives here, which is deliberate: a refused
+        # redirect is a source this run could not honestly fetch, and that is what this
+        # branch already means.
         return "error", f"could not fetch {url}: {exc}"
+    # The seam takes either shape. `fetch()` returns a Fetched, carrying where the bytes
+    # actually came from; an injected fetcher may return bare bytes, which means it is
+    # answering as the recorded URL and has no redirect to report. Tolerated rather than
+    # required, because the alternative is every test in this suite restating a field none
+    # of them is about.
+    if isinstance(fetched, Fetched):
+        content, landed = fetched.content, fetched.url
+    else:
+        content, landed = fetched, url
     if not isinstance(content, (bytes, bytearray)):
         return "error", f"fetch of {url} returned {type(content).__name__}, expected bytes"
     if len(content) > MAX_FETCH_BYTES:
@@ -484,13 +581,30 @@ def check_record(record, fetcher):
             f"{MAX_FETCH_BYTES} byte read bound"
         )
     digest = hashlib.sha256(content).hexdigest()
-    if digest == record["sha256"]:
-        return "ok", f"up to date ({digest[:12]}) {url}"
-    return "drift", (
-        f"DRIFT: {url}\n"
-        f"      recorded: {record['sha256']}\n"
-        f"      upstream: {digest}"
-    )
+    moved = landed != url
+    if digest != record["sha256"]:
+        # Content drift, and the landing URL is named when it differs so the reader knows
+        # which bytes were digested rather than assuming the recorded source answered.
+        where = f"\n      retrieved from: {landed}" if moved else ""
+        return "drift", (
+            f"DRIFT: {url}{where}\n"
+            f"      recorded: {record['sha256']}\n"
+            f"      upstream: {digest}"
+        )
+    if moved:
+        # Location drift. The bytes are identical, so this is not a content problem, and it
+        # is still drift in the thing the record pins: `source:` no longer names what
+        # answered. Reporting `ok` would let a record sit on a redirect indefinitely, which
+        # is the rot this script exists to surface. Named as a different kind of drift from
+        # the one above rather than sharing its wording, because the remedy differs: repoint
+        # the record, do not re-digest it.
+        return "drift", (
+            f"MOVED: {url}\n"
+            f"      now answered by: {landed}\n"
+            f"      content is unchanged ({digest[:12]}), so repoint the record's source "
+            f"rather than re-taking the digest."
+        )
+    return "ok", f"up to date ({digest[:12]}) {url}"
 
 
 def unreadable_note(count):

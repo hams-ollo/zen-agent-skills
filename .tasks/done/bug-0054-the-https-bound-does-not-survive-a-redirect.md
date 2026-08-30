@@ -2,7 +2,7 @@
 id: bug-0054
 title: The https bound applies to the recorded URL and not to what is actually fetched
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-08-29
 
 ## Problem
 
-[`check-provenance.py`](../scripts/check-provenance.py)'s `validate()` rejects an `http://` source at
+[`check-provenance.py`](../../scripts/check-provenance.py)'s `validate()` rejects an `http://` source at
 line 427, and its comment states exactly why:
 
 > Over plaintext the digest authenticates nothing, so the record would read as verified provenance
@@ -47,7 +47,7 @@ one thing `validate()`'s comment says must not happen.
 
 **Why this is worth fixing now rather than in principle.** All nine destinations
 `python scripts/check-provenance.py --list` prints today are `raw.githubusercontent.com`, so nothing
-is exploitable against the current file. [`SECURITY.md`](../SECURITY.md) line 20 already names the
+is exploitable against the current file. [`SECURITY.md`](../../SECURITY.md) line 20 already names the
 shape that changes that: "a pull request can add a provenance block, and its `source:` URL is a
 destination a maintainer's later run will contact from their machine." Accepting public
 contributions is the event that makes this reachable, and it is the event this task is filed ahead
@@ -105,6 +105,35 @@ test that has to prove the real handler refuses.
   names, and the digest is the only check on the content. What it closes is the narrower thing the
   code already claims, which is that the bytes were retrieved over a channel where the digest means
   something.
+- **A departure from this task's own implementation notes.** They say to return `None` from
+  `redirect_request`, which is urllib's documented way to decline and which re-raises the original
+  `HTTPError`. That reaches a reader as "HTTP Error 302: Found" and says nothing about why a checker
+  refused, which is the same complaint this repository has about a traceback standing in for a
+  diagnosis. `InsecureRedirect` is raised instead. It is a `ValueError`, so it lands in
+  `check_record()`'s existing `except` with no new branch, and it carries both URLs into the message.
+- **A rejected alternative.** Changing every injected fetcher in `tests/test_check_provenance.py` to
+  return the new two-field shape. Rejected because those tests are about parsing, placements, and
+  digests, and none of them is about where the bytes came from; restating a field they do not care
+  about in each would be noise that obscures what each test is actually pinning. `check_record()`
+  takes either shape, and the tolerance is documented where it is implemented.
+- **A stand-in that would have stopped standing in, caught rather than shipped.** `_fake_urlopen` in
+  the test file patched `urllib.request.urlopen`. `fetch()` now calls `_OPENER.open`, so the patch
+  would have gone on applying to a function nothing calls, and the three read-bound tests would have
+  gone on passing over a response nobody served. That is the check-that-cannot-fail shape `AGENTS.md`
+  names, arriving as a side effect of a change somewhere else, and it is the reason those three tests
+  failed loudly here instead: the helper patches the opener now, and its docstring says why.
+- **A classification decision, taken as the task proposed and worth restating.** A source that
+  redirects to a different `https` location is reported `drift`, not `ok`, even when the bytes are
+  identical. The record's `source:` no longer names what answered, and reporting `ok` would let a
+  record sit on a redirect indefinitely, which is the rot this script exists to surface. It is worded
+  as `MOVED` rather than sharing the content-drift wording, because the remedy differs: repoint the
+  record, do not re-take the digest.
+- **An outstanding verification, not performed.** The Risks section above says to verify against the
+  real nine URLs by hand before closing. That is an outbound network run and the maintainer had
+  scoped this session to no outbound traffic, so it has not been done. Everything mechanical is
+  covered by the acceptance criteria, which do not require it, and `--list` still enumerates the same
+  nine without contacting any of them. The one thing a real run would add is confirmation that no
+  recorded source currently redirects, which would show as `MOVED` rather than as a failure.
 
 ## Risks and rollback
 
@@ -119,20 +148,20 @@ Reversible by reverting one commit. Nothing persisted changes.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test proves an `https` source redirecting to `http` is refused rather than digested, driven
+- [x] A test proves an `https` source redirecting to `http` is refused rather than digested, driven
       through the real opener against a loopback server so it would fail if the handler were removed.
-- [ ] A test proves an `https` to `https` redirect still succeeds and reports the final URL when it
+- [x] A test proves an `https` to `https` redirect still succeeds and reports the final URL when it
       differs from the recorded one.
-- [ ] A test proves the existing `http://` rejection in `validate()` still fires.
-- [ ] `SECURITY.md`'s bullet says what the code does, distinguishing the recorded-URL rule from the
+- [x] A test proves the existing `http://` rejection in `validate()` still fires.
+- [x] `SECURITY.md`'s bullet says what the code does, distinguishing the recorded-URL rule from the
       transport rule.
-- [ ] `python scripts/check-provenance.py --list` still fetches nothing and still prints nine
+- [x] `python scripts/check-provenance.py --list` still fetches nothing and still prints nine
       destinations.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
