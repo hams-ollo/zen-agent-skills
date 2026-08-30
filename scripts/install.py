@@ -82,6 +82,15 @@ import shutil
 import sys
 from pathlib import Path
 
+# `_textio` is a sibling module in this directory, imported through the repository root so
+# the one spelling works whether this file is run as a script or imported as a module of
+# `scripts`, which `observatory/serve.py` already does for `install`. Same preamble as there,
+# and the same reason: the two invocations put different directories on `sys.path`.
+_TEXTIO_ROOT = Path(__file__).resolve().parent.parent
+if str(_TEXTIO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TEXTIO_ROOT))
+from scripts._textio import NotUTF8, read_text_utf8   # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 RULES_DIR = REPO_ROOT / ".agents" / "rules"
@@ -155,7 +164,7 @@ def description_of(skill_dir: Path) -> str:
     Only the frontmatter is scanned, and only for this one field. A block-scalar
     indicator is dropped so the length is the text's, matching what a harness measures.
     """
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ""
@@ -186,7 +195,7 @@ def status_of(skill_dir: Path) -> str:
     An unrecognised value reads as shipped rather than as a draft, so a typo
     over-delivers (today's defect) instead of silently under-delivering (the worse one).
     """
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ""
@@ -242,7 +251,7 @@ def draft_conflicts(selected, seed, draft_names) -> list:
 
 def sibling_refs(skill_dir: Path) -> set:
     """Skill names this skill links to as ../<name>/SKILL.md."""
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     return set(SIBLING_REF_RE.findall(text)) - {skill_dir.name}
 
 
@@ -1290,7 +1299,23 @@ def check(home: Path) -> int:
 
 
 def main(argv=None) -> int:
-    """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test."""
+    """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test.
+
+    Wraps the real entry point so an undecodable file anywhere in the tree is reported
+    as a diagnosis naming the file rather than as a traceback naming this tool
+    (chore-0081).
+    """
+    try:
+        return _main(argv)
+    except NotUTF8 as exc:
+        # Exit 2, could not run, rather than 1. Nothing was compared or placed: a file this
+        # tool must read is not readable, which is a different claim from "the change is bad"
+        # and is the distinction install.py --check and check-provenance.py already draw.
+        print(f"Cannot read a file this run needs: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Install the Zen Agent Skills library.")
     ap.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     ap.add_argument("--uninstall", action="store_true", help="remove what was installed")

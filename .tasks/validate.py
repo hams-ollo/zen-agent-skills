@@ -186,6 +186,42 @@ def markdown_files():
     return sorted(TASKS_DIR.rglob("*.md"))
 
 
+
+class NotUTF8(ValueError):
+    """A file in scope is not valid UTF-8. Its `str()` is the reportable message.
+
+    A local copy rather than an import. This file is a template `init-worktracking` writes
+    into other repositories, where nothing named `scripts/` exists, so it cannot share the
+    helper the distribution tooling uses. A test asserts the two produce the same message
+    rather than trusting that they still do (`chore-0081`).
+    """
+
+
+def read_text_utf8(path):
+    """The file's text, or `NotUTF8` naming the file and the byte that stopped it.
+
+    Every file this validator reads is UTF-8 by contract. Without this, one stray byte in
+    one task file killed the whole run on a traceback that named no file and read as a
+    defect in the validator rather than a diagnosis of the file.
+
+    `errors="ignore"` is deliberately not the answer: reading past a bad byte gives a task
+    file whose frontmatter is quietly mangled, and that file then validates. The file is
+    reported and skipped, and the run ends non-zero.
+
+    `OSError` is not caught. A missing file is a different fact from an undecodable one.
+    """
+    path = Path(path)
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        byte = exc.object[exc.start] if exc.start < len(exc.object) else 0
+        raise NotUTF8(
+            f"{path}: not valid UTF-8. Byte 0x{byte:02x} at offset {exc.start} could not be "
+            f"decoded ({exc.reason}). Every file this tool reads is UTF-8 by contract, so the "
+            f"file is reported rather than read past: re-save it as UTF-8."
+        ) from None
+
+
 def broken_links(path):
     """Relative link targets in `path` that do not resolve from its own directory.
 
@@ -205,7 +241,7 @@ def broken_links(path):
     runs over every markdown file under .tasks/ and every globbed document.
     """
     found = []
-    content = path.read_text(encoding="utf-8")
+    content = read_text_utf8(path)
     spans = code_span_ranges(content) + fenced_block_ranges(content)
     for match in LINK_RE.finditer(content):
         if any(start <= match.start() < end for start, end in spans):
@@ -322,7 +358,7 @@ def mislabelled_links(path):
     is worse than a missed link. That is also why callers report this as a warning.
     """
     found = []
-    content = path.read_text(encoding="utf-8")
+    content = read_text_utf8(path)
     spans = code_span_ranges(content) + fenced_block_ranges(content)
     for match in LINK_TEXT_RE.finditer(content):
         if any(start <= match.start() < end for start, end in spans):
@@ -392,7 +428,14 @@ def check_links(patterns) -> int:
     broken = []
     for path in sorted(docs):
         rel = path.relative_to(REPO_ROOT).as_posix()
-        for target in broken_links(path):
+        try:
+            targets = broken_links(path)
+        except NotUTF8 as exc:
+            # Reported and skipped, so one undecodable document does not take the whole
+            # link check down with it and the rest of the tree is still checked.
+            broken.append(f"{rel} could not be read. {exc}")
+            continue
+        for target in targets:
             broken.append(f"{rel} -> {target}")
 
     for entry in broken:
@@ -444,7 +487,11 @@ def main(argv=None) -> int:
 
     for f in files:
         rel = f.relative_to(REPO_ROOT).as_posix()
-        fm = parse_frontmatter(f.read_text(encoding="utf-8"))
+        try:
+            fm = parse_frontmatter(read_text_utf8(f))
+        except NotUTF8 as exc:
+            err(rel, f"frontmatter could not be read. {exc}")
+            continue
         if fm is None:
             err(rel, "no YAML frontmatter block")
             continue
@@ -540,7 +587,15 @@ def main(argv=None) -> int:
     # ledger is a thing to fix, not a thing to exempt.
     for f in markdown_files():
         rel = f.relative_to(REPO_ROOT).as_posix()
-        for target in broken_links(f):
+        try:
+            targets = broken_links(f)
+        except NotUTF8 as exc:
+            # Named separately from the frontmatter failure above. Both checks read the same
+            # file and both must say so, but an identical sentence twice leaves a reader
+            # unable to tell which check could not run.
+            err(rel, f"links could not be checked. {exc}")
+            continue
+        for target in targets:
             hint = ""
             if (f.parent / ".." / target).exists():
                 hint = (" (one level too shallow; a file moved to done/ needs "

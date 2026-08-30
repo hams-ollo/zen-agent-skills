@@ -1726,5 +1726,79 @@ class TestTheCoverageLineTheAggregatorSelects(unittest.TestCase):
         self.assertIn(f"{expected} skill(s)", rc.coverage_line(out))
 
 
+class UndecodableSkillFileTests(unittest.TestCase):
+    """chore-0081: one stray byte in a skill body took the whole lint down.
+
+    Eleven sites across four distribution scripts read text with no handler, so a file from
+    outside this repository, which is the first place such a byte arrives, killed the run on
+    a traceback that named no file. Reported and skipped now, never read past: a body decoded
+    with `errors="ignore"` would validate and install with a quietly mangled description.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.skills = Path(self._tmp.name) / "skills"
+        self.skills.mkdir(parents=True)
+
+    def _good(self, name):
+        _write_skill(self.skills, name, GOOD_FM.format(name=name, desc=LONG_DESC))
+
+    def _undecodable(self, name):
+        directory = self.skills / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_bytes(
+            GOOD_FM.format(name=name, desc=LONG_DESC).encode("utf-8") + b"\xff\xfe rubbish")
+
+    def test_an_undecodable_skill_is_reported_rather_than_raising(self):
+        self._undecodable("alpha")
+        code, out = _run(self.skills)        # would raise before the fix, not return
+        self.assertEqual(code, 1, out)
+        self.assertIn("not valid UTF-8", out)
+        self.assertIn("alpha", out)
+
+    def test_the_message_names_the_byte_and_its_offset(self):
+        self._undecodable("alpha")
+        _, out = _run(self.skills)
+        self.assertIn("0xff", out)
+        self.assertRegex(out, r"at offset \d+")
+
+    def test_the_undecodable_file_is_reported_rather_than_skipped_silently(self):
+        # The fix must not be an `errors="ignore"` in disguise, and it must not be a quiet
+        # `continue` either: a skipped file with no error is the silence this repository
+        # keeps recording, so the error count is the assertion.
+        self._undecodable("alpha")
+        _, out = _run(self.skills)
+        self.assertNotIn("0 error(s)", out)
+
+    def test_one_bad_skill_does_not_stop_the_others_being_checked(self):
+        # The whole point of reporting rather than raising: a run that dies on the first bad
+        # file tells you about one problem and hides the rest.
+        self._undecodable("alpha")
+        self._good("beta")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Checked 2 skill(s)", out)
+
+    def test_a_good_tree_is_unaffected(self):
+        # The negative case, which a lint reporting every file as undecodable would fail.
+        self._good("alpha")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("not valid UTF-8", out)
+
+    def test_an_undecodable_rules_lens_is_reported_rather_than_raising(self):
+        # The rules directory is read by two separate checks and neither had a handler.
+        rules = self.skills.parent / "rules"
+        rules.mkdir(parents=True, exist_ok=True)
+        lens = "# Zen example lens\n\nThis file is a **swappable module**.\n"
+        (rules / "example.md").write_bytes(lens.encode("utf-8") + b"\xff\xfe")
+        self._good("alpha")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("not valid UTF-8", out)
+        self.assertIn("example.md", out)
+
+
 if __name__ == "__main__":
     unittest.main()

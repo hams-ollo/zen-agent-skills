@@ -43,6 +43,15 @@ import re
 import sys
 from pathlib import Path
 
+# `_textio` is a sibling module in this directory, imported through the repository root so
+# the one spelling works whether this file is run as a script or imported as a module of
+# `scripts`, which `observatory/serve.py` already does for `install`. Same preamble as there,
+# and the same reason: the two invocations put different directories on `sys.path`.
+_TEXTIO_ROOT = Path(__file__).resolve().parent.parent
+if str(_TEXTIO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TEXTIO_ROOT))
+from scripts._textio import NotUTF8, read_text_utf8   # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 
@@ -399,7 +408,12 @@ def check_supporting_files(skill_dir: Path, skill_names: set, rel: str, errors: 
         if kind != "markdown":
             continue
         label = f"{rel}/{path.relative_to(skill_dir).as_posix()}"
-        check_links(path, path.read_text(encoding="utf-8"), skill_names, label, errors,
+        try:
+            body = read_text_utf8(path)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        check_links(path, body, skill_names, label, errors,
                     portable_root, sibling_shortcut=False)
     return counts
 
@@ -457,7 +471,12 @@ def check_portable_markdown(portable_root: Path, skills_dir: Path, skill_names: 
         counts[kind] += 1
         if kind != "markdown":
             continue
-        check_links(path, path.read_text(encoding="utf-8"), skill_names, _rel(path),
+        try:
+            body = read_text_utf8(path)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        check_links(path, body, skill_names, _rel(path),
                     errors, portable_root, sibling_shortcut=False)
     return counts
 
@@ -591,7 +610,11 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
     if not rules_dir.is_dir():
         return
     for rules_file in sorted(rules_dir.glob("*.md")):
-        text = rules_file.read_text(encoding="utf-8")
+        try:
+            text = read_text_utf8(rules_file)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
         if not declares_itself_a_lens(text):
             continue
         if any(_names_file_outside_fences(skill_text, rules_file.name)
@@ -652,7 +675,11 @@ def check_universal_lenses_reach_every_skill(rules_dir: Path, skill_texts: dict,
     if not rules_dir.is_dir():
         return
     for rules_file in sorted(rules_dir.glob("*.md")):
-        text = rules_file.read_text(encoding="utf-8")
+        try:
+            text = read_text_utf8(rules_file)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
         if not declares_itself_a_lens(text) or not declares_universal_scope(text):
             continue
         missing = sorted(
@@ -711,7 +738,14 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         if not skill_md.is_file():
             errors.append(f"{rel}: no SKILL.md")
             continue
-        text = skill_md.read_text(encoding="utf-8")
+        try:
+            text = read_text_utf8(skill_md)
+        except NotUTF8 as exc:
+            # Reported and skipped, never read past. A body decoded with `errors="ignore"`
+            # would validate and install with a quietly mangled description, which is worse
+            # than the traceback this replaces (chore-0081).
+            errors.append(str(exc))
+            continue
         skill_texts[d.name] = text
         fm, body_lines = parse_frontmatter(text)
         if fm is None:

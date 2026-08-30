@@ -2,7 +2,7 @@
 id: chore-0081
 title: An undecodable byte crashes the distributed tooling with a traceback instead of a diagnosis
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -26,10 +26,10 @@ enclosing `try`:
 grep -rn "read_text(" scripts/*.py .tasks/validate.py | grep -v "errors="
 ```
 
-[`validate-skills.py`](../scripts/validate-skills.py) at 392, 450, 584, 639;
-[`validate.py`](validate.py) at 208, 325, 447; [`install.py`](../scripts/install.py) at 158, 189,
-245; [`check-citations.py`](../scripts/check-citations.py) at 328;
-[`build-adapters.py`](../scripts/build-adapters.py) at 488.
+[`validate-skills.py`](../../scripts/validate-skills.py) at 392, 450, 584, 639;
+[`validate.py`](../validate.py) at 208, 325, 447; [`install.py`](../../scripts/install.py) at 158, 189,
+245; [`check-citations.py`](../../scripts/check-citations.py) at 328;
+[`build-adapters.py`](../../scripts/build-adapters.py) at 488.
 
 Any one of them meets a file with a stray byte and the tool dies on a traceback. Reproduced
 2026-08-29 with a `SKILL.md` carrying a trailing `\xff\xfe`, run through
@@ -42,7 +42,7 @@ Any one of them meets a file with a stray byte and the tool dies on a traceback.
 The acceptance command then dies on a stack trace that reads as a defect in the tool rather than a
 diagnosis of the file, and does not name which file it was reading.
 
-This is the failure [`check-provenance.py`](../scripts/check-provenance.py) reasons about and avoids
+This is the failure [`check-provenance.py`](../../scripts/check-provenance.py) reasons about and avoids
 at line 472, in a comment that states the general case:
 
 > Degrade cleanly. A traceback here would read as a defect in this script rather than as the network
@@ -80,7 +80,7 @@ A small shared helper is the obvious shape and it is not available: the hooks co
 importing from this repository, and `.tasks/validate.py` is a template that ships into adopter
 repositories via `init-worktracking`, so it cannot import from `scripts/` either. So this is a
 repeated four-line pattern rather than one function, and the tests are what keep the copies honest.
-That is the same trade [`chore-0059`](chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md)
+That is the same trade [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md)
 is open on for the link helpers, and this should follow whatever that task settles rather than
 inventing a second answer. If `chore-0059` lands first, reuse its mechanism.
 
@@ -89,6 +89,42 @@ Within `scripts/`, where nothing forbids sharing, one helper is fine and preferr
 The error message is the deliverable, not the catch. It should name the path, say the file is not
 valid UTF-8, and give the byte offset, because that is what turns a five-minute puzzle into a
 one-line fix. Mirror `_validate_manifest()`'s docstring principle: "The message is half the fix."
+
+## Decisions
+
+- **A premise that turned out false, and the acceptance criterion built on it.** This task asked
+  that "the template copy of `validate.py` matches this repository's copy". They were never
+  identical: on 2026-08-30 they differed by 119 lines, deliberately, because the template is the
+  generic version an adopter receives and this repository's copy carries its own history in its
+  comments and points at its own bug ids. What has to match is the **behaviour**, so
+  `UndecodableFileTemplateTests` subclasses the repository copy's tests and reruns every one of
+  them against the template loaded as a separate module, which is the mechanism
+  `tests/test_tasks_validate.py` already used for exactly this reason.
+- **A premise about the site count, corrected by re-deriving it.** The Problem above names 14 sites
+  from line numbers taken on 2026-08-29. Re-running the grep found 17, across five files rather
+  than four, because the template's three were never counted and because `bug-0055`, `bug-0057` and
+  `feat-0064` had moved every line number since. The grep is the authority, not the numbers.
+- **`check-citations.py` was not one of the crashes, and was a worse defect.** Its `_read` already
+  caught `UnicodeDecodeError` and returned `""`. So an undecodable conformance matrix yielded no
+  citations and the run reported `0 unresolved` over a file it had never read, which is `bug-0049`'s
+  defect exactly: a gate reporting a clean result over a question it never asked. It now routes into
+  the `unreadable` channel that already exists there and already exits 2. Fixing it is in scope
+  rather than adjacent: the task's Out of scope rejects silence in the same words.
+- **A rejected alternative, twice.** A single helper shared by all five files is impossible:
+  `.tasks/validate.py` ships into repositories where nothing named `scripts/` exists. A helper
+  duplicated six times was rejected in the other direction, because the message is the deliverable
+  and six copies of a sentence drift. The split is one shared module for the four distribution
+  scripts, imported through the repository root exactly as `observatory/serve.py` already imports
+  `install`, and one local copy in `.tasks/validate.py` and its template, with
+  `HelperCopiesAgreeTests` holding all three to one message.
+- **A seam left open deliberately.** The three copies are held together by a test, not by the
+  language. That is the same trade [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md)
+  is open on for the link helpers, and this deliberately did not invent a second answer ahead of it.
+- **Work beyond `touched_files`, disclosed.** `scripts/_textio.py` is new. The
+  `init-worktracking` template copy of `validate.py` was edited, which the acceptance criteria
+  required and the frontmatter did not list. No documentation changed: `README.md`'s script list was
+  already non-exhaustive, omitting `check-citations.py`, and `AGENTS.md`'s scripts row states that
+  membership rather than enumeration is the property, so a new private helper needs no amendment.
 
 ## Risks and rollback
 
@@ -106,19 +142,19 @@ Reversible by reverting one commit.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] `validate-skills.py` over a tree containing a `SKILL.md` with invalid UTF-8 exits non-zero with
+- [x] `validate-skills.py` over a tree containing a `SKILL.md` with invalid UTF-8 exits non-zero with
       an error naming that file, and does not raise.
-- [ ] `.tasks/validate.py` over a task file with invalid UTF-8 does the same.
-- [ ] `install.py --dry-run` over such a tree reports the file and does not raise.
-- [ ] A test asserts the undecodable file is reported as an error rather than skipped silently, so
+- [x] `.tasks/validate.py` over a task file with invalid UTF-8 does the same.
+- [x] `install.py --dry-run` over such a tree reports the file and does not raise.
+- [x] A test asserts the undecodable file is reported as an error rather than skipped silently, so
       the fix cannot be an `errors="ignore"` in disguise.
-- [ ] The template copy of `validate.py` under `init-worktracking/templates/` matches this
+- [x] The template copy of `validate.py` under `init-worktracking/templates/` matches this
       repository's copy.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

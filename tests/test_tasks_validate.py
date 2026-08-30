@@ -993,5 +993,123 @@ class ScaffoldedTaskTemplateTests(TasksRootTestCase):
         self.assertEqual(code, 0, out)
 
 
+class UndecodableFileTests(TasksRootTestCase):
+    """chore-0081: one stray byte took the whole validator down with a traceback.
+
+    The population is a file that is not UTF-8, which is the contract every file this reads
+    is held to. Before this, `read_text(encoding="utf-8")` with no handler meant a single
+    byte anywhere in `.tasks/` killed the run on a `UnicodeDecodeError` that named no file
+    and read as a defect in the validator rather than a diagnosis of the file.
+
+    Reported and skipped, never read past. `errors="ignore"` was rejected in the task: a
+    task file whose frontmatter is quietly mangled would validate, which is worse than the
+    traceback it replaces.
+    """
+
+    module = tv
+
+    def _write_undecodable(self, name="bug-0001-probe.md"):
+        path = self.tasks / name
+        path.write_bytes(TASK.format(external="").encode("utf-8") + b"\xff\xfe rubbish")
+        return path
+
+    def test_an_undecodable_task_file_is_reported_rather_than_raising(self):
+        self._write_undecodable()
+        code, out = self._run()          # would raise before the fix, not return
+        self.assertEqual(code, 1, out)
+        self.assertIn("not valid UTF-8", out)
+        self.assertIn("bug-0001-probe.md", out)
+
+    def test_the_message_names_the_byte_and_its_offset(self):
+        # The message is the deliverable, not the catch. Path, offset and byte are what turn
+        # a five-minute puzzle into a one-line fix.
+        self._write_undecodable()
+        _, out = self._run()
+        self.assertIn("0xff", out)
+        self.assertRegex(out, r"at offset \d+")
+
+    def test_each_check_that_could_not_run_says_which_one_it_was(self):
+        # Two checks read the same file and both must report it. An identical sentence twice
+        # leaves a reader unable to tell which check could not run, so they are distinct.
+        self._write_undecodable()
+        _, out = self._run()
+        self.assertIn("frontmatter could not be read", out)
+        self.assertIn("links could not be checked", out)
+
+    def test_the_file_is_skipped_rather_than_read_past(self):
+        # The fix must not be an `errors="ignore"` in disguise. A mangled file that still
+        # parsed would be counted as a valid task, so the count is the assertion.
+        self._write_undecodable()
+        _, out = self._run()
+        self.assertNotIn("0 error(s)", out,
+                         "an undecodable file passed validation, which means it was read "
+                         "past rather than reported")
+
+    def test_a_good_tree_is_unaffected(self):
+        # The negative case. A validator that reports every file as undecodable would satisfy
+        # every assertion above.
+        (self.tasks / "feat-0099-test.md").write_text(TASK.format(external=""),
+                                                      encoding="utf-8")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("not valid UTF-8", out)
+
+
+class UndecodableFileTemplateTests(UndecodableFileTests):
+    """The same behaviour in the copy `init-worktracking` writes into other repositories.
+
+    Run against the template as a loaded module rather than compared as text, because the two
+    files deliberately differ: the template is the generic version, and this repository's copy
+    carries its own history in its comments. `chore-0081` was filed asking that the two
+    "match", which was a false premise: they were already 119 lines apart by design. What has
+    to match is the behaviour, which is what subclassing asserts.
+    """
+
+    module = tvt
+
+
+class HelperCopiesAgreeTests(unittest.TestCase):
+    """The three copies of the undecodable-file diagnosis produce one message.
+
+    `.tasks/validate.py` cannot import from `scripts/`, because it ships into repositories
+    where nothing named `scripts/` exists, so the helper is duplicated rather than shared.
+    That is the trade `chore-0081` accepted and `chore-0059` is open on for the link helpers.
+    The duplication is only safe while a test holds the copies to one message, which is this.
+    """
+
+    @staticmethod
+    def _message_from(module, path):
+        try:
+            module.read_text_utf8(path)
+        except module.NotUTF8 as exc:
+            return str(exc)
+        raise AssertionError("the helper decoded a file that is not UTF-8")
+
+    def test_every_copy_of_the_helper_produces_the_identical_message(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "zen_textio", REPO_ROOT / "scripts" / "_textio.py")
+        textio = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(textio)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "sample.md"
+            bad.write_bytes(b"fine so far\n\xff\xfe rubbish")
+            messages = {name: self._message_from(module, bad) for name, module in (
+                ("scripts/_textio.py", textio),
+                (".tasks/validate.py", tv),
+                ("init-worktracking template", tvt),
+            )}
+
+        distinct = set(messages.values())
+        self.assertEqual(len(distinct), 1,
+                         "the copies of the undecodable-file diagnosis have drifted apart, "
+                         f"which is what duplicating it risks: {messages}")
+        only = distinct.pop()
+        self.assertIn("not valid UTF-8", only)
+        self.assertIn("0xff", only)
+        self.assertIn("re-save it as UTF-8", only)
+
+
 if __name__ == "__main__":
     unittest.main()
