@@ -254,9 +254,17 @@ and the estimate is labelled as one everywhere it appears rather than once in a 
 
 Three things about the arithmetic are worth knowing before you trust a number.
 
-- **Historical sessions are priced at current rates.** The table holds one rate per model, the
-  corpus spans months, and there is no per-date rate history that could be fetched. So a session
-  run when rates were different is priced at today's, and the report says so beside the figure.
+- **A message is priced at the rate in force on its own date, where the table records one.** A
+  model whose price has never changed carries a single rate that applies to every date, which is
+  most of the table, and a session run when that model cost something else is still priced at the
+  one figure recorded. A model whose price has changed carries a dated list instead, and each
+  message is priced against the period covering its own timestamp. **The date compared is always
+  the corpus's and never the machine's**, so two runs a month apart over the same corpus produce
+  identical figures; a report that changed with the calendar would answer two readers differently
+  about the same sessions. Added by `bug-0057`, after `claude-sonnet-5` shipped at an introductory
+  rate that lapsed on 2026-08-31 with the standard rate recorded in a note nothing applied: from
+  2026-09-01 every figure using it would have understated by a third on input and a half on output,
+  silently, beside a number that still looked exactly as right as the day it was true.
 - **Cache tokens dominate, so they are priced.** Measured on 2026-08-29 over this maintainer's
   corpus, 96.7% of all input-side tokens were served from cache, and pricing only input and
   output would have produced $1,105.12 against $9,378.53 for the same work: a figure eight and a

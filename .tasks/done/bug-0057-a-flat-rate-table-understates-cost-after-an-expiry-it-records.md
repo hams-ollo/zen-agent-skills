@@ -2,7 +2,7 @@
 id: bug-0057
 title: A flat rate table silently understates cost after an expiry it records but never applies
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-08-29
 
 ## Problem
 
-[`pricing.json`](../scripts/observatory/pricing.json) lines 45 to 49:
+[`pricing.json`](../../scripts/observatory/pricing.json) lines 45 to 49:
 
 ```json
   "claude-sonnet-5": {
@@ -89,7 +89,7 @@ twelve entries that have never changed do not all grow an array. `models_note` a
 key is present or the model is unpriced, with no prefix matching; the same exactness applies to a
 date falling in no range.
 
-Selection happens where cost is derived in [`serve.py`](../scripts/observatory/serve.py), against the
+Selection happens where cost is derived in [`serve.py`](../../scripts/observatory/serve.py), against the
 session's `first_ts`. Use the session's start rather than its end, because that is when the run was
 priced, and say so in a comment: a session spanning a rate change is a real case and picking one end
 silently is how the next reader loses a day.
@@ -105,6 +105,35 @@ everywhere else.
   rejected, because it breaks the property `rate_notes_note` protects: two runs over the same corpus
   would then disagree, and a report that changes when nothing it reports on changed is not a report
   of a corpus.
+- **A premise that turned out false, and it moved the join.** The notes above say to select against
+  the session's `first_ts`. `cost_report()` does not group by session at all: it groups by model over
+  the whole `message` table, so there was no session to select against. Selection is per message
+  instead, against `message.ts`, which is strictly more accurate and needed no new join. The query
+  now groups by `(model, day)`. Cheap at this corpus's shape and measured rather than assumed: 90
+  `(model, day)` rows over 59,447 messages, with every timestamp present and parseable.
+- **A rejected alternative on partial coverage.** Pricing the days a model's periods cover and
+  reporting the rest as a caveat. Rejected for the reason `load_pricing()` already gives one level
+  up: "A half-resolved model would be worse than an unpriced one, because its cost would look like a
+  figure while quietly omitting whichever kind had no rate." A day no period covers is that same
+  shape across time, so a model with any such day is unpriced, its tokens are still reported per
+  `S-011`, and the uncovered dates are named.
+- **A guard that matched prose, caught by its own mutation test.** The assertion that rate selection
+  reads no clock scanned the source of `rate_in_force` for the word `today`, and failed, because
+  that function's docstring explains that `when` is "a date the corpus recorded, never today". That
+  is the fifth recorded instance in this repository of an assertion matching a bare word in source
+  text rather than a statement. It strips the docstring and comments before looking now, and
+  `_code_only` is itself checked against a sample carrying a real clock so stripping the prose has
+  not stripped the teeth. Mutation-tested end to end: inserting `time.time()` into `rate_in_force`
+  makes the test fail.
+- **A seam left open deliberately.** The clock claim is asserted over the source of the two
+  selection functions rather than by patching a clock in. A patch proves only the paths it happens
+  to reach; a source assertion over both functions proves there are none to reach. The determinism
+  check beside it is necessary and proves less: two runs a second apart would agree even if the code
+  did read the calendar, and the test says so rather than letting the pair imply more than they show.
+- **Measured before and after on the real corpus, and the answer is that nothing moved.** The
+  estimate is byte-identical at $10,226.495341, because every message in the corpus predates the
+  2026-08-31 boundary. That is the correct outcome and the point of the fix: it is forward-looking,
+  it changes no figure anyone has already read, and it starts mattering on 2026-09-01.
 
 ## Risks and rollback
 
@@ -119,22 +148,22 @@ Reversible by reverting one commit. The store is untouched; only the derivation 
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test prices two sessions of the same model, one dated inside the introductory window and one
+- [x] A test prices two sessions of the same model, one dated inside the introductory window and one
       after it, and asserts they receive different rates.
-- [ ] A test proves the report's output is unchanged when the same corpus is priced twice with
+- [x] A test proves the report's output is unchanged when the same corpus is priced twice with
       different system clocks, so no dependency on `today` was introduced.
-- [ ] A test proves a session whose date falls in no recorded range is reported unpriced under
+- [x] A test proves a session whose date falls in no recorded range is reported unpriced under
       `S-011` rather than priced at a guess.
-- [ ] A test proves a model entry carrying only flat `input` and `output` still prices, so an
+- [x] A test proves a model entry carrying only flat `input` and `output` still prices, so an
       unmigrated table is readable.
-- [ ] `claude-sonnet-5` carries both rates with their boundary, and the report names which one it
+- [x] `claude-sonnet-5` carries both rates with their boundary, and the report names which one it
       applied.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `agent-observatory` conformance matrix is brought up to date for `S-010` and `S-011`, or the deferral is recorded.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `agent-observatory` conformance matrix is brought up to date for `S-010` and `S-011`, or the deferral is recorded.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
