@@ -19,7 +19,7 @@ checker performs a network action named by repository content despite the univer
 The fifth finding is minor: the observatory's live watcher retries an unexpected failure forever
 without exposing the failure, so a persistently stale page can still look healthy.
 
-The full acceptance command was not green during the external review run at `0502aa61c0ce4c01bba3de2d25e6adceda98ad18`. It ran 1,075 tests and
+The full acceptance command was not green before this document existed. It ran 1,075 tests and
 reported `8 passed, 1 failed, 0 could not run`: five Codex registration tests failed because their
 attempt to start `/bin/bash` through WSL returned an error. That pre-existing issue maps to
 [`chore-0083`](../../.tasks/chore-0083-no-codex-session-has-ever-exercised-the-codex-wiring.md).
@@ -398,4 +398,4 @@ OK
 ```
 
 This is a review ledger. It reports fixes but implements none, changes no approved contract, and
-files its findings as separate task files.
+creates no task file.
