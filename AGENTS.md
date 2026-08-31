@@ -27,7 +27,7 @@ A skills library, not an application. The deliverables are the skills under [`.a
 | Path | Holds |
 |---|---|
 | [`.agents/skills/`](.agents/skills/) | The skills. One directory per skill, each with a `SKILL.md` harness-agnostic body. |
-| [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities, [`autonomy.md`](.agents/rules/autonomy.md) for what an agent may do when nobody is watching. Adopters may replace any of them. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
+| [`.agents/rules/`](.agents/rules/) | The swappable lenses skills compose: [`house-style.md`](.agents/rules/house-style.md) for writing and formatting, [`review-quality.md`](.agents/rules/review-quality.md) for the review rubric and severities, [`autonomy.md`](.agents/rules/autonomy.md) for what an agent may do when nobody is watching, and, in `A10`, for what it may do with material it did not author on any run at all. Adopters may replace any of them. Shipped alongside the skills by `install.py`, because a skill that references a lens is not self-contained without it. |
 | [`.agents/hooks/`](.agents/hooks/) | Optional runtime guardrails (Python on stdin), each a *reminder* (injects context, never blocks) or a *gate* (blocks, only when the condition is decidable from the payload). The only thing the kit ships that runs inside an adopter's session, so installation is opt-in and activation is theirs: `install.py --with-hooks` places the files and prints the registration rather than editing anyone's settings. Contract in [`.agents/hooks/README.md`](.agents/hooks/README.md). |
 | [`scripts/`](scripts/) | Two kinds, and which kind a thing is matters more than the list. **Distribution tooling**, a deliverable, which ships the kit: `install.py`, `build-adapters.py`, `validate-skills.py`, `check-provenance.py`, `run-checks.py`, `check-citations.py`. **Maintainer tooling**, which reaches no adopter tree and which `install.py` never places: `observatory/`, a local reporting surface over this repository's own session corpus, contracted by [`agent-observatory.md`](docs/spec/agent-observatory.md). What decides the kind is whether an adopter receives it, not where it sits, and the stdlib rule in the conventions section governs both. **Membership is the term here, not the enumeration**: a script added or retired needs no amendment to this row, per the precedent [`chore-0049`](.tasks/done/chore-0049-a-checker-for-conformance-matrix-citations.md) set when a gate count went stale the first time anyone added a gate. |
 | [`.tasks/`](.tasks/) | Atomic, agent-assignable work items for building this kit, plus `validate.py`. |
@@ -79,10 +79,29 @@ neither should be retrofitted onto the other.
   [`review-quality`](.agents/rules/review-quality.md) rules module are lenses. Giving a lens a
   step-by-step procedure invites an agent to run it standalone, which is the one thing it is not for.
 
-### Every skill points at the house-style module
+### Every skill points at every universal lens
 
-Whatever its shape, a skill must reference the house-style module somewhere, because that module is
-swappable: an adopter who replaces it is silently ignored by any skill that never points at it.
+Whatever its shape, a skill must reference each lens that declares itself universal, because a lens
+is swappable: an adopter who replaces it is silently ignored by any skill that never points at it.
+Two do so today, [`house-style.md`](.agents/rules/house-style.md) and
+[`autonomy.md`](.agents/rules/autonomy.md), each saying `**Scope: universal.**` in its own opening.
+[`review-quality.md`](.agents/rules/review-quality.md) is topical and is composed only by the skills
+that review, which is correct: requiring the rest to name a rubric they never apply is the noise
+that gets a rule ignored.
+
+**Universality is declared in the lens and enforced by
+[`validate-skills.py`](scripts/validate-skills.py), not listed here.** A list in this file, or in
+that script, passes the day a fourth lens is added and nobody edits it, which is the failure
+`feat-0048` was filed for. A lens that wants the stronger rule says so in its opening; one that says
+nothing is topical and is still covered by the at-least-one rule.
+
+The enforcement is new and the reason is worth keeping. This rule existed here in prose and nothing
+checked it, so its two halves had drifted a long way apart without either being visible: on
+2026-08-29 `house-style.md` was referenced by all twenty-two skills, which is discipline rather than
+a guarantee, and `autonomy.md` by five, for the twenty-one days since `A10`, the kit's only rule
+about material an agent did not author, was added to it. Every gate passed throughout, because the
+only lens rule in the validator asked whether **at least one** skill pointed at a module and one
+always did (`feat-0064`).
 
 Which conventions govern depends on what the skill writes:
 
@@ -147,6 +166,10 @@ The layout table above states that hook installation is opt-in and activation is
 The reason is mechanical rather than a preference. A user-level `~/.claude/settings.json` does not reach a cloud session, and a cloud session is the exact case this hook exists for: it clones the repository, gets none of the user-scope skills this kit installs, and would otherwise work without them and never say so. Verified against Anthropic's Claude Code documentation on 2026-08-07, which states the same thing from the other side by telling readers to commit settings files to change a cloud session's settings. A printed registration cannot be pasted by a machine that nobody is watching.
 
 The exception is kept as small as it can be: one hook, in the reminder shape, which never blocks and never writes, firing only on a genuinely new session. Its worst case is one injected paragraph. **Adding a second hook to that file, or any hook that blocks, is a new decision and not covered by this one.**
+
+**The interpreter is a fallback, `python3 <hook> || python <hook>`, and the bound on that shape is the hooks module contract.** `a || b` reaches `b` only when `a` fails, and every hook here always exits 0, including on failure, so the only way the second interpreter runs is the first never starting. That is what makes the shape legal: a hook that exited non-zero *after* writing to stdout would run twice and emit two objects, which corrupts the exchange the harness parses. If a hook is ever registered here that does not honour exit 0, this command has to change with it. `tests/test_hooks.py` asserts both halves, running the committed command as the harness does and asserting every shipped hook exits 0 on every path.
+
+The fallback replaced a one-sided `python3`, and the correction is worth recording because the reasoning was sound and the conclusion was wrong (`bug-0050`). `python3` was chosen as the portable default for the cloud sessions this exception exists for, with the Windows hazard known and stated: there `python3` is the Microsoft Store alias, a stub that advertises an install and exits without running anything. Both halves were true. What was wrong was the sentence joining them, that a static JSON file cannot probe and so cannot be right on both platforms at once. **It does not need to probe.** The cost of believing it was counted rather than estimated: the observatory's health report found this hook had exited non-zero on every session start in this checkout from 2026-08-07 to 2026-08-29, fourteen distinct failures, silent throughout, because a reminder must exit cleanly whatever happens. The one hook this repository commits, for the one argument that justified committing it, had never run.
 
 ### Commit messages: no co-author trailer
 

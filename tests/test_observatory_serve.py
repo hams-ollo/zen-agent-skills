@@ -1495,6 +1495,152 @@ class TestActionBoundary(ServerTestCase):
         return html[start:html.index("  skills: function (data, into) {", start)]
 
 
+class TestNavigateSchemeAllowList(ServerTestCase):
+    """bug-0055: a corpus value reached an `href` with no scheme check.
+
+    Every field in a fleet row comes out of a session transcript, which this repository did
+    not write. `pr_url` is the one that reached an interpreted context rather than a text
+    node, so a `javascript:` URI recorded there became a link labelled "Pull request" whose
+    one click ran script in this surface's own origin, able to read every route on the
+    server.
+
+    The decision is made in `serve.followable_url` rather than on the page, and these tests
+    are why: the suite has no JavaScript runtime by design (see the `node_modules` assertion
+    elsewhere in this file), so a check written in the page could only be asserted by reading
+    its source. Here it is executed, against values that travelled the whole path the defect
+    took: transcript, ingester, store, route.
+    """
+
+    PR_SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    def pr_records(self, url):
+        """A transcript that records a pull request link, as the corpus shapes one."""
+        return [
+            self.record("u1", sid=self.PR_SESSION),
+            {"type": "pr-link", "sessionId": self.PR_SESSION, "prNumber": 80,
+             "prUrl": url, "timestamp": "2026-08-01T10:00:01.000Z"},
+        ]
+
+    def fleet_row(self, url):
+        """The row `/api/fleet` serves for a session whose transcript recorded `url`."""
+        self.build_store(self.pr_records(url))
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 200)
+        rows = [r for r in payload["sessions"] if r["session_id"] == self.PR_SESSION]
+        self.assertEqual(len(rows), 1, "the ingested session is not in the fleet report")
+        return rows[0]
+
+    def test_a_javascript_url_from_a_transcript_is_not_offered_as_an_href(self):
+        """The reported defect, driven from an ingested transcript rather than a built row,
+        so the test covers the path the value actually took."""
+        hostile = "javascript:fetch('/api/fleet').then(r=>r.text())"
+        row = self.fleet_row(hostile)
+
+        self.assertIsNone(row["pr_href"],
+                          "a javascript: URI recorded in a transcript is still offered to "
+                          "the page as something a browser may be pointed at")
+        self.assertEqual(row["pr_url"], hostile,
+                         "the report no longer records what the corpus said, so it and the "
+                         "transcript disagree")
+
+    def test_the_refusal_is_an_allow_list_and_not_a_javascript_denylist(self):
+        """`data:` and `vbscript:` execute too, and a check that names only `javascript:`
+        would pass both. Casing and embedded control characters are the other half: browsers
+        normalise them away before dispatching the scheme, so a prefix test that does not
+        would refuse the safe spelling and admit the dangerous one."""
+        for hostile in ("data:text/html;base64,PHNjcmlwdD4=",
+                        "vbscript:msgbox(1)",
+                        "JaVaScRiPt:alert(1)",
+                        "java\nscript:alert(1)",
+                        "\tjavascript:alert(1)",
+                        "//evil.example.com/pull/1",
+                        "/relative/pull/1",
+                        "   ",
+                        ""):
+            with self.subTest(hostile=hostile):
+                self.assertIsNone(serve.followable_url(hostile),
+                                  f"{hostile!r} is offered as a followable URL")
+        for bad_type in (None, 80, ["https://example.com"], {"url": "https://example.com"}):
+            with self.subTest(bad_type=bad_type):
+                self.assertIsNone(serve.followable_url(bad_type),
+                                  "a non-string value is treated as a URL")
+
+    def test_a_real_pull_request_url_still_reaches_the_page_as_a_link(self):
+        """The failure direction that matters as much as the fix: a check strict enough to
+        refuse a genuine pull request removes a working control, and would be noticed only by
+        someone who expected a link to be there."""
+        real = "https://github.com/hams-ollo/zen-agent-skills/pull/80"
+        row = self.fleet_row(real)
+
+        self.assertEqual(row["pr_href"], real,
+                         "a real pull request URL is no longer followable")
+        self.assertEqual(row["pr_url"], real)
+        for good in ("http://localhost:8787/pull/1",
+                     "HTTPS://github.com/o/r/pull/1",
+                     "  https://github.com/o/r/pull/1  "):
+            with self.subTest(good=good):
+                self.assertIsNotNone(serve.followable_url(good),
+                                     f"{good!r} is refused, and it should not be")
+
+    def test_a_session_with_no_pull_request_offers_no_link_and_no_text(self):
+        """The common row. An action whose field is empty is not offered at all, which is the
+        existing behaviour and must survive the change."""
+        row = self.fleet_row("")
+        self.assertIsNone(row["pr_href"])
+        self.assertFalse(row["pr_url"], "an absent pull request became a value")
+
+    def test_the_allow_list_is_a_constant_the_page_and_this_test_both_read(self):
+        """`ACTION_KINDS` is a constant rather than a literal because it is the edit that
+        could make S-019 false. This is the same shape for the same reason: the allow-list is
+        the edit that could make the fix false."""
+        self.assertEqual(serve.ACTION_URL_SCHEMES, ("http:", "https:"),
+                         "the scheme allow-list changed, which is a decision rather than a "
+                         "refactor: state why in the task that changes it")
+        navigate = [a for a in serve.ACTIONS if a["kind"] == "navigate"]
+        self.assertTrue(navigate, "no navigate action is declared")
+        for action in navigate:
+            with self.subTest(action=action["id"]):
+                self.assertIn("href_field", action,
+                              "a navigate action declares no href_field, so the page has "
+                              "nothing safe to point at and would fall back to the raw value")
+
+    def test_the_page_takes_the_href_from_the_server_and_never_from_the_raw_field(self):
+        """The page-side half. This is a source assertion and is deliberately weaker than the
+        four above, because the suite has no JavaScript runtime and a test asserting one
+        would be the first. That is why the decision was put in `followable_url` where it is
+        executed; what remains here is the wiring, which source can answer."""
+        html = UI_INDEX.read_text(encoding="utf-8")
+        start = html.index("function actionControl(")
+        body = html[start:html.index("function actionCell(", start)]
+
+        self.assertIn("action.href_field", body,
+                      "the page no longer reads the server's followable value")
+        self.assertNotIn("href: value", body,
+                         "the page sets href from the raw corpus field again, which is "
+                         "bug-0055 exactly")
+        self.assertIn("href: href", body,
+                      "the anchor no longer takes the checked value")
+        self.assertIn('rel: "noreferrer noopener"', body,
+                      "the anchor lost its referrer and opener protection")
+
+    def test_a_refused_value_is_shown_to_the_viewer_rather_than_hidden(self):
+        """Refusing to make it clickable is not the same as pretending it is not there. The
+        report's contract is that it shows what the corpus holds, so a refused URL is still
+        rendered, as text."""
+        html = UI_INDEX.read_text(encoding="utf-8")
+        start = html.index("function actionControl(")
+        body = html[start:html.index("function actionCell(", start)]
+        navigate_branch = body[body.index('if (action.kind === "navigate")'):]
+        fallback = navigate_branch[:navigate_branch.index("return el(\"a\"")]
+
+        self.assertIn('el("code"', fallback,
+                      "a refused URL is dropped rather than shown, so the viewer cannot see "
+                      "what the corpus recorded")
+        self.assertIn("text: value", fallback,
+                      "the fallback shows something other than the recorded value")
+
+
 class TestHostHeader(ServerTestCase):
     """A rebound request must not reach a report.
 
@@ -2911,6 +3057,103 @@ class TestHealthPageBehaviour(HealthTestCase):
                 self.assertNotIn(forbidden, body,
                                  f"the health renderer builds {forbidden} directly, so it is "
                                  f"outside the enumeration S-019 is proven by")
+
+
+class ContentSecurityPolicyTests(ServerTestCase):
+    """chore-0082 item 4: the layer that would have contained bug-0055.
+
+    Defence in depth rather than a fix for anything live. The page uses no `innerHTML`
+    anywhere and `bug-0055` closed the one sink where a corpus value reached an interpreted
+    context. This is cheap insurance on a surface that serves one maintainer's whole session
+    history: it turns a click-to-execute into a blocked request.
+    """
+
+    def test_every_response_carries_the_policy(self):
+        self.build_store([self.record("u1")])
+        server = self.serve_on_loopback()
+        for route in ("/", "/api/meta", "/api/fleet", "/nope"):
+            with self.subTest(route=route):
+                header = self._header(server, route, "Content-Security-Policy")
+                self.assertEqual(header, serve.CONTENT_SECURITY_POLICY,
+                                 f"{route} carries no policy, so one route is exempt from "
+                                 f"the containment every other route has")
+
+    def _header(self, server, path, name):
+        host, port = server.server_address[0], server.server_address[1]
+        conn = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            conn.request("GET", path)
+            return conn.getresponse().getheader(name)
+        finally:
+            conn.close()
+
+    def test_the_policy_blocks_a_script_source_this_page_never_uses(self):
+        # The containment that matters for bug-0055's class: no host is listed for scripts,
+        # so a javascript: URI is blocked whatever else changes on the page.
+        policy = serve.CONTENT_SECURITY_POLICY
+        self.assertIn("default-src 'none'", policy,
+                      "the policy opens permissively, so a directive nobody thought to name "
+                      "is allowed rather than denied")
+        self.assertIn("script-src 'self' 'unsafe-inline'", policy)
+        self.assertNotIn("script-src *", policy)
+        for directive in ("base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"):
+            with self.subTest(directive=directive):
+                self.assertIn(directive, policy)
+
+    def test_unsafe_inline_is_required_by_a_contract_rather_than_an_oversight(self):
+        # S-022 forbids fetching a subresource, so every style and script in the page is
+        # inline by design and the policy has to permit that. Asserted against the page
+        # itself, so dropping `unsafe-inline` without extracting them fails here rather than
+        # in a browser.
+        html = UI_INDEX.read_text(encoding="utf-8")
+        self.assertIn("<style>", html)
+        self.assertIn("<script>", html)
+        self.assertIn("'unsafe-inline'", serve.CONTENT_SECURITY_POLICY,
+                      "the page is entirely inline by contract, so a policy without "
+                      "'unsafe-inline' would render nothing at all")
+
+    def test_the_page_requests_no_host_the_policy_would_have_to_allow(self):
+        # The policy is only honest if the page really is self-contained. `src=` or `href=`
+        # pointing anywhere off-origin would need a directive nobody has written.
+        html = UI_INDEX.read_text(encoding="utf-8")
+        for pattern in ("https://", "http://"):
+            for attribute in (f'src="{pattern}', f"src='{pattern}",
+                              f'href="{pattern}', f"href='{pattern}"):
+                with self.subTest(attribute=attribute):
+                    self.assertNotIn(attribute, html,
+                                     "the page fetches a subresource, which S-022 forbids "
+                                     "and this policy does not permit")
+
+
+class BindGuardCasingTests(unittest.TestCase):
+    """chore-0082 item 3: one name, two readings.
+
+    `loopback_address()` decides what may be bound and `host_is_loopback()` decides what may
+    be answered. They are separate on purpose, and they were reading `localhost` two ways:
+    the bind guard compared case-sensitively, so `--host LOCALHOST` was refused while the
+    same spelling in a `Host` header was accepted. It failed closed, which is the right
+    direction and not a reason to leave one name with two readings.
+    """
+
+    def test_an_uppercase_localhost_binds_rather_than_raising(self):
+        self.assertEqual(serve.loopback_address("LOCALHOST"), serve.DEFAULT_HOST)
+        self.assertEqual(serve.loopback_address("LocalHost."), serve.DEFAULT_HOST)
+
+    def test_the_two_guards_agree_on_every_spelling_of_the_name(self):
+        # The property, rather than the one case that was wrong: whatever this binds, that
+        # accepts. A future edit to either that reintroduces a disagreement fails here.
+        for spelling in ("localhost", "LOCALHOST", "LocalHost", "localhost.", "LOCALHOST."):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(serve.loopback_address(spelling), serve.DEFAULT_HOST)
+                self.assertTrue(serve.host_is_loopback(spelling))
+
+    def test_a_non_loopback_name_is_still_refused_by_both(self):
+        # The negative case. Lowering the comparison must not have widened what it accepts.
+        for spelling in ("localhost.evil.com", "notlocalhost", "example.com", "0.0.0.0"):
+            with self.subTest(spelling=spelling):
+                with self.assertRaises(serve.NotLoopback):
+                    serve.loopback_address(spelling)
+                self.assertFalse(serve.host_is_loopback(spelling))
 
 
 if __name__ == "__main__":

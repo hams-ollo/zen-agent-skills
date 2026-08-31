@@ -26,6 +26,33 @@ read as auditing the contract in full. The rows below cover S-001 through S-015 
 stood before that amendment. Three scenarios and one flag are unaudited here, and the coverage
 arithmetic is 15 of 18 scenarios; the matrix for the remainder is owed at that task's closeout.
 
+**One clause of S-016 was audited on 2026-08-30 by `bug-0056`, and it was found diverged.** The rest
+of S-016 through S-018 remains unaudited and this is not a claim otherwise. That scenario says the
+adopted and edited cases are told apart "by whether the installed file still matches the digest
+recorded when it was placed, **which is the same line `--check` draws between `diverged` and
+`revised`**". `--check` did not draw that line. Its adopted branch compared the recorded baseline
+against the source and never opened the installed file, so it could not tell an edited lens from an
+untouched one, and both answered `revised` at exit 0. The session-start currency reminder excludes
+`revised` from what it reports, on the ground that firing on a file the adopter was invited to own is
+crying wolf, so an untouched lens that had simply gone stale was silent in both places at once.
+Measured on the author's machine that day: `autonomy.md`, carrying this kit's only rule about
+material an agent did not author, sat two days behind in both installed homes with its installed
+digest byte-identical to the recorded baseline.
+
+**The contract was right and the code was wrong**, which is the direction `AGENTS.md` says a
+disagreement resolves in, and the reason nothing caught it is that this clause sat inside the
+unaudited range. `bug-0056` brought `--check` into line with the sentence rather than amending it.
+That clause is now **conformed**: `_check_entry()` in `scripts/install.py` digests the installed tree
+in the adopted branch, which it already did for `bug-0022`'s missing-file check, and splits on
+whether the files the kit revised still match their baseline. Proven by
+`test_a_kit_revision_to_a_lens_the_adopter_never_touched_is_reported`,
+`test_a_kit_revision_to_a_lens_the_adopter_edited_stays_revised_and_exit_zero`, and
+`test_the_revised_message_says_which_files_are_the_adopters_and_which_are_not`. The hook mirrors it,
+proven by `test_an_untouched_lens_the_kit_revised_is_reported`,
+`test_an_edited_lens_the_kit_revised_stays_silent`, and
+`test_the_hook_and_install_py_give_the_same_verdict_for_the_same_state`, which asserts the two give
+one answer for one entry rather than only sharing a vocabulary.
+
 ## Matrix
 
 | Section | Item | Status | Evidence | Note |

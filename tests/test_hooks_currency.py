@@ -669,5 +669,158 @@ class DigestAgreementTests(unittest.TestCase):
                              hashlib.sha256(b"notes\n").hexdigest())
 
 
+class UntouchedAdoptedLensTests(FixtureCase):
+    """bug-0056: `revised` meant two things, and this hook stayed silent for both.
+
+    `REPORTING_VERDICTS` excludes `revised` because firing on a file the adopter was invited
+    to own is crying wolf. That is true when they own it. When they never touched it, the
+    same word covered a lens that had simply gone stale, and this hook said nothing.
+
+    Measured on the author's machine 2026-08-29: both installed copies of `autonomy.md`
+    matched their recorded baseline exactly, so nothing there was theirs, and the module had
+    been missing `A10`, the kit's only rule about untrusted input, for two days.
+    """
+
+    def _adopted(self, installed_body, source_body_after, fixture=None):
+        """An adopted `rules` entry, with the installed copy and the later source stated."""
+        fx = fixture or self.fx
+        fx.write_skill("doc-sync")
+        fx.record("doc-sync")
+        rules = fx.root / ".agents" / "rules"
+        rules.mkdir(parents=True, exist_ok=True)
+        (rules / "house-style.md").write_text("original\n", encoding="utf-8", newline="\n")
+        target = fx.home / ".claude" / "rules"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "house-style.md").write_text(installed_body,
+                                               encoding="utf-8", newline="\n")
+        entry = {
+            "tool": "claude", "name": "rules", "target": str(target), "mode": "copy",
+            "source": str(rules), "digests": install_mod.digest_tree(rules),
+        }
+        fx.entries.append(entry)
+        (rules / "house-style.md").write_text(source_body_after,
+                                              encoding="utf-8", newline="\n")
+        fx.write_manifest()
+        return entry
+
+    def test_an_untouched_lens_the_kit_revised_is_reported(self):
+        # The installed copy is byte-identical to the baseline, so nothing here is theirs
+        # and the silence was covering plain staleness.
+        self._adopted(installed_body="original\n", source_body_after="upstream moved\n")
+        self.assertIn("NOT KNOWN TO BE CURRENT", self.context())
+
+    def test_an_edited_lens_the_kit_revised_stays_silent(self):
+        # The half the exclusion exists for, kept intact. A hook firing here would be the
+        # crying wolf `REPORTING_VERDICTS` was written to prevent.
+        self._adopted(installed_body="mine\n", source_body_after="upstream moved\n")
+        self.assertIsNone(icr.evaluate(startup(), root=self.fx.root),
+                          "the hook spoke about a lens the adopter made theirs")
+
+    def test_the_hook_and_install_py_give_the_same_verdict_for_the_same_state(self):
+        # The vocabulary test elsewhere in this file pins that the two use the same words.
+        # This pins that they give the same answer, which is the drift that would actually
+        # hurt: two readers of one manifest disagreeing about whether a lens is stale.
+        for index, (installed, expected) in enumerate(
+                (("original\n", "diverged"), ("mine\n", "revised"))):
+            with self.subTest(installed=installed.strip()):
+                fx = Fixture(Path(self._tmp.name) / f"case{index}")
+                entry = self._adopted(installed_body=installed,
+                                      source_body_after="upstream moved\n", fixture=fx)
+                self.assertEqual(icr.classify(entry), expected)
+                self.assertEqual(install_mod._check_entry(entry)[0], expected,
+                                 "the hook and install.py disagree about one entry, which "
+                                 "is the drift their shared vocabulary exists to stop")
+
+
+class BoundedDigestTests(FixtureCase):
+    """chore-0082 item 1: this hook runs at every session start, on a path it did not derive.
+
+    `source` is read out of a manifest, and `find_manifest()` walks upward from the session's
+    working directory, so a manifest at any ancestor decides what gets read. Unbounded, a
+    single entry naming a large directory turned every session start into a full recursive
+    read of it. The module's own docstring makes cost the property to get right and bounded
+    only the no-manifest path; past that gate there was no bound at all.
+
+    `install.py`'s copy of `digest_tree` is deliberately left unbounded. It runs because a
+    person invoked the installer and can watch it; this one does not.
+    """
+
+    def _wide_source(self, count):
+        directory = self.fx.root / ".agents" / "skills" / "wide"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text("---\nname: wide\ndescription: x.\n---\n\nb\n",
+                                            encoding="utf-8", newline="\n")
+        for i in range(count):
+            (directory / f"f{i}.txt").write_text("x", encoding="utf-8", newline="\n")
+        return directory
+
+    def test_a_source_over_the_file_cap_is_error_rather_than_a_completed_digest(self):
+        source = self._wide_source(12)
+        with self.assertRaises(icr.TreeTooLarge):
+            icr.digest_tree(source, max_files=5)
+        entry = {"tool": "claude", "name": "wide", "mode": "copy",
+                 "target": str(self.fx.home / ".claude" / "skills" / "wide"),
+                 "source": str(source), "digests": {"SKILL.md": "0" * 64}}
+        Path(entry["target"]).mkdir(parents=True, exist_ok=True)
+        real = icr.MAX_DIGEST_FILES
+        icr.MAX_DIGEST_FILES = 5
+        self.addCleanup(setattr, icr, "MAX_DIGEST_FILES", real)
+        self.assertEqual(icr.classify(entry), "error",
+                         "a source too large to digest was not reported as uncomparable")
+
+    def test_a_source_over_the_byte_cap_is_error_too(self):
+        source = self._wide_source(3)
+        with self.assertRaises(icr.TreeTooLarge):
+            icr.digest_tree(source, max_bytes=4)
+
+    def test_the_bound_refuses_before_reading_rather_than_after(self):
+        # Sized with `stat` and refused before `read_bytes`, so an enormous single file is
+        # never held in memory. Asserted over the source, because a test that measured
+        # memory would be measuring the machine.
+        body = inspect_source(icr.digest_tree)
+        self.assertLess(body.index("stat().st_size"), body.index("read_bytes()"),
+                        "the file is read before it is sized, so the bound arrives too late")
+
+    def test_the_caps_sit_far_above_anything_this_kit_ships(self):
+        # The failure direction that costs more is a cap firing on a correct install, since
+        # `error` is a reporting verdict and this hook fires at every session start. Measured
+        # against the real modules rather than asserted as a bare number.
+        for module in (REPO_ROOT / ".agents" / "hooks", REPO_ROOT / ".agents" / "rules"):
+            files = [p for p in module.rglob("*") if p.is_file()]
+            with self.subTest(module=module.name):
+                self.assertLess(len(files), icr.MAX_DIGEST_FILES / 10,
+                                "a real module is within an order of magnitude of the file "
+                                "cap, so the cap is too close to a correct install")
+                self.assertLess(sum(p.stat().st_size for p in files),
+                                icr.MAX_DIGEST_BYTES / 10,
+                                "a real module is within an order of magnitude of the byte "
+                                "cap")
+
+    def test_a_correct_install_still_digests_and_stays_silent(self):
+        # The negative case, and the one that keeps the bound from being crying wolf: an
+        # ordinary fixture install is well inside the caps and the hook says nothing.
+        self.fx.write_skill("alpha")
+        self.fx.record("alpha")
+        self.fx.write_manifest()
+        self.assertIsNone(icr.evaluate(startup(), root=self.fx.root),
+                          "the hook spoke about an install that is current")
+
+
+def inspect_source(function):
+    """The source of `function` with its docstring removed, for an ordering assertion.
+
+    Prose is not code. Both bound and read are discussed in that docstring, so a scan of the
+    raw text would be answered by the explanation rather than by the statements.
+    """
+    import inspect as _inspect
+    body = _inspect.getsource(function)
+    opening = body.find('"""')
+    if opening != -1:
+        closing = body.find('"""', opening + 3)
+        if closing != -1:
+            body = body[:opening] + body[closing + 3:]
+    return body
+
+
 if __name__ == "__main__":
     unittest.main()

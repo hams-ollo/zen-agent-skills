@@ -122,6 +122,15 @@ import re
 import sys
 from pathlib import Path
 
+# `_textio` is a sibling module in this directory, imported through the repository root so
+# the one spelling works whether this file is run as a script or imported as a module of
+# `scripts`, which `observatory/serve.py` already does for `install`. Same preamble as there,
+# and the same reason: the two invocations put different directories on `sys.path`.
+_TEXTIO_ROOT = Path(__file__).resolve().parent.parent
+if str(_TEXTIO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TEXTIO_ROOT))
+from scripts._textio import NotUTF8, read_text_utf8   # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The corpus. Globbed rather than listed, because a hardcoded list silently excludes
@@ -319,14 +328,32 @@ def _defined_test_names(root):
     if not tests.is_dir():
         return names
     for path in sorted(tests.rglob("*.py")):
-        names |= set(DEFINITION.findall(_read(path)))
+        try:
+            names |= set(DEFINITION.findall(_read(path)))
+        except NotUTF8:
+            # A source that cannot be decoded defines no name this checker can see. Skipped
+            # rather than crashing the run; the citations it would have satisfied are then
+            # reported unresolved, which is the honest answer and names the matrix row.
+            continue
     return names
 
 
 def _read(path):
+    """The file's text, or `""` when it is not there.
+
+    An absent or unopenable file reads as empty, which is this checker's existing answer and
+    is right for the two callers that resolve a citation against a source file: a citation
+    pointing at a file that is gone resolves to nothing, and that is the finding.
+
+    An **undecodable** file is deliberately no longer folded in with it (chore-0081). It used
+    to return `""` too, so a matrix that could not be decoded yielded no citations and the run
+    reported `0 unresolved` over a file it had never read, which is `bug-0049`'s defect exactly:
+    a gate reporting a clean result over a question it never asked. `NotUTF8` now propagates,
+    and `collect()` routes it into the `unreadable` channel that already exists for this.
+    """
     try:
-        return path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        return read_text_utf8(path)
+    except OSError:
         return ""
 
 
@@ -347,7 +374,15 @@ class _Sources:
     def variants(self, path):
         key = str(path)
         if key not in self._cache:
-            text = _read(path)
+            try:
+                text = _read(path)
+            except NotUTF8:
+                # A source that cannot be decoded carries no phrase this checker can match,
+                # which is exactly what an empty read already meant here. The citations it
+                # would have satisfied are then reported unresolved and name the matrix row,
+                # so the run fails with a finding rather than passing over a file it could
+                # not read.
+                text = ""
             plain = _collapse(text)
             uncommented = _collapse(FULL_LINE_COMMENT.sub("", text))
             self._cache[key] = (plain, uncommented,
@@ -533,7 +568,12 @@ def audit(root=None):
 
     unreadable = []
     for matrix in matrices:
-        text = _read(matrix)
+        try:
+            text = _read(matrix)
+        except NotUTF8 as exc:
+            unreadable.append((matrix, f"it is not valid UTF-8, so nothing in it could be "
+                                       f"read: {exc}"))
+            continue
         subjects = _header_subjects(matrix, text) + _ledger_siblings(matrix)
         tables = list(_tables(text))
         readable = [(header, body) for header, body in tables

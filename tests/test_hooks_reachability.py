@@ -558,13 +558,22 @@ class CommittedRegistrationTests(unittest.TestCase):
                                  cwd=str(REPO_ROOT), capture_output=True, text=True)
         self.assertIn("settings.json", tracked.stdout)
 
-    def test_the_interpreter_is_the_one_that_resolves_where_this_file_is_needed(self):
-        # Not `python`. See the class docstring; this is the assertion that would have
-        # caught the original defect.
+    def test_the_interpreter_resolves_on_every_platform_this_file_has_to_reach(self):
+        # Both names, in that order, since bug-0050. `python3` leads because cloud sessions
+        # are Linux, where `python` frequently does not exist and this exception exists for
+        # them. `python` follows because on Windows `python3` is the Microsoft Store alias,
+        # a stub that exits without running anything, which had left this hook inert on
+        # every session start in this checkout for three weeks.
+        #
+        # This assertion used to read `startswith("python3 ")` and stop there, and it
+        # passed throughout that period: it pinned the half of the decision that was right
+        # and could not see the half that was wrong.
         self.assertTrue(self.command.startswith("python3 "),
-                        "cloud sessions are Linux, where `python` frequently does not "
-                        "exist; a Windows developer overrides this in the untracked "
-                        ".claude/settings.local.json")
+                        "python3 no longer leads, so a cloud session on Linux without "
+                        "`python` would take the wrong branch first")
+        self.assertIn("|| python ", self.command,
+                      "there is no fallback, so on Windows `python3` resolves to the Store "
+                      "alias and the hook is placed, registered, and never run")
 
     def test_it_registers_the_reachability_hook_on_a_new_session_only(self):
         self.assertEqual("startup", self.entry["matcher"])
@@ -574,8 +583,14 @@ class CommittedRegistrationTests(unittest.TestCase):
         # A repository-relative path, so a fresh clone runs the hook in the checkout with
         # nothing installed, which is the state it reports on. If the path is wrong the
         # hook is inert and silent, the same failure by another route.
-        rel = self.command.split(" ", 1)[1].strip()
-        self.assertTrue((REPO_ROOT / rel).is_file(), f"{rel} does not exist")
+        # Every `.py` token, because the command is an interpreter fallback since bug-0050
+        # and names the script once per branch. Splitting on the first space took the whole
+        # remainder as one path and broke on the second branch.
+        named = [tok.strip("'\"") for tok in self.command.split() if tok.endswith(".py")]
+        self.assertTrue(named, "the command names no script at all")
+        for rel in named:
+            with self.subTest(path=rel):
+                self.assertTrue((REPO_ROOT / rel).is_file(), f"{rel} does not exist")
 
     def test_the_exception_is_documented_where_the_rule_it_bends_lives(self):
         # AGENTS.md states hook installation is opt-in. This file breaks that for every

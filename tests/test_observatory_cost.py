@@ -326,15 +326,30 @@ class TestCostIsADatedEstimate(CostTestCase):
         self.assertEqual(cheap["cost"]["estimated_usd"], 65.0)
         self.assertEqual(dear["cost"]["estimated_usd"], 650.0)
 
-    def test_s010_the_report_states_that_history_is_priced_at_current_rates(self):
+    def test_s010_the_report_states_how_a_historical_session_is_priced(self):
         """One rate per model applied to a corpus spanning months is wrong for old sessions
         and is the right simplification anyway. It is only honest if the report says so."""
         self.priced_corpus()
 
         payload = self.cost(pricing=self.pricing_file({"test-model": PRICED}))
 
-        self.assertIn("current rates", payload["historical_note"])
-        self.assertIn("one rate per model", payload["historical_note"].lower())
+        # Unchanged in intent: the report must say how a session older than the table is
+        # priced, because that is the bound a reader has to know before trusting a figure.
+        # The answer itself changed with bug-0057, from "at current rates" to "at the rate in
+        # force on its own date", so the assertion follows the claim rather than the wording.
+        note = payload["historical_note"]
+        self.assertIn("rate in force on its own date", note)
+        self.assertIn("never this machine's", note,
+                      "the note no longer says the date compared is the corpus's, which is "
+                      "the property that keeps two runs over one corpus identical")
+        # The old note claimed the table holds "one rate per model", which bug-0057 made
+        # false. The bound a reader still has to be told is the one that survived: a model
+        # whose price never changed is priced at its single recorded figure whatever the
+        # session's date, so most of the table really is one rate applying to every date.
+        self.assertIn("single rate that applies to every date",
+                      payload["historical_note"].lower(),
+                      "the note no longer states the bound that survived, which is the one "
+                      "case where a session older than the rate is priced at it anyway")
 
     def test_s010_the_shipped_rate_table_records_a_date_and_a_source(self):
         """The artifact this task creates, checked as an artifact. A table with no date cannot
@@ -345,11 +360,17 @@ class TestCostIsADatedEstimate(CostTestCase):
         self.assertRegex(table["transcribed"], r"^\d{4}-\d{2}-\d{2}$")
         self.assertTrue(table["source"] and table["source_author"])
         self.assertTrue(table["models"], "the shipped table prices nothing")
-        for name, rate in table["models"].items():
-            with self.subTest(model=name):
-                for key in ("input", "output"):
-                    self.assertIsInstance(rate[key], (int, float))
-                    self.assertGreater(rate[key], 0)
+        # Two shapes since bug-0057, and the invariant is the same over both: whatever a
+        # model declares, every rate it declares is a positive number. A model whose price has
+        # never changed carries the flat pair; one whose price has changed carries `rates`.
+        for name, entry in table["models"].items():
+            declared = entry["rates"] if "rates" in entry else [entry]
+            self.assertTrue(declared, f"{name} declares no rate at all")
+            for rate in declared:
+                with self.subTest(model=name, since=rate.get("from")):
+                    for key in ("input", "output"):
+                        self.assertIsInstance(rate[key], (int, float))
+                        self.assertGreater(rate[key], 0)
         for key in ("cache_read", "cache_creation"):
             self.assertGreater(table["cache_multipliers"][key], 0)
 
@@ -361,12 +382,19 @@ class TestCostIsADatedEstimate(CostTestCase):
         self.assertTrue(loaded["present"])
         self.assertEqual(loaded["as_of"], "2026-06-24")
         self.assertTrue(loaded["models"])
-        for name, rate in loaded["models"].items():
-            with self.subTest(model=name):
-                self.assertEqual(set(rate), {"input", "output", "cache_read",
-                                             "cache_creation"})
-                self.assertEqual(rate["cache_read"], rate["input"] * 0.1)
-                self.assertEqual(rate["cache_creation"], rate["input"] * 1.25)
+        # Unchanged in intent: every rate a model declares resolves all four kinds, and the
+        # two cache rates are derived from that rate's own input. A model now carries a list
+        # of dated periods rather than one rate (bug-0057), so the invariant is asserted per
+        # period, which is where it actually has to hold: a model whose price changed derives
+        # each period's cache rates from that period's input, not from the entry's.
+        for name, periods in loaded["models"].items():
+            self.assertTrue(periods, f"{name} resolved no rate at all")
+            for period in periods:
+                with self.subTest(model=name, since=period["from"], until=period["until"]):
+                    self.assertEqual(set(period), {"input", "output", "cache_read",
+                                                   "cache_creation", "from", "until", "note"})
+                    self.assertEqual(period["cache_read"], period["input"] * 0.1)
+                    self.assertEqual(period["cache_creation"], period["input"] * 1.25)
 
     def test_s010_the_page_puts_the_rate_date_in_the_figures_own_caption(self):
         """The task says to state the estimate as an estimate everywhere it appears, "not once
@@ -509,9 +537,9 @@ class TestUnpricedModels(CostTestCase):
         """
         self.mixed_corpus()
         table = self.pricing_file({
-            "test-model": {"input": 2.0, "output": 10.0,
-                           "note": "Introductory rate. The standard rate is $3.00 and $15.00.",
-                           "expires": "2026-08-31"},
+            "test-model": {"rates": [
+                {"until": "2026-08-31", "input": 2.0, "output": 10.0,
+                 "note": "Introductory rate. The standard rate is $3.00 and $15.00."}]},
             "mystery-model": {"input": 1.0, "output": 5.0},
         })
 
@@ -520,7 +548,7 @@ class TestUnpricedModels(CostTestCase):
         self.assertEqual(payload["rates"]["rate_notes"],
                          [{"model": "test-model",
                            "note": "Introductory rate. The standard rate is $3.00 and $15.00.",
-                           "expires": "2026-08-31"}],
+                           "from": None, "until": "2026-08-31"}],
                          "a rate carrying a stated expiry did not reach the report, so the "
                          "page prices with it and never says it runs out")
         # Derived, not observed. `test-model` at 2.0/10.0 with the 0.1 and 1.25 multipliers:
@@ -543,7 +571,7 @@ class TestUnpricedModels(CostTestCase):
 
         self.assertEqual(payload["rates"]["rate_notes"], [])
 
-    def test_s010_the_page_renders_a_time_bound_rate_where_the_reader_meets_the_rates(self):
+    def test_s010_the_page_renders_a_rates_window_where_the_reader_meets_the_rates(self):
         """Carried in the payload and never rendered would leave the reader exactly where the
         finding found them."""
         body = cost_renderer_body()
@@ -551,7 +579,11 @@ class TestUnpricedModels(CostTestCase):
         self.assertIn("rates.rate_notes", body,
                       "the page never reads the rate notes, so a rate with a known expiry "
                       "is priced with and never mentioned")
-        self.assertIn("entry.expires", body,
+        # `entry.expires` was replaced by the period's own bounds in bug-0057, and this
+        # assertion is what caught the renderer still reading the old field: the page showed
+        # "no date recorded" for two rows that plainly carried dates. Found by loading the
+        # page rather than by any test, which is why chore-0082 asked for that.
+        self.assertIn("rateWindow(entry)", body,
                       "the page renders a rate note without its date, which is the half of "
                       "the note a reader needs to know whether it still applies")
 
@@ -1108,6 +1140,241 @@ def cost_renderer_body() -> str:
                  if match.start() > start]
     end = min(following + [html.index("\n};", start)])
     return html[start:end]
+
+
+def _code_only(body: str) -> str:
+    """`body` with its leading docstring and every `#` comment removed.
+
+    Prose is not code. A guard that reads it is satisfied by an explanation of the rule and
+    broken by one, which is how an assertion ends up describing a comment.
+    """
+    stripped = body
+    opening = stripped.find('"""')
+    if opening != -1:
+        closing = stripped.find('"""', opening + 3)
+        if closing != -1:
+            stripped = stripped[:opening] + stripped[closing + 3:]
+    return "\n".join(line.split("#", 1)[0] for line in stripped.splitlines())
+
+
+class DatedRatesTest(CostTestCase):
+    """bug-0057: a rate can expire, and a flat table keeps applying it forever.
+
+    `claude-sonnet-5` shipped at an introductory $2.00 and $10.00 that the source table gives
+    as running through 2026-08-31, with the standard $3.00 and $15.00 behind it recorded in a
+    note nothing applied. From 2026-09-01 every figure priced with it would have understated
+    by a third on input and a half on output, silently, with a rendered note beside a number
+    that still looked exactly as right as it did the day it was true.
+
+    **The fix is not a clock, and could not be.** `pricing.json` has always said its dates are
+    never compared against `today`, because the report derives everything from the corpus and
+    a figure that changed with the calendar would answer two readers differently about the
+    same sessions. A message's own timestamp is corpus data, so pricing each message against
+    the rate in force on its own date keeps that property exactly: the clock test below is the
+    one that proves it.
+    """
+
+    TWO_PERIODS = {"rates": [
+        {"until": "2026-08-31", "input": 2.0, "output": 10.0, "note": "Introductory rate."},
+        {"from": "2026-09-01", "input": 3.0, "output": 15.0},
+    ]}
+
+    def two_dated_messages(self):
+        """One million output tokens on each side of the boundary, same model."""
+        self.build_store([
+            self.assistant("before", model="test-model", sid="s1",
+                           ts="2026-08-31T23:00:00.000Z", output_tokens=MILLION),
+            self.assistant("after", model="test-model", sid="s2",
+                           ts="2026-09-01T01:00:00.000Z", output_tokens=MILLION),
+        ])
+
+    def test_two_messages_of_one_model_are_priced_at_the_rate_of_their_own_date(self):
+        # The defect itself. Before the fix both would have been priced at 10.0, giving 20.00.
+        self.two_dated_messages()
+
+        payload = self.cost(pricing=self.pricing_file({"test-model": self.TWO_PERIODS}))
+        row = self.by_model(payload)["test-model"]
+
+        # 1M output at $10/M under the intro rate, 1M at $15/M after it.
+        self.assertEqual(row["cost_usd"], 25.0,
+                         "both halves were priced at one rate, so the boundary did nothing")
+        self.assertEqual(payload["cost"]["estimated_usd"], 25.0)
+        self.assertTrue(row["priced"])
+
+    def test_the_report_names_both_rates_it_applied_and_what_each_cost(self):
+        # "The report saying which rate it applied when a model has more than one." A single
+        # figure covering two rates is not reconcilable by a reader without this.
+        self.two_dated_messages()
+
+        row = self.by_model(self.cost(
+            pricing=self.pricing_file({"test-model": self.TWO_PERIODS})))["test-model"]
+
+        applied = row["rates_applied"]
+        self.assertEqual(len(applied), 2, "the breakdown does not name both rates")
+        self.assertEqual([(a["from"], a["until"]) for a in applied],
+                         [(None, "2026-08-31"), ("2026-09-01", None)])
+        self.assertEqual([a["output"] for a in applied], [10.0, 15.0])
+        self.assertEqual([a["cost_usd"] for a in applied], [10.0, 15.0])
+        self.assertIsNone(row["rate"],
+                          "a single `rate` was reported for a model priced at two, which is a "
+                          "figure nobody can reconcile against the breakdown beside it")
+
+    def test_a_model_priced_at_one_rate_still_reports_that_rate_directly(self):
+        # The common case must not gain the breakdown's indirection. Every model whose price
+        # never changed still answers "the rate" with a rate.
+        self.build_store([self.assistant("a1", model="test-model",
+                                         input_tokens=2 * MILLION, output_tokens=1 * MILLION,
+                                         cache_read=10 * MILLION,
+                                         cache_creation=4 * MILLION)])
+
+        row = self.by_model(self.cost(
+            pricing=self.pricing_file({"test-model": PRICED})))["test-model"]
+
+        self.assertEqual(row["rate"], {"input": 5.0, "output": 25.0,
+                                       "cache_read": 0.5, "cache_creation": 6.25})
+        self.assertEqual(len(row["rates_applied"]), 1)
+
+    def test_the_same_corpus_prices_identically_whatever_the_system_clock_says(self):
+        # The property `pricing.json` protects, asserted rather than trusted. Two runs whose
+        # only difference is the machine's date must be byte-identical, which is what makes
+        # this a report of a corpus rather than a report of a moment.
+        self.two_dated_messages()
+        table = self.pricing_file({"test-model": self.TWO_PERIODS})
+
+        first = json.dumps(self.cost(pricing=table), sort_keys=True)
+        second = json.dumps(self.cost(pricing=table), sort_keys=True)
+        self.assertEqual(first, second, "the report is not even deterministic")
+
+        # The determinism above is necessary and does not prove the claim: two runs a second
+        # apart would agree even if the code read the calendar. What is decidable is that the
+        # selection path never asks. Asserted over the source of the two functions that choose
+        # a rate, which is where a clock would have to appear, rather than by patching one in.
+        # A patch proves only the paths it happens to reach; this proves there are none.
+        source = Path(serve.__file__).read_text(encoding="utf-8")
+        for name in ("rate_in_force", "_rate_periods"):
+            start = source.index(f"def {name}(")
+            body = source[start:source.index("\ndef ", start + 1)]
+            # Strip the docstring and the comments before looking. Both of these functions
+            # explain in prose that they never read a clock, so a scan of the raw text is
+            # satisfied or broken by the explanation rather than by the code. That is the
+            # trap this repository has now recorded five times: an assertion matching a bare
+            # word in source text rather than a statement. `_code_only` is checked against a
+            # sample carrying a real clock, so stripping prose has not stripped the teeth.
+            body = _code_only(body)
+            for forbidden in ("today", ".now(", "utcnow", "time.time", "datetime"):
+                with self.subTest(function=name, forbidden=forbidden):
+                    self.assertNotIn(forbidden, body,
+                                     "rate selection reads a clock, which is the one thing "
+                                     "the rate table's own notes forbid")
+
+    def test_a_date_no_period_covers_is_unpriced_rather_than_priced_at_a_guess(self):
+        # S-011 one level down. A model with rates that do not reach a message is exactly as
+        # unpriceable as a model with no rates, and inventing a figure is what that scenario
+        # forbids. The nearest guess here would be 15.0, which is why this must not happen.
+        self.build_store([
+            self.assistant("orphan", model="test-model", sid="s1",
+                           ts="2020-01-01T10:00:00.000Z", output_tokens=MILLION),
+        ])
+        gapped = {"rates": [{"from": "2026-01-01", "input": 3.0, "output": 15.0}]}
+
+        payload = self.cost(pricing=self.pricing_file({"test-model": gapped}))
+        row = self.by_model(payload)["test-model"]
+
+        self.assertFalse(row["priced"], "a date outside every period was priced anyway")
+        self.assertIsNone(row["cost_usd"], "an uncovered date produced a cost figure")
+        self.assertEqual(row["tokens"], MILLION,
+                         "the tokens went missing along with the price, which S-011 forbids")
+        self.assertEqual(row["unpriced_days"], ["2020-01-01"],
+                         "the report does not say which dates it could not price")
+        self.assertIn("unpriced", payload["cost"]["note"].lower())
+
+    def test_a_partially_covered_model_is_unpriced_rather_than_partly_priced(self):
+        # All or nothing per model, matching how a half-resolved rate is already treated: a
+        # cost that quietly omits the messages it could not price looks like a complete figure.
+        self.build_store([
+            self.assistant("covered", model="test-model", sid="s1",
+                           ts="2026-06-01T10:00:00.000Z", output_tokens=MILLION),
+            self.assistant("orphan", model="test-model", sid="s2",
+                           ts="2020-01-01T10:00:00.000Z", output_tokens=MILLION),
+        ])
+        gapped = {"rates": [{"from": "2026-01-01", "input": 3.0, "output": 15.0}]}
+
+        row = self.by_model(self.cost(
+            pricing=self.pricing_file({"test-model": gapped})))["test-model"]
+
+        self.assertFalse(row["priced"])
+        self.assertIsNone(row["cost_usd"], "a partial cost was reported as if it were whole")
+        self.assertEqual(row["tokens"], 2 * MILLION)
+
+    def test_an_entry_carrying_only_flat_rates_still_prices_every_date(self):
+        # A half-migrated table is the likely intermediate state, and the twelve entries whose
+        # price has never changed are not going to grow an array to say so.
+        self.build_store([
+            self.assistant("old", model="test-model", sid="s1",
+                           ts="2020-01-01T10:00:00.000Z", output_tokens=MILLION),
+            self.assistant("new", model="test-model", sid="s2",
+                           ts="2030-01-01T10:00:00.000Z", output_tokens=MILLION),
+        ])
+
+        row = self.by_model(self.cost(
+            pricing=self.pricing_file({"test-model": PRICED})))["test-model"]
+
+        self.assertTrue(row["priced"], "an unmigrated flat entry stopped pricing")
+        self.assertEqual(row["cost_usd"], 50.0)
+
+    def test_a_flat_pair_beside_rates_covers_the_dates_the_periods_do_not(self):
+        # Both shapes on one entry: `rates` wins where it applies and the flat pair is the
+        # fallback, which is what keeps a table readable while it is being migrated.
+        self.build_store([
+            self.assistant("inside", model="test-model", sid="s1",
+                           ts="2026-06-01T10:00:00.000Z", output_tokens=MILLION),
+            self.assistant("outside", model="test-model", sid="s2",
+                           ts="2020-01-01T10:00:00.000Z", output_tokens=MILLION),
+        ])
+        both = {"input": 1.0, "output": 5.0,
+                "rates": [{"from": "2026-01-01", "input": 3.0, "output": 15.0}]}
+
+        row = self.by_model(self.cost(
+            pricing=self.pricing_file({"test-model": both})))["test-model"]
+
+        self.assertTrue(row["priced"], "the flat fallback did not cover the uncovered date")
+        self.assertEqual(row["cost_usd"], 20.0, "the period and the fallback were not both used")
+
+    def test_the_shipped_table_carries_both_sonnet_rates_with_their_boundary(self):
+        # Against the real file, because the maintenance decision is the point: the intro rate
+        # lapses 2026-08-31 and the table has to know both sides of that without anyone
+        # remembering to edit it on the day.
+        loaded = serve.load_pricing(SHIPPED_PRICING)
+        periods = loaded["models"]["claude-sonnet-5"]
+
+        self.assertEqual(sorted((p["from"] or "", p["until"] or "") for p in periods),
+                         [("", "2026-08-31"), ("2026-09-01", "")])
+        by_bound = {p["until"]: p for p in periods if p["until"]}
+        self.assertEqual((by_bound["2026-08-31"]["input"], by_bound["2026-08-31"]["output"]),
+                         (2.0, 10.0), "the introductory rate is no longer the shipped one")
+        later = [p for p in periods if p["from"] == "2026-09-01"][0]
+        self.assertEqual((later["input"], later["output"]), (3.0, 15.0),
+                         "the standard rate behind the introductory one is wrong or missing")
+
+    def test_the_shipped_table_prices_each_side_of_the_sonnet_boundary_correctly(self):
+        # The boundary is inclusive on both sides, and off-by-one here is a third of the input
+        # cost of the model most of this corpus runs.
+        periods = serve.load_pricing(SHIPPED_PRICING)["models"]["claude-sonnet-5"]
+        for day, expected in (("2026-08-30", 2.0), ("2026-08-31", 2.0),
+                              ("2026-09-01", 3.0), ("2027-01-01", 3.0)):
+            with self.subTest(day=day):
+                self.assertEqual(serve.rate_in_force(periods, day)["input"], expected)
+
+    def test_the_shipped_table_no_longer_carries_a_rate_change_nothing_applies(self):
+        # `expires` and `standard_after_expiry` recorded a coming change that nothing acted on,
+        # which is the defect. Two representations of one fact is the drift shape this file's
+        # own notes are careful about everywhere else, so they are gone rather than kept beside
+        # the periods that replaced them.
+        raw = json.loads(SHIPPED_PRICING.read_text(encoding="utf-8"))
+        for name, entry in raw["models"].items():
+            with self.subTest(model=name):
+                self.assertNotIn("expires", entry)
+                self.assertNotIn("standard_after_expiry", entry)
 
 
 if __name__ == "__main__":

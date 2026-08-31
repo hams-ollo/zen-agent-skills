@@ -19,6 +19,9 @@ The defect each group protects against:
 import importlib.util
 import io
 import json
+import shutil
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -289,15 +292,23 @@ class WiringConsistencyTests(unittest.TestCase):
         for command, _ in entries:
             with self.subTest(command=command):
                 named = self._script_paths(command)
+                targets = {(REPO_ROOT / n).resolve() for n in named}
+                # One *distinct* hook, not one mention of it. The command is an interpreter
+                # fallback since `bug-0050`, `python3 <hook> || python <hook>`, so it names
+                # the same file twice. What the AGENTS.md exception bounds is which hooks
+                # this file activates, and that is the distinct count: a second, different
+                # hook smuggled into a fallback still fails here.
                 self.assertEqual(
-                    len(named), 1, f"{command!r} should name exactly one hook script")
-                target = (REPO_ROOT / named[0]).resolve()
+                    len(targets), 1,
+                    f"{command!r} activates {len(targets)} distinct hooks; the conventions "
+                    f"section of AGENTS.md grants an exception for exactly one")
+                target = targets.pop()
                 self.assertTrue(
                     target.is_file(),
-                    f".claude/settings.json runs {named[0]}, which does not exist")
+                    f".claude/settings.json runs {target}, which does not exist")
                 self.assertIn(
                     target, shipped,
-                    f".claude/settings.json runs {named[0]}, which is not a hook this "
+                    f".claude/settings.json runs {target}, which is not a hook this "
                     f"module ships from {HOOKS_DIR}")
 
     def test_every_matcher_covers_every_delegation_tool(self):
@@ -317,6 +328,192 @@ class WiringConsistencyTests(unittest.TestCase):
                 with self.subTest(source=name, tool=tool):
                     self.assertNotRegex(
                         tool, matcher, f"{name} fires on the unrelated {tool!r}")
+
+
+class TheCommittedRegistrationActuallyRuns(unittest.TestCase):
+    """bug-0050: the one hook this repository commits had never run on this machine.
+
+    `.claude/settings.json` named `python3`, which on Windows is the Microsoft Store
+    app-execution alias: a stub that prints an install advertisement and exits non-zero
+    without running anything. The observatory's health report counted the cost on
+    2026-08-29, over this repository's own corpus: **14 distinct failures, every session
+    start from 2026-08-07**, silent throughout, because the reminder shape requires a hook
+    to exit cleanly whatever happens and so nothing surfaced it.
+
+    Every test that touched this file before asserted its *shape*: that it names a hook that
+    exists, on an event the module ships, matching what the wirings agree on. All of them
+    passed for three weeks while the command could not launch. A structural assertion cannot
+    see an interpreter that is not there, so this one runs the command.
+    """
+
+    SETTINGS = REPO_ROOT / ".claude" / "settings.json"
+
+    def commands(self):
+        settings = json.loads(self.SETTINGS.read_text(encoding="utf-8"))
+        return [entry["command"]
+                for event in settings.get("hooks", {}).values()
+                for matcher in event
+                for entry in matcher.get("hooks", [])]
+
+    def test_every_committed_command_launches_and_exits_zero(self):
+        """Run it the way the harness does: through a shell, one JSON object on stdin.
+
+        The oracle is the hooks module contract, which is what a harness relies on: exit 0,
+        and stdout carrying either nothing or exactly one JSON object. A non-zero exit is
+        the defect this task fixes; stdout carrying two objects would be the defect the
+        fallback could introduce if a hook ever broke its exit-0 promise.
+        """
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup",
+                              "cwd": str(REPO_ROOT)})
+        for command in self.commands():
+            with self.subTest(command=command):
+                result = subprocess.run(command, input=payload, capture_output=True,
+                                        text=True, shell=True, cwd=REPO_ROOT)
+                self.assertEqual(
+                    result.returncode, 0,
+                    f"the committed registration exits {result.returncode}. That is this "
+                    f"hook placed, correct-looking, and never run, which is the failure "
+                    f"the module's own README names and which no structural test can see. "
+                    f"stderr: {result.stderr[:200]!r}")
+                if result.stdout.strip():
+                    json.loads(result.stdout)   # exactly one object, or this raises
+
+    def codex_commands(self):
+        settings = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        return [entry["command"]
+                for event in settings.get("hooks", {}).values()
+                for matcher in event
+                for entry in matcher.get("hooks", [])]
+
+    def test_every_codex_command_launches_and_exits_zero(self):
+        """The same executable check over the Codex wiring (`bug-0058`).
+
+        **A POSIX shell explicitly, and the bound is worth stating.** Every Codex command
+        contains `$(git rev-parse --show-toplevel)`, which is POSIX substitution: `cmd.exe`
+        passes it through as a literal path, so on Windows the default shell cannot run
+        these at all. That is a second assumption in this wiring, older than `bug-0058` and
+        equally unverified, and it is why the command is run under `bash` here.
+
+        So this proves the command is **well-formed POSIX that works**, not that Codex
+        spawns a POSIX shell. Nothing here can prove the second: this machine's 71 Codex
+        sessions all predate the hooks module, so the wiring has never been exercised. What
+        makes the change safe without that proof is the other side, pinned by
+        `test_a_hook_ignores_extra_argv_so_the_fallback_degrades_safely`: with no shell the
+        tail arrives as argv and no hook reads it, so the fallback is never worse than the
+        bare `python3` it replaces.
+        """
+        posix_shell = shutil.which("bash") or shutil.which("sh")
+        if not posix_shell:
+            self.skipTest("no POSIX shell available to evaluate the command's own syntax")
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup",
+                              "cwd": str(REPO_ROOT)})
+        for command in self.codex_commands():
+            with self.subTest(command=command[:60]):
+                result = subprocess.run([posix_shell, "-c", command], input=payload,
+                                        capture_output=True, text=True, cwd=REPO_ROOT)
+                self.assertEqual(result.returncode, 0,
+                                 f"a Codex registration exits {result.returncode}. "
+                                 f"stderr: {result.stderr[:200]!r}")
+                if result.stdout.strip():
+                    json.loads(result.stdout)
+
+    def test_a_hook_ignores_extra_argv_so_the_fallback_degrades_safely(self):
+        """The measurement the Codex change rests on, kept as an assertion.
+
+        If a harness does not use a shell, the command splits into argv and the fallback's
+        tail arrives as arguments to the script. That is only harmless while no hook reads
+        `sys.argv`, and if one ever does, the fallback stops being safe on that harness and
+        this fails rather than the wiring quietly changing meaning.
+        """
+        payload = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Task"})
+        for script in sorted(HOOKS_DIR.glob("*.py")):
+            with self.subTest(hook=script.name):
+                plain = subprocess.run([sys.executable, str(script)], input=payload,
+                                       capture_output=True, text=True, cwd=REPO_ROOT)
+                with_tail = subprocess.run(
+                    [sys.executable, str(script), "||", "python", str(script)],
+                    input=payload, capture_output=True, text=True, cwd=REPO_ROOT)
+                self.assertEqual(with_tail.returncode, plain.returncode)
+                self.assertEqual(with_tail.stdout, plain.stdout,
+                                 f"{script.name} behaves differently when the fallback's "
+                                 f"tail arrives as argv, so the Codex wiring's shape is no "
+                                 f"longer safe on a harness that does not use a shell")
+
+    def test_every_wiring_names_the_interpreter_this_platform_has(self):
+        """All three wirings, so they cannot drift apart on this again (`bug-0058`).
+
+        They already had. `.claude/settings.json` argued at length for a bare `python3`,
+        `.codex/hooks.json` copied it, and `.opencode/plugins/zen-hooks.mjs` had been trying
+        both in order since it was written. Nothing compared them, so one wiring held the
+        answer while another explained why it was impossible.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "install_for_wirings", REPO_ROOT / "scripts" / "install.py")
+        install = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(install)
+        wanted = install.hook_interpreter()
+
+        for label, command in ([("claude", c) for c in self.commands()]
+                               + [("codex", c) for c in self.codex_commands()]):
+            with self.subTest(wiring=label, command=command[:50]):
+                names = {
+                    Path(t.strip('"\'')).name
+                    for t in command.split()
+                    if not t.endswith(".py") and t != "||"
+                }
+                self.assertIn(wanted, names,
+                              f"the {label} wiring never names {wanted!r}")
+
+        plugin = (REPO_ROOT / ".opencode" / "plugins" / "zen-hooks.mjs").read_text(
+            encoding="utf-8")
+        self.assertIn(f'"{wanted}"', plugin,
+                      f"the opencode plugin's interpreter list never names {wanted!r}")
+
+    def test_a_fallback_names_the_interpreter_this_platform_actually_has(self):
+        """Whatever shape the command takes, it has to include the name that works here.
+
+        Asserted against `install.hook_interpreter()`, which is the other half of the
+        distribution path and already encodes the per-platform answer. The two disagreed for
+        three weeks: the installer printed a registration that worked and the repository
+        committed one that did not. A literal comparison cannot express that, because
+        `hook_interpreter()` returns a different name per platform and this file is static,
+        so the assertion is containment rather than equality.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "install_for_hooks", REPO_ROOT / "scripts" / "install.py")
+        install = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(install)
+
+        wanted = install.hook_interpreter()
+        for command in self.commands():
+            with self.subTest(command=command):
+                names = {token for token in command.split() if not token.endswith(".py")}
+                self.assertIn(
+                    wanted, names,
+                    f"the committed registration never names {wanted!r}, which is what "
+                    f"install.py resolves to on this platform, so the two halves of the "
+                    f"distribution path disagree about how to launch the same hook")
+
+    def test_the_fallback_is_only_safe_because_a_hook_always_exits_zero(self):
+        """The bound, asserted rather than left in a comment.
+
+        `a || b` reaches `b` only when `a` fails. Every hook here exits 0 on every path, so
+        the only way the second interpreter runs is the first never starting. A hook that
+        exited non-zero after writing to stdout would run twice and emit two objects, which
+        corrupts the exchange, so this shape is legal only while that contract holds.
+        """
+        payloads = ('{"hook_event_name":"SessionStart","source":"startup"}',
+                    '{"hook_event_name":"SessionStart","source":"resume"}',
+                    "not json at all", "")
+        for script in sorted(HOOKS_DIR.glob("*.py")):
+            for payload in payloads:
+                with self.subTest(hook=script.name, payload=payload[:24]):
+                    result = subprocess.run([sys.executable, str(script)], input=payload,
+                                            capture_output=True, text=True, cwd=REPO_ROOT)
+                    self.assertEqual(result.returncode, 0,
+                                     f"{script.name} exits {result.returncode}, which makes "
+                                     f"the committed fallback unsafe: it would run the hook "
+                                     f"a second time and emit a second object")
 
 
 if __name__ == "__main__":

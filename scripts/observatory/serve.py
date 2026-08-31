@@ -56,6 +56,7 @@ import argparse
 import ipaddress
 import json
 import queue
+import re
 import socket
 import sys
 import threading
@@ -81,6 +82,28 @@ DEFAULT_REGISTRY = ingest.DEFAULT_REGISTRY
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 INDEX = UI_DIR / "index.html"
+
+# A rate period is bounded by ISO dates, and a message is dated by the corpus in the same
+# shape, so both sides compare as plain strings. No parsing, no timezone, and above all no
+# clock: `bug-0057` added dated rates precisely so the report keeps deriving everything from
+# the corpus, and a date object here would be the first step toward comparing against today.
+_ISO_DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
+
+# Every source the page needs is in the page. `default-src 'none'` then names the few it
+# actually uses, rather than `'self'` admitting whatever else the origin might later serve.
+# `connect-src 'self'` is the JSON routes and the event stream; `img-src data:` covers the
+# inline SVG charts the page draws itself. No `script-src` host is listed at all, so a
+# `javascript:` URI is blocked whatever else changes on the page.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'none'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "img-src 'self' data:; "
+    "base-uri 'none'; "
+    "form-action 'none'; "
+    "frame-ancestors 'none'"
+)
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
@@ -333,8 +356,11 @@ ESTIMATE_LABEL = (
 )
 
 HISTORICAL_RATES_NOTE = (
-    "Historical sessions are priced at current rates. The table holds one rate per model and "
-    "the corpus spans months, so a session run when rates differed is priced at today's."
+    "A message is priced at the rate in force on its own date, where the table records one. "
+    "A model whose price never changed carries a single rate that applies to every date, so a "
+    "session run when that model cost something else is still priced at the one figure "
+    "recorded. The date compared is always the corpus's and never this machine's, so two runs "
+    "a month apart over the same corpus produce identical figures."
 )
 
 # `S-011` in one sentence, served to the page for the same reason `LIVENESS_POLICY` is: the
@@ -397,9 +423,11 @@ ACTION_KINDS = ("navigate", "copy-command")
 # `copy-command`; a `navigate` action uses the field's value as the target.
 ACTIONS = (
     {"id": "open-pr", "kind": "navigate", "label": "Pull request", "field": "pr_url",
-     "template": None,
+     "template": None, "href_field": "pr_href",
      "note": "Opens the session's pull request. A link the viewer follows is a request their "
-             "browser makes, not one this report makes, so S-022 is untouched."},
+             "browser makes, not one this report makes, so S-022 is untouched. `field` carries "
+             "what the corpus recorded and is always displayed; `href_field` carries the same "
+             "value only when it is safe to point a browser at, and is None otherwise."},
     {"id": "copy-cwd", "kind": "copy-command", "label": "Copy path", "field": "cwd",
      "template": "{cwd}",
      "note": "Copies the working directory. A file:// link from an http:// page is blocked "
@@ -410,6 +438,53 @@ ACTIONS = (
              "command for a person to run; running it is not this surface's to do. The flag "
              "is the CLI's own, confirmed against `claude --help` rather than assumed."},
 )
+
+# The only schemes a `navigate` action may point a viewer's browser at. Everything in the
+# fleet report comes from a session transcript, which this repository did not write, and a
+# `navigate` value is the one field that reaches an interpreted context rather than a text
+# node. `javascript:` there is script execution in this surface's own origin, which can read
+# every route on this server: that is the whole session corpus (`bug-0055`).
+#
+# A constant rather than a literal in the check, for the reason `ACTION_KINDS` is one: it is
+# the edit that could make the guarantee false, so a test reads it instead of a reviewer
+# remembering it.
+ACTION_URL_SCHEMES = ("http:", "https:")
+
+
+def followable_url(value):
+    """`value` when a browser may be pointed at it, otherwise None.
+
+    The decision is made here rather than on the page, and that placement is the point. The
+    suite deliberately has no JavaScript runtime (a test asserts `node_modules` is never
+    introduced), so a check written in the page could only ever be asserted by reading its
+    source, while this one is executed by real tests against real ingested corpus values.
+    The page consumes the answer and carries no security logic it cannot be tested on.
+
+    Parsed rather than pattern-matched. `startswith("http")` admits `httpx://` and a
+    denylist of `javascript:` misses `data:` and `vbscript:`, so this is an allow-list over
+    the parsed scheme. `urlsplit` strips ASCII tab, carriage return and newline exactly as
+    browsers do, so `java\\nscript:` normalises to `javascript:` here and refuses, rather
+    than slipping past a naive prefix test and executing in the browser.
+
+    A relative or protocol-relative value has no scheme and is refused, which is correct
+    rather than incidental: this field records an absolute pull request URL, and `//evil/x`
+    resolved against this origin is a navigation the corpus never asked for.
+
+    Refusing returns None instead of raising, because a refused value is still displayed to
+    the viewer as text. Nothing the corpus recorded is hidden; it is only not made clickable.
+    """
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    try:
+        scheme = urlsplit(candidate).scheme.lower()
+    except ValueError:
+        # A value malformed enough that the parser refuses it is one no browser should be
+        # pointed at either. Fail closed.
+        return None
+    return candidate if f"{scheme}:" in ACTION_URL_SCHEMES else None
 
 
 class NotLoopback(ValueError):
@@ -425,7 +500,12 @@ def loopback_address(host: str) -> str:
     machine whose hosts file points `localhost` somewhere else must not be able to talk this
     server onto a routable interface.
     """
-    if host.rstrip(".") == "localhost":
+    # Lowered, agreeing with `host_is_loopback()` below. These two answer different
+    # questions, what may this bind against what may this answer, and they were reading the
+    # same name two ways: `--host LOCALHOST` was refused here and accepted there. It failed
+    # closed, which is the right direction and not a reason to leave one name with two
+    # readings (chore-0082).
+    if host.rstrip(".").lower() == "localhost":
         return DEFAULT_HOST
     try:
         address = ipaddress.ip_address(host)
@@ -688,7 +768,11 @@ def fleet_report(conn, project: str | None = None, registry=None, corpus=None) -
             "session_id": session_id, "project": project_name, "branch": branch,
             "first_activity": first, "last_activity": last, "title": title,
             "entrypoint": entrypoint, "cwd": cwd, "in_store": in_store,
-            "pr_url": pr_url, "pr_number": pr_number,
+            # `pr_url` is what the corpus recorded, unaltered, because this report is a
+            # record of the corpus and rewriting it here would make the row disagree with
+            # the transcript it summarises. `pr_href` is the same value only when a browser
+            # may be pointed at it, and None otherwise, so the page never has to decide.
+            "pr_url": pr_url, "pr_href": followable_url(pr_url), "pr_number": pr_number,
             "state": state, "registry": registry_state, "evidence": evidence,
             "pid": entry.get("pid"), "kind": entry.get("kind"),
             "name": entry.get("name"), "started_at": _started_at(entry),
@@ -1136,6 +1220,105 @@ def _rate(value):
     return value if value >= 0 else None
 
 
+def _boundary(value):
+    """An ISO date bounding a rate period, or None for unbounded on that side.
+
+    Anything that is not a `YYYY-MM-DD` string is None, which reads as unbounded. That is the
+    permissive direction and it is the right one here: the alternative is a typo in a hand-
+    edited table silently narrowing a period so some dates fall in no range and their tokens
+    go unpriced, which looks like a corpus fact rather than an editing mistake.
+    """
+    return value if isinstance(value, str) and _ISO_DATE_RE.match(value) else None
+
+
+def _rate_periods(entry, read_multiplier, creation_multiplier):
+    """Every dated rate an entry declares, oldest bound first. Empty when it declares none.
+
+    Two shapes, and the flat one is not deprecated (`bug-0057`). A model whose price has never
+    changed carries `input` and `output` at the top level and gets one unbounded period, which
+    is most of the table and would be noise as a one-element array. A model whose price has
+    changed carries a `rates` list, each element bounded by `from` and `until` inclusive, either
+    of which may be absent for unbounded on that side. Both may appear: `rates` wins, and the
+    flat pair is then the fallback for a date no period covers, which is how a half-migrated
+    table stays readable.
+
+    Cache rates are derived per period from that period's own input rate, not from the entry's,
+    because the multipliers are ratios against whatever input cost at the time.
+    """
+    periods = []
+    declared = entry.get("rates")
+    for raw in declared if isinstance(declared, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        base_input, base_output = _rate(raw.get("input")), _rate(raw.get("output"))
+        if base_input is None or base_output is None:
+            continue                          # half a rate is not a rate
+        note = raw.get("note")
+        periods.append({
+            "from": _boundary(raw.get("from")),
+            "until": _boundary(raw.get("until")),
+            "input": base_input,
+            "output": base_output,
+            "cache_read": base_input * read_multiplier,
+            "cache_creation": base_input * creation_multiplier,
+            "note": note.strip() if isinstance(note, str) and note.strip() else None,
+        })
+
+    flat_input, flat_output = _rate(entry.get("input")), _rate(entry.get("output"))
+    if flat_input is not None and flat_output is not None:
+        note = entry.get("note")
+        periods.append({
+            # Unbounded on both sides, so it covers any date no declared period does. On an
+            # unmigrated entry that is every date, which is the whole of the old behaviour.
+            "from": None,
+            "until": None,
+            "input": flat_input,
+            "output": flat_output,
+            "cache_read": flat_input * read_multiplier,
+            "cache_creation": flat_input * creation_multiplier,
+            "note": note.strip() if isinstance(note, str) and note.strip() else None,
+        })
+
+    # Bounded periods first, so `rate_in_force` finds a specific answer before the catch-all.
+    # `from` sorted descending inside that, so the latest applicable period wins where two
+    # overlap, which is what a hand-edited table with a sloppy boundary most likely meant.
+    periods.sort(key=lambda p: (p["from"] is None and p["until"] is None,
+                                p["from"] is None, _neg_date(p["from"])))
+    return periods
+
+
+def _neg_date(value):
+    """A sort key putting later dates first, with None last. Strings do not negate."""
+    return "" if value is None else "".join(chr(255 - ord(c)) for c in value)
+
+
+def rate_in_force(periods, when):
+    """The rate covering `when`, or None when no period does.
+
+    `when` is a date the corpus recorded, never today. That distinction is the whole design
+    constraint here and it is stated in `pricing.json`'s own notes: the report derives
+    everything it says from the corpus, so introducing a clock would make two runs over the
+    same corpus disagree. A session's timestamp is corpus data; the system date is not.
+
+    A date matching no period is unpriced rather than priced at the nearest guess, which is
+    `S-011`'s rule applied one level down: a model with rates that do not cover a message is
+    exactly as unpriceable as a model with no rates at all, and inventing a figure is the one
+    thing that scenario forbids.
+    """
+    if not when:
+        return None
+    day = when[:10]
+    if not _ISO_DATE_RE.match(day):
+        return None
+    for period in periods:
+        if period["from"] is not None and day < period["from"]:
+            continue
+        if period["until"] is not None and day > period["until"]:
+            continue
+        return period
+    return None
+
+
 def load_pricing(path=None) -> dict:
     """The rate table, read from a local file. Never fetched, at any point (`S-022`).
 
@@ -1200,26 +1383,21 @@ def load_pricing(path=None) -> dict:
     for name, entry in (models if isinstance(models, dict) else {}).items():
         if not isinstance(entry, dict):
             continue
-        base_input = _rate(entry.get("input"))
-        base_output = _rate(entry.get("output"))
-        if base_input is None or base_output is None:
-            continue                          # half a rate is not a rate
-        table["models"][name] = {
-            "input": base_input,
-            "output": base_output,
-            "cache_read": base_input * read_multiplier,
-            "cache_creation": base_input * creation_multiplier,
-        }
+        periods = _rate_periods(entry, read_multiplier, creation_multiplier)
+        if not periods:
+            continue                          # half a rate is not a rate, and neither is none
+        table["models"][name] = periods
         # A rate can be correct and temporary at once, and the number alone cannot say so.
         # Carried to the report and never priced with: a note is for the reader, and letting
         # it reach the arithmetic would be a second rate table nobody declared.
-        note, expires = entry.get("note"), entry.get("expires")
-        if isinstance(note, str) and note.strip():
-            table["rate_notes"].append({
-                "model": name,
-                "note": note.strip(),
-                "expires": expires if isinstance(expires, str) else None,
-            })
+        for period in periods:
+            if period["note"]:
+                table["rate_notes"].append({
+                    "model": name,
+                    "note": period["note"],
+                    "from": period["from"],
+                    "until": period["until"],
+                })
 
     if not table["models"]:
         table["note"] = (f"The rate table at {path} names no model with a usable rate. Every "
@@ -1396,33 +1574,82 @@ def cost_report(conn, project: str | None = None, pricing=None, quota=None) -> d
     columns = kinds + ("thinking_tokens",)
     sums = ", ".join(f"COALESCE(SUM({column}), 0) AS {column}" for column in columns)
 
+    # Grouped by day as well as by model since `bug-0057`, because a rate can change under a
+    # corpus that does not. The day comes from the message's own timestamp, which is corpus
+    # data: pricing each message against the rate in force on its own date leaves two runs a
+    # month apart producing identical output, which is the property `pricing.json`'s own notes
+    # protect and which a comparison against today would destroy. Cheap at this shape: 90
+    # (model, day) rows over 59,447 messages on the maintainer's corpus, measured 2026-08-30.
     if project:
         rows = conn.execute(
-            f"SELECT model, COUNT(*) AS messages, {sums} FROM message "
+            f"SELECT model, substr(ts, 1, 10) AS day, COUNT(*) AS messages, {sums} FROM message "
             f"WHERE uuid IN (SELECT uuid FROM message_occurrence WHERE project = ?) "
-            f"GROUP BY model", (project,)).fetchall()
+            f"GROUP BY model, day", (project,)).fetchall()
     else:
         rows = conn.execute(
-            f"SELECT model, COUNT(*) AS messages, {sums} FROM message "
-            f"GROUP BY model").fetchall()
+            f"SELECT model, substr(ts, 1, 10) AS day, COUNT(*) AS messages, {sums} FROM message "
+            f"GROUP BY model, day").fetchall()
 
-    models = []
+    gathered = {}
     for row in rows:
         name = row["model"] or MODEL_UNRECORDED
-        counts = {column: row[column] for column in columns}
-        rate = table["models"].get(name)
+        bucket = gathered.setdefault(name, {
+            "messages": 0,
+            "counts": {column: 0 for column in columns},
+            "by_period": {},        # id(period) -> {"period":.., "counts":..}
+            "undated": [],          # days no declared period covers
+        })
+        bucket["messages"] += row["messages"]
+        for column in columns:
+            bucket["counts"][column] += row[column]
+
+        period = rate_in_force(table["models"].get(name) or [], row["day"])
+        if period is None:
+            bucket["undated"].append(row["day"] or "(no timestamp)")
+            continue
+        slot = bucket["by_period"].setdefault(
+            id(period), {"period": period, "counts": {column: 0 for column in columns}})
+        for column in columns:
+            slot["counts"][column] += row[column]
+
+    def _cost(counts, rates):
+        return sum(counts[kind] / 1_000_000 * rates[kind[: -len("_tokens")]] for kind in kinds)
+
+    models = []
+    for name, bucket in gathered.items():
+        counts = bucket["counts"]
+        # All or nothing per model, matching how a half-resolved rate is already treated one
+        # level up: "A half-resolved model would be worse than an unpriced one, because its
+        # cost would look like a figure while quietly omitting whichever kind had no rate."
+        # A day the table does not cover is the same shape across time rather than across
+        # token kinds, so a model with any such day is unpriced and says which days (`S-011`).
+        priced = bool(bucket["by_period"]) and not bucket["undated"]
+        applied = [
+            {"from": slot["period"]["from"], "until": slot["period"]["until"],
+             "note": slot["period"]["note"],
+             **{kind[: -len("_tokens")]: slot["period"][kind[: -len("_tokens")]]
+                for kind in kinds},
+             "tokens": sum(slot["counts"][kind] for kind in kinds),
+             "cost_usd": round(_cost(slot["counts"], slot["period"]), 6)}
+            for slot in bucket["by_period"].values()
+        ]
+        applied.sort(key=lambda a: (a["from"] or "", a["until"] or ""))
         entry = {
             "model": name,
-            "messages": row["messages"],
+            "messages": bucket["messages"],
             "tokens": sum(counts[kind] for kind in kinds),
-            "priced": rate is not None,
-            "rate": rate,
-            "cost_usd": None,
+            "priced": priced,
+            # The four rates when exactly one period priced this model, which is every model
+            # whose price never changed and is what a reader means by "the rate". None when
+            # two applied, because there is no single answer and inventing one would be a
+            # figure nobody could reconcile against the breakdown below it.
+            "rate": ({kind[: -len("_tokens")]: applied[0][kind[: -len("_tokens")]]
+                      for kind in kinds} if priced and len(applied) == 1 else None),
+            "rates_applied": applied if priced else [],
+            "unpriced_days": sorted(set(bucket["undated"])),
+            "cost_usd": round(sum(a["cost_usd"] for a in applied), 6) if priced else None,
         }
         entry.update(counts)
-        if rate is not None:
-            entry["cost_usd"] = round(sum(
-                counts[kind] / 1_000_000 * rate[kind[: -len("_tokens")]] for kind in kinds), 6)
         models.append(entry)
 
     # Priced first, then by what each cost, then by tokens so an unpriced row with real
@@ -2032,6 +2259,18 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
         # The page is a view of a store that changes under it, so a cached answer is a wrong
         # answer rather than a stale nicety.
         self.send_header("Cache-Control", "no-store")
+        # Defence in depth rather than a fix for anything live: the page uses no `innerHTML`
+        # anywhere and `bug-0055` closed the one sink where a corpus value reached an
+        # interpreted context. This is the layer that would have contained that defect
+        # instead of letting it reach the network, on a surface serving one maintainer's
+        # whole session history.
+        #
+        # `'unsafe-inline'` is required and is not an oversight. Every style and every line
+        # of script in `ui/index.html` is inline, deliberately, because `S-022` forbids
+        # fetching a subresource and the page must render with the network unavailable.
+        # Extracting them would trade one contract property for another. Even with it,
+        # `script-src` blocks a `javascript:` URI, which is the containment this is for.
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)

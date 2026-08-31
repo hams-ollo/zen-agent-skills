@@ -776,9 +776,20 @@ class TestTheHouseConventions(SkillTestCase):
 
     def test_the_body_links_to_nothing_outside_the_skill_tree(self):
         """`validate-skills.py` enforces this, and it is asserted here too because the contract
-        this skill implements lives in `docs/spec/`, which is exactly the tempting link."""
+        this skill implements lives in `docs/spec/`, which is exactly the tempting link.
+
+        `../../rules/` is the one legal escape and is excluded here, because the portability
+        contract in `AGENTS.md` names three destinations a skill link may reach: its own files,
+        a sibling `SKILL.md`, and the rules module. The first version of this assertion banned
+        every `../../` target, which is stricter than the contract it claims to mirror and would
+        have refused any skill linking to a lens at all. It passed only because this body named
+        `house-style.md` in backticks rather than linking it, so the stricter rule was never
+        tested against the case it got wrong. Found by `feat-0064`, which added a lens link here.
+        """
         for target in re.findall(r"\[[^\]]*\]\(([^)]+)\)", self.body):
             with self.subTest(target=target):
+                if target.startswith("../../rules/"):
+                    continue
                 self.assertFalse(target.startswith("../../"),
                                  "a link escapes the skill tree, so it resolves in this "
                                  "repository and dangles everywhere the skill actually runs")

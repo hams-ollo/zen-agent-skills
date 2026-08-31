@@ -306,15 +306,38 @@ function pressureChart(daily, compactions) {
    Both kinds are non-mutating by construction. A navigate action is an anchor the viewer
    follows; a copy-command puts text on their clipboard for them to run. Neither can reach a
    session, and there is no third kind. */
+/* One rate period's window, in words. A bare date cannot say whether it is the start or the
+   end, and both ends are optional: a rate that has always applied has neither. */
+function rateWindow(entry) {
+  if (entry.from && entry.until) { return entry.from + " to " + entry.until; }
+  if (entry.until) { return "until " + entry.until; }
+  if (entry.from) { return "from " + entry.from; }
+  return "no date recorded";
+}
+
 function actionControl(action, row) {
   var value = row[action.field];
   if (!value) { return null; }
 
   if (action.kind === "navigate") {
+    /* The server decides what may be followed, and this page does not. `href_field` carries
+       the recorded value only when its scheme is one a browser may be pointed at, and is
+       absent otherwise; see followable_url in serve.py. A corpus value reaching href
+       unchecked was bug-0055: everything in this row came out of a session transcript, and
+       a javascript: URI here would run in this surface's own origin, which can read every
+       route on the server. The decision lives in Python because that is the only place it
+       can be executed by a test, this suite having no JavaScript runtime by design. */
+    var href = action.href_field ? row[action.href_field] : null;
+    if (!href) {
+      /* Refused, so it is shown rather than hidden. The corpus recorded something here and
+         a reader should be able to see what it was; it simply is not made clickable. Same
+         element the clipboard-less path below falls back to. */
+      return el("code", { "data-action": action.id, text: value, title: action.note });
+    }
     /* noreferrer keeps the loopback URL from reaching the destination. The report itself
        still requests nothing: this is a link the viewer chooses to follow. */
     return el("a", {
-      "data-action": action.id, href: value, target: "_blank",
+      "data-action": action.id, href: href, target: "_blank",
       rel: "noreferrer noopener", text: action.label, title: action.note
     });
   }
@@ -775,13 +798,16 @@ var RENDERERS = {
       into.appendChild(el("h2", { text: "Rates with a limited life" }));
       into.appendChild(el("table", {}, [
         el("thead", {}, [el("tr", {}, [
-          el("th", { text: "Model" }), el("th", { text: "In force until" }),
+          el("th", { text: "Model" }), el("th", { text: "In force" }),
           el("th", { text: "What it is" })
         ])]),
         el("tbody", {}, rates.rate_notes.map(function (entry) {
           return el("tr", {}, [
             el("td", {}, [el("code", { text: entry.model })]),
-            el("td", { text: entry.expires || "no date recorded" }),
+            /* The period's own bounds since bug-0057, which replaced the `expires` field
+               this column used to read. Either side may be open, so both are spelled out
+               rather than printed as a bare date that would not say which end it was. */
+            el("td", { text: rateWindow(entry) }),
             el("td", { text: entry.note })
           ]);
         }))

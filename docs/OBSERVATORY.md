@@ -254,9 +254,17 @@ and the estimate is labelled as one everywhere it appears rather than once in a 
 
 Three things about the arithmetic are worth knowing before you trust a number.
 
-- **Historical sessions are priced at current rates.** The table holds one rate per model, the
-  corpus spans months, and there is no per-date rate history that could be fetched. So a session
-  run when rates were different is priced at today's, and the report says so beside the figure.
+- **A message is priced at the rate in force on its own date, where the table records one.** A
+  model whose price has never changed carries a single rate that applies to every date, which is
+  most of the table, and a session run when that model cost something else is still priced at the
+  one figure recorded. A model whose price has changed carries a dated list instead, and each
+  message is priced against the period covering its own timestamp. **The date compared is always
+  the corpus's and never the machine's**, so two runs a month apart over the same corpus produce
+  identical figures; a report that changed with the calendar would answer two readers differently
+  about the same sessions. Added by `bug-0057`, after `claude-sonnet-5` shipped at an introductory
+  rate that lapsed on 2026-08-31 with the standard rate recorded in a note nothing applied: from
+  2026-09-01 every figure using it would have understated by a third on input and a half on output,
+  silently, beside a number that still looked exactly as right as the day it was true.
 - **Cache tokens dominate, so they are priced.** Measured on 2026-08-29 over this maintainer's
   corpus, 96.7% of all input-side tokens were served from cache, and pricing only input and
   output would have produced $1,105.12 against $9,378.53 for the same work: a figure eight and a
@@ -395,13 +403,20 @@ reminder that [`.claude/settings.json`](../.claude/settings.json) registers as `
 49 with "Python was not found" every time a session starts here on Windows, from 2026-08-07 to
 2026-08-29.
 
-That is a **known and deliberate trade, not a defect**. The comment in that file argues it at
-length and `feat-0038` observed the same failure: `python3` is the portable default for the cloud
-sessions the committed registration exists to reach, a static JSON file cannot probe for the right
-interpreter, and a Windows developer who wants the hook locally overrides it in
-`.claude/settings.local.json`. What was missing was the other half of the trade. The reminder shape
-requires a hook to exit cleanly whatever happens, so the Windows cost was argued rather than
-counted, and nobody could say how often it was actually being paid. Now it is 14 sessions.
+It was recorded here as a **known and deliberate trade rather than a defect**, and counting it is
+what turned it back into one. The comment in that file argued it at length: `python3` is the
+portable default for the cloud sessions the committed registration exists to reach, a static JSON
+file cannot probe for the right interpreter, and a Windows developer who wants the hook locally
+overrides it in `.claude/settings.local.json`. Both halves of that were true and the sentence
+joining them was not. **A static file does not need to probe; it needs a fallback.** Fixed by
+`bug-0050` on 2026-08-31, with the command now `python3 <hook> || python <hook>`, which is right on
+all three platforms and needed no measurement of the machine. The opencode plugin had been doing
+exactly that in code since it was written, three wirings away from a file arguing it was impossible.
+
+The measurement is what made the difference, and that is the entry worth keeping. The reminder
+shape requires a hook to exit cleanly whatever happens, so the Windows cost was argued rather than
+counted for three weeks, and nobody could say how often it was being paid. Once it was 14 sessions,
+and by the time it was fixed 21 stored rows, the trade stopped looking like a trade.
 
 ## What it never does
 

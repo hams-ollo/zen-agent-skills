@@ -1217,20 +1217,61 @@ class StalenessCheckTests(unittest.TestCase):
         self.assertEqual(self._status(out, "rules"), "ok")
         self.assertIn("0 diverged", out)
 
-    def test_a_rules_file_the_kit_revised_since_the_install_is_reported_as_revised(self):
-        # The other half of the same decision. The adopter's copy is theirs, so what is
-        # worth telling them is that the copy they were handed has moved, which is
-        # check-provenance.py's question and is answerable only from the recorded baseline.
-        # Exit-neutral on purpose: it is news, not a fault.
+    def test_a_kit_revision_to_a_lens_the_adopter_never_touched_is_reported(self):
+        # bug-0056. This test used to assert `revised` at exit 0 here, and its comment said
+        # "the adopter's copy is theirs" about a fixture in which the adopter never touched
+        # it. That conflation is the defect: `revised` is exit 0 and the currency hook
+        # excludes it, so an untouched lens two days stale was silent everywhere. Measured
+        # on the author's machine 2026-08-29, on the module carrying the kit's only rule
+        # about untrusted input.
         self._install()
         (self.rules / "house-style.md").write_text(
             "# house style\n\nno em-dashes, and sentence-case headings.\n",
             encoding="utf-8")
 
         code, out = self._check()
-        self.assertEqual(code, 0, "news about an adopted file is not a failure")
+        self.assertEqual(code, 1, "an untouched lens that has gone stale is not news, it is "
+                                  "an installed copy that no longer matches this kit")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("house-style.md", out)
+        self.assertIn("yours is untouched", out,
+                      "the message does not say why re-installing is safe here")
+
+    def test_a_kit_revision_to_a_lens_the_adopter_edited_stays_revised_and_exit_zero(self):
+        # The other half, and the one the exemption exists for. Something in the module is
+        # theirs, so the kit's copy moving is news rather than a fault, and a check that
+        # cried wolf here is a check nobody runs.
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "news about a file the adopter made theirs is not a fault")
+        self.assertEqual(self._status(out, "rules"), "revised")
+        self.assertIn("yours is yours", out)
+
+    def test_the_revised_message_says_which_files_are_the_adopters_and_which_are_not(self):
+        # Collapsing a module where one file was edited and two were not into a single word
+        # tells a reader nothing about what re-installing would move, which is the question
+        # they are about to have.
+        # Two lenses recorded by the install, so the two states can coexist in one module.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nthe rubric as shipped.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules.\n", encoding="utf-8")
+        for name in ("house-style.md", "review-quality.md"):
+            (self.rules / name).write_text(f"# {name}\n\nthe kit moved on.\n",
+                                           encoding="utf-8")
+
+        _, out = self._check()
+
         self.assertEqual(self._status(out, "rules"), "revised")
         self.assertIn("house-style.md", out)
+        self.assertIn("re-installing would refresh those and leave yours alone", out)
 
     def test_an_installed_target_removed_by_hand_is_reported_rather_than_passing(self):
         # Absence is divergence too. A check that only compares files it can open would
@@ -2411,6 +2452,276 @@ class MalformedManifestInstallChoiceTests(unittest.TestCase):
                          "a refused install must not create the discovery directory")
         self.assertEqual(inst.MANIFEST.read_text(encoding="utf-8"), damaged,
                          "the damaged record must survive the run that refused it")
+
+
+class UninstallSurvivesAPartialRecordTests(unittest.TestCase):
+    """bug-0053: `uninstall()` deleted a target and then died on an optional key.
+
+    `_validate_manifest()` requires only `target`; `tool` and `name` are optional so that a
+    record written by another version of this tool reads as a record rather than as
+    corruption (`bug-0024`). `uninstall()` subscripted both, so a manifest this validator
+    accepts killed the run at the print statement, one line after `_rm()` had already taken
+    the file, and the `save_manifest()` at the end of the loop never ran. The file was gone
+    and the record still claimed it, which is the over-claiming direction and the one the
+    next run reads to decide what it placed.
+
+    These drive `uninstall()` directly rather than through the CLI, because the defect is in
+    the loop rather than in argument handling, and directly is where a mid-loop failure can
+    be induced without a subprocess.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        inst.MANIFEST = self._real_manifest
+
+    def _place(self, name):
+        """A directory under the home, as an install would leave one."""
+        target = self.home / ".claude" / "skills" / name
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("placed by the test\n", encoding="utf-8")
+        return target
+
+    def _record(self, entries):
+        inst.MANIFEST.write_text(json.dumps({"entries": entries}, indent=2),
+                                 encoding="utf-8")
+
+    def _entries(self):
+        return json.loads(inst.MANIFEST.read_text(encoding="utf-8"))["entries"]
+
+    def _uninstall(self, dry=False):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.uninstall(self.home, dry)
+        return code, buf.getvalue()
+
+    def _bare_entry(self, name):
+        """An entry the validator accepts and the old code could not print: `target` only."""
+        return {"target": str(self._place(name)),
+                "source": str(inst.SKILLS_DIR / name), "mode": "copy"}
+
+    def test_an_entry_with_no_tool_or_name_is_removed_rather_than_raising(self):
+        entry = self._bare_entry("doc-sync")
+        self._record([entry])
+        target = Path(entry["target"])
+
+        inst._validate_manifest({"entries": [entry]})    # the premise: this record is legal
+
+        code, out = self._uninstall()
+
+        self.assertEqual(code, 0, out)
+        self.assertFalse(target.exists(), "the recorded target was not removed")
+        self.assertEqual(self._entries(), [],
+                         "the record still claims a target that has been removed")
+        self.assertIn("(unnamed entry)", out,
+                      "an entry with no name is removed silently, so a reader cannot tell "
+                      "which record the line came from")
+
+    def test_the_dry_run_over_the_same_record_removes_nothing_and_does_not_raise(self):
+        """The preview a careful person takes first raised in the same place as the real
+        run, so the one step that exists to make this safe was the step that failed."""
+        entry = self._bare_entry("doc-sync")
+        self._record([entry])
+        target = Path(entry["target"])
+
+        code, out = self._uninstall(dry=True)
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(target.exists(), "a dry run removed the target")
+        self.assertEqual(len(self._entries()), 1, "a dry run rewrote the record")
+        self.assertIn("[dry-run]", out)
+
+    def test_a_failure_part_way_through_leaves_a_record_that_matches_the_disk(self):
+        """The property the fix is really about, and it is not about missing keys.
+
+        Whatever stops the loop, the record must claim exactly what is still on disk. The
+        failure is induced at `_rm` rather than by patching `save_manifest`, so this still
+        fails if the loop is restructured: a real `_rm` can fail on a permission error, a
+        file held open, or a full disk, and the old code lost the record of every removal
+        that had already succeeded.
+        """
+        first, second, third = (self._bare_entry(n) for n in ("a-skill", "b-skill",
+                                                              "c-skill"))
+        self._record([first, second, third])
+        doomed = Path(second["target"])
+        real_rm = inst._rm
+
+        def rm(target):
+            if Path(target) == doomed:
+                raise OSError(13, "permission denied")
+            return real_rm(target)
+
+        inst._rm = rm
+        self.addCleanup(lambda: setattr(inst, "_rm", real_rm))
+
+        buf = io.StringIO()
+        with self.assertRaises(OSError):
+            with contextlib.redirect_stdout(buf):
+                inst.uninstall(self.home, dry=False)
+
+        self.assertFalse(Path(first["target"]).exists(), "the first target survived")
+        self.assertTrue(doomed.exists(), "the target whose removal failed is gone anyway")
+        self.assertTrue(Path(third["target"]).exists(),
+                        "a target after the failure was removed")
+
+        remaining = [e["target"] for e in self._entries()]
+        self.assertNotIn(first["target"], remaining,
+                         "the record still claims a target this run removed, which is the "
+                         "over-claiming direction bug-0053 was filed for")
+        self.assertIn(second["target"], remaining,
+                      "the record dropped a target that is still on disk")
+        self.assertIn(third["target"], remaining,
+                      "the record dropped a target that was never reached")
+
+    def test_a_target_recorded_under_another_home_is_untouched_by_the_failure(self):
+        """The `finally` writes `others` back too, so a partial run must not take another
+        home's entries with it. That scoping is `S-007` and `S-012` and predates this fix."""
+        mine = self._bare_entry("a-skill")
+        elsewhere = {"target": str(self.root / "other-home" / ".claude" / "skills" / "x"),
+                     "tool": "claude", "name": "x", "mode": "copy"}
+        self._record([mine, elsewhere])
+        real_rm = inst._rm
+        inst._rm = lambda target: (_ for _ in ()).throw(OSError(13, "denied"))
+        self.addCleanup(lambda: setattr(inst, "_rm", real_rm))
+
+        buf = io.StringIO()
+        with self.assertRaises(OSError):
+            with contextlib.redirect_stdout(buf):
+                inst.uninstall(self.home, dry=False)
+
+        remaining = [e["target"] for e in self._entries()]
+        self.assertIn(elsewhere["target"], remaining,
+                      "another home's record was lost by a failure in this one")
+
+    def test_every_consumer_of_an_optional_key_reaches_it_through_get(self):
+        """The comment above `_OPTIONAL_ENTRY_TYPES` is the only statement of which reader
+        touches which key, and a reader trusting it is how this shipped. This asserts the
+        property that comment describes, over the source, so a fourth consumer added with a
+        subscript puts the trap back and fails here.
+
+        `_validate_manifest()` is excluded, and the exclusion is the point rather than a
+        convenience. It is the one function whose job is to inspect a shape before anything
+        trusts it, so it subscripts `name` inside an `isinstance(entry.get("name"), str)`
+        guard, which is correct and idiomatic there. Everywhere else the entry has already
+        been accepted and the key is optional by contract, so a bare subscript is a defect.
+        The first version of this assertion scanned the whole file and flagged that guarded
+        line; narrowing it was the right answer and editing the validator to satisfy it
+        would have been the wrong one.
+        """
+        source = Path(inst.__file__).read_text(encoding="utf-8")
+        start = source.index("def _validate_manifest(")
+        end = source.index("\ndef ", start)
+        consumers = source[:start] + source[end:]
+        self.assertIn("entry.get(\"name\")", source[start:end],
+                      "the validator no longer guards the subscript this exclusion assumes, "
+                      "so the exclusion is now hiding something")
+
+        for key in inst._OPTIONAL_ENTRY_TYPES:
+            for spelling in (f'e["{key}"]', f"e['{key}']",
+                             f'entry["{key}"]', f"entry['{key}']"):
+                with self.subTest(key=key, spelling=spelling):
+                    self.assertNotIn(
+                        spelling, consumers,
+                        f"{spelling} subscripts an optional manifest key, which "
+                        f"_validate_manifest does not require: read it through .get()")
+
+
+class OrphanedRecordTests(unittest.TestCase):
+    """chore-0082 item 2: a record of an install whose home is gone too.
+
+    Reversal is scoped to `--home` by design (`S-007`, `S-012`), so `uninstall()` rewrites
+    only the entries it did not remove. An entry for a home that was *deleted* rather than
+    uninstalled is never in `mine`, never pruned, and counted `diverged` forever, inflating
+    the one number a person reads as a currency signal.
+
+    Observed for real on 2026-08-29: twenty such entries under a throwaway `fakehome` from
+    another session, `0 of 20` targets still on disk. They were not merely noise in a count.
+    Registering `install-currency-reminder.py` made it report them as installed copies that
+    had "gone stale", naming real skills, when the actual install was current: a guardrail
+    asserting something false at every session start.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.home = self.root / "home"
+        self._real_manifest = inst.MANIFEST
+        inst.MANIFEST = self.root / "manifest.json"
+        self.addCleanup(setattr, inst, "MANIFEST", self._real_manifest)
+
+    def _entry(self, home, name, place):
+        target = home / ".claude" / "skills" / name
+        if place:
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("placed\n", encoding="utf-8")
+        return {"tool": "claude", "name": name, "mode": "copy", "target": str(target),
+                "source": str(inst.SKILLS_DIR / "doc-sync"),
+                "digests": {"SKILL.md": "0" * 64}}
+
+    def _check(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = inst.check(self.home)
+        return code, buf.getvalue()
+
+    def test_a_home_that_is_gone_reads_differently_from_a_target_that_is_gone(self):
+        # Both are `diverged`, and they need different things from a reader: one is a file
+        # somebody removed and re-installing restores it, the other is a record of an install
+        # that no longer exists anywhere and re-installing would recreate a tree nobody wants.
+        dead_home = self.root / "gone"
+        removed = self._entry(self.home, "alpha", place=False)
+        self.home.joinpath(".claude", "skills").mkdir(parents=True, exist_ok=True)
+        orphan = self._entry(dead_home, "beta", place=False)
+        inst.MANIFEST.write_text(json.dumps({"entries": [removed, orphan]}), encoding="utf-8")
+
+        # `check` is scoped to `--home`, so run it over the parent that holds both.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            inst.check(self.root)
+        out = buf.getvalue()
+
+        self.assertIn("the installed target is gone: ", out)
+        self.assertIn("so is the home it sat in", out)
+        self.assertIn("nothing will prune them", out,
+                      "the summary does not tell a reader these will never leave the record")
+
+    def test_a_target_gone_from_a_live_home_is_not_called_an_orphan(self):
+        # The negative case. Calling a live install's missing file an orphan would invite
+        # deleting a record that a re-install would legitimately restore.
+        self.home.joinpath(".claude", "skills").mkdir(parents=True)
+        entry = self._entry(self.home, "alpha", place=False)
+        inst.MANIFEST.write_text(json.dumps({"entries": [entry]}), encoding="utf-8")
+
+        _, out = self._check()
+
+        self.assertIn("the installed target is gone", out)
+        self.assertNotIn("so is the home it sat in", out)
+        self.assertNotIn("nothing will prune them", out)
+
+    def test_home_derivation_walks_up_to_the_discovery_directory(self):
+        # The home is derived from the target rather than recorded, because the manifest has
+        # never carried it and a new key would be unreadable for every entry written before.
+        home = Path(self.root) / "somewhere"
+        for sub in ((".claude", "skills", "doc-sync"), (".agents", "rules"),
+                    (".claude", "hooks")):
+            with self.subTest(sub=sub):
+                self.assertEqual(inst._home_of(home.joinpath(*sub)), home)
+
+    def test_a_target_with_no_discovery_marker_reads_as_still_there(self):
+        # The safe direction: the only thing this decides is whether --check calls an entry
+        # litter, and calling real litter live costs a line where the reverse invites
+        # deleting a live record.
+        odd = self.root / "not-a-home" / "thing"
+        odd.mkdir(parents=True)
+        self.assertTrue(inst._home_of(odd).exists())
 
 
 if __name__ == "__main__":

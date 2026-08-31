@@ -43,6 +43,15 @@ import re
 import sys
 from pathlib import Path
 
+# `_textio` is a sibling module in this directory, imported through the repository root so
+# the one spelling works whether this file is run as a script or imported as a module of
+# `scripts`, which `observatory/serve.py` already does for `install`. Same preamble as there,
+# and the same reason: the two invocations put different directories on `sys.path`.
+_TEXTIO_ROOT = Path(__file__).resolve().parent.parent
+if str(_TEXTIO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TEXTIO_ROOT))
+from scripts._textio import NotUTF8, read_text_utf8   # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 
@@ -127,6 +136,16 @@ SHIPPED_STATUS_RE = re.compile(
 # which is the exact failure feat-0048 was filed for. `autonomy.md` called itself the
 # third lens for ten days while no skill composed it, and every gate passed.
 LENS_DECLARATION_RE = re.compile(r"\*\*swappable module\*\*|\blens\b", re.IGNORECASE)
+
+# A lens may ask for the stronger rule: every skill references it, not merely one. The
+# marker lives in the lens and not in a list here, for the same reason the declaration above
+# is derived rather than hardcoded. Bolded and line-leading, because the phrase has to be
+# unmistakable prose a reader sees rather than something a lens could match by accident
+# while discussing scope. Unbounded by line count, unlike the declaration window: this
+# marker earns its place in the opening paragraphs of a module whose openings differ in
+# length, and a window sized to today's files is the kind of number that goes stale.
+UNIVERSAL_SCOPE_RE = re.compile(r"^\s*\*\*Scope:\s*universal\.?\*\*",
+                                re.IGNORECASE | re.MULTILINE)
 
 # How far into a rules file the self-declaration has to appear. See
 # `declares_itself_a_lens` for why the window exists and why it is this size.
@@ -389,7 +408,12 @@ def check_supporting_files(skill_dir: Path, skill_names: set, rel: str, errors: 
         if kind != "markdown":
             continue
         label = f"{rel}/{path.relative_to(skill_dir).as_posix()}"
-        check_links(path, path.read_text(encoding="utf-8"), skill_names, label, errors,
+        try:
+            body = read_text_utf8(path)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        check_links(path, body, skill_names, label, errors,
                     portable_root, sibling_shortcut=False)
     return counts
 
@@ -447,7 +471,12 @@ def check_portable_markdown(portable_root: Path, skills_dir: Path, skill_names: 
         counts[kind] += 1
         if kind != "markdown":
             continue
-        check_links(path, path.read_text(encoding="utf-8"), skill_names, _rel(path),
+        try:
+            body = read_text_utf8(path)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        check_links(path, body, skill_names, _rel(path),
                     errors, portable_root, sibling_shortcut=False)
     return counts
 
@@ -581,7 +610,11 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
     if not rules_dir.is_dir():
         return
     for rules_file in sorted(rules_dir.glob("*.md")):
-        text = rules_file.read_text(encoding="utf-8")
+        try:
+            text = read_text_utf8(rules_file)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
         if not declares_itself_a_lens(text):
             continue
         if any(_names_file_outside_fences(skill_text, rules_file.name)
@@ -594,6 +627,75 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
             f"section is the usual shape), or drop the self-declaration from its opening. "
             f"Naming the file only inside a fenced code block does not count: that shows "
             f"what a reference looks like rather than making one."
+        )
+
+
+def declares_universal_scope(text: str) -> bool:
+    """True when a lens declares that **every** skill must reference it, not merely one.
+
+    Read out of the lens rather than out of a list in this script, for the same reason
+    `declares_itself_a_lens()` is: a hardcoded set here passes the day a fourth lens is
+    added and nobody edits this file, which is the exact failure `feat-0048` was filed for.
+    A lens that wants the stronger rule says so in its own opening and this finds it.
+
+    Absence means topical, which is the correct default and is a decision rather than an
+    omission: `review-quality.md` is composed only by the skills that review, and requiring
+    the other eighteen to name a rubric they never apply would be the noise that gets a
+    rule ignored. A topical lens is still covered by the at-least-one rule above.
+
+    The marker is matched outside fenced blocks, for the reason a reference is: inside a
+    fence it is sample text showing what a declaration looks like rather than making one.
+    """
+    for match in UNIVERSAL_SCOPE_RE.finditer(text):
+        if not any(lo <= match.start() < hi for lo, hi in fenced_block_ranges(text)):
+            return True
+    return False
+
+
+def check_universal_lenses_reach_every_skill(rules_dir: Path, skill_texts: dict,
+                                             errors: list) -> None:
+    """Flag a universal lens that some skill never references.
+
+    `check_lenses_are_composed()` above asks whether **at least one** skill points at a
+    lens, which is the right question for a topical one and too weak for a universal one.
+    A lens reaches an agent only through a skill that points at it, so a universal lens
+    missing from some bodies is not partially wired: it is inert for exactly those skills,
+    and the failure is silent because every other skill still names it and the module still
+    reads correctly on its own.
+
+    Measured before this rule existed (`feat-0064`): `house-style.md` was referenced by all
+    twenty-two skills with nothing enforcing it, and `autonomy.md` by five, for the
+    twenty-one days after `A10`, the kit's only rule about material an agent did not
+    author, was added to it. Both facts were invisible to every gate, because the only lens
+    rule asked whether anybody pointed at each module and somebody always did.
+
+    Reported once per lens naming every skill that misses it, rather than once per skill:
+    the fix is one edit per named skill and a reader wants the list, not twenty lines.
+    """
+    if not rules_dir.is_dir():
+        return
+    for rules_file in sorted(rules_dir.glob("*.md")):
+        try:
+            text = read_text_utf8(rules_file)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        if not declares_itself_a_lens(text) or not declares_universal_scope(text):
+            continue
+        missing = sorted(
+            name for name, skill_text in skill_texts.items()
+            if not _names_file_outside_fences(skill_text, rules_file.name)
+        )
+        if not missing:
+            continue
+        errors.append(
+            f"{_rel(rules_file)}: declares universal scope but {len(missing)} of "
+            f"{len(skill_texts)} skill(s) never reference it, so it is inert for exactly "
+            f"those and an adopter who rewrites it changes nothing there: "
+            f"{', '.join(missing)}. Name the file in each of them (one line in a "
+            f"`## Conventions` section is the usual shape, saying what that skill composes "
+            f"it for), or drop the `**Scope: universal.**` declaration from its opening if "
+            f"the stronger rule is not what it wants."
         )
 
 
@@ -636,7 +738,14 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         if not skill_md.is_file():
             errors.append(f"{rel}: no SKILL.md")
             continue
-        text = skill_md.read_text(encoding="utf-8")
+        try:
+            text = read_text_utf8(skill_md)
+        except NotUTF8 as exc:
+            # Reported and skipped, never read past. A body decoded with `errors="ignore"`
+            # would validate and install with a quietly mangled description, which is worse
+            # than the traceback this replaces (chore-0081).
+            errors.append(str(exc))
+            continue
         skill_texts[d.name] = text
         fm, body_lines = parse_frontmatter(text)
         if fm is None:
@@ -679,6 +788,10 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     # lens" is a fact about every skill together, and it is the one rule here that reads
     # outside .agents/skills/ to ask that question.
     check_lenses_are_composed(portable_root / "rules", skill_texts, errors)
+    # The stronger half of the same question, and a separate function because it is a
+    # separate rule with a separate verdict: the one above asks whether anybody composes a
+    # lens, this one asks whether everybody composes the ones that say they need it.
+    check_universal_lenses_reach_every_skill(portable_root / "rules", skill_texts, errors)
     # And once over the markdown beside the skills tree, which is a different question
     # about the same files: check_lenses_are_composed asks whether a skill points *at*
     # a lens and never reads a link *out* of one (chore-0058). Deliberately not folded

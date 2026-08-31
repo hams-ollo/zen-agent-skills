@@ -52,6 +52,15 @@ against the source, so it also catches a file the adopter edited after installin
 hook cannot see that, and does not claim to. The two agree whenever the installed copy is
 untouched, which is the case the ten-day gap was made of.
 
+**One exception, added by `bug-0056` and bounded on purpose.** For the adopted rules module,
+and only once the kit's copy is already known to have moved, this does open the install home
+and digest what is there. It has to: `revised` is excluded from `REPORTING_VERDICTS` because
+firing on a file the adopter was invited to own is crying wolf, and whether they own it is
+decidable only from the installed copy. Without that read, a lens the adopter never touched
+sat two days stale and unreported while this hook was working exactly as designed. The read
+is the adopted module alone, three files today, reached on a branch most entries never take.
+It is not the per-file read of every installed skill that the cost section below refuses.
+
 Cost, which is the thing to get right
 -------------------------------------
 This runs at every session start, so the manifest is read first and its absence ends the
@@ -134,6 +143,15 @@ DRAFT_STATUS = "draft"
 METADATA_KEY_RE = re.compile(r"^metadata:\s*$")
 STATUS_FIELD_RE = re.compile(r"^\s+status:\s*(\S.*?)\s*$")
 
+# What this hook will digest before declining. A recorded `source` is a path read out of a
+# manifest, not one this hook derived, and this runs at every session start, so an entry
+# naming a large directory would turn every start into a full recursive read of it. Set far
+# above any module the kit ships (the largest is the hooks directory) so a correct install
+# can never reach them: the failure direction that costs more is a cap firing on a real
+# install, since `error` is a reporting verdict.
+MAX_DIGEST_FILES = 2000
+MAX_DIGEST_BYTES = 64 * 1024 * 1024
+
 # How many names to spell out before summarising. A reminder long enough to scroll is one
 # an agent learns to skip, and then says nothing on the start that mattered.
 MAX_NAMED = 6
@@ -160,22 +178,58 @@ def _digestable(rel: Path, path: Path) -> bool:
     return path.suffix != ".pyc" and "__pycache__" not in rel.parts
 
 
-def digest_tree(root: Path) -> dict:
+class TreeTooLarge(Exception):
+    """A recorded source is too big to digest at session start.
+
+    Not an error about the tree: it is this hook declining to spend a session start on it.
+    `classify()` turns it into the `error` verdict, which already means "could not be
+    compared at all" and is already in `REPORTING_VERDICTS`.
+    """
+
+
+def digest_tree(root: Path, max_files: int = None, max_bytes: int = None) -> dict:
     """SHA256 per file beneath `root`, keyed by its POSIX-relative path.
 
     Byte-for-byte the same derivation install.py records with, because a different one
     would disagree with the baseline it is being compared against. Bytes, never decoded
     text, and POSIX-relative keys so a record written on Windows reads on macOS and Linux.
+
+    Bounded, unlike install.py's copy, and the asymmetry is the point (`chore-0082`). That
+    one runs because a person invoked the installer and can watch it. This one runs at
+    **every session start**, on a path read out of a manifest rather than derived, and
+    `find_manifest()` walks upward, so a manifest at any ancestor of the session's working
+    directory decides what gets read. Past either bound this raises rather than finishing,
+    so a pathological entry costs a stat walk instead of a full recursive read.
+
+    The bounds are set far above any real module: the largest the kit ships is the hooks
+    directory at a handful of files and tens of kilobytes, so a correct install cannot reach
+    them. That direction matters more than the exact numbers, because `error` is a reporting
+    verdict and a cap set below a real install would fire this hook on every session start,
+    which is the crying-wolf failure its own docstring says gets it uninstalled in a week.
     """
+    # Read at call time rather than bound as default arguments. A default is evaluated once
+    # when the function is defined, so the constants above would be untunable and, worse,
+    # untestable: a test raising or lowering them would change the name and not the bound.
+    max_files = MAX_DIGEST_FILES if max_files is None else max_files
+    max_bytes = MAX_DIGEST_BYTES if max_bytes is None else max_bytes
     digests = {}
     if not root.is_dir():
         return digests
+    seen_bytes = 0
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
         if not _digestable(rel, path):
             continue
+        if len(digests) >= max_files:
+            raise TreeTooLarge(f"more than {max_files} files under {root}")
+        # Sized before reading, so an enormous single file is refused rather than held in
+        # memory. `stat` on a file that vanished mid-walk is an OSError, which `classify()`
+        # already treats as `error`.
+        seen_bytes += path.stat().st_size
+        if seen_bytes > max_bytes:
+            raise TreeTooLarge(f"more than {max_bytes} bytes under {root}")
         digests[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return digests
 
@@ -267,14 +321,50 @@ def classify(entry, cache=None) -> str:
             current = digest_tree(source)
             if cache is not None:
                 cache[key] = current
-    except OSError:
+    except (OSError, TreeTooLarge):
+        # `TreeTooLarge` is this hook declining to spend a session start on a recorded path
+        # that is too big to digest, not a fault in the tree. `error` already means "could
+        # not be compared at all" and is already reported, so it needs no seventh verdict
+        # (chore-0082).
         return "error"
 
     if current == recorded:
         return "ok"
-    # An adopted lens the adopter was invited to rewrite. The kit's copy having moved is
-    # information, not a problem, and install.py exits 0 on it.
-    return "revised" if entry.get("name") in ADOPTED_ENTRY_NAMES else "diverged"
+    if entry.get("name") not in ADOPTED_ENTRY_NAMES:
+        return "diverged"
+
+    # An adopted lens the adopter was invited to rewrite, and the kit's copy has moved. That
+    # used to end here at `revised`, which this hook deliberately does not report, on the
+    # ground that firing on a file the adopter was invited to own is crying wolf. True only
+    # if they actually own it (`bug-0056`). Measured on the author's machine on 2026-08-29:
+    # both installed copies matched their recorded baseline exactly, so nothing there was
+    # theirs, and the module had been missing `A10` for two days while this hook stayed
+    # silent by design.
+    #
+    # The line is the one `install.py`'s `_place_adopted()` already draws for placement: a
+    # file differing from its recorded digest is the adopter's, and one matching it differs
+    # only because the kit moved on.
+    #
+    # **This is the one place this hook opens the install home**, and the docstring's cost
+    # boundary is narrowed rather than dropped. It reads the adopted module only, three
+    # files today, and only once the kit's copy is already known to have moved. It is not
+    # the per-file read of every installed skill that boundary exists to refuse.
+    try:
+        installed = digest_tree(Path(entry.get("target") or ""))
+    except (OSError, TreeTooLarge):
+        return "error"
+    # Asked over the files the kit actually revised, not over everything that differs.
+    # A file the kit newly ships, or one it stopped shipping, is not staleness in the
+    # adopter's copy, and one of those shapes is the recorded-removal case: an adopter
+    # deletes a lens, the next install drops its digest, and afterwards neither side claims
+    # it. That adopter made the module theirs and no digest comparison can see it, so the
+    # narrower question leaves them at `revised` and silent, which is right.
+    changed = [rel for rel in recorded if rel in current and current[rel] != recorded[rel]]
+    if not changed:
+        return "revised"
+    if any(installed.get(rel) != recorded[rel] for rel in changed):
+        return "revised"          # something the kit revised is theirs; silence is right
+    return "diverged"             # untouched and out of date; worth saying once
 
 
 def unrecorded_skills(project_root: Path, recorded_names) -> list:

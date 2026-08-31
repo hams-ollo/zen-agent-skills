@@ -82,6 +82,15 @@ import shutil
 import sys
 from pathlib import Path
 
+# `_textio` is a sibling module in this directory, imported through the repository root so
+# the one spelling works whether this file is run as a script or imported as a module of
+# `scripts`, which `observatory/serve.py` already does for `install`. Same preamble as there,
+# and the same reason: the two invocations put different directories on `sys.path`.
+_TEXTIO_ROOT = Path(__file__).resolve().parent.parent
+if str(_TEXTIO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TEXTIO_ROOT))
+from scripts._textio import NotUTF8, read_text_utf8   # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 RULES_DIR = REPO_ROOT / ".agents" / "rules"
@@ -155,7 +164,7 @@ def description_of(skill_dir: Path) -> str:
     Only the frontmatter is scanned, and only for this one field. A block-scalar
     indicator is dropped so the length is the text's, matching what a harness measures.
     """
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ""
@@ -186,7 +195,7 @@ def status_of(skill_dir: Path) -> str:
     An unrecognised value reads as shipped rather than as a draft, so a typo
     over-delivers (today's defect) instead of silently under-delivering (the worse one).
     """
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ""
@@ -242,7 +251,7 @@ def draft_conflicts(selected, seed, draft_names) -> list:
 
 def sibling_refs(skill_dir: Path) -> set:
     """Skill names this skill links to as ../<name>/SKILL.md."""
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = read_text_utf8(skill_dir / "SKILL.md")
     return set(SIBLING_REF_RE.findall(text)) - {skill_dir.name}
 
 
@@ -297,9 +306,16 @@ class ManifestError(Exception):
 _OPTIONAL_ENTRY_TYPES = {
     "source": (str, "a string"),      # _check_entry: Path(entry.get("source", ""))
     "tool": (str, "a string"),        # check(): sort key and printed column
+                                      # uninstall(): printed column
     "name": (str, "a string"),        # check(): sort key, and the ADOPTED_ENTRY_NAMES test
+                                      # uninstall(): printed column
     "digests": (dict, "an object"),   # _compare(): iterated as a mapping
 }
+# Every reader named above reaches its key through `.get()`, and that is what makes the
+# optionality real rather than asserted. `uninstall()` was missing from this list and
+# subscripted both of its two, so a record this validator accepts killed it mid-loop, after
+# it had already deleted a target (bug-0053). A reader added here without a `.get()` puts
+# the same trap back, and the comment is the only place the two facts are stated together.
 
 
 def _describe(value) -> str:
@@ -1005,6 +1021,26 @@ def _beneath(target: str, home: Path) -> bool:
         return False
 
 
+def _home_of(target) -> Path:
+    """The install home a recorded target sits under, derived from the path itself.
+
+    A target is `<home>/.claude/skills/<name>` or `<home>/.claude/rules`, so the home is the
+    parent of the first `.claude` or `.agents` component walking up. Derived rather than
+    recorded because the manifest has never carried it, and a new key would be unreadable
+    for every entry written before it.
+
+    Falls back to the target's own parent when neither marker is present, which cannot match
+    a home this tool placed into and so reads as "still there". That is the safe direction:
+    the only thing this decides is whether `--check` calls an entry litter, and calling real
+    litter live costs a line of output where the reverse invites deleting a live record.
+    """
+    target = Path(target)
+    for parent in target.parents:
+        if parent.name in (".claude", ".agents"):
+            return parent.parent
+    return target.parent
+
+
 def uninstall(home: Path, dry: bool) -> int:
     try:
         manifest = load_manifest()
@@ -1028,16 +1064,38 @@ def uninstall(home: Path, dry: bool) -> int:
         return 0
 
     removed = 0
-    for e in mine:
-        target = Path(e["target"])
-        if target.is_symlink() or target.exists():
-            if not dry:
-                _rm(target)
-            removed += 1
-            print(f"{tag}removed   {e['tool']:8} {e['name']}  ({target})")
-        else:
-            print(f"{tag}gone      {e['tool']:8} {e['name']}  ({target})")
-    save_manifest(others, dry)
+    # How many of `mine` have been dealt with, so the `finally` below can write a record
+    # that matches the disk whatever happens in the loop (bug-0053). Writing the record once
+    # after the loop is what let a failure part-way through lose every removal that had
+    # already happened: the files were gone and the manifest still claimed them, which is
+    # the over-claiming direction, and the next run reads that record to decide what it
+    # placed. An entry is counted here whether it was removed or already gone, because
+    # neither is installed any more and both leave the record.
+    handled = 0
+    try:
+        for e in mine:
+            target = Path(e["target"])
+            # `.get()`, not subscription. `_validate_manifest()` requires only `target` and
+            # treats `tool` and `name` as optional on purpose, so a record written by
+            # another version of this tool is readable rather than corrupt-looking. This
+            # function subscripted both and died on such a record *after* deleting its
+            # target. `check()` already reads them this way; this is the third reader
+            # agreeing with the other two. `(unnamed entry)` is the wording
+            # `install-currency-reminder.py` uses for the same gap.
+            label = f"{(e.get('tool') or '?'):8} {e.get('name') or '(unnamed entry)'}"
+            if target.is_symlink() or target.exists():
+                if not dry:
+                    _rm(target)
+                removed += 1
+                print(f"{tag}removed   {label}  ({target})")
+            else:
+                print(f"{tag}gone      {label}  ({target})")
+            handled += 1
+    finally:
+        # `finally` rather than `except`: the record is made truthful and the failure still
+        # surfaces. Swallowing an OSError from `_rm` would report a successful uninstall
+        # over files that are still there, which is this defect inverted.
+        save_manifest(others + mine[handled:], dry)
     print(f"\n{tag}Uninstalled {removed} target(s).")
     if others:
         print(f"{tag}Kept {len(others)} target(s) recorded under other homes.")
@@ -1115,6 +1173,18 @@ def _check_entry(entry) -> tuple:
         return "unknown", ("installed before digests were recorded, so whether it is "
                            "current is unknown. Re-install to establish a baseline.")
     if not (target.exists() or target.is_symlink()):
+        # Two ways to be gone, and they need different things from a reader (chore-0082).
+        # A target missing from a home that is still there is a file somebody removed, and
+        # re-installing restores it. A target whose whole home is gone is a record of an
+        # install that no longer exists anywhere, usually a throwaway `--home` deleted
+        # rather than uninstalled, and re-installing would recreate a tree nobody wants.
+        # Reversal is scoped to `--home` by design (`S-007`, `S-012`), so `--uninstall` will
+        # never reach it and it is counted `diverged` forever, inflating the one number a
+        # person reads as a currency signal.
+        if not _home_of(target).exists():
+            return "diverged", (f"the installed target is gone, and so is the home it sat "
+                                f"in, so this records an install that no longer exists "
+                                f"anywhere: {target}")
         return "diverged", f"the installed target is gone: {target}"
     if not source.is_dir():
         return "error", (f"the kit no longer has a source at {source}, so the installed "
@@ -1179,8 +1249,60 @@ def _check_entry(entry) -> tuple:
         if not moved:
             return "ok", f"every file this install placed is still there, and the kit's "\
                          f"copy is unchanged since this install ({len(recorded)} file(s))"
+
+        # The kit's copy has moved. Whether that is worth telling anyone depends on a
+        # question this branch used to skip: did the adopter ever make this module theirs
+        # (bug-0056)? Both states answered `revised` and said "yours is yours to keep", and
+        # the currency hook excludes `revised` from what it reports on the stated ground
+        # that firing on it would be crying wolf about a file the adopter was invited to
+        # own. True of one state, false of the other, and the hook could not tell them apart
+        # because this could not.
+        #
+        # The line is the one `_place_adopted()` already draws for placement: "A file
+        # differing from the recorded digest is the adopter's and is left alone; a file
+        # matching it differs only because the kit moved on, so it is ours to refresh."
+        # `installed` is already in hand, digested a few lines up for the missing-file check.
+        #
+        # Only a file the kit actually *revised* can be stale, so the question is asked over
+        # `changed` rather than over everything `moved` reports. `moved` also carries files
+        # the kit newly ships and files it stopped shipping, and one of those is the
+        # recorded-removal case `bug-0022` created: an adopter deletes a lens, the next
+        # install drops its digest, and afterwards neither side claims it. That adopter
+        # plainly made the module theirs, and nothing in a digest comparison can see it,
+        # because both sides forgot the file. Asking only about `changed` leaves that case
+        # where it belongs, at `revised` and exit 0.
+        changed = sorted(rel for rel in recorded
+                         if rel in current and current[rel] != recorded[rel])
+        theirs = sorted(rel for rel in changed if installed.get(rel) != recorded[rel])
+        if changed and not theirs:
+            # Untouched, and out of date. Nothing here is the adopter's yet, so "yours is
+            # yours to keep" describes a file they never made theirs, and `diverged` is both
+            # true and already reported by the hook. Not a seventh verdict: `diverged`
+            # already means the installed copy no longer matches this kit, which is exactly
+            # the claim, and widening the vocabulary would cost a new concept for a
+            # distinction the existing words carry.
+            return "diverged", (
+                "the kit's copy has changed since this install and yours is untouched, so "
+                "nothing of yours is at stake and re-installing takes the change:\n"
+                + "\n".join(f"      {p}" for p in moved))
+        # Something in the module is theirs, so `revised` and its silence are right. The
+        # counts are new: collapsing a module where one file was edited and two were not
+        # into a single word tells the reader nothing about which files re-installing would
+        # move, and that is the question they are about to have.
+        if not changed:
+            detail = (" Nothing the kit ships has been revised; what moved is a file added "
+                      "or dropped, which re-installing reconciles.")
+        elif len(theirs) < len(changed):
+            detail = (f" Of the {len(changed)} file(s) the kit revised you have edited "
+                      f"{len(theirs)} ({', '.join(theirs)}); the other "
+                      f"{len(changed) - len(theirs)} are still as this install placed them, "
+                      f"so re-installing would refresh those and leave yours alone.")
+        else:
+            detail = (f" You have edited every file the kit revised "
+                      f"({', '.join(theirs)}), so re-installing changes nothing here.")
         return "revised", ("the kit's copy has changed since this install; yours is yours "
-                           "to keep:\n" + "\n".join(f"      {p}" for p in moved))
+                           "to keep:\n" + "\n".join(f"      {p}" for p in moved) + "\n     "
+                           + detail)
 
     try:
         problems = _compare(digest_tree(target), current)
@@ -1229,9 +1351,15 @@ def check(home: Path) -> int:
     # Tracked in this loop rather than re-derived from the manifest afterwards, so the two
     # answers cannot drift apart.
     unknown_kinds = set()
+    # Entries whose home is gone as well as their target. Counted apart from the rest of
+    # `diverged` because the remedy is different and because they never leave the record on
+    # their own: reversal is scoped to `--home`, so nothing prunes them.
+    orphaned = []
     for entry in sorted(scoped, key=lambda e: (e.get("tool", ""), e.get("name", ""))):
         status, message = _check_entry(entry)
         counts[status] += 1
+        if status == "diverged" and "so is the home it sat in" in message:
+            orphaned.append(entry)
         if status == "unknown":
             unknown_kinds.add("adopted" if entry.get("name") in ADOPTED_ENTRY_NAMES
                               else "derived")
@@ -1240,9 +1368,15 @@ def check(home: Path) -> int:
     print(f"\n{counts['ok']} current, {counts['diverged']} diverged, "
           f"{counts['linked']} linked, {counts['revised']} revised upstream, "
           f"{counts['unknown']} unknown, {counts['error']} error(s).")
-    if counts["diverged"]:
+    if counts["diverged"] > len(orphaned):
         print("An installed copy no longer matches this kit. Re-install to refresh it, or "
               "keep your version: this check never rewrites anything.")
+    if orphaned:
+        print(f"{len(orphaned)} of those {counts['diverged']} record an install whose home "
+              f"is gone too, so nothing is stale there and nothing will prune them: "
+              f"--uninstall is scoped to --home and never reaches a home that no longer "
+              f"exists. Remove them by hand, or re-run --uninstall with the same --home "
+              f"before deleting one next time.")
     if counts["revised"]:
         print("An adopted file's source has moved since you installed. Your copy is left "
               "alone; merge the kit's change only if you want it.")
@@ -1261,7 +1395,23 @@ def check(home: Path) -> int:
 
 
 def main(argv=None) -> int:
-    """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test."""
+    """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test.
+
+    Wraps the real entry point so an undecodable file anywhere in the tree is reported
+    as a diagnosis naming the file rather than as a traceback naming this tool
+    (chore-0081).
+    """
+    try:
+        return _main(argv)
+    except NotUTF8 as exc:
+        # Exit 2, could not run, rather than 1. Nothing was compared or placed: a file this
+        # tool must read is not readable, which is a different claim from "the change is bad"
+        # and is the distinction install.py --check and check-provenance.py already draw.
+        print(f"Cannot read a file this run needs: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Install the Zen Agent Skills library.")
     ap.add_argument("--dry-run", action="store_true", help="preview, write nothing")
     ap.add_argument("--uninstall", action="store_true", help="remove what was installed")

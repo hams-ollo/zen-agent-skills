@@ -191,9 +191,10 @@ def unreachable(exc):
 class _FakeResponse:
     """The parts of an HTTP response `fetch()` uses, counting the bytes it hands over."""
 
-    def __init__(self, payload):
+    def __init__(self, payload, url=URL):
         self._buffer = io.BytesIO(payload)
         self.bytes_read = 0
+        self._url = url
 
     def __enter__(self):
         return self
@@ -206,6 +207,11 @@ class _FakeResponse:
         self.bytes_read += len(chunk)
         return chunk
 
+    def geturl(self):
+        # `fetch()` asks where the bytes came from, so a stand-in response has to answer.
+        # Defaults to the recorded URL, which is the no-redirect case these tests are about.
+        return self._url
+
 
 class _fake_urlopen:
     """Serve `payload` to `fetch()` without a socket, and expose the response it served.
@@ -213,12 +219,17 @@ class _fake_urlopen:
     `fetch()` is the one function with no injection seam, because the seam the rest of this
     file uses replaces it. Its read bound therefore has to be exercised against a stand-in
     response rather than a stand-in fetcher, and still without a socket.
+
+    Patches the module's own opener rather than `urllib.request.urlopen`, because that is
+    what `fetch()` calls since `bug-0054` put a redirect handler in front of it. Patching
+    the function `fetch()` no longer uses would leave these three read-bound tests passing
+    over a stand-in nothing consulted, which is the shape of a check that cannot fail.
     """
 
-    def __init__(self, payload):
-        self.response = _FakeResponse(payload)
+    def __init__(self, payload, url=URL):
+        self.response = _FakeResponse(payload, url=url)
         self._patch = unittest.mock.patch.object(
-            cp.urllib.request, "urlopen", lambda request, timeout=None: self.response
+            cp._OPENER, "open", lambda request, timeout=None: self.response
         )
 
     def __enter__(self):
@@ -460,7 +471,13 @@ class ReadBoundTest(unittest.TestCase):
     def test_fetch_returns_a_response_at_the_bound(self):
         payload = b"x" * 64
         with _fake_urlopen(payload):
-            self.assertEqual(cp.fetch(URL, max_bytes=64), payload)
+            fetched = cp.fetch(URL, max_bytes=64)
+        # Unchanged in intent: a body exactly at the bound comes back whole. `fetch()`
+        # returns the landing URL beside the bytes since `bug-0054`, so the content is
+        # reached through the field rather than compared against the whole return value.
+        self.assertEqual(fetched.content, payload)
+        self.assertEqual(fetched.url, URL,
+                         "no redirect happened, so the landing URL is the recorded one")
 
     def test_fetch_raises_when_the_response_exceeds_the_bound(self):
         with _fake_urlopen(b"x" * 65):
@@ -1266,6 +1283,167 @@ class RepositoryRecordsTest(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         self.assertIn("source: detected | user", text, "fixture is stale; the field moved")
         self.assertEqual(cp.parse_records(text), [])
+
+
+class RedirectStaysOnHttps(unittest.TestCase):
+    """bug-0054: the `https` bound applied to the recorded URL and not to what was fetched.
+
+    `validate()` rejects an `http://` source and says why: over plaintext the digest
+    authenticates nothing, so the record would read as verified provenance for bytes anyone
+    on the path could have written. `fetch()` then called `urlopen`, which follows redirects
+    by default, and the standard library's own allow-list admits `http`. So an `https`
+    source answering `302 Location: http://...` was followed into plaintext, and the caller
+    was told nothing.
+
+    The loopback test below is the one that has to use a real server. Everything else here
+    goes through the injected seam, per this file's opening note, but "the handler is
+    actually installed on the opener `fetch()` uses" is not a claim a stand-in can make: the
+    defect was precisely that the wrong opener was being used.
+    """
+
+    def _redirecting_pair(self):
+        """Two loopback servers, the first answering 302 toward the second. No outbound
+        traffic. Both speak http, which is the point: after the fix any redirect off https
+        is refused, and http is the cheapest non-https scheme to serve."""
+        import http.server
+        import threading
+
+        target_holder = {}
+
+        class Target(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b"BYTES FROM THE REDIRECT TARGET"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        class Source(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", target_holder["url"])
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        target = http.server.HTTPServer(("127.0.0.1", 0), Target)
+        source = http.server.HTTPServer(("127.0.0.1", 0), Source)
+        target_holder["url"] = f"http://127.0.0.1:{target.server_port}/t"
+        for server in (target, source):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{source.server_port}/recorded", target_holder["url"]
+
+    def test_a_redirect_off_https_is_refused_by_the_opener_fetch_actually_uses(self):
+        # Through the real opener against a real server, so it fails if the handler is
+        # removed or if `fetch()` goes back to `urllib.request.urlopen`. Before the fix this
+        # returned the target's bytes and said nothing.
+        recorded, target = self._redirecting_pair()
+        with self.assertRaises(cp.InsecureRedirect) as caught:
+            cp.fetch(recorded)
+        self.assertIn(target, str(caught.exception),
+                      "the refusal does not say where the redirect pointed")
+
+    def test_the_opener_carries_our_handler_and_not_the_default(self):
+        # `build_opener` drops its own default when handed a subclass. If that ever stops
+        # being true, the default would follow the redirect before ours declined it.
+        redirects = [type(h).__name__ for h in cp._OPENER.handlers if "Redirect" in type(h).__name__]
+        self.assertEqual(redirects, ["HttpsOnlyRedirectHandler"])
+
+    def test_the_handler_permits_a_redirect_that_stays_on_https(self):
+        # The failure direction that matters as much as the refusal: upstream repositories
+        # get renamed, and a checker that fails on a moved file is one that gets disabled.
+        # Driven at the handler because serving https on loopback needs a certificate.
+        handler = cp.HttpsOnlyRedirectHandler()
+        request = cp.urllib.request.Request(URL)
+        moved = "https://raw.githubusercontent.com/moonray/renamed/main/x.md"
+        new = handler.redirect_request(request, io.BytesIO(b""), 302, "Found", {}, moved)
+        self.assertIsNotNone(new, "a redirect that stays on https was refused")
+        self.assertEqual(new.full_url, moved)
+
+    def test_the_handler_refuses_every_scheme_that_is_not_https(self):
+        handler = cp.HttpsOnlyRedirectHandler()
+        request = cp.urllib.request.Request(URL)
+        for target in ("http://example.com/x.md",
+                       "ftp://example.com/x.md",
+                       "file:///etc/passwd",
+                       "HTTP://example.com/x.md"):
+            with self.subTest(target=target):
+                with self.assertRaises(cp.InsecureRedirect):
+                    handler.redirect_request(request, io.BytesIO(b""), 302, "Found", {}, target)
+
+    def test_a_source_that_moved_is_reported_as_drift_even_when_the_bytes_match(self):
+        # The record's `source:` no longer names what answered. Reporting `ok` would let a
+        # record sit on a redirect indefinitely, which is the rot this script exists to
+        # surface. The remedy differs from content drift, so the wording does too.
+        moved_to = URL.replace("moonray", "moonray-renamed")
+
+        def fetcher(url, timeout=30):
+            return cp.Fetched(UPSTREAM, moved_to)
+
+        code, output = run(block(), fetcher)
+        self.assertEqual(code, 1, output)
+        self.assertIn("MOVED", output)
+        self.assertIn(moved_to, output)
+        self.assertIn("repoint the record's source", output)
+        self.assertIn("0 up to date, 1 drifted", output)
+
+    def test_content_drift_names_where_the_bytes_were_actually_retrieved_from(self):
+        moved_to = URL.replace("moonray", "moonray-renamed")
+
+        def fetcher(url, timeout=30):
+            return cp.Fetched(b"different bytes entirely\n", moved_to)
+
+        code, output = run(block(), fetcher)
+        self.assertEqual(code, 1, output)
+        self.assertIn("DRIFT", output)
+        self.assertIn("retrieved from", output)
+        self.assertIn(moved_to, output)
+
+    def test_an_unmoved_source_is_still_reported_ok_and_says_nothing_about_redirects(self):
+        # The common case must not gain noise. A record whose source answered directly reads
+        # exactly as it did before this change.
+        def fetcher(url, timeout=30):
+            return cp.Fetched(UPSTREAM, url)
+
+        code, output = run(block(), fetcher)
+        self.assertEqual(code, 0, output)
+        self.assertIn("up to date", output)
+        self.assertNotIn("MOVED", output)
+
+    def test_a_fetcher_returning_bare_bytes_is_still_understood(self):
+        # The seam takes either shape, so the tests above this class, which return bytes and
+        # are about something else entirely, keep meaning what they meant.
+        code, output = run(block(), serve(UPSTREAM))
+        self.assertEqual(code, 0, output)
+        self.assertIn("up to date", output)
+
+    def test_a_refused_redirect_reaches_the_report_as_an_error_rather_than_a_traceback(self):
+        # InsecureRedirect is a ValueError so it lands in check_record's existing except,
+        # which is the branch that already means "this source could not honestly be
+        # fetched". Exit 2, not 1: nothing was compared.
+        code, output = run(block(), unreachable(cp.InsecureRedirect("refused a redirect off https")))
+        self.assertEqual(code, 2, output)
+        self.assertIn("could not fetch", output)
+        self.assertIn("refused a redirect off https", output)
+
+    def test_the_recorded_url_rule_and_the_transport_rule_are_both_still_enforced(self):
+        # The recorded-URL half, which existed before this change and must not have been
+        # traded away for the transport half.
+        self.assertIsNotNone(cp.validate({
+            "source": "http://raw.githubusercontent.com/x/y/main/z.md", "author": "A",
+            "license": "MIT", "retrieved": "2026-08-30", "sha256": "0" * 64,
+        }), "an http:// source is no longer reported as malformed")
+        self.assertIsNone(cp.validate({
+            "source": URL, "author": "A", "license": "MIT",
+            "retrieved": "2026-08-30", "sha256": "0" * 64,
+        }), "a well-formed https record is rejected")
 
 
 if __name__ == "__main__":
