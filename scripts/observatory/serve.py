@@ -58,6 +58,7 @@ import json
 import queue
 import re
 import socket
+import sqlite3
 import sys
 import threading
 import time
@@ -2406,13 +2407,29 @@ class ObservatoryHandler(BaseHTTPRequestHandler):
                 "store": str(store), "store_present": False,
                 "message": f"No store at {store}. Run scripts/observatory/ingest.py first.",
             })
+        # Two failure classes, and only one of them used to be caught (`bug-0052`).
+        # `StoreUnusable` is a `RuntimeError` this module raises on purpose and it carries a
+        # readable remedy, so it keeps its own message. A `sqlite3.Error` is anything the
+        # driver itself refuses: a locked database, a missing table, a corrupt file. That is
+        # not a `StoreUnusable`, so it passed straight through the `except` below and left
+        # `do_GET` returning with nothing written. The client got a dropped connection rather
+        # than a status and a body, which reads as the server being down.
         try:
             conn = db.connect(store)
         except db.StoreUnusable as exc:
             return self._json({"store": str(store), "store_present": True,
                                "error": str(exc)}, 500)
+        except sqlite3.Error as exc:
+            return self._json({"store": str(store), "store_present": True,
+                               "error": f"the store could not be opened: {exc}"}, 500)
         try:
             payload = build(conn)
+        except sqlite3.Error as exc:
+            # The same gap one call further in, and the one nobody has seen fail. A query can
+            # fail for every reason a connect can, and the `finally` below closes the
+            # connection without answering, so this site was silent in exactly the same way.
+            return self._json({"store": str(store), "store_present": True,
+                               "error": f"the report could not be built: {exc}"}, 500)
         finally:
             conn.close()
         payload.setdefault("store", str(store))

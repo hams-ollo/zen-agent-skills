@@ -15,9 +15,11 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -988,6 +990,98 @@ class TestProcessState(RegistryTestCase):
         self.assertEqual(state, ingest.GONE,
                          "a reused pid was reported alive on the strength of the pid alone")
         self.assertIn("reused", evidence)
+
+
+class ReaderDoesNotTakeAWriteLockTests(unittest.TestCase):
+    """bug-0051: opening the store to read it took a write lock, so a reader waited on a writer.
+
+    `connect()` ran `executescript(SCHEMA)` and an unconditional upsert into `schema_meta` on
+    **every** open, then committed. SQLite needs the write lock for that, so every read-only
+    HTTP route contended with any concurrent ingester and gave up after the driver's five
+    second default with `database is locked`.
+
+    Diagnosed by `feat-0062`, whose first root cause was wrong and passed an independent
+    verifier: it blamed the missing `timeout=` on the strength of an A/B where raising the
+    timeout inverted the outcome, which is consistent with the hypothesis and does not test
+    it. A second agent found that converting the store to WAL changes nothing, while guarding
+    the upsert fixes it at baseline speed. The missing timeout is the aggravating condition.
+
+    **These tests pin the observable, not the repair.** A test asserting on `PRAGMA
+    busy_timeout` would pass for a change that leaves every reader waiting out the writer, and
+    fail for the fix that removes the contention. What has to be true is that a reader opens
+    while a writer holds the lock.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.store = Path(self._tmp.name) / "store.db"
+        db.connect(self.store).close()          # establish the schema once, as ingest would
+
+    def held_writer(self):
+        """A second connection holding a write transaction, released on cleanup."""
+        writer = sqlite3.connect(str(self.store), timeout=30)
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('probe', '1')")
+        self.addCleanup(writer.close)
+        self.addCleanup(writer.rollback)
+        return writer
+
+    def test_a_reader_opens_while_a_writer_holds_the_lock(self):
+        # The defect itself. Against the unfixed code this raises OperationalError after the
+        # driver's five second default, which is why the timing assertion below is separate:
+        # this one fails even with an infinite timeout.
+        self.held_writer()
+        conn = db.connect(self.store)
+        self.addCleanup(conn.close)
+        version, = conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        self.assertEqual(int(version), db.SCHEMA_VERSION)
+
+    def test_the_reader_does_not_wait_out_the_writer(self):
+        # The other half, and the one that tells a real fix from a raised timeout. A change
+        # that only widens `busy_timeout` passes the test above and fails this one, because
+        # the reader still blocks until the writer lets go.
+        self.held_writer()
+        start = time.monotonic()
+        conn = db.connect(self.store)
+        elapsed = time.monotonic() - start
+        self.addCleanup(conn.close)
+        self.assertLess(elapsed, 2.0,
+                        f"opening the store to read it took {elapsed:.2f}s while a writer "
+                        f"held the lock, so the reader is still contending for it")
+
+    def test_a_fresh_store_still_records_its_schema_version(self):
+        # What the guard must not break, first half: a store that does not exist yet is still
+        # created, still gets the schema, and still records the version.
+        fresh = Path(self._tmp.name) / "fresh.db"
+        conn = db.connect(fresh)
+        self.addCleanup(conn.close)
+        version, = conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        self.assertEqual(int(version), db.SCHEMA_VERSION)
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertIn("message", tables)
+
+    def test_a_store_recording_an_older_version_is_migrated_and_restamped(self):
+        # Second half. The guard must not turn a needed migration into a skipped one, which is
+        # the failure the version check's own comment warns about.
+        conn = db.connect(self.store)
+        conn.execute("INSERT INTO message (uuid, session_id) VALUES ('u1', 's1')")
+        conn.execute("UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                     (str(db.SCHEMA_VERSION - 1),))
+        conn.commit()
+        conn.close()
+
+        migrated = db.connect(self.store)
+        self.addCleanup(migrated.close)
+        version, = migrated.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        self.assertEqual(int(version), db.SCHEMA_VERSION,
+                         "a forward migration no longer restamps the version")
+        rows, = migrated.execute("SELECT COUNT(*) FROM message").fetchone()
+        self.assertEqual(rows, 0, "a forward migration no longer rebuilds the derived tables")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import socket
 import subprocess
 import sys
@@ -3057,6 +3058,85 @@ class TestHealthPageBehaviour(HealthTestCase):
                 self.assertNotIn(forbidden, body,
                                  f"the health renderer builds {forbidden} directly, so it is "
                                  f"outside the enumeration S-019 is proven by")
+
+
+class StoreFailureReachesTheClientTests(ServerTestCase):
+    """bug-0052: a sqlite error inside a route escaped the handler with no response written.
+
+    `_with_store` catches `db.StoreUnusable`, and `sqlite3.OperationalError` is not one: it is
+    a plain `sqlite3.Error`. So an error raised inside `db.connect` passed straight through
+    the `except` on the line below it, `do_GET` returned having written nothing, and the
+    client got a dropped connection rather than a status and a body.
+
+    Two call sites, and only the first has ever been observed. `bug-0051` was how it surfaced:
+    a concurrent ingester made `db.connect` raise `database is locked` and routes stopped
+    answering. `build(conn)` is the same gap unreached, since a query can fail for the same
+    reasons a connect can.
+
+    **Asserted on what the client receives**, never on what the server logged. A handler that
+    writes nothing and a handler that writes a 500 look identical from inside the process.
+    """
+
+    def failing_at(self, where):
+        """Make the store fail at one of the two call sites, and undo it afterwards."""
+        if where == "connect":
+            original = serve.db.connect
+            def boom(path):
+                raise sqlite3.OperationalError("database is locked")
+            serve.db.connect = boom
+            self.addCleanup(setattr, serve.db, "connect", original)
+        else:
+            original = serve.fleet_report
+            def boom(*a, **k):
+                raise sqlite3.OperationalError("no such table: session")
+            serve.fleet_report = boom
+            self.addCleanup(setattr, serve, "fleet_report", original)
+
+    def test_a_sqlite_failure_at_connect_still_answers_the_client(self):
+        self.build_store([self.record("u1")])
+        self.failing_at("connect")
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("error", payload)
+        self.assertIn("database is locked", payload["error"])
+
+    def test_a_sqlite_failure_inside_the_report_still_answers_the_client(self):
+        # The site nobody has seen fail. A query can fail for the same reasons a connect can,
+        # and the `finally` around `build(conn)` closes the connection without answering.
+        self.build_store([self.record("u1")])
+        self.failing_at("build")
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("error", payload)
+        self.assertIn("no such table", payload["error"])
+
+    def test_a_missing_store_still_answers_200_and_says_so(self):
+        # Existing behaviour this must not fold into a generic error: an absent store means
+        # the ingester has not run, which is a different thing from a corpus with nothing in
+        # it, and the page says which.
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 200)
+        self.assertIs(payload["store_present"], False)
+        self.assertIn("ingest.py", payload["message"])
+
+    def test_a_schema_version_failure_keeps_its_readable_message(self):
+        # The other existing behaviour. `StoreUnusable` carries a message telling the reader
+        # to delete the store and re-ingest, and a generic 500 would lose it.
+        self.build_store([self.record("u1")])
+        conn = sqlite3.connect(str(self.store))
+        conn.execute("UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                     (str(serve.db.SCHEMA_VERSION + 5),))
+        conn.commit()
+        conn.close()
+
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("re-ingest", payload["error"],
+                      "the readable StoreUnusable message was folded into a generic error")
 
 
 class ContentSecurityPolicyTests(ServerTestCase):

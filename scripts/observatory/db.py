@@ -26,6 +26,11 @@ from pathlib import Path
 # you do not understand produces wrong figures instead of an error.
 SCHEMA_VERSION = 4
 
+# How long a write path waits for the lock before giving up. Reached only by a fresh store or
+# a forward migration since `bug-0051`: an open that merely reads takes no write lock at all,
+# so the common case never waits and this bound never applies to it.
+CONNECT_TIMEOUT_SECONDS = 30.0
+
 # Every table holding derived corpus data. A version bump drops and re-derives all of them
 # rather than backfilling: the corpus is authoritative and re-reading it costs seconds, while a
 # partial backfill leaves rows that predate a column and are indistinguishable from rows where
@@ -212,7 +217,18 @@ def connect(path: Path) -> sqlite3.Connection:
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    # An explicit timeout, for the two occasions below that genuinely need the write lock: a
+    # fresh store and a forward migration. The driver's default is five seconds, which is
+    # short for a migration running beside an ingest of a real corpus.
+    #
+    # **This is the aggravating condition, not the cause**, and the distinction cost a whole
+    # investigation to establish (`feat-0062`). That run first blamed the missing timeout on
+    # an A/B where raising it inverted the outcome, which is consistent with the hypothesis
+    # and does not test it: raising a timeout ends any wait, whatever is waiting. Converting
+    # the store to WAL and changing nothing else failed identically, while guarding the
+    # `schema_meta` upsert below fixed it at baseline speed. So the guard is the fix and this
+    # is insurance, and saying which is which here is the point.
+    conn = sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SECONDS)
     conn.row_factory = sqlite3.Row
 
     # The version check runs before the schema script, because a stale store's tables have to be
@@ -251,10 +267,23 @@ def connect(path: Path) -> sqlite3.Connection:
             conn.execute(f"DROP TABLE IF EXISTS {table}")
 
     conn.executescript(SCHEMA)
-    conn.execute(
-        "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (str(SCHEMA_VERSION),),
-    )
-    conn.commit()
+    if found != SCHEMA_VERSION:
+        # Only when it would change something (`bug-0051`). This upsert ran on **every** open
+        # and committed, so every read-only HTTP route took the write lock and contended with
+        # any concurrent ingester, then gave up with `database is locked`.
+        #
+        # The guard is exactly this statement and nothing else, because measuring said so.
+        # With a writer holding the lock: the `SELECT` above returns, the `CREATE TABLE IF
+        # NOT EXISTS` returns, `executescript(SCHEMA)` returns, and only this upsert blocks.
+        # So the schema script stays unguarded and keeps recreating a table somebody deleted,
+        # which is a real safety property this fix had no need to trade away.
+        #
+        # `found` is None for a fresh store and lower for a migration, and both write here
+        # and should: those are the two occasions the row is genuinely wrong.
+        conn.execute(
+            "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(SCHEMA_VERSION),),
+        )
+        conn.commit()
     return conn

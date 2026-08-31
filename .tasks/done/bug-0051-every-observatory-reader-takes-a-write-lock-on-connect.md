@@ -2,7 +2,7 @@
 id: bug-0051
 title: Every observatory reader takes a write lock on connect, so a concurrent ingester takes the page down
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
@@ -15,17 +15,17 @@ created: 2026-08-29
 ## Problem
 
 While another process holds a write transaction on `.observatory/store.db`, every store-reading
-route of [`serve.py`](../scripts/observatory/serve.py) fails with
+route of [`serve.py`](../../scripts/observatory/serve.py) fails with
 `sqlite3.OperationalError: database is locked`. Observed live twice, on 2026-08-28 and again on
 2026-08-29 during reconciliation, in the ordinary case: a page open in a browser while a concurrent
 session's ingester runs.
 
 **Diagnosed, not guessed.** The full record, including two disproved hypotheses and a refutation of
 the first cause this investigation named, is the `## Dogfood record` section of
-[`feat-0062`](done/feat-0062-dogfood-systematic-debugging-then-promote-it.md). This task carries what
+[`feat-0062`](feat-0062-dogfood-systematic-debugging-then-promote-it.md). This task carries what
 that record established and nothing it did not.
 
-**The cause is one statement.** [`db.py`](../scripts/observatory/db.py) line 254 issues an
+**The cause is one statement.** [`db.py`](../../scripts/observatory/db.py) line 254 issues an
 unconditional
 
     conn.execute(
@@ -112,20 +112,20 @@ returned in 0.001s under the held writer.
 
     python scripts/run-checks.py
 
-- [ ] With a writer holding a write transaction on the store, a store-reading route returns a
+- [x] With a writer holding a write transaction on the store, a store-reading route returns a
       response, and returns it without waiting out the writer's hold.
-- [ ] The regression test fails against the current code. Confirm it does before the fix, per the
+- [x] The regression test fails against the current code. Confirm it does before the fix, per the
       discipline in `.agents/skills/test-author/SKILL.md`.
-- [ ] **The test pins the behavior, not the repair.** A test asserting on `PRAGMA busy_timeout`
+- [x] **The test pins the behavior, not the repair.** A test asserting on `PRAGMA busy_timeout`
       passes for a change that leaves every reader waiting out the writer, and fails for the better
       fix that removes the contention. The observable is that a route answers under a held writer.
-- [ ] Opening a fresh store still records the schema version, and a forward migration still updates
+- [x] Opening a fresh store still records the schema version, and a forward migration still updates
       it. Both are what the guard must not break.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
