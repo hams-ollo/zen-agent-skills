@@ -398,4 +398,4 @@ OK
 ```
 
 This is a review ledger. It reports fixes but implements none, changes no approved contract, and
-creates no task file.
+files its findings as separate task files.
