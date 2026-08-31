@@ -16,6 +16,12 @@ against verbatim inlining, which is the known-bad behavior it was written for.
 Every scenario S-001 through S-017 has a covering test. The runs that write do so
 into a temp directory; the one test that targets the repository itself (S-011) uses
 a preview run, so it asserts the no-op without depending on it.
+
+`TestDestinationContainment` carries no scenario id, deliberately. No scenario in
+the spec governs where a write may land, so it is a characterization test pinning
+observed behavior rather than an acceptance test deriving from the contract, and
+tagging it with an id would claim a contract line that does not exist. Amending the
+spec is chore-0087.
 """
 import contextlib
 import importlib.util
@@ -25,6 +31,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODULE_PATH = REPO_ROOT / "scripts" / "build-adapters.py"
@@ -658,6 +665,187 @@ class TestSkillAssetsExcludeBytecode(unittest.TestCase):
                         [p for p in reported
                          if p.endswith(".pyc") or "__pycache__" in p.split("/")],
                         f"byte-cache emitted or counted into {name}: {reported}")
+
+
+class TestDestinationContainment(unittest.TestCase):
+    """bug-0060: a frontmatter `name` becomes a path component of both inlining
+    destinations, so a `..` segment in one walks out of the output root.
+
+    test-quality notes: characterization, not acceptance. See the module docstring
+    for why there is no S-NNN id.
+
+    The oracle is the filesystem rather than the return value or the exception,
+    because the defect is a file existing where it should not. An emitter that
+    returned an escaping path and wrote nothing would be harmless, and one that
+    returned a contained path and wrote outside would be the bug, and the two are
+    indistinguishable from the return value. That is the escape the shipped code
+    already half-knew about: `_main`'s print line branches on
+    `dest.is_relative_to(out)`, so it formats the escape and writes it anyway.
+
+    Two layers, because there are two distinct failure modes. `_write`'s containment
+    check is reached through the emitters directly, which is the only way to drive it
+    with a name `_main` now rejects before dispatch. The run-level behavior, a
+    non-zero exit and a message rather than a quiet skip, is driven through `main()`
+    over a fixture skill tree. Either layer alone passes against a build that escapes
+    quietly at the other.
+
+    Every path here stays inside a `TemporaryDirectory`. The traversal name carries
+    exactly enough `..` segments to leave `<out>` and land in the sandbox directory
+    above it, so the escape is provable without a write ever reaching a real location.
+    """
+
+    # Three segments up from `<out>/.cursor/rules/` is `<out>/..`, which is the
+    # `nested/` directory `_sandbox` puts between the temp root and the output root.
+    ESCAPING_NAME = "../../../escaped"
+
+    def _sandbox(self):
+        """A temp root holding nothing but the output root, two levels down.
+
+        Nothing else is placed under it, so any file this returns that is not under
+        `out` was put there by the code under test.
+        """
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name).resolve()
+        return root, root / "nested" / "out"
+
+    def _source_tree(self, name=None):
+        """A one-skill source tree, in its own temp directory rather than the sandbox.
+
+        Kept apart so the sandbox holds only what the run wrote. `name` is the
+        frontmatter value; the directory is always `traversal-fixture`, which is what
+        makes the two disagree.
+        """
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        skills = Path(tmp.name).resolve() / "skills"
+        skill = skills / "traversal-fixture"
+        skill.mkdir(parents=True)
+        if name is not None:
+            (skill / "SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: a fixture skill\n---\n\nBody.\n",
+                encoding="utf-8")
+        return skills, skill
+
+    @contextlib.contextmanager
+    def _kit(self, skills_dir):
+        """Point the tool at a fixture tree, with no rules module to place.
+
+        `RULES_DIR` is redirected to an absent path so `emit_rules_module` is a no-op,
+        which keeps the sandbox holding only the per-skill writes under test.
+        """
+        with mock.patch.object(ba, "SKILLS_DIR", skills_dir), \
+             mock.patch.object(ba, "RULES_DIR", skills_dir.parent / "absent-rules"):
+            yield
+
+    def _outside(self, root, out):
+        """Every file under `root` that is not under the resolved output root."""
+        return sorted(str(p) for p in root.rglob("*")
+                      if p.is_file() and not p.resolve().is_relative_to(out.resolve()))
+
+    def test_a_traversal_name_writes_nothing_outside_the_output_root(self):
+        # The emitters are driven directly, below `_main`'s name check, so this
+        # reaches the shared write boundary rather than the guard in front of it.
+        for target in ("cursor", "vscode"):
+            with self.subTest(target=target):
+                root, out = self._sandbox()
+                _, skill = self._source_tree()
+                raised = None
+                try:
+                    ba.EMITTERS[target](skill, self.ESCAPING_NAME, "a fixture skill",
+                                        "Body.\n", out, False)
+                except Exception as exc:  # noqa: BLE001 - typed below, after the oracle
+                    raised = exc
+                self.assertEqual(
+                    self._outside(root, out), [],
+                    f"{target} wrote outside the resolved output root {out}")
+                self.assertIsInstance(
+                    raised, ba.OutsideOutputRoot,
+                    f"{target} must refuse the destination, not skip it silently")
+
+    def test_the_write_boundary_refuses_before_the_preview_branch(self):
+        # `_write` returns early on `dry`, so a check placed after that branch never
+        # fires in the one place this repository runs the tool: run-checks.py's
+        # adapters gate is a --dry-run.
+        root, out = self._sandbox()
+        dest = out / ".cursor" / "rules" / ".." / ".." / ".." / "escaped.mdc"
+        with self.assertRaises(ba.OutsideOutputRoot):
+            ba._write(dest, "content\n", True, out)
+        self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
+
+    def test_a_traversal_name_fails_the_run_naming_the_skill_and_a_destination(self):
+        root, out = self._sandbox()
+        skills, _ = self._source_tree(self.ESCAPING_NAME)
+        # Derived here from the documented `cursor` path shape rather than read back
+        # from the tool, so the message is checked against an independent statement of
+        # where the name lands. `cursor` is the first of the two default targets.
+        escaped = (out / ".cursor" / "rules" / f"{self.ESCAPING_NAME}.mdc").resolve()
+        self.assertFalse(escaped.is_relative_to(out.resolve()),
+                         "fixture is wrong: the name must actually leave the root")
+
+        with self._kit(skills):
+            code, printed = _run(["--out", str(out)])
+
+        self.assertEqual(self._outside(root, out), [],
+                         f"the run wrote outside the resolved output root {out}")
+        self.assertEqual(code, 2, f"the run must fail, not emit; it printed:\n{printed}")
+        self.assertIn("traversal-fixture", printed)
+        self.assertIn(self.ESCAPING_NAME, printed)
+        # The refusal has to show a path that resolves outside the root, not only the
+        # root it stayed inside of. Naming the root alone leaves a reader unable to see
+        # that the name escapes at all, which is the fact carrying the severity.
+        self.assertIn(str(escaped), printed,
+                      "the refusal must name a destination outside the output root, "
+                      f"not only the root itself; it printed:\n{printed}")
+        self.assertIn(str(out), printed, "the output root must stay in the message")
+
+    def test_the_named_destination_follows_the_requested_target(self):
+        # The representative destination belongs to a target the run actually asked
+        # for, so it cannot be hardcoded to cursor. And a plugin-only run derives no
+        # path from the name at all, so it must not claim an escape that cannot happen:
+        # a refusal that overstated what would occur is the same defect as one that
+        # understated it.
+        root, out = self._sandbox()
+        skills, _ = self._source_tree(self.ESCAPING_NAME)
+        with self._kit(skills):
+            code, printed = _run(["--target", "vscode", "--out", str(out)])
+        self.assertEqual(code, 2, printed)
+        self.assertIn(str((out / ".github" / "prompts"
+                           / f"{self.ESCAPING_NAME}.prompt.md").resolve()), printed)
+        self.assertNotIn(".mdc", printed, "named cursor's destination for a vscode run")
+
+        root, out = self._sandbox()
+        skills, _ = self._source_tree(self.ESCAPING_NAME)
+        with self._kit(skills):
+            code, printed = _run(["--target", "plugin", "--out", str(out)])
+        self.assertEqual(code, 2, printed)
+        self.assertIn("No requested target derives a destination", printed)
+        self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
+
+    def test_a_preview_refuses_the_same_input_a_real_run_refuses(self):
+        root, out = self._sandbox()
+        skills, _ = self._source_tree(self.ESCAPING_NAME)
+        with self._kit(skills):
+            code, printed = _run(["--out", str(out), "--dry-run"])
+        self.assertEqual(code, 2, f"a preview must refuse what a real run refuses; "
+                                  f"it printed:\n{printed}")
+        self.assertIn("traversal-fixture", printed)
+        self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
+
+    def test_a_name_matching_its_directory_still_emits_both_adapters(self):
+        # The guard must be invisible on valid input, so the same fixture with an
+        # honest name emits exactly what it emitted before the guard existed.
+        root, out = self._sandbox()
+        skills, _ = self._source_tree("traversal-fixture")
+        with self._kit(skills):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 0, printed)
+        self.assertEqual(
+            sorted(p.relative_to(out).as_posix()
+                   for p in out.rglob("*") if p.is_file()),
+            [".cursor/rules/traversal-fixture.mdc",
+             ".github/prompts/traversal-fixture.prompt.md"])
+        self.assertEqual(self._outside(root, out), [])
 
 
 if __name__ == "__main__":

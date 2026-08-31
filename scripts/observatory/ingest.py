@@ -407,7 +407,7 @@ def ingest(corpus: Path, store: Path) -> dict:
             # a 400 MB re-read reported as an incremental run.
             key = os.path.normcase(str(path.resolve()))
             row = conn.execute(
-                "SELECT offset, size FROM ingest_state WHERE path = ?", (key,)
+                "SELECT offset, size, mtime_ns FROM ingest_state WHERE path = ?", (key,)
             ).fetchone()
             start = row["offset"] if row else 0
             # A transcript that shrank was replaced rather than appended to, so a recorded
@@ -415,7 +415,14 @@ def ingest(corpus: Path, store: Path) -> dict:
             # the middle of a different file.
             if stat.st_size < start:
                 start = 0
-            if row and stat.st_size == row["size"] and start == stat.st_size:
+            # A replacement of the same byte count leaves the size nothing to disagree with,
+            # so the modification marker is the only recorded field that moves. Same reasoning
+            # as the shrink above, and the same answer: the offset points into content that is
+            # no longer there, so start over (`bug-0059`).
+            if row and stat.st_size == row["size"] and stat.st_mtime_ns != row["mtime_ns"]:
+                start = 0
+            if (row and stat.st_size == row["size"] and stat.st_mtime_ns == row["mtime_ns"]
+                    and start == stat.st_size):
                 continue  # unchanged since last run: S-005's cheap path
 
             result = scan_file(path, start)

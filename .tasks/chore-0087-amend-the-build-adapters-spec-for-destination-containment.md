@@ -17,7 +17,7 @@ created: 2026-08-31
 
 ## Problem
 
-[`bug-0060`](bug-0060-a-frontmatter-name-can-write-outside-the-adapter-output-root.md) adds a guard
+[`bug-0060`](done/bug-0060-a-frontmatter-name-can-write-outside-the-adapter-output-root.md) adds a guard
 that refuses to write outside the resolved output root. Nothing in
 [`build-adapters.md`](../docs/spec/build-adapters.md) requires it.
 
@@ -51,6 +51,14 @@ an amendment here.
 - Add the matching row to
   [`build-adapters.conformance.md`](../docs/spec/build-adapters.conformance.md), citing the tests
   `bug-0060` wrote, and update its coverage proof arithmetic.
+- **Re-anchor the "Emitted per-skill paths" row of that same matrix.** It cites the `dest`
+  expressions in `emit_cursor()` and `emit_vscode()` for the path shapes it asserts, and after
+  `bug-0060` those functions read `dest` from a `NAME_DESTINATIONS` mapping, so a reader following
+  the citation no longer sees the shapes it claims. The classification is still correct: the emitted
+  paths were proven byte-identical across four target sets. This is the pointer drifting, which
+  `review-quality`'s gate calls a re-anchor rather than a dropped finding, so name
+  `NAME_DESTINATIONS` alongside the emitters instead of changing the verdict. The `matrix citations`
+  gate does not catch it, because a citation of this shape falls in its unaudited set.
 - Update both build-adapters rows in [`docs/spec/README.md`](../docs/spec/README.md): the amendment
   ledger row, which names each added scenario and the task that added it, and the scenario count in
   the status table. That file's derived arithmetic is the subject of the open

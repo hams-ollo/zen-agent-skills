@@ -4,8 +4,9 @@
 Ships with the init-worktracking scaffold. Checks the mechanical integrity a
 multi-agent workflow depends on: every task file has a well-formed frontmatter,
 ids are unique and match their filenames, every depends_on resolves to a real
-task, every relative markdown link resolves from where the file actually lives,
-and (with --strict) every touched_files path exists.
+task and no ring of them closes back on itself, every relative markdown link
+resolves from where the file actually lives, and (with --strict) every
+touched_files path exists.
 
 It also warns when a link's text names one path and the link opens another, the
 class underneath a dangling link. That one is a heuristic rather than a fact, so
@@ -305,6 +306,78 @@ def stale_high_water(manifest_path, ids):
     return findings
 
 
+def dependency_cycles(edges):
+    """Every dependency ring in `edges`, normalised and reported once each.
+
+    The graph check that no per-edge check can make. A `depends_on` entry is validated
+    for two things, that it is not the task's own id and that it names a task that
+    exists, and every edge of a ring satisfies both. In the repository this scaffold came
+    from, two otherwise valid tasks naming each other passed `--strict` at exit 0 in both
+    copies of this file (bug-0061). The lifecycle rule is that a task is dispatchable
+    once every id it depends on is in done/, so no member of a ring ever becomes
+    dispatchable, and the only symptom is a person noticing that a batch has nothing
+    ready.
+
+    `edges` maps a task id to the ids it depends on, and carries the ids in done/ like
+    any other: a dependency that is already satisfied is not a ring, and dropping those
+    nodes would make every completed dependency a false positive. Self-edges are
+    expected to be absent, because a one-node ring rendered as a path is a worse message
+    than the direct `depends_on lists itself` one that already fires.
+
+    The search carries its own stack rather than recursing. This walks a directory of
+    arbitrary size on three platforms, so a chain longer than the interpreter's recursion
+    limit is a real failure mode and an uninteresting one.
+
+    Deterministic in three places, because a gate whose text varies by dictionary
+    ordering is a gate whose output cannot be diffed: roots and neighbours are walked in
+    sorted order, each ring is rotated to start at its lowest id, and the rings come back
+    sorted.
+
+    What it does not promise: this reports every ring a back edge closes, not an
+    enumeration of all elementary cycles. Disjoint rings, nested rings, and a ring
+    reached down a chain are all reported. A ring whose nodes are all inside a subtree
+    the walk has already finished can hide behind the one reported there, and surfaces on
+    the next run once the named edge is cut. Enumerating all of them is exponential in
+    the worst case, which is the wrong trade for a gate that has to finish on somebody
+    else's backlog.
+
+    Returns a list of rings, each a list of ids in walk order and without the repeated
+    closing id, so the caller decides how to render it.
+    """
+    cycles = set()
+    visited = set()
+    for root in sorted(edges):
+        if root in visited:
+            continue
+        # `stack` and `path` move in lockstep: one frame per node on the walk, holding
+        # the neighbours it has not tried yet. `on_path` is the same nodes as a set,
+        # because "is this node an ancestor of where I am" is the question asked on
+        # every edge, and it is the one that separates a ring from a rejoining path.
+        visited.add(root)
+        path = [root]
+        on_path = {root}
+        stack = [iter(sorted(edges.get(root, ())))]
+        while stack:
+            nxt = next(stack[-1], None)
+            if nxt is None:
+                stack.pop()
+                on_path.discard(path.pop())
+                continue
+            if nxt in on_path:
+                # A back edge, so the walk has closed a ring. Rotating it to start at
+                # its lowest id is what makes the same ring one finding however the
+                # walk entered it.
+                ring = path[path.index(nxt):]
+                pivot = ring.index(min(ring))
+                cycles.add(tuple(ring[pivot:] + ring[:pivot]))
+            elif nxt not in visited:
+                visited.add(nxt)
+                path.append(nxt)
+                on_path.add(nxt)
+                stack.append(iter(sorted(edges.get(nxt, ()))))
+    return [list(ring) for ring in sorted(cycles)]
+
+
 def broken_links(path):
     """Relative link targets in `path` that do not resolve from its own directory.
 
@@ -563,6 +636,10 @@ def main(argv=None) -> int:
     parsed = {}
     ids_seen = {}
     all_ids = set()
+    # The dependency graph, gathered in the per-file loop below rather than in a pass of
+    # its own. It is built after all_ids is complete, so an edge is only recorded once it
+    # is known to point at a task that exists.
+    edges = {}
 
     for f in files:
         rel = f.relative_to(REPO_ROOT).as_posix()
@@ -617,6 +694,13 @@ def main(argv=None) -> int:
                 err(rel, f"depends_on lists itself: {dep}")
             elif dep not in all_ids:
                 err(rel, f"depends_on unresolved: {dep!r} is not a known task id")
+            elif tid:
+                # Whatever survives both branches above is an edge between two tasks that
+                # exist, which is the only kind a ring can be made of. A self-edge is
+                # deliberately excluded: it has the direct diagnostic above. An empty
+                # `tid` is a file with no id, already reported as a missing field, and
+                # keying a graph on it would invent a node.
+                edges.setdefault(tid, set()).add(dep)
 
         touched = fm.get("touched_files", []) or []
         if not touched:
@@ -658,6 +742,16 @@ def main(argv=None) -> int:
     for tid, where in ids_seen.items():
         if len(where) > 1:
             err(where[0], f"duplicate id {tid!r} also in: {', '.join(where[1:])}")
+
+    # The graph check the two per-edge checks above cannot make: every edge of a ring
+    # passes both, and no member of one can ever be dispatched, because a task is
+    # dispatchable only once every id it depends on is in done/. Reported against the
+    # lowest-id member so the finding keeps err()'s file-relative signature, with the
+    # whole ordered path in the message so the reader can see which edge to cut without
+    # reconstructing it.
+    for ring in dependency_cycles(edges):
+        err(ids_seen[ring[0]][0],
+            "depends_on cycle: " + " -> ".join(ring + [ring[0]]))
 
     # The duplicate-id error above is where a stale scaffold manifest used to surface:
     # after the colliding task file had been written, named, and cross-referenced, so

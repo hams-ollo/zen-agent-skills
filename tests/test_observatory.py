@@ -372,6 +372,58 @@ class TestReplacedTranscript(ObservatoryTestCase):
         self.assertEqual(self.counts()["message"], 3,
                          "re-reading a replaced transcript duplicated rows")
 
+    def stored_uuids(self):
+        conn = db.connect(self.store)
+        try:
+            return [r["uuid"] for r in conn.execute(
+                "SELECT uuid FROM message ORDER BY uuid")]
+        finally:
+            conn.close()
+
+    def recorded_mtime_ns(self, path):
+        """The modification marker `ingest` stored for this transcript, keyed as it keys it."""
+        conn = db.connect(self.store)
+        try:
+            return conn.execute(
+                "SELECT mtime_ns FROM ingest_state WHERE path = ?",
+                (os.path.normcase(str(path.resolve())),),
+            ).fetchone()["mtime_ns"]
+        finally:
+            conn.close()
+
+    def test_s005_a_same_size_replacement_is_re_read_rather_than_called_unchanged(self):
+        """S-005 promises nothing changes for "a corpus that has not changed". A transcript
+        replaced by different content of the same byte count has changed, so the cheap path
+        must not claim it: size and offset both still match, and only the recorded
+        modification marker moved (`bug-0059`)."""
+        path = self.write_transcript(records=[self.record("a1")])
+        ingest.ingest(self.corpus, self.store)
+        self.assertEqual(self.stored_uuids(), ["a1"])
+        size_before = path.stat().st_size
+
+        # Different content, identical byte count: the two uuids are the same length, so the
+        # serialized records are too. Size alone cannot tell these two files apart.
+        with path.open("wb") as fh:
+            fh.write((json.dumps(self.record("a2")) + "\n").encode("utf-8"))
+        self.assertEqual(path.stat().st_size, size_before,
+                         "the replacement is not the same byte count, so this asserts nothing")
+
+        # `st_mtime_ns` resolution differs by filesystem, and on a coarse one the replacement
+        # lands in the same tick as the first ingest. Set the marker rather than sleep, so the
+        # discriminator this test is about is present on every platform.
+        recorded = self.recorded_mtime_ns(path)
+        moved = recorded + 1_000_000_000
+        os.utime(path, ns=(moved, moved))
+        self.assertNotEqual(path.stat().st_mtime_ns, recorded,
+                            "the replacement kept the recorded mtime, so this asserts nothing")
+
+        result = ingest.ingest(self.corpus, self.store)
+
+        self.assertEqual(self.stored_uuids(), ["a1", "a2"],
+                         "the store does not hold the replacement's record")
+        self.assertEqual(result["files_read"], 1, "the replaced transcript was never opened")
+        self.assertEqual(result["records"], 1, "the replaced transcript was never re-read")
+
 
 class TestHookHealth(ObservatoryTestCase):
     """Hook outcomes arrive on `attachment` records, not `system` ones, and their numeric fields
