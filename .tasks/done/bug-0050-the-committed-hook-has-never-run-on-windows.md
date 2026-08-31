@@ -108,7 +108,7 @@ change.
   fixed here. The fallback needs a shell, that was measured for Claude Code and only inferred for
   Codex, and applying an unverified shell-dependent change to a wiring nobody here can exercise
   turns a known failure on one platform into a possible failure on three. Filed with the inference
-  and its evidence as [`bug-0058`](../bug-0058-the-codex-wiring-still-registers-every-hook-as-python3.md).
+  and its evidence as [`bug-0058`](bug-0058-the-codex-wiring-still-registers-every-hook-as-python3.md).
 - **What every prior test asserted, and why none of them saw this.** Three tests already covered this
   file: that it names a hook that exists, on an event the module ships, matching what the wirings
   agree on. One asserted `command.startswith("python3 ")`, which pinned the half of the decision that

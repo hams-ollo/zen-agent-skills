@@ -19,6 +19,7 @@ The defect each group protects against:
 import importlib.util
 import io
 import json
+import shutil
 import subprocess
 import sys
 import unittest
@@ -376,6 +377,95 @@ class TheCommittedRegistrationActuallyRuns(unittest.TestCase):
                     f"stderr: {result.stderr[:200]!r}")
                 if result.stdout.strip():
                     json.loads(result.stdout)   # exactly one object, or this raises
+
+    def codex_commands(self):
+        settings = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        return [entry["command"]
+                for event in settings.get("hooks", {}).values()
+                for matcher in event
+                for entry in matcher.get("hooks", [])]
+
+    def test_every_codex_command_launches_and_exits_zero(self):
+        """The same executable check over the Codex wiring (`bug-0058`).
+
+        **A POSIX shell explicitly, and the bound is worth stating.** Every Codex command
+        contains `$(git rev-parse --show-toplevel)`, which is POSIX substitution: `cmd.exe`
+        passes it through as a literal path, so on Windows the default shell cannot run
+        these at all. That is a second assumption in this wiring, older than `bug-0058` and
+        equally unverified, and it is why the command is run under `bash` here.
+
+        So this proves the command is **well-formed POSIX that works**, not that Codex
+        spawns a POSIX shell. Nothing here can prove the second: this machine's 71 Codex
+        sessions all predate the hooks module, so the wiring has never been exercised. What
+        makes the change safe without that proof is the other side, pinned by
+        `test_a_hook_ignores_extra_argv_so_the_fallback_degrades_safely`: with no shell the
+        tail arrives as argv and no hook reads it, so the fallback is never worse than the
+        bare `python3` it replaces.
+        """
+        posix_shell = shutil.which("bash") or shutil.which("sh")
+        if not posix_shell:
+            self.skipTest("no POSIX shell available to evaluate the command's own syntax")
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup",
+                              "cwd": str(REPO_ROOT)})
+        for command in self.codex_commands():
+            with self.subTest(command=command[:60]):
+                result = subprocess.run([posix_shell, "-c", command], input=payload,
+                                        capture_output=True, text=True, cwd=REPO_ROOT)
+                self.assertEqual(result.returncode, 0,
+                                 f"a Codex registration exits {result.returncode}. "
+                                 f"stderr: {result.stderr[:200]!r}")
+                if result.stdout.strip():
+                    json.loads(result.stdout)
+
+    def test_a_hook_ignores_extra_argv_so_the_fallback_degrades_safely(self):
+        """The measurement the Codex change rests on, kept as an assertion.
+
+        If a harness does not use a shell, the command splits into argv and the fallback's
+        tail arrives as arguments to the script. That is only harmless while no hook reads
+        `sys.argv`, and if one ever does, the fallback stops being safe on that harness and
+        this fails rather than the wiring quietly changing meaning.
+        """
+        payload = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Task"})
+        for script in sorted(HOOKS_DIR.glob("*.py")):
+            with self.subTest(hook=script.name):
+                plain = subprocess.run([sys.executable, str(script)], input=payload,
+                                       capture_output=True, text=True, cwd=REPO_ROOT)
+                with_tail = subprocess.run(
+                    [sys.executable, str(script), "||", "python", str(script)],
+                    input=payload, capture_output=True, text=True, cwd=REPO_ROOT)
+                self.assertEqual(with_tail.returncode, plain.returncode)
+                self.assertEqual(with_tail.stdout, plain.stdout,
+                                 f"{script.name} behaves differently when the fallback's "
+                                 f"tail arrives as argv, so the Codex wiring's shape is no "
+                                 f"longer safe on a harness that does not use a shell")
+
+    def test_every_wiring_names_the_interpreter_this_platform_has(self):
+        """All three wirings, so they cannot drift apart on this again (`bug-0058`).
+
+        They already had. `.claude/settings.json` argued at length for a bare `python3`,
+        `.codex/hooks.json` copied it, and `.opencode/plugins/zen-hooks.mjs` had been trying
+        both in order since it was written. Nothing compared them, so one wiring held the
+        answer while another explained why it was impossible.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "install_for_wirings", REPO_ROOT / "scripts" / "install.py")
+        install = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(install)
+        wanted = install.hook_interpreter()
+
+        for label, command in ([("claude", c) for c in self.commands()]
+                               + [("codex", c) for c in self.codex_commands()]):
+            with self.subTest(wiring=label, command=command[:50]):
+                names = {t for t in command.split() if not t.endswith(".py")}
+                self.assertTrue(
+                    any(wanted == n.strip('"\'') or n.strip('"\'').endswith(f"/{wanted}")
+                        or wanted in n for n in names),
+                    f"the {label} wiring never names {wanted!r}")
+
+        plugin = (REPO_ROOT / ".opencode" / "plugins" / "zen-hooks.mjs").read_text(
+            encoding="utf-8")
+        self.assertIn(f'"{wanted}"', plugin,
+                      f"the opencode plugin's interpreter list never names {wanted!r}")
 
     def test_a_fallback_names_the_interpreter_this_platform_actually_has(self):
         """Whatever shape the command takes, it has to include the name that works here.

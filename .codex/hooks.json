@@ -5,7 +5,30 @@
     "",
     "The matcher is deliberately broad. Each hook re-checks the tool name against its own",
     "precise set, so a matcher that catches more than it should cannot cause a false fire.",
-    "See .agents/hooks/README.md for the module contract."
+    "See .agents/hooks/README.md for the module contract.",
+    "",
+    "Every command is an interpreter fallback, `python3 <hook> || python <hook>`, matching",
+    "what .claude/settings.json does and what .opencode/plugins/zen-hooks.mjs has always",
+    "done in code. A bare `python3` is inert on Windows, where that name resolves to the",
+    "Microsoft Store app-execution alias: a stub that advertises an install and exits",
+    "without running anything. bug-0050 measured that cost in the Claude Code wiring at 21",
+    "silent failures over three weeks; bug-0058 is the same spelling here.",
+    "",
+    "Whether Codex runs these through a shell was NOT observed, and could not be: this",
+    "machine's 71 Codex sessions all predate the hooks module, so this file has never been",
+    "exercised. The change is safe without that observation, which is why it was made",
+    "anyway, and the argument is worth keeping because it is the reason and not a guess.",
+    "",
+    "  With a shell, `||` does what it says and Windows is fixed.",
+    "  Without one, the command splits into argv and the tail arrives as arguments to the",
+    "  script. No hook in this module reads sys.argv, so it behaves exactly as the bare",
+    "  `python3 <hook>` did: measured 2026-08-31, `python <hook> || python <hook>` passed as",
+    "  literal argv exits 0 and emits exactly one JSON object.",
+    "",
+    "So the fallback is never worse than what it replaces, under either hypothesis. Note",
+    "that `$(git rev-parse --show-toplevel)` in every command already assumes a shell, so a",
+    "Codex without one would mean this wiring is inert everywhere today rather than only on",
+    "Windows, and this change would still not be what made it so."
   ],
   "hooks": {
     "SessionStart": [
@@ -14,13 +37,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\"",
             "statusMessage": "Skill reachability",
             "timeout": 20
           },
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/install-currency-reminder.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/install-currency-reminder.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/install-currency-reminder.py\"",
             "statusMessage": "Install currency",
             "timeout": 20
           }
@@ -33,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/delegation-reminder.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/delegation-reminder.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/delegation-reminder.py\"",
             "statusMessage": "Delegation checkpoint",
             "timeout": 20
           }
@@ -44,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/spec-conformance-gate.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/spec-conformance-gate.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/spec-conformance-gate.py\"",
             "statusMessage": "Spec-closeout gate",
             "timeout": 20
           }
@@ -57,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/observatory-event.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/observatory-event.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/observatory-event.py\"",
             "statusMessage": "Observatory event",
             "timeout": 5
           }

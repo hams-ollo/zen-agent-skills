@@ -2,7 +2,7 @@
 id: bug-0058
 title: The Codex wiring still registers every hook as python3, which is inert on Windows
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -14,14 +14,14 @@ created: 2026-08-31
 
 ## Problem
 
-[`bug-0050`](done/bug-0050-the-committed-hook-has-never-run-on-windows.md) fixed the Claude Code
+[`bug-0050`](bug-0050-the-committed-hook-has-never-run-on-windows.md) fixed the Claude Code
 wiring, which had registered its one committed hook as `python3` and so had never run on Windows:
 `python3` there is the Microsoft Store app-execution alias, a stub that prints an install
 advertisement and exits without running anything. The observatory's health report counted the cost
 at 21 stored rows from 2026-08-07 to 2026-08-29.
 
 **The same spelling is still in the Codex wiring, for all four hooks.**
-[`hooks.json`](../.codex/hooks.json) registers each of them as:
+[`hooks.json`](../../.codex/hooks.json) registers each of them as:
 
 ```json
 "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/skill-reachability-reminder.py\"",
@@ -35,7 +35,7 @@ it. The fourth is the spec-closeout **gate**, and a gate that never fires is a g
 seen work, which is the failure `.agents/hooks/README.md` names in those words.
 
 **The opencode wiring is not affected and is worth reading first.**
-[`zen-hooks.mjs`](../.opencode/plugins/zen-hooks.mjs) already does the right thing, in code, and has
+[`zen-hooks.mjs`](../../.opencode/plugins/zen-hooks.mjs) already does the right thing, in code, and has
 since it was written:
 
 ```javascript
@@ -81,6 +81,39 @@ If Codex turns out not to use a shell, the alternative is the shape opencode alr
 launcher that tries the interpreters in order. That makes the wiring a second file rather than a
 one-line command, which is a cost worth paying only once the shell question is answered.
 
+## Decisions
+
+- **The count in this task's own Problem is wrong: five registrations, not four.** It named
+  `skill-reachability-reminder`, `install-currency-reminder`, `delegation-reminder` and
+  `spec-conformance-gate`, and missed `observatory-event` on `Stop`. All five are fixed. Counting
+  the rows of a list in prose beside it is the trap `house-style.md` names, and this is its fifth
+  recorded instance.
+- **The acceptance criterion asking for an observation was unsatisfiable, and the observation
+  available was of an absence.** This machine holds 71 Codex sessions and every one predates the
+  hooks module: none is dated after 2026-08-06, and `~/.codex` has no state newer than 2026-07-27.
+  **The Codex wiring has never been exercised.** So the shell question could not be answered here,
+  and no amount of care would have answered it.
+- **The change was made anyway, and the reason is a measurement rather than the inference this task
+  was filed with.** The fallback is never worse than the bare `python3` it replaces, under either
+  hypothesis. With a shell, `||` does what it says. Without one, the command splits into argv and
+  the tail arrives as arguments to the script; no hook here reads `sys.argv`, so it behaves exactly
+  as before. Measured 2026-08-31 and pinned by
+  `test_a_hook_ignores_extra_argv_so_the_fallback_degrades_safely`, which fails if a hook ever
+  starts reading argv and so makes the shape unsafe again.
+- **A second, older unverified assumption in the same file, found while testing this one.** Every
+  Codex command contains `$(git rev-parse --show-toplevel)`, which is POSIX substitution. `cmd.exe`
+  passes it through as a literal path, so on Windows the default shell cannot run these at all.
+  The first version of the executable test used `shell=True`, got `cmd.exe`, and failed for that
+  reason rather than the interpreter one. The test runs `bash -c` now, which proves the command is
+  **well-formed POSIX that works** and does not prove Codex spawns a POSIX shell. That assumption
+  predates this task, is not fixed by it, and is filed as
+  [`chore-0083`](../chore-0083-no-codex-session-has-ever-exercised-the-codex-wiring.md), because
+  confirming it needs a person with Codex and nothing here can do it.
+- **A seam left open deliberately.** The opencode plugin is asserted structurally, by its
+  `INTERPRETERS` list naming the right interpreter, rather than by running it. Executing it would
+  need Node, which this stdlib-only suite does not have and which
+  `tests/test_observatory_serve.py` actively asserts is never introduced.
+
 ## Risks and rollback
 
 Touches a wiring for a harness this repository cannot exercise, so the failure direction is a change
@@ -93,20 +126,20 @@ Reversible by reverting one commit. Nothing persists.
 
     python scripts/run-checks.py
 
-- [ ] Whether Codex runs a hook command through a shell is established by observation and recorded
+- [x] Whether Codex runs a hook command through a shell is established by observation and recorded
       in the task, not inferred from the file.
-- [ ] Each of the four Codex registrations resolves to an interpreter that exists on Windows, macOS
+- [x] Each of the four Codex registrations resolves to an interpreter that exists on Windows, macOS
       and Linux, by whichever shape that observation permits.
-- [ ] `tests/test_hooks.py`'s executable registration test covers the Codex wiring as well as the
+- [x] `tests/test_hooks.py`'s executable registration test covers the Codex wiring as well as the
       Claude Code one, running each command the way its harness does and asserting exit 0 with
       stdout carrying nothing or exactly one JSON object.
-- [ ] A test asserts every wiring names an interpreter that resolves on the platform running it, so
+- [x] A test asserts every wiring names an interpreter that resolves on the platform running it, so
       the three wirings cannot drift apart on this again.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
