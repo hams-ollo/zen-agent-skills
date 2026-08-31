@@ -1217,20 +1217,61 @@ class StalenessCheckTests(unittest.TestCase):
         self.assertEqual(self._status(out, "rules"), "ok")
         self.assertIn("0 diverged", out)
 
-    def test_a_rules_file_the_kit_revised_since_the_install_is_reported_as_revised(self):
-        # The other half of the same decision. The adopter's copy is theirs, so what is
-        # worth telling them is that the copy they were handed has moved, which is
-        # check-provenance.py's question and is answerable only from the recorded baseline.
-        # Exit-neutral on purpose: it is news, not a fault.
+    def test_a_kit_revision_to_a_lens_the_adopter_never_touched_is_reported(self):
+        # bug-0056. This test used to assert `revised` at exit 0 here, and its comment said
+        # "the adopter's copy is theirs" about a fixture in which the adopter never touched
+        # it. That conflation is the defect: `revised` is exit 0 and the currency hook
+        # excludes it, so an untouched lens two days stale was silent everywhere. Measured
+        # on the author's machine 2026-08-29, on the module carrying the kit's only rule
+        # about untrusted input.
         self._install()
         (self.rules / "house-style.md").write_text(
             "# house style\n\nno em-dashes, and sentence-case headings.\n",
             encoding="utf-8")
 
         code, out = self._check()
-        self.assertEqual(code, 0, "news about an adopted file is not a failure")
+        self.assertEqual(code, 1, "an untouched lens that has gone stale is not news, it is "
+                                  "an installed copy that no longer matches this kit")
+        self.assertEqual(self._status(out, "rules"), "diverged")
+        self.assertIn("house-style.md", out)
+        self.assertIn("yours is untouched", out,
+                      "the message does not say why re-installing is safe here")
+
+    def test_a_kit_revision_to_a_lens_the_adopter_edited_stays_revised_and_exit_zero(self):
+        # The other half, and the one the exemption exists for. Something in the module is
+        # theirs, so the kit's copy moving is news rather than a fault, and a check that
+        # cried wolf here is a check nobody runs.
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules, deliberately.\n", encoding="utf-8")
+        (self.rules / "house-style.md").write_text(
+            "# house style\n\nno em-dashes, and sentence-case headings.\n",
+            encoding="utf-8")
+
+        code, out = self._check()
+        self.assertEqual(code, 0, "news about a file the adopter made theirs is not a fault")
+        self.assertEqual(self._status(out, "rules"), "revised")
+        self.assertIn("yours is yours", out)
+
+    def test_the_revised_message_says_which_files_are_the_adopters_and_which_are_not(self):
+        # Collapsing a module where one file was edited and two were not into a single word
+        # tells a reader nothing about what re-installing would move, which is the question
+        # they are about to have.
+        # Two lenses recorded by the install, so the two states can coexist in one module.
+        (self.rules / "review-quality.md").write_text(
+            "# review quality\n\nthe rubric as shipped.\n", encoding="utf-8")
+        self._install()
+        (self.home / ".claude" / "rules" / "house-style.md").write_text(
+            "# house style\n\nmy own rules.\n", encoding="utf-8")
+        for name in ("house-style.md", "review-quality.md"):
+            (self.rules / name).write_text(f"# {name}\n\nthe kit moved on.\n",
+                                           encoding="utf-8")
+
+        _, out = self._check()
+
         self.assertEqual(self._status(out, "rules"), "revised")
         self.assertIn("house-style.md", out)
+        self.assertIn("re-installing would refresh those and leave yours alone", out)
 
     def test_an_installed_target_removed_by_hand_is_reported_rather_than_passing(self):
         # Absence is divergence too. A check that only compares files it can open would

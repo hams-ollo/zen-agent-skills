@@ -156,7 +156,7 @@ link is, per the portability contract), so this changes no install profile.
 - **A premise that turned out false.** The review that filed this task was briefed to answer whether
   the lens should gain a rule for this class. It already had, two days earlier. The premise was
   checked by reading the repository's own `autonomy.md` rather than the installed copy, which
-  predates `A10`; that discrepancy is [`bug-0056`](../bug-0056-revised-conflates-an-edited-lens-with-a-stale-one.md).
+  predates `A10`; that discrepancy is [`bug-0056`](bug-0056-revised-conflates-an-edited-lens-with-a-stale-one.md).
 - **A seam left open deliberately.** Nothing here measures whether an agent actually obeys `A10`
   once it can see it. That is the limit `docs/spec/README.md` states about every prose rule in this
   kit, and closing it needs the evaluation harness in

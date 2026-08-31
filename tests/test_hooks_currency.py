@@ -669,6 +669,69 @@ class DigestAgreementTests(unittest.TestCase):
                              hashlib.sha256(b"notes\n").hexdigest())
 
 
+class UntouchedAdoptedLensTests(FixtureCase):
+    """bug-0056: `revised` meant two things, and this hook stayed silent for both.
+
+    `REPORTING_VERDICTS` excludes `revised` because firing on a file the adopter was invited
+    to own is crying wolf. That is true when they own it. When they never touched it, the
+    same word covered a lens that had simply gone stale, and this hook said nothing.
+
+    Measured on the author's machine 2026-08-29: both installed copies of `autonomy.md`
+    matched their recorded baseline exactly, so nothing there was theirs, and the module had
+    been missing `A10`, the kit's only rule about untrusted input, for two days.
+    """
+
+    def _adopted(self, installed_body, source_body_after, fixture=None):
+        """An adopted `rules` entry, with the installed copy and the later source stated."""
+        fx = fixture or self.fx
+        fx.write_skill("doc-sync")
+        fx.record("doc-sync")
+        rules = fx.root / ".agents" / "rules"
+        rules.mkdir(parents=True, exist_ok=True)
+        (rules / "house-style.md").write_text("original\n", encoding="utf-8", newline="\n")
+        target = fx.home / ".claude" / "rules"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "house-style.md").write_text(installed_body,
+                                               encoding="utf-8", newline="\n")
+        entry = {
+            "tool": "claude", "name": "rules", "target": str(target), "mode": "copy",
+            "source": str(rules), "digests": install_mod.digest_tree(rules),
+        }
+        fx.entries.append(entry)
+        (rules / "house-style.md").write_text(source_body_after,
+                                              encoding="utf-8", newline="\n")
+        fx.write_manifest()
+        return entry
+
+    def test_an_untouched_lens_the_kit_revised_is_reported(self):
+        # The installed copy is byte-identical to the baseline, so nothing here is theirs
+        # and the silence was covering plain staleness.
+        self._adopted(installed_body="original\n", source_body_after="upstream moved\n")
+        self.assertIn("NOT KNOWN TO BE CURRENT", self.context())
+
+    def test_an_edited_lens_the_kit_revised_stays_silent(self):
+        # The half the exclusion exists for, kept intact. A hook firing here would be the
+        # crying wolf `REPORTING_VERDICTS` was written to prevent.
+        self._adopted(installed_body="mine\n", source_body_after="upstream moved\n")
+        self.assertIsNone(icr.evaluate(startup(), root=self.fx.root),
+                          "the hook spoke about a lens the adopter made theirs")
+
+    def test_the_hook_and_install_py_give_the_same_verdict_for_the_same_state(self):
+        # The vocabulary test elsewhere in this file pins that the two use the same words.
+        # This pins that they give the same answer, which is the drift that would actually
+        # hurt: two readers of one manifest disagreeing about whether a lens is stale.
+        for index, (installed, expected) in enumerate(
+                (("original\n", "diverged"), ("mine\n", "revised"))):
+            with self.subTest(installed=installed.strip()):
+                fx = Fixture(Path(self._tmp.name) / f"case{index}")
+                entry = self._adopted(installed_body=installed,
+                                      source_body_after="upstream moved\n", fixture=fx)
+                self.assertEqual(icr.classify(entry), expected)
+                self.assertEqual(install_mod._check_entry(entry)[0], expected,
+                                 "the hook and install.py disagree about one entry, which "
+                                 "is the drift their shared vocabulary exists to stop")
+
+
 class BoundedDigestTests(FixtureCase):
     """chore-0082 item 1: this hook runs at every session start, on a path it did not derive.
 

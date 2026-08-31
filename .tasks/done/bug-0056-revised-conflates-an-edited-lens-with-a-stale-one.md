@@ -2,7 +2,7 @@
 id: bug-0056
 title: revised conflates an edited lens with an untouched stale one, so a new rule never gets reported
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-08-29
 
 ## Problem
 
-`_check_entry()` in [`install.py`](../scripts/install.py) takes the adopted branch at line 1135 and
+`_check_entry()` in [`install.py`](../../scripts/install.py) takes the adopted branch at line 1135 and
 returns at 1182:
 
 ```python
@@ -33,13 +33,13 @@ verdict and the same sentence:
   is yours to keep" about a file they never made theirs.
 
 `REPORTING_VERDICTS` in
-[`install-currency-reminder.py`](../.agents/hooks/install-currency-reminder.py) is `("diverged",
+[`install-currency-reminder.py`](../../.agents/hooks/install-currency-reminder.py) is `("diverged",
 "unknown", "error")`. `revised` is excluded on the stated ground that "firing on it every session
 would be crying wolf about a file the adopter was invited to own." That reasoning is correct for the
 first state and wrong for the second, and the hook cannot separate them because `--check` did not.
 
 **The consequence, measured on the author's machine on 2026-08-29.** `A10`, the kit's only rule about
-untrusted input, landed in [`autonomy.md`](../.agents/rules/autonomy.md) on 2026-08-27 in `f2adc5e`.
+untrusted input, landed in [`autonomy.md`](../../.agents/rules/autonomy.md) on 2026-08-27 in `f2adc5e`.
 Both installed homes:
 
 ```text
@@ -120,6 +120,33 @@ correctly refuses to do at session start.
   That is wrong, and measuring it is what corrected it: `installed == recorded` in both homes, so
   `_place_adopted()` would refresh on the next run. The defect is that nothing tells anyone to make
   that run.
+- **This was a contract divergence, not only a defect, and the task did not know it.** `S-016` of the
+  approved [`install`](../../docs/spec/install.md) contract already says the two cases are told apart
+  "by whether the installed file still matches the digest recorded when it was placed, **which is the
+  same line `--check` draws between `diverged` and `revised`**". `--check` did not draw that line.
+  So the code disagreed with an approved scenario written on 2026-08-07, which is the direction
+  `AGENTS.md` says resolves against the code, and the fix implements the sentence rather than
+  amending it. Nothing caught it because `S-016` sits inside the `S-016` to `S-018` range
+  [`install.conformance.md`](../../docs/spec/install.conformance.md) records as never audited. That
+  one clause is audited now; the rest of the range is not, and the matrix says so rather than letting
+  this pass read as closing it.
+- **A premise of the fix that turned out false, caught by an existing test.** The first version
+  asked whether *any* recorded file's installed copy differed from its baseline. That broke
+  `test_a_removal_recorded_by_one_run_is_no_longer_a_fault_at_the_next_check`: an adopter who deletes
+  a lens has plainly made the module theirs, but `bug-0022` has the next install drop that file's
+  digest, so afterwards neither side claims it and no digest comparison can see the edit. The
+  question is asked over the files the kit actually **revised** now, which leaves a recorded removal
+  at `revised` and exit 0 where it belongs. A file the kit newly ships or has stopped shipping is not
+  staleness in the adopter's copy.
+- **A stated boundary was narrowed rather than dropped.** The hook's docstring said "no install home
+  is opened and no installed file is read", and that had to change, because whether a lens is the
+  adopter's is decidable only from the installed copy. The read is the adopted module alone, three
+  files today, on a branch taken only once the kit's copy is already known to have moved. It is not
+  the per-file read of every installed skill the cost section refuses, and the docstring now says
+  which of the two it is.
+- **Work beyond `touched_files`, disclosed.** `docs/INSTALL.md`, whose reader-facing verdict table
+  described `revised` as covering both states and `diverged` as absence only, and
+  `docs/spec/install.conformance.md` for the audited clause above.
 
 ## Risks and rollback
 
@@ -135,20 +162,20 @@ digests this needs.
 
     python -m unittest discover -s tests -p "test_*.py" && python scripts/run-checks.py
 
-- [ ] A test builds an adopted entry whose installed files match the recorded baseline while the
+- [x] A test builds an adopted entry whose installed files match the recorded baseline while the
       source has moved, and asserts the verdict is reportable rather than `revised`.
-- [ ] A test builds an adopted entry whose installed files differ from the baseline and asserts it is
+- [x] A test builds an adopted entry whose installed files differ from the baseline and asserts it is
       still `revised`, still exit 0, and still silent from the hook.
-- [ ] A test drives the currency hook over the first case and asserts it emits, and over the second
+- [x] A test drives the currency hook over the first case and asserts it emits, and over the second
       and asserts it stays silent.
-- [ ] The `VERDICTS` and `check()` vocabularies still agree in both directions, which
+- [x] The `VERDICTS` and `check()` vocabularies still agree in both directions, which
       `tests/test_hooks_currency.py` already asserts.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] The `install` conformance matrix is brought up to date, or the deferral is recorded.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
+- [x] The `install` conformance matrix is brought up to date, or the deferral is recorded.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

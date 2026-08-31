@@ -1249,8 +1249,60 @@ def _check_entry(entry) -> tuple:
         if not moved:
             return "ok", f"every file this install placed is still there, and the kit's "\
                          f"copy is unchanged since this install ({len(recorded)} file(s))"
+
+        # The kit's copy has moved. Whether that is worth telling anyone depends on a
+        # question this branch used to skip: did the adopter ever make this module theirs
+        # (bug-0056)? Both states answered `revised` and said "yours is yours to keep", and
+        # the currency hook excludes `revised` from what it reports on the stated ground
+        # that firing on it would be crying wolf about a file the adopter was invited to
+        # own. True of one state, false of the other, and the hook could not tell them apart
+        # because this could not.
+        #
+        # The line is the one `_place_adopted()` already draws for placement: "A file
+        # differing from the recorded digest is the adopter's and is left alone; a file
+        # matching it differs only because the kit moved on, so it is ours to refresh."
+        # `installed` is already in hand, digested a few lines up for the missing-file check.
+        #
+        # Only a file the kit actually *revised* can be stale, so the question is asked over
+        # `changed` rather than over everything `moved` reports. `moved` also carries files
+        # the kit newly ships and files it stopped shipping, and one of those is the
+        # recorded-removal case `bug-0022` created: an adopter deletes a lens, the next
+        # install drops its digest, and afterwards neither side claims it. That adopter
+        # plainly made the module theirs, and nothing in a digest comparison can see it,
+        # because both sides forgot the file. Asking only about `changed` leaves that case
+        # where it belongs, at `revised` and exit 0.
+        changed = sorted(rel for rel in recorded
+                         if rel in current and current[rel] != recorded[rel])
+        theirs = sorted(rel for rel in changed if installed.get(rel) != recorded[rel])
+        if changed and not theirs:
+            # Untouched, and out of date. Nothing here is the adopter's yet, so "yours is
+            # yours to keep" describes a file they never made theirs, and `diverged` is both
+            # true and already reported by the hook. Not a seventh verdict: `diverged`
+            # already means the installed copy no longer matches this kit, which is exactly
+            # the claim, and widening the vocabulary would cost a new concept for a
+            # distinction the existing words carry.
+            return "diverged", (
+                "the kit's copy has changed since this install and yours is untouched, so "
+                "nothing of yours is at stake and re-installing takes the change:\n"
+                + "\n".join(f"      {p}" for p in moved))
+        # Something in the module is theirs, so `revised` and its silence are right. The
+        # counts are new: collapsing a module where one file was edited and two were not
+        # into a single word tells the reader nothing about which files re-installing would
+        # move, and that is the question they are about to have.
+        if not changed:
+            detail = (" Nothing the kit ships has been revised; what moved is a file added "
+                      "or dropped, which re-installing reconciles.")
+        elif len(theirs) < len(changed):
+            detail = (f" Of the {len(changed)} file(s) the kit revised you have edited "
+                      f"{len(theirs)} ({', '.join(theirs)}); the other "
+                      f"{len(changed) - len(theirs)} are still as this install placed them, "
+                      f"so re-installing would refresh those and leave yours alone.")
+        else:
+            detail = (f" You have edited every file the kit revised "
+                      f"({', '.join(theirs)}), so re-installing changes nothing here.")
         return "revised", ("the kit's copy has changed since this install; yours is yours "
-                           "to keep:\n" + "\n".join(f"      {p}" for p in moved))
+                           "to keep:\n" + "\n".join(f"      {p}" for p in moved) + "\n     "
+                           + detail)
 
     try:
         problems = _compare(digest_tree(target), current)

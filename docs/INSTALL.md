@@ -64,9 +64,9 @@ Pass the same `--home` you installed with. The check reads the manifest, re-read
 | Report | Meaning |
 |---|---|
 | `ok` | For a skill, every placed file still matches the kit. For the rules module the claim is narrower, because that module is yours: every file the install placed is still there, and the kit's own copy of it has not moved since. A lens you edited is not checked against anything and is never counted against this |
-| `diverged` | At least one file no longer matches, named individually, with the installed and source digests. For the rules module this is absence only: a file the install placed is gone. Editing a lens there is never divergence |
+| `diverged` | At least one file no longer matches, named individually, with the installed and source digests. For the rules module it means one of two things, and never that you edited a lens: a file the install placed is gone, or the kit revised a lens you have **not** touched, so nothing there is yours yet and re-installing simply takes the change |
 | `linked` | The target is a symlink to its source, so it cannot go stale |
-| `revised` | The kit's copy of an adopter-owned file (the rules module) changed since you installed. Your copy is left alone |
+| `revised` | The kit revised a lens you have edited, so the change is news rather than a fault and your copy is left alone. The report says which of the revised files are yours and which are still as the install placed them, because that is what decides what re-installing would move |
 | `unknown` | The entry predates this baseline, so its state is not known. Re-install to establish one, or `--replace-adopted` for the rules module, where a re-install preserves your files and records nothing |
 
 Exit codes are `0` when everything current, `1` when something diverged, and `2` when the check could not answer (an entry with no baseline, or a source the kit no longer has). Nothing recorded beneath the given home is also a `2`, not a clean result: a check that never saw your install has learned nothing about it.
@@ -74,6 +74,8 @@ Exit codes are `0` when everything current, `1` when something diverged, and `2`
 Run it when a skill behaves like an older version of itself, after pulling changes into this repository, and before trusting an installed skill for anything consequential. The fix for a diverged entry is to re-install: this command deliberately does not do it for you.
 
 The rules module is handled differently on purpose. [`.agents/rules/`](../.agents/rules/) is swappable, and rewriting a lens is something the kit invites you to do, so your edits there are never reported as divergence. What you are told instead is when the kit's own copy of that lens has moved since you installed, which is news you can act on rather than a warning that fires forever.
+
+**Whether it is news or a fault depends on whether you actually made it yours**, and for a while it did not. Both states reported `revised` at exit 0, and the session-start currency reminder excludes `revised` on the ground that firing on a file you were invited to own is crying wolf. So a lens nobody had touched could go stale and nothing anywhere said so: measured on the author's own machine, the module carrying this kit's only rule about untrusted input sat two days behind in both installed homes, reported `revised`, and was silent from the hook built to catch exactly that (`bug-0056`). An untouched lens the kit has revised now reports `diverged` and is reported by the hook; an edited one stays `revised` and stays silent.
 
 Deleting a lens is the one thing there the check does report. A file the installer placed and that is no longer on disk is named individually and exits `1`, because a missing lens is a different claim from an edited one: `house-review` reads its entire rubric and severity scheme out of that module, and an install missing it behaves like a skill that never had one. The check still writes nothing, so the file is not restored. Re-install to have the removal recorded, after which the check stops reporting it, or run `--replace-adopted` to take the kit's copy back.
 

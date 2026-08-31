@@ -52,6 +52,15 @@ against the source, so it also catches a file the adopter edited after installin
 hook cannot see that, and does not claim to. The two agree whenever the installed copy is
 untouched, which is the case the ten-day gap was made of.
 
+**One exception, added by `bug-0056` and bounded on purpose.** For the adopted rules module,
+and only once the kit's copy is already known to have moved, this does open the install home
+and digest what is there. It has to: `revised` is excluded from `REPORTING_VERDICTS` because
+firing on a file the adopter was invited to own is crying wolf, and whether they own it is
+decidable only from the installed copy. Without that read, a lens the adopter never touched
+sat two days stale and unreported while this hook was working exactly as designed. The read
+is the adopted module alone, three files today, reached on a branch most entries never take.
+It is not the per-file read of every installed skill that the cost section below refuses.
+
 Cost, which is the thing to get right
 -------------------------------------
 This runs at every session start, so the manifest is read first and its absence ends the
@@ -321,9 +330,41 @@ def classify(entry, cache=None) -> str:
 
     if current == recorded:
         return "ok"
-    # An adopted lens the adopter was invited to rewrite. The kit's copy having moved is
-    # information, not a problem, and install.py exits 0 on it.
-    return "revised" if entry.get("name") in ADOPTED_ENTRY_NAMES else "diverged"
+    if entry.get("name") not in ADOPTED_ENTRY_NAMES:
+        return "diverged"
+
+    # An adopted lens the adopter was invited to rewrite, and the kit's copy has moved. That
+    # used to end here at `revised`, which this hook deliberately does not report, on the
+    # ground that firing on a file the adopter was invited to own is crying wolf. True only
+    # if they actually own it (`bug-0056`). Measured on the author's machine on 2026-08-29:
+    # both installed copies matched their recorded baseline exactly, so nothing there was
+    # theirs, and the module had been missing `A10` for two days while this hook stayed
+    # silent by design.
+    #
+    # The line is the one `install.py`'s `_place_adopted()` already draws for placement: a
+    # file differing from its recorded digest is the adopter's, and one matching it differs
+    # only because the kit moved on.
+    #
+    # **This is the one place this hook opens the install home**, and the docstring's cost
+    # boundary is narrowed rather than dropped. It reads the adopted module only, three
+    # files today, and only once the kit's copy is already known to have moved. It is not
+    # the per-file read of every installed skill that boundary exists to refuse.
+    try:
+        installed = digest_tree(Path(entry.get("target") or ""))
+    except (OSError, TreeTooLarge):
+        return "error"
+    # Asked over the files the kit actually revised, not over everything that differs.
+    # A file the kit newly ships, or one it stopped shipping, is not staleness in the
+    # adopter's copy, and one of those shapes is the recorded-removal case: an adopter
+    # deletes a lens, the next install drops its digest, and afterwards neither side claims
+    # it. That adopter made the module theirs and no digest comparison can see it, so the
+    # narrower question leaves them at `revised` and silent, which is right.
+    changed = [rel for rel in recorded if rel in current and current[rel] != recorded[rel]]
+    if not changed:
+        return "revised"
+    if any(installed.get(rel) != recorded[rel] for rel in changed):
+        return "revised"          # something the kit revised is theirs; silence is right
+    return "diverged"             # untouched and out of date; worth saying once
 
 
 def unrecorded_skills(project_root: Path, recorded_names) -> list:
