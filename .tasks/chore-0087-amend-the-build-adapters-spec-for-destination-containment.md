@@ -7,7 +7,7 @@ priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0060]
 spec: docs/spec/build-adapters.md
-scenarios: []
+scenarios: ["S-020"]
 touched_files:
   - docs/spec/build-adapters.md
   - docs/spec/build-adapters.conformance.md
