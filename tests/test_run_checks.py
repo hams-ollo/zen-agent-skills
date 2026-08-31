@@ -14,6 +14,8 @@ import importlib.util
 import io
 import platform
 import re
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -113,6 +115,13 @@ class GateSetTests(unittest.TestCase):
         ("matrix citations",
          [["scripts/check-citations.py"]],
          None),
+        # Added by chore-0072, and the first gate whose work is a callable rather than a
+        # subprocess, so it pins as no commands and no cleanup. The empty list is not the
+        # whole shape, which is why the test below asserts the callable separately: a gate
+        # that lost its `check` would pin identically and do nothing.
+        ("roadmap bookkeeping",
+         [],
+         None),
     ]
 
     @staticmethod
@@ -131,6 +140,23 @@ class GateSetTests(unittest.TestCase):
         self.assertEqual(self.EXPECTED, actual,
                          "the gate set changed; if that was deliberate, update this list "
                          "and checks.yml's expectations together")
+
+    def test_the_roadmap_gate_is_a_callable_and_not_an_empty_gate(self):
+        # The pin above records `roadmap bookkeeping` as carrying no commands, which is
+        # also exactly what a gate whose `check` was deleted would look like. This is the
+        # half of its shape the pin cannot express.
+        roadmap = next(g for g in rc.gates() if g.name == "roadmap bookkeeping")
+        self.assertEqual([], roadmap.commands)
+        self.assertTrue(callable(roadmap.check),
+                        "an empty command list with no check is a gate that never runs")
+
+    def test_no_gate_carries_both_commands_and_a_check(self):
+        # Two gate kinds, and `run_gate` dispatches on the check first, so a gate carrying
+        # both would silently never run its commands.
+        for gate_ in rc.gates():
+            with self.subTest(gate=gate_.name):
+                self.assertFalse(gate_.commands and gate_.check is not None,
+                                 "a gate carries commands or a check, never both")
 
     def test_the_install_cycle_runs_twice_to_prove_idempotence(self):
         # Called out separately from the pin above because it is the one duplicate in the
@@ -536,8 +562,18 @@ class WorkflowWiringTests(unittest.TestCase):
         # derives, and a gate whose command names neither a script nor a `-m` module would
         # contribute no marker and be silently unprotected.
         for gate_ in rc.gates():
-            command = gate_.commands[0]
             with self.subTest(gate=gate_.name):
+                # An in-process gate (chore-0072) names no command, so there is nothing
+                # checks.yml could restate and nothing for a marker to protect. The
+                # guarantee is kept rather than widened: such a gate must prove it is that
+                # kind by carrying a check, so "no marker" can never mean "no work".
+                if not gate_.commands:
+                    self.assertIsNotNone(gate_.check,
+                                         f"{gate_.name} names no command and no "
+                                         f"check, so it contributes no marker and "
+                                         f"does nothing")
+                    continue
+                command = gate_.commands[0]
                 self.assertTrue(rc._script_of(command) or "-m" in command,
                                 f"{gate_.name} contributes no marker, so restating it in "
                                 f"checks.yml would not be caught")
@@ -551,6 +587,187 @@ class ArgumentTests(unittest.TestCase):
         code = rc.main(["--only", "tests"], out=buf)
         self.assertEqual(2, code)
         self.assertIn("takes no arguments", buf.getvalue())
+
+
+class RoadmapBookkeepingTests(unittest.TestCase):
+    """The `roadmap bookkeeping` gate (chore-0072).
+
+    Characterization, not spec-derived: `docs/spec/cloud-executable.md` contracts the gate
+    SET as an open membership and says nothing about any individual gate, so there is no
+    S-NNN scenario to be faithful to here. What these pin instead is that the check fires
+    on the input it claims to reject and stays quiet on the input it claims to accept, and
+    both halves are anchored to real text rather than to invented examples.
+
+    The fixtures are built in a temporary directory rather than under `tests/fixtures/`,
+    so the whole change stays inside the two files chore-0072 owns.
+    """
+
+    def _repo(self, roadmap, done=(), still_open=()):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / ".tasks" / "done").mkdir(parents=True)
+        for task_id in done:
+            (root / ".tasks" / "done" / f"{task_id}-slug.md").write_text(
+                "x", encoding="utf-8")
+        for task_id in still_open:
+            (root / ".tasks" / f"{task_id}-slug.md").write_text("x", encoding="utf-8")
+        (root / "ROADMAP.md").write_text(roadmap, encoding="utf-8")
+        return root
+
+    # The two sentences below are verbatim from ROADMAP.md at b7cd720^, the state
+    # chore-0066 found. Quoting the real defect rather than inventing one is the point:
+    # a check proved against a fixture written to match it has proved nothing.
+    SCOPED_AS = ("- **The lite tier scaffolds a required field that cannot be "
+                 "satisfied.** Lite ships no `ROADMAP.md`,\n  `_TEMPLATE.md.tmpl` seeds "
+                 "`parent`. Scoped as [`bug-0030`]"
+                 "(.tasks/done/bug-0030-lite-tier-parent-field-has-no-roadmap-to-name.md).")
+    FILED_NOT_FIXED = ("**Landed 2026-08-18, in one worktree-isolated batch of six**: "
+                       "`bug-0026`, `bug-0028`.\nTwo findings the batch itself surfaced "
+                       "are filed rather\nthan fixed: [`chore-0042`]"
+                       "(.tasks/done/chore-0042-renormalise-the-authors-working-tree.md), "
+                       "the\nrenormalise remainder.")
+
+    def test_an_open_state_claim_over_a_closed_id_is_reported(self):
+        root = self._repo(self.SCOPED_AS, done=["bug-0030"])
+        ok, report = rc.check_roadmap(root)
+        self.assertFalse(ok, "the gate did not fail on the defect it exists for")
+        self.assertIn("bug-0030", report)
+        self.assertIn("ROADMAP.md:1", report)
+        self.assertIn("scoped as", report)
+
+    def test_the_shipped_clause_chore_0066_added_clears_the_finding(self):
+        # The correction, not a different sentence: the same block with the completion
+        # clause chore-0066 appended. If this still fired, the check would have failed
+        # every run since 2026-08-27 and been disabled within a week.
+        fixed = self.SCOPED_AS[:-1] + " and **shipped 2026-08-19**."
+        root = self._repo(fixed, done=["bug-0030"])
+        ok, report = rc.check_roadmap(root)
+        self.assertTrue(ok, report)
+
+    def test_a_present_tense_claim_survives_a_completion_marker_elsewhere(self):
+        # `**Landed 2026-08-18**` is a true claim about the batch and says nothing about
+        # the two findings the same paragraph reports as unfixed. A block-wide marker
+        # suppressing a present-tense claim would lose this whole defect, which is what an
+        # earlier draft of the check did.
+        root = self._repo(self.FILED_NOT_FIXED, done=["chore-0042", "bug-0026", "bug-0028"])
+        ok, report = rc.check_roadmap(root)
+        self.assertFalse(ok, "a present-tense claim must not be excused by a marker")
+        self.assertIn("chore-0042", report)
+
+    def test_the_past_tense_correction_of_that_sentence_is_clean(self):
+        # chore-0066 corrected it to "were filed rather than fixed and **both closed
+        # 2026-08-19**". The tense is the whole distinction between a claim and a record.
+        fixed = self.FILED_NOT_FIXED.replace(
+            "are filed rather\nthan fixed:",
+            "were filed rather\nthan fixed and **both closed 2026-08-19**:")
+        root = self._repo(fixed, done=["chore-0042", "bug-0026", "bug-0028"])
+        ok, report = rc.check_roadmap(root)
+        self.assertTrue(ok, report)
+
+    def test_a_phrase_split_across_a_line_break_is_still_found(self):
+        # ROADMAP.md wraps prose at about a hundred columns, so every multi-word phrase in
+        # the vocabulary straddles a newline somewhere. Matching the raw block text missed
+        # the chore-0042 defect for exactly this reason.
+        self.assertIn("rather\nthan fixed", self.FILED_NOT_FIXED)
+        root = self._repo(self.FILED_NOT_FIXED, done=["chore-0042"])
+        self.assertFalse(rc.check_roadmap(root)[0])
+
+    def test_the_same_claim_over_an_open_id_is_not_reported(self):
+        # `bug-0030` in `.tasks/` makes "Scoped as" true, and the check must say nothing.
+        root = self._repo(self.SCOPED_AS, still_open=["bug-0030"])
+        ok, report = rc.check_roadmap(root)
+        self.assertTrue(ok, report)
+
+    def test_a_returned_last_updated_header_is_reported(self):
+        root = self._repo("**Status:** living document | **Last updated:** 2026-08-07\n")
+        ok, report = rc.check_roadmap(root)
+        self.assertFalse(ok, "the header chore-0066 removed came back unreported")
+        self.assertIn("Last updated", report)
+        self.assertIn("chore-0066", report)
+
+    def test_the_sentence_recording_the_removal_is_not_read_as_the_header(self):
+        # The live file explains the removal in prose and names the field while doing it.
+        # A check that fired on its own rationale would be uninstalled on day one.
+        root = self._repo("A whole-file `Last updated` header was removed on 2026-08-27.\n")
+        self.assertTrue(rc.check_roadmap(root)[0])
+
+    def test_an_id_naming_no_task_file_is_reported_but_not_judged(self):
+        root = self._repo("Scoped as `feat-9999`, which is still to do.\n")
+        ok, report = rc.check_roadmap(root)
+        self.assertTrue(ok, "an unresolvable id is a bound on the answer, not a failure")
+        self.assertIn("feat-9999", report)
+        self.assertIn("not judged", report)
+
+    def test_the_report_carries_the_arithmetic_and_not_a_claim(self):
+        root = self._repo(self.SCOPED_AS, done=["bug-0030"])
+        report = rc.check_roadmap(root)[1]
+        self.assertIn("1 task ids named, 1 in .tasks/done/", report)
+        self.assertIn("blocks read", report)
+
+    def test_the_report_names_the_class_it_cannot_reach(self):
+        # The bound is the point of the gate as much as the findings are. Epic E item 2
+        # restating a bar `docs/spec/cloud-executable.md` had already repointed is the
+        # defect that mattered most in chore-0066's pass and the one nothing mechanical
+        # catches, so a passing run must not read as "the roadmap is current".
+        report = rc.check_roadmap(self._repo("Nothing here.\n"))[1]
+        self.assertIn("restated-contract", report)
+        self.assertIn("2 of the 3 shapes", report)
+
+    def test_the_coverage_line_run_checks_shows_is_the_bound(self):
+        # `coverage_line` echoes the last line carrying a digit, so the arithmetic and the
+        # bound have to share that line or the run shows one without the other.
+        report = rc.check_roadmap(self._repo("Nothing here.\n"))[1]
+        line = rc.coverage_line(report)
+        self.assertIn("task ids named", line)
+        self.assertIn("restated-contract", line)
+
+    def test_the_check_is_clean_over_this_repositorys_own_roadmap(self):
+        # Run over the real file, per the task's own criterion. This is also what keeps
+        # the check honest in the other direction: the fixtures above are small, and a
+        # rule that over-fires shows up here or nowhere.
+        ok, report = rc.check_roadmap(REPO_ROOT)
+        self.assertTrue(ok, report)
+        self.assertRegex(report, r"\d+ task ids named")
+
+
+class CheckGateWiringTests(unittest.TestCase):
+    """`run_gate`'s second branch: a gate whose work is a callable (chore-0072)."""
+
+    def test_a_check_returning_false_is_a_failure_not_an_error(self):
+        failing = rc.Gate("check", [], check=lambda: (False, "found 1 thing"))
+        buf = io.StringIO()
+        self.assertEqual(1, rc.run_all([failing], out=buf))
+        self.assertIn("found 1 thing", buf.getvalue())
+
+    def test_a_check_that_raises_is_unrunnable_not_failed(self):
+        # Same precedence as a missing script: the question was never answered, which is
+        # a different claim from "the answer is no".
+        def boom():
+            raise RuntimeError("no ROADMAP.md")
+
+        buf = io.StringIO()
+        self.assertEqual(2, rc.run_all([rc.Gate("check", [], check=boom)], out=buf))
+        self.assertIn("unrunnable", buf.getvalue())
+        self.assertIn("no ROADMAP.md", buf.getvalue())
+
+    def test_a_raising_check_does_not_stop_the_gates_after_it(self):
+        # The whole reason the exception is caught rather than allowed to propagate: an
+        # unattended agent gets one round trip, and an aborted aggregator costs another.
+        def boom():
+            raise RuntimeError("boom")
+
+        after = rc.Gate("after", [[rc.PY, "-c", "print('ran 1 thing')"]])
+        buf = io.StringIO()
+        self.assertEqual(2, rc.run_all([rc.Gate("check", [], check=boom), after], out=buf))
+        self.assertIn("ok          after", buf.getvalue())
+
+    def test_a_check_gate_never_invokes_the_subprocess_runner(self):
+        stub = stub_runner({})
+        passing = rc.Gate("check", [], check=lambda: (True, "read 2 files"))
+        buf = io.StringIO()
+        self.assertEqual(0, rc.run_all([passing], stub, buf))
+        self.assertEqual([], stub.calls)
+        self.assertIn("read 2 files", buf.getvalue())
 
 
 if __name__ == "__main__":

@@ -1011,6 +1011,179 @@ class TestUniversalLensScope(unittest.TestCase):
         self.assertEqual(code, 0, out)
 
 
+class TestDeclaredBodyShape(unittest.TestCase):
+    """chore-0069: a skill that declares itself a lens and is built as a workflow warns.
+
+    The rule is the skill-structure section of `AGENTS.md`: a lens carries `Intent`,
+    `Workflow` and an `Output` heading, because it is composed into another skill rather than
+    run on its own, and giving it a step-by-step procedure invites an agent to run it
+    standalone. Nothing had ever checked it, which is how the one rule governing the internal
+    structure of every deliverable this kit ships reached 2026-08-27 naming three lenses and
+    being right about one.
+
+    **The tautology is the design problem, and the negative cases are what answer it.** A
+    checker that read the intended shape out of the headings would make every skill conform by
+    construction, and a check that cannot fail is unchecked whatever it printed. This one reads
+    a declaration the headings cannot supply, so the pair that carries the weight is
+    `test_a_declared_lens_built_as_a_workflow_warns` beside
+    `test_the_same_body_without_the_declaration_is_not_reported`: byte-identical headings,
+    opposite verdicts, which is only possible if the declaration is what is being read.
+
+    A warning rather than an error, decided after measuring both numbers rather than before:
+    three shipped skills declare themselves lenses and one of the three, `test-quality`,
+    disagrees with the shape. As an error that one skill would fail the tree on landing, and
+    the resolution (reshape the skill, or reword its declaration) is a change to a file this
+    task does not own. `check_status_contradiction` is the prior art for the severity as well
+    as for the shape: a body-content rule reported over parsed text.
+    """
+
+    DECLARATION = "This skill is a lens, not a workflow: it is composed into one.\n\n"
+
+    LENS_HEADINGS = ("## Intent\n\nWhat it decides.\n\n"
+                     "## Workflow\n\nWhat it applies.\n\n"
+                     "## Output format\n\nWhat it returns.\n")
+    WORKFLOW_HEADINGS = ("## When to use\n\nSometimes.\n\n"
+                         "## Procedure\n\n1. Do the first thing.\n\n"
+                         "## Notes\n\nOdds and ends.\n")
+
+    # The stable half of the warning text, so a reworded explanation does not silently stop
+    # these assertions from testing anything.
+    FINDING = "declares itself a lens but is not shaped like one"
+
+    # Real phrasings lifted from shipped bodies. Every one of these names a lens the skill
+    # composes, and none of them classifies the skill as one. A bare-word pattern, which is
+    # what the rules-directory declaration uses, would conscript all four.
+    MENTIONS = {
+        "composes another lens": "It composes the `review-quality` lens the way house-review does.\n\n",
+        "applies a lens": "Apply the `test-quality` lens before returning the draft.\n\n",
+        "runs a lens over its own output": "Run the `spec-quality` lens over your own draft.\n\n",
+        "defines the word": "A lens is a reusable review shot that a workflow composes.\n\n",
+    }
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self._trees = 0
+
+    def _run_body(self, body):
+        """Run main() over a one-skill tree carrying `body`, in a tree of its own."""
+        self._trees += 1
+        root = self.root / f"tree{self._trees}" / "skills"
+        root.mkdir(parents=True)
+        _write_skill(root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        return _run(root)
+
+    def test_a_declared_lens_built_as_a_workflow_warns(self):
+        # The constructed disagreement the whole check exists for: declared one shape, built
+        # as the other. Every heading the lens shape asks for is absent and the workflow's own
+        # heading is present, so the warning names both halves.
+        code, out = self._run_body(self.DECLARATION + self.WORKFLOW_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertIn(self.FINDING, out)
+        for role in ("Intent", "Workflow", "Output"):
+            with self.subTest(role=role):
+                self.assertIn(f"no `{role}` heading", out)
+        self.assertIn("`Procedure` heading", out)
+
+    def test_the_same_body_without_the_declaration_is_not_reported(self):
+        # The other half of the pair, and the answer to the tautology. Identical headings,
+        # declaration removed, nothing reported. If this ever starts warning, the check has
+        # gone back to inferring the shape from the headings and means nothing.
+        code, out = self._run_body(self.WORKFLOW_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_a_declared_lens_carrying_the_lens_shape_is_not_reported(self):
+        code, out = self._run_body(self.DECLARATION + self.LENS_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_the_output_heading_may_be_spelled_either_way(self):
+        # `spec-conformance` writes `Output` and `spec-plan-readiness` writes `Output format`.
+        # Which of the two an author typed is not a fact about whether the skill can be run
+        # standalone, so a check that split them would report a conforming lens, and a rule
+        # that fires on something nobody intended gets switched off rather than satisfied.
+        for heading in ("## Output\n", "## Output format\n", "## Output shape\n"):
+            with self.subTest(heading=heading.strip()):
+                body = (self.DECLARATION + "## Intent\n\nWhy.\n\n## Workflow\n\nHow.\n\n"
+                        + heading + "\nWhat it returns.\n")
+                code, out = self._run_body(body)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn(self.FINDING, out)
+
+    def test_a_heading_that_merely_starts_with_the_same_letters_does_not_fill_the_role(self):
+        # `Intended readers` is not `Intent`. The role match is the word, or the word followed
+        # by a space, so a prefix collision cannot clear a role the body never carries.
+        body = (self.DECLARATION + "## Intended readers\n\nWho.\n\n"
+                "## Workflow\n\nHow.\n\n## Output\n\nWhat.\n")
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_naming_the_lens_a_skill_composes_is_not_declaring_itself_one(self):
+        for label, mention in self.MENTIONS.items():
+            with self.subTest(phrasing=label):
+                code, out = self._run_body(mention + self.WORKFLOW_HEADINGS)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn(self.FINDING, out, label)
+
+    def test_a_declaration_inside_a_fenced_block_does_not_count(self):
+        # Same rule the reference and scope checks apply: inside a fence the body is showing
+        # what a declaration looks like rather than making one. A skill documenting this
+        # convention must not thereby classify itself.
+        body = ("A lens opts in by writing:\n\n```\n"
+                "This skill is a lens, not a workflow.\n```\n\n" + self.WORKFLOW_HEADINGS)
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_a_heading_inside_a_fenced_block_does_not_fill_a_role(self):
+        # The converse, and not hypothetical: `spec-author` prints a whole spec skeleton of
+        # `##` headings inside a fence, and reading those as its own sections would describe
+        # the document it writes rather than the document it is.
+        body = (self.DECLARATION + "It emits a document shaped like this:\n\n```markdown\n"
+                "## Intent\n\n## Workflow\n\n## Output format\n```\n\n" + self.WORKFLOW_HEADINGS)
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn(self.FINDING, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_a_third_level_heading_does_not_fill_a_role(self):
+        # The shape rule is about the sections a body is divided into, not about what sits
+        # inside one, so `### Intent` under some other section does not answer the role.
+        body = (self.DECLARATION + "## Notes\n\n### Intent\n\nnested.\n\n"
+                "## Workflow\n\nHow.\n\n## Output\n\nWhat.\n")
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_the_shipped_tree_declares_exactly_these_lenses(self):
+        # Pinned rather than assumed, for the reason the universal-lens set above is pinned:
+        # which skills call themselves lenses is a decision about the kit's taxonomy, and it
+        # should have to be restated in the task that changes it rather than drifting.
+        # `spec-plan-readiness` is deliberately absent: it calls itself a gate, and no other
+        # skill body calls it a lens (measured 2026-08-31, chore-0069).
+        skills = REPO_ROOT / ".agents" / "skills"
+        declaring = sorted(
+            d.name for d in skills.iterdir()
+            if d.is_dir() and vs.declares_lens_shape(
+                (d / "SKILL.md").read_text(encoding="utf-8"))
+        )
+        self.assertEqual(declaring, ["spec-conformance", "spec-quality", "test-quality"],
+                         "the set of self-declared lenses changed; state it in the task "
+                         "that changes it rather than letting the taxonomy drift")
+
+    def test_the_shipped_tree_reports_exactly_the_one_known_disagreement(self):
+        # The number the closeout states, asserted rather than described. One of the three
+        # declared lenses disagrees with the shape, and it stays a warning, so a green
+        # acceptance run is still a green run.
+        code, out = _run(REPO_ROOT / ".agents" / "skills")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count(self.FINDING), 1, out)
+        self.assertIn(f".agents/skills/test-quality/SKILL.md: {self.FINDING}", out)
+
+
 class TestSupportingFileLinkChecks(unittest.TestCase):
     """Characterization tests for chore-0036: the files a skill ships beside its SKILL.md.
 

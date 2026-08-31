@@ -81,4 +81,8 @@ Before writing a hook, be able to answer three questions. If any answer is soft,
 2. Is the condition decidable from the payload, or does it require reading prose? (This picks the shape.)
 3. What does someone do who hits it and disagrees?
 
-Then: write it, add tests to `tests/test_hooks.py` covering the fire path, the silent path, and malformed input, register it in all three wirings, and add a row to the table above.
+Then: write it, test it, register it in all three wirings, and add a row to the table above.
+
+Tests for the hook's own behaviour go in a test file of its own, covering the fire path, the silent path, and malformed input. Name it `tests/test_hooks_<topic>.py`, which is what the reachability, conformance-gate, and currency hooks each did; `observatory-event.py` is the exception that shows what the rule is really about, since its tests sit with the subsystem it feeds rather than under a `test_hooks_` name. Either way it is one hook per file, because a hook's own scenarios are the part that grows.
+
+`tests/test_hooks.py` is not that file, and adding to it is the wrong move. It holds the module-wide contract this page states, asserted over every hook the module ships, plus `delegation-reminder.py`'s own scenarios, which are there only because it was the first hook and there was nothing to separate them from yet. It discovers the hooks directory by glob, so a new hook is covered by the contract tests the moment it lands. If it is not, that is a contract test to widen rather than a case to append here.

@@ -164,6 +164,27 @@ def _repo_root(path, cwd):
         current = parent
 
 
+def _within(root, candidate):
+    """True when `candidate` lands inside `root`, so a `spec:` value cannot escape it.
+
+    `os.path.join` is not a containment operator: an absolute second argument discards the
+    first outright, and a `../` chain walks out of it. The `spec:` value is ordinary
+    frontmatter, so nothing upstream of here bounds it. Compared with `normcase` because
+    Windows paths differ in case without differing in identity, and `abspath` rather than
+    `realpath` because the question is which tree the reference names, not where a symlink
+    inside that tree happens to point.
+    """
+    try:
+        root = os.path.normcase(os.path.abspath(root))
+        candidate = os.path.normcase(os.path.abspath(candidate))
+    except (OSError, ValueError):
+        return False
+    # `join(root, "")` rather than `root + os.sep`, so a root that already ends in a
+    # separator (a checkout at a drive root) does not get a doubled one and reject
+    # every path inside itself.
+    return candidate == root or candidate.startswith(os.path.join(root, ""))
+
+
 def _block(reason):
     return {"decision": "block", "reason": reason}
 
@@ -195,11 +216,15 @@ def _evaluate_task_close(path, fields, cwd):
         return None
     if any(fields.get(key) for key in CONFORMANCE_KEYS):
         return None
-    spec_path = os.path.join(_repo_root(path, cwd), spec_ref.replace("\\", "/"))
-    if not os.path.isfile(spec_path):
-        # The reference does not resolve. That is a task-file defect for the validator to
-        # report, not a conformance question, and blocking on it would be this hook
-        # answering a question it was not asked.
+    root = _repo_root(path, cwd)
+    spec_path = os.path.join(root, spec_ref.replace("\\", "/"))
+    if not _within(root, spec_path) or not os.path.isfile(spec_path):
+        # Either the reference points outside the repository, or it does not resolve. Both
+        # are task-file defects for the validator to report, not conformance questions, and
+        # blocking on one would be this hook answering a question it was not asked. Reading
+        # the head of a file the repository does not own is the part worth refusing: the
+        # impact is nil today because nothing here emits what it read, and the bound costs
+        # one condition and removes the question (chore-0038).
         return None
     spec_fields = _frontmatter(_read_head(spec_path) or "")
     if _matrix_present(spec_path, spec_fields):

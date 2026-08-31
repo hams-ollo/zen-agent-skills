@@ -12,6 +12,11 @@ class underneath a dangling link. That one is a heuristic rather than a fact, so
 it is reported as a warning on purpose: see mislabelled_links() for why a false
 positive there is more expensive than a miss.
 
+A second warning covers the scaffold manifest, the one file here that is neither
+Markdown nor a task: `new-task` tells an author to prefer its id_high_water over
+scanning the tree, so a record that has fallen behind hands out ids that are
+already taken. See stale_high_water() for what it does and does not report.
+
 A second mode link-checks an arbitrary set of documents instead of the backlog,
 so a CI docs link gate can call the link rule here rather than author its own
 copy of it. Every pattern it is given must match at least one document, and the
@@ -26,6 +31,7 @@ on any error, so it drops cleanly into CI or a pre-commit hook.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -50,6 +56,11 @@ SCENARIO_RE = re.compile(r"^S-\d{3}$")
 EXTERNAL_RE = re.compile(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#\d+$")
 
 SKIP_NAMES = {"README.md", "_TEMPLATE.md"}
+
+# The scaffold manifest `init-worktracking` writes, which records the highest id in
+# use per type under `id_high_water`. It is the only file here that is not Markdown
+# and not a task, and it is read for exactly one reason: see stale_high_water().
+SCAFFOLD_MANIFEST = ".scaffold.json"
 
 # A complete markdown link: bracketed text followed immediately by a parenthesised
 # target. It ignores a bare closing fragment, which is how prose that describes a
@@ -220,6 +231,81 @@ def read_text_utf8(path):
             f"decoded ({exc.reason}). Every file this tool reads is UTF-8 by contract, so the "
             f"file is reported rather than read past: re-save it as UTF-8."
         ) from None
+
+
+def stale_high_water(manifest_path, ids):
+    """Every `id_high_water` entry in the scaffold manifest the backlog has passed.
+
+    The manifest is a second source of truth for task ids, and until `chore-0060`
+    nothing read it. `new-task` Step 1.4 tells an author to prefer it over scanning the
+    tree, and Step 6.2 asks them to bump it afterwards; only hand discipline connected
+    the two. It had fallen two bugs and nine chores behind while every gate stayed
+    green, so an agent following the instruction as written was handed `bug-0042` and
+    `chore-0049`, both already taken, and learned it only from the duplicate-id error
+    after the task files existed and had been cross-referenced.
+
+    Only *below* is reported. Ahead is the normal state: an id is consumed when a task
+    is authored, and a task can be abandoned without its id ever being reused, so a
+    manifest running ahead of the tree means the record is doing its job.
+
+    The tolerances are what let this ship into every repository the scaffold touches. An
+    absent manifest is silent, because a tracker without one has no second source of
+    truth to be wrong about. A type the manifest lists and the tree has never used is
+    skipped, because a repository that has never filed a bug must not be told its bug
+    high-water is wrong. What is *not* tolerated in silence is a manifest this cannot
+    read or a value it cannot compare: that is a guard quietly ceasing to guard, which
+    is the failure class this check was added to close rather than to join.
+
+    Returns a list of messages, empty when the manifest and the backlog agree.
+    """
+    manifest_path = Path(manifest_path)
+    if not manifest_path.is_file():
+        return []
+    try:
+        raw = read_text_utf8(manifest_path)
+    except (NotUTF8, OSError) as exc:
+        return [f"scaffold manifest could not be read, so id_high_water was not "
+                f"compared against the backlog. {exc}"]
+    try:
+        manifest = json.loads(raw)
+    except ValueError as exc:
+        return [f"scaffold manifest is not valid JSON, so id_high_water was not "
+                f"compared against the backlog: {exc}"]
+    if not isinstance(manifest, dict):
+        return ["scaffold manifest is not a JSON object, so id_high_water was not "
+                "compared against the backlog"]
+    recorded = manifest.get("id_high_water")
+    if recorded is None:
+        return []
+    if not isinstance(recorded, dict):
+        return ["id_high_water is not an object mapping each task type to its highest "
+                "id, so nothing could be compared against the backlog"]
+
+    highest = {}
+    for tid in ids:
+        match = ID_RE.match(tid)
+        if match is None:
+            continue
+        number = int(tid.rsplit("-", 1)[1])
+        if number > highest.get(match.group(1), -1):
+            highest[match.group(1)] = number
+
+    findings = []
+    for ttype in sorted(recorded):
+        value = recorded[ttype]
+        # `bool` is an `int` in Python, and `true` is not a high-water mark.
+        if isinstance(value, bool) or not isinstance(value, int):
+            findings.append(
+                f"id_high_water[{ttype!r}] is {value!r}, which is not a whole number, "
+                f"so the backlog could not be compared against it")
+            continue
+        present = highest.get(ttype)
+        if present is not None and value < present:
+            findings.append(
+                f"id_high_water[{ttype!r}] is {value} but {ttype}-{present:04d} already "
+                f"exists: an author who prefers this file over scanning the tree would "
+                f"be handed an id that is already taken")
+    return findings
 
 
 def broken_links(path):
@@ -579,6 +665,19 @@ def main(argv=None) -> int:
     for tid, where in ids_seen.items():
         if len(where) > 1:
             err(where[0], f"duplicate id {tid!r} also in: {', '.join(where[1:])}")
+
+    # The duplicate-id error above is where a stale scaffold manifest used to surface:
+    # after the colliding task file had been written, named, and cross-referenced, so
+    # the cheapest fix was a rename by hand. This reports the drift instead, from the
+    # ids the run already has in hand (`chore-0060`).
+    #
+    # A warning rather than an error, for the reason the mislabelled-link check below
+    # gives: this ships into every repository the scaffold touches, and failing an
+    # adopter's clean tree is the outcome worth designing against. `--strict`, which
+    # this repository's backlog gate runs, promotes it.
+    manifest_path = TASKS_DIR / SCAFFOLD_MANIFEST
+    for msg in stale_high_water(manifest_path, all_ids):
+        warn(manifest_path.relative_to(REPO_ROOT).as_posix(), msg)
 
     # Links are checked in done/ too, unlike touched_files. The asymmetry is
     # deliberate: a completed task's touched_files are a historical claim that

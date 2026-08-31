@@ -74,10 +74,35 @@ neither should be retrofitted onto the other.
 
 - **Workflow skills** carry a procedure: ordered steps an agent executes, usually with sections for
   when to use it, when not to, inputs, the procedure itself, and notes. Most skills are workflows.
-- **Lenses** carry `Intent`, `Workflow`, and `Output format` instead, because they are composed into
-  another skill rather than run on their own. `spec-quality`, `test-quality`, and the
-  [`review-quality`](.agents/rules/review-quality.md) rules module are lenses. Giving a lens a
-  step-by-step procedure invites an agent to run it standalone, which is the one thing it is not for.
+- **Lenses** carry `Intent`, `Workflow`, and an `Output` heading instead, because they are composed
+  into another skill rather than run on their own. Giving a lens a step-by-step procedure invites an
+  agent to run it standalone, which is the one thing it is not for.
+
+**A skill's shape is declared in the skill and enforced by
+[`validate-skills.py`](scripts/validate-skills.py), not listed here.** A lens says so in its own
+body, in the form the bodies already use ("This skill is a lens", "This is a lens"), and the
+validator reads that declaration and warns when the headings underneath it are a workflow's. The
+declaration is what makes the check falsifiable: inferring the intended shape from the headings
+would make every skill conform by construction, and a check that cannot fail is unchecked. A list
+here would pass the day another lens is added and nobody edits it, which is the failure the
+universal-lens rule below was filed for.
+
+The enforcement is new because the list was wrong, and how wrong is worth keeping. Until
+`chore-0069` this rule named three lenses and was right about one: `spec-quality` carried the shape,
+`test-quality` did not, and `review-quality.md` was never in this section's scope at all, since this
+section opens by saying what a skill *directory* contains and that file is a rules module under
+`.agents/rules/`, governed by the layout table above and the lens rules below. Two skills the rule
+never named were shaped exactly as it prescribed, `spec-conformance` and `spec-plan-readiness`, and
+the second of those calls itself a gate rather than a lens, so nothing classifies it either way.
+Measured again on 2026-08-31: three skills declare themselves lenses (`spec-conformance`,
+`spec-quality`, `test-quality`), and one of the three is reported.
+
+That one report is `test-quality`, and it is left standing rather than cleared. Its headings are a
+rubric (`Goal`, `Core rules`, `Review checklist`, `Commit gate`, `Reporting`), so the shape rule's
+letter is broken there and its stated harm is not: it carries no procedure for an agent to run.
+Which way that settles, reshaping the skill or rewording its declaration, is a change to the skill
+rather than to this file, and renaming its headings to clear the warning would be satisfying the
+validator instead of the rule.
 
 ### Every skill points at every universal lens
 
@@ -136,7 +161,7 @@ Follow [`.agents/rules/house-style.md`](.agents/rules/house-style.md) for writin
 python scripts/run-checks.py
 ```
 
-[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, the documentation link check, and the conformance-matrix citation check. The set is open, and its membership rather than its size is the property: naming a count here goes stale the first time anyone adds a gate. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
+[`run-checks.py`](scripts/run-checks.py) runs every gate that decides whether a change here is acceptable, in one command with no flags: skill lint, the test suite, backlog validation, adapter and install dry runs, the real install cycle, the documentation link check, the conformance-matrix citation check, and the roadmap bookkeeping check. The set is open, and its membership rather than its size is the property: naming a count here goes stale the first time anyone adds a gate. It exits 0 when all pass, 1 when one ran and failed, and 2 when one could not run at all, with 2 outranking 1 for the same reason `install.py --check` and `check-provenance.py` do it: a gate that could not execute means the report is incomplete, which is a different claim from "the change is bad". Every gate runs even after one fails, because an agent working unattended gets one round trip and a report truncated at the first failure costs it another.
 
 [`.github/workflows/checks.yml`](.github/workflows/checks.yml) calls this same script rather than restating the gates. One rule, two callers, per `chore-0029`.
 

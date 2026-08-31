@@ -1,10 +1,10 @@
 # Skill catalog
 
-Every skill Zen Agent Skills ships, plus what is planned and deliberately not built yet.
+Every skill Zen Agent Skills ships, plus what is drafted, what is planned, and what is deliberately not built yet.
 
 The kit is organized by how broadly a skill is worth sharing. The axis is deliberate: broadly-useful skills go in the public kit; hyper-specific personal skills stay out and serve as portfolio demos instead.
 
-A skill is only listed as **shipped** once it lives under [`.agents/skills/`](../.agents/skills/) and has been used and iterated on for real. Everything else is **planned**, and stays planned until it has earned its place. This is the same "seed by inspection, not speculation" principle the skills themselves follow.
+A skill is listed as **shipped** once it lives under [`.agents/skills/`](../.agents/skills/) and has been used and iterated on for real. A skill that is written and lives there but has not yet earned that is a **draft**, listed under [drafts](#drafts-built-but-not-blessed) rather than in a tier, because no install places it. A skill that is not written at all is **planned**, and stays planned until it has earned its place. This is the same "seed by inspection, not speculation" principle the skills themselves follow.
 
 ## Tier A: broadly shareable (the public kit)
 
@@ -41,6 +41,17 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 | `verifier-agent` | shipped (Epic B) | Independently verifies an implementation before reconciliation: runs the declared commands, composes `spec-conformance` so a contract divergence fails the run even when tests pass, maps each acceptance criterion to evidence, and returns a deterministic pass, fail, or blocked verdict. Verifies and reports; never edits what it verifies. |
 | `doc-sync` | shipped (Epic B) | Detects documentation drift by checking prose claims against repository facts, classifying every document as current-state (correctable with approval), contract (report-only, human-owned) or ledger (skipped). Dry run is the default and detection never changes a file. Composes `doc-revise` for editing discipline. Authored in-kit against `docs/spec/doc-sync.md`, dogfooded on this repository's own documentation (`feat-0020`), and blessed after its apply path repointed three dangling references (`chore-0006`). |
 | `review-depth` | shipped (Epic B) | Chooses how hard to look before `house-review` looks: quick, standard, or deep, selected from a stated signal table (reviewable changed lines, directory spread, trust-boundary risk flags, blast radius, documentation-only scope) so two runs over the same diff reach the same depth and the reason is inspectable. An explicit user choice always overrides detection. Composes into `house-review` rather than duplicating its rubric, which lives in the `review-quality` lens. Blessed 2026-08-05; using it is what exposed the mode contradiction inside `house-review` that `chore-0024` then fixed. |
+
+## Drafts: built but not blessed
+
+A **draft** is written, lives under [`.agents/skills/`](../.agents/skills/), and is placed by no install profile, not even the one that asks for everything. That is the contribution bar made mechanical: a skill earns its place here only after it has been used and iterated on for real, so a freshly written one is held back until real work has exercised it, and `install.py` names what it withheld on every run rather than dropping it silently (`S-015` of [`docs/spec/install.md`](spec/install.md)).
+
+Drafts are listed rather than omitted because both silent readings are wrong. A skill left out of this catalog reads as absent when it is in fact in the tree; the same skill listed in a tier beside the shipped ones reads as available when nothing will install it. What a draft still owes before it ships is tracked in [`ROADMAP.md`](../ROADMAP.md), which is builder-facing; this section only says that it exists and that you do not have it.
+
+| Skill | Status | What it does |
+|---|---|---|
+| `agent-observatory` | draft | Answers questions that span more than one agent session (what is running, what a wave cost, which skills were used, what failed) by reading the local observatory store rather than one transcript at a time, and acts on a session only where the harness exposes the action. Never starts, resumes, interrupts, or ends one. A draft since 2026-08-29. |
+| `systematic-debugging` | draft | Turns a reported defect into a named cause with the evidence that established it: reproduces the report first, localizes to the boundary where behavior diverges, then tests one hypothesis at a time and returns a deterministic verdict. Diagnoses and never repairs. A draft since 2026-08-29, and deliberately kept one at its first dogfood (`feat-0062`), where an independent check refuted the cause the run had reached. |
 
 ## Tier B: semi-scalable (great for teams and clients)
 

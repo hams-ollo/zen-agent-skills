@@ -2,7 +2,7 @@
 id: chore-0060
 title: The scaffold manifest's id_high_water is nine chores and two bugs behind the backlog, and it is the source new-task tells an author to prefer
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: []
@@ -39,7 +39,7 @@ feat:  0049
 Two bugs and nine chores behind. `feat` is current, which is what makes the drift easy to miss: a
 reader who spot-checks one type finds it right.
 
-This is not a cosmetic record. [`new-task`](../.agents/skills/new-task/SKILL.md), Step 1.4, tells
+This is not a cosmetic record. [`new-task`](../../.agents/skills/new-task/SKILL.md), Step 1.4, tells
 an author which source to trust, in this order:
 
 > Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`;
@@ -72,9 +72,9 @@ returns six hits, all inside `init-worktracking/SKILL.md` and `new-task/SKILL.md
 no gate, and no test reads the file. It is a second source of truth for ids, written by hand,
 consulted first, and unguarded, which is the same shape as the drifted link rule `chore-0029`
 replaced and the unguarded helper copies in
-[chore-0059](chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md).
+[chore-0059](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md).
 
-**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](done/chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0049`](done/chore-0049-a-checker-for-conformance-matrix-citations.md), [`chore-0058`](done/chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), and [`chore-0059`](chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md). `chore-0058` closed 2026-08-27, and `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](done/chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
+**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0049`](chore-0049-a-checker-for-conformance-matrix-citations.md), [`chore-0058`](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), and [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md). `chore-0058` closed 2026-08-27, and `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
 
 ## Scope
 
@@ -119,6 +119,31 @@ working as intended and is worth expecting rather than discovering.
 Route 2 touches a shipped skill body and the manifest format an adopter may already carry. Say in
 the closeout what an adopter with the old field should do, even if the answer is "nothing, it is
 ignored".
+
+## Decisions
+
+- **Route 1 taken: `validate.py` compares the manifest against the tree.** `main()` already holds
+  every id in the run, so the comparison is nearly free, and it puts the guard on the one path both
+  this repository and every adopter already execute.
+- **Rejected, route 2 (delete the field, always scan).** It removes the second source of truth,
+  which is the cleanest answer on paper, at the cost of a persisted-format change adopters already
+  carry on disk. Paying a migration to delete a record that a short check makes trustworthy is the
+  worse trade.
+- **Rejected, route 3 (reverse the instruction, keep the field).** Cheapest, and it leaves a field
+  in a shipped manifest that means nothing, which is the shape this task was filed about.
+- **Premise partly false: the figures in the Problem section had already moved.** It records
+  `bug: 41, feat: 49, chore: 48` against a tree at `bug 0043, chore 0057, feat 0049`. At the base
+  commit the manifest read `bug: 52, feat: 63, chore: 80` and the tree held `bug-0058, feat-0064,
+  chore-0083`, so it had been bumped by hand since and fallen behind again on all three types. The
+  drift is real and self-renewing, which argues for the guard more strongly than the task did, but
+  the quoted numbers are stale and were not used.
+- **Seam left open: the manifest is still written by hand.** The check reports drift and never
+  repairs it, per the detect-and-report rule in the autonomy lens. Nothing in this kit assigns ids,
+  so an automatic bump would need a writer that does not exist.
+- **Seam left open: a type the manifest lists and the tree has never used is not compared.** A
+  scaffolded repository that has never filed a bug must not be told its `bug` high-water is wrong on
+  every run, so that entry is unguarded until the first task of that type lands, which is when the
+  record starts mattering.
 
 ## Risks and rollback
 

@@ -1452,7 +1452,12 @@ def _main(argv=None) -> int:
     if args.uninstall:
         return uninstall(home, args.dry_run)
 
-    tools = [t.strip() for t in args.tools.split(",") if t.strip()]
+    # De-duplicated, first mention wins, because a repeat is not a request to place twice.
+    # `--tools claude,claude` used to run the whole placement loop once per mention and then
+    # report "x 2 tool(s)", so the summary line disagreed with what a second run of the same
+    # command would report. `dict.fromkeys` keeps the order the user typed, which the summary
+    # and the per-target lines both read (chore-0038).
+    tools = list(dict.fromkeys(t.strip() for t in args.tools.split(",") if t.strip()))
     bad = [t for t in tools if t not in TOOL_SUBPATHS]
     if bad:
         print(f"Unknown tool(s): {bad}. Choose from {list(TOOL_SUBPATHS)}.")

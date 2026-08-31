@@ -2,7 +2,7 @@
 id: chore-0079
 title: The reader-facing catalog has no slot for a skill that is built but not blessed, and two are now in it
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic C: semi-scalable (teams and clients)"
 depends_on: []
@@ -13,7 +13,7 @@ created: 2026-08-29
 
 ## Problem
 
-[`docs/CATALOG.md`](../docs/CATALOG.md) states its own rule in its opening: a skill is listed as
+[`docs/CATALOG.md`](../../docs/CATALOG.md) states its own rule in its opening: a skill is listed as
 **shipped** once it lives under `.agents/skills/` and has been used and iterated on for real, and
 "everything else is **planned**, and stays planned until it has earned its place."
 
@@ -53,7 +53,7 @@ revisits, which is the state `agent-observatory` has been in since it was drafte
 - **Promoting either skill.** `feat-0062` decides `systematic-debugging`'s draft status and
   `agent-observatory` has no promotion task, which is itself worth noticing and is not this task.
 - Any change to `install.py`'s draft handling. The distribution behavior is correct and contracted
-  by `S-015` of [`docs/spec/install.md`](../docs/spec/install.md); this is about what a reader is
+  by `S-015` of [`docs/spec/install.md`](../../docs/spec/install.md); this is about what a reader is
   told, not about what is placed.
 - `ROADMAP.md`, which already records both as drafts in prose and is builder-facing rather than
   reader-facing.
@@ -67,6 +67,28 @@ absent. Both readings are wrong for a draft, which is why the omission is not a 
 Whichever shape is chosen, state the contribution bar next to it once rather than per row. The rule
 that a skill ships only after real use is the interesting thing about this category, and repeating
 it per skill buries it.
+
+## Decisions
+
+- **A separate section beat a third status word in the existing tier tables** (rejected alternative).
+  A `draft` cell inside Tier A or the Epic B table puts an unblessed skill on the rows a reader scans
+  for what they can install, and the one fact that matters about the category, that no profile places
+  it, would then have to be repeated per row or left unsaid. Leaving drafts out entirely was rejected
+  for the reason the Problem states: omission reads as absent, which is false.
+- **The section sits after the Epic B table, not after Tier C** (rejected alternative). Tier C closes
+  with "They live in their own repo, not here", and a drafts section immediately below it would have
+  a reader carry that sentence forward onto skills that are in this tree. The chosen position keeps
+  everything under `.agents/skills/` contiguous and leaves the availability order descending:
+  shipped, shipped, built but not placed, planned, out of the kit.
+- **The forward link to the new section is an in-document anchor, which no gate checks** (seam left
+  open deliberately). `.tasks/validate.py --links` splits a link target on `#` and skips it when
+  nothing remains, so `#drafts-built-but-not-blessed` was verified by hand against GitHub's anchor
+  rule and will not be verified again if the heading is reworded.
+- **The Epic B paragraph's counts in prose beside its own table were left alone** (seam left open
+  deliberately). "All nine were dogfooded", "Four of them", and "Four" sit next to the nine-row spine
+  table and are exactly what the house style's never-count-the-rows rule forbids. They are a
+  pre-existing defect in this file rather than anything this change introduced, and fixing them is
+  outside what this task scoped, so they are reported as a finding instead.
 
 ## Acceptance criteria (mechanically verifiable)
 

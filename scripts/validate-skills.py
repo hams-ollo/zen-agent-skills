@@ -9,7 +9,8 @@ defeats progressive disclosure, and frontmatter written in a form no real YAML
 parser can read. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
 exists, that every self-declared lens under `.agents/rules/` is referenced by at
-least one skill, and warns when a skill asserts both draft and shipped status. A link inside
+least one skill, that a skill declaring itself a lens is not built as a
+workflow, and warns when a skill asserts both draft and shipped status. A link inside
 an inline code span or a fenced code block is left alone, because it renders as
 literal text and opens nothing, so a skill may show an example link. Standard
 library only. Exits non-zero on error.
@@ -150,6 +151,43 @@ UNIVERSAL_SCOPE_RE = re.compile(r"^\s*\*\*Scope:\s*universal\.?\*\*",
 # How far into a rules file the self-declaration has to appear. See
 # `declares_itself_a_lens` for why the window exists and why it is this size.
 LENS_DECLARATION_LINES = 10
+
+# A *skill* body classifying itself as a lens: something composed into another skill rather
+# than run on its own. Read out of the body for the same reason `declares_universal_scope`
+# is read out of a lens: a list of names, here or in `AGENTS.md`, passes the day another lens
+# is added and nobody edits it, which is the failure feat-0048 and feat-0064 were both filed
+# for. That list was wrong here too. On 2026-08-27 the shape rule in `AGENTS.md` named three
+# lenses and was right about one, and nothing could report it (chore-0069).
+#
+# Deliberately far narrower than LENS_DECLARATION_RE above, which matches the bare word. That
+# pattern is safe only because a rules directory holds nothing but lenses and a README; a
+# skill body is full of the word. `house-review`, `review-depth`, `spec-author`,
+# `test-author`, `verifier-agent` and `fix-batch` all name the lens they compose, and a
+# bare-word pattern would conscript every one of them. What separates a declaration from a
+# mention is the copula: a body saying it *is* a lens is classifying itself, and a body
+# saying it *composes* one is pointing at something else.
+#
+# Unwindowed, unlike the rules-file declaration, and that is a measurement rather than a
+# preference: the three declarations in this kit sit at lines 16, 21 and 37 of their bodies,
+# so a window sized to an opening would silently drop one of the three. The window exists
+# there to stop a bare word matching a body mention, and this pattern has no bare word to
+# protect.
+SKILL_LENS_DECLARATION_RE = re.compile(
+    r"\b(?:this|it)\s+(?:skill\s+)?is\s+a\s+lens\b", re.IGNORECASE)
+
+# A top-level body heading. `###` and deeper do not match, because the shape rule is about
+# the sections a body is divided into and not about what sits inside one.
+BODY_HEADING_RE = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+
+# The three headings the skill-structure section of AGENTS.md names for a lens, and the one
+# it names for a workflow. Matched as roles rather than as exact strings: a heading answers a
+# role when it is that word, or begins with that word followed by a space. `spec-conformance`
+# writes `Output` and `spec-plan-readiness` writes `Output format`, and which of the two an
+# author typed is not a fact about whether the skill can be run standalone. The trailing
+# space is what stops a prefix collision clearing a role, so `Intended readers` is not
+# `Intent`.
+LENS_SHAPE_ROLES = ("Intent", "Workflow", "Output")
+WORKFLOW_SHAPE_ROLE = "Procedure"
 
 
 def parse_frontmatter(text: str):
@@ -699,6 +737,91 @@ def check_universal_lenses_reach_every_skill(rules_dir: Path, skill_texts: dict,
         )
 
 
+def body_headings(text: str) -> list:
+    """The top-level headings of a body, excluding any inside a fenced code block.
+
+    A fence is a body *showing* a heading rather than carrying one, and that is not
+    hypothetical: `spec-author` prints a whole spec skeleton of `##` headings inside a fence,
+    so reading those as its own sections would describe the document it writes rather than the
+    document it is. Same reasoning as `_names_file_outside_fences()`.
+    """
+    fences = fenced_block_ranges(text)
+    return [m.group(1) for m in BODY_HEADING_RE.finditer(text)
+            if not any(lo <= m.start() < hi for lo, hi in fences)]
+
+
+def declares_lens_shape(text: str) -> bool:
+    """True when a skill body classifies itself as a lens rather than naming one.
+
+    Matched outside fenced blocks, for the reason a reference and a scope marker are: inside a
+    fence the body is showing what a declaration looks like rather than making one, so a skill
+    documenting this convention does not thereby classify itself.
+    """
+    fences = fenced_block_ranges(text)
+    return any(not any(lo <= m.start() < hi for lo, hi in fences)
+               for m in SKILL_LENS_DECLARATION_RE.finditer(text))
+
+
+def _fills_role(heading: str, role: str) -> bool:
+    """Whether one heading answers one of the named shape roles. See LENS_SHAPE_ROLES."""
+    text = heading.strip().lower()
+    role = role.lower()
+    return text == role or text.startswith(role + " ")
+
+
+def lens_shape_disagreements(headings: list) -> list:
+    """What a declared lens's headings say that its own declaration does not.
+
+    Both halves of the rule, reported separately because they are separate facts and the fix
+    differs. A missing role breaks the rule's letter; a `Procedure` heading is its stated
+    harm, since a step-by-step procedure is what invites an agent to run a lens standalone,
+    which is the one thing it is not for.
+    """
+    problems = [f"no `{role}` heading" for role in LENS_SHAPE_ROLES
+                if not any(_fills_role(h, role) for h in headings)]
+    if any(_fills_role(h, WORKFLOW_SHAPE_ROLE) for h in headings):
+        problems.append(f"a `{WORKFLOW_SHAPE_ROLE}` heading, which is the workflow shape")
+    return problems
+
+
+def check_declared_shape(text: str, rel: str, warnings: list) -> None:
+    """Warn when a skill declares itself a lens and is built as a workflow.
+
+    The rule is the skill-structure section of `AGENTS.md`, and until chore-0069 nothing
+    checked it: the one rule governing the internal structure of every deliverable this kit
+    ships had no gate, which is how it could name three lenses and be right about one for
+    months in the file every agent reads in full.
+
+    **The declaration is what makes this falsifiable, and it is the whole design.** A checker
+    that read the intended shape out of the headings would make every skill conform by
+    construction, and a check that cannot fail is unchecked whatever it printed, per the
+    conventions section of `AGENTS.md`. So the intended shape is read from a claim the
+    headings cannot supply, and the actual shape from the headings, and the finding is the
+    disagreement between the two.
+
+    A warning rather than an error, decided after measuring both numbers rather than before.
+    On 2026-08-31 three shipped skills declared themselves lenses and one of them,
+    `test-quality`, disagreed with the shape: its headings are a rubric (`Goal`, `Core rules`,
+    `Review checklist`, `Commit gate`, `Reporting`) rather than the three named roles. As an
+    error that one skill would fail the tree on landing, and the resolution is a decision
+    about the skill rather than about this script. `check_status_contradiction` below is the
+    prior art for the severity as well as for the shape: a body-content rule reported over
+    parsed text.
+    """
+    if not declares_lens_shape(text):
+        return
+    problems = lens_shape_disagreements(body_headings(text))
+    if not problems:
+        return
+    warnings.append(
+        f"{rel}/SKILL.md: declares itself a lens but is not shaped like one: "
+        f"{'; '.join(problems)}. A lens is composed into another skill rather than run on "
+        f"its own, so it carries `Intent`, `Workflow` and an `Output` heading and no "
+        f"procedure. Renaming headings to clear this is not the fix: either the body is the "
+        f"wrong shape or the declaration is, and which one is a decision about the skill."
+    )
+
+
 def check_status_contradiction(text: str, rel: str, warnings: list) -> None:
     """Warn when a skill asserts both draft and shipped status."""
     if DRAFT_STATUS_RE.search(text) and SHIPPED_STATUS_RE.search(text):
@@ -782,6 +905,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")
         check_links(skill_md, text, skill_names, f"{rel}/SKILL.md", errors, portable_root)
         check_frontmatter_is_parseable(text, rel, errors)
+        check_declared_shape(text, rel, warnings)
         check_status_contradiction(text, rel, warnings)
 
     # Checked once over the whole tree rather than per skill: "no skill references this

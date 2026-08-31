@@ -2,7 +2,7 @@
 id: chore-0069
 title: The two-body-shapes rule names three lenses and is right about one, and validate-skills.py has no shape check at all
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -32,9 +32,9 @@ Measured 2026-08-27 against the actual top-level headings:
 
 **And it fails in the other direction.** Two skills the rule does not name are shaped exactly as it
 prescribes, and both are called lenses in other skill bodies:
-[`spec-conformance`](../.agents/skills/spec-conformance/SKILL.md) (Intent, When to use, Inputs, Workflow,
+[`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md) (Intent, When to use, Inputs, Workflow,
 Output, Non-goals) and
-[`spec-plan-readiness`](../.agents/skills/spec-plan-readiness/SKILL.md) (Intent, Inputs, Non-goals,
+[`spec-plan-readiness`](../../.agents/skills/spec-plan-readiness/SKILL.md) (Intent, Inputs, Non-goals,
 Workflow, Output format, Readiness checklist).
 
 So the rule is **one for three** on its own list, with two unlisted skills following it.
@@ -46,7 +46,7 @@ ships has no gate, which is why it could be wrong for months in the file every a
 **The consequence is stated by the rule itself**, which is what makes this a defect rather than
 bookkeeping: "Giving a lens a step-by-step procedure invites an agent to run it standalone, which is the
 one thing it is not for." `test-quality` is composed by
-[`test-author`](../.agents/skills/test-author/SKILL.md), is named a lens in three skill bodies, and is
+[`test-author`](../../.agents/skills/test-author/SKILL.md), is named a lens in three skill bodies, and is
 shaped like something you run.
 
 ## Scope
@@ -73,7 +73,7 @@ shaped like something you run.
 **Out of scope:**
 
 - **The progressive-disclosure question**, which is
-  [`chore-0070`](chore-0070-adopt-the-published-disclosure-convention-and-decide-its-enforcement-level.md).
+  [`chore-0070`](../chore-0070-adopt-the-published-disclosure-convention-and-decide-its-enforcement-level.md).
   **That task touches the same three files as this one, so the two cannot share a wave.**
 - Reshaping any skill other than `test-quality`, and reshaping even that one only if this task decides to.
 - The description ceiling and its headroom. Related surface, different question, not filed.
@@ -96,13 +96,55 @@ Two candidate sources, neither obviously right:
   forgets it is silently a workflow.
 - **The composition graph.** A lens is defined by being composed rather than run, and this repository
   already models that: `check_lenses_are_composed` asks whether some skill names a rules file, and
-  `SIBLING_REF_RE` in [`install.py`](../scripts/install.py) treats a sibling link as a profile edge. A
+  `SIBLING_REF_RE` in [`install.py`](../../scripts/install.py) treats a sibling link as a profile edge. A
   skill that only ever appears as somebody else's reference is a lens by the rule's own definition. Cost:
   it infers intent from usage, so a lens nothing composes yet is invisible, which is exactly the state
   `autonomy.md` was in for ten days.
 
 Prior art for the check's shape: `check_status_contradiction` in `validate-skills.py` is the closest
 existing thing, a body-content rule expressed as a warning over parsed text.
+
+## Decisions
+
+- **Rejected alternative, the composition graph as the source of declared shape.** Measured
+  2026-08-31 over the sibling-link graph of all 22 skills: the rule's own definition, read as
+  "referenced by another skill and referencing none", classifies `init-worktracking`, `pr-describe`
+  and `project-bootstrap` as lenses and none of the three skills that call themselves one, because
+  `verifier-agent` alone carries seven inbound edges. Rejected on the measurement, not the argument.
+- **Rejected alternative, a `metadata` frontmatter key as the source of declared shape.** It
+  declares nothing until a marker is added to each lens, and no `SKILL.md` is in this task's
+  `touched_files`, so it would have shipped a convention with no adopter in the tree, which is the
+  `autonomy.md` failure `feat-0064` was filed for. Chosen instead: the self-declaration the bodies
+  already carry ("This skill is a lens"), read the way `declares_universal_scope()` reads its
+  marker, which needs no skill edited and is what an agent reading the body actually sees.
+- **Rejected alternatives for `test-quality`: reshaping it, and reclassifying it as a third kind.**
+  It stays a lens, unreshaped, and the disagreement is reported as a standing warning. Reshaping
+  was rejected because its `SKILL.md` is not in `touched_files` and because the rule's stated harm
+  is absent there: its headings are a rubric and there is no procedure for an agent to run
+  standalone. A third category was rejected because a category with one member is a rename rather
+  than a taxonomy, and the warning already says what the new name would.
+- **Rejected alternative, error severity.** Both numbers, measured before the choice: three skills
+  declare themselves lenses, and one of the three is reported. As an error that one fails the tree
+  on landing for a resolution this task does not own. Warning chosen, per `check_status_contradiction`.
+- **A premise that turned out false.** The Problem section says `spec-conformance` and
+  `spec-plan-readiness` are "both called lenses in other skill bodies". `spec-conformance` is;
+  `spec-plan-readiness` is not, in any skill body, and its own opening calls it a gate. It is
+  therefore shaped like a lens and classified as one by nothing, including this check.
+- **A premise partly overtaken.** The task predates `feat-0064` (2026-08-29), which rewrote this
+  section around declaration-in-the-file plus validator enforcement. The wrong sentence was still
+  there verbatim, so the defect held, but the fix follows that precedent: the list is deleted rather
+  than corrected, because a corrected list goes stale the same way the first one did.
+- **A seam left open deliberately: the spec.** [`docs/spec/validate-skills.md`](../../docs/spec/validate-skills.md)
+  is `approved` and enumerates its scenarios, and `feat-0064` amended it when it added S-026. That
+  spec and its conformance matrix are outside this task's `touched_files`, so the amendment for this
+  check is owed as a follow-up rather than made here.
+- **A seam left open deliberately: a WARN from this gate is invisible in the acceptance command.**
+  `coverage_line()` in `run-checks.py` shows one line per gate, the last containing a digit, so the
+  standing `test-quality` warning shows only when `validate-skills.py` is run directly. Pre-existing
+  and equally true of `check_status_contradiction`; not changed here.
+- **A seam left open deliberately: the short-description correlation was not written into the
+  rule.** The Scope section marks it optional and requires its own evidence, none was gathered, and
+  the declaration now supplies the mechanism the correlation was standing in for.
 
 ## Risks and rollback
 

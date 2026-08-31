@@ -21,7 +21,7 @@ created: 2026-08-29
 Four items from the
 [2026-08-29 pre-publication review](../../docs/reviews/2026-08-29-pre-publication-review.md), each small
 enough that four task files would cost more than the work. The bundling follows the precedent
-[`chore-0038`](../chore-0038-five-small-upkeep-items-from-the-2026-08-08-review.md) set and its caveat
+[`chore-0038`](chore-0038-five-small-upkeep-items-from-the-2026-08-08-review.md) set and its caveat
 applies here too: this is the exception rather than the pattern, and the reason is written down so a
 later reader does not take it as licence.
 

@@ -26,6 +26,7 @@ import ast
 import contextlib
 import importlib.util
 import io
+import json
 import re
 import subprocess
 import sys
@@ -1063,6 +1064,194 @@ class UndecodableFileTemplateTests(UndecodableFileTests):
     carries its own history in its comments. `chore-0081` was filed asking that the two
     "match", which was a false premise: they were already 119 lines apart by design. What has
     to match is the behaviour, which is what subclassing asserts.
+    """
+
+    module = tvt
+
+
+class ScaffoldManifestTests(TasksRootTestCase):
+    """`chore-0060`: the id high-water mark in the scaffold manifest, read at last.
+
+    `.tasks/.scaffold.json` records the highest id in use per type, and `new-task` tells
+    an author to prefer it over scanning the tree. Nothing read it. A search for
+    `scaffold.json` and `id_high_water` across the skills, the tracker, the tests and
+    the scripts returned six hits and every one was prose in a skill body: no validator,
+    no gate, no test. It had drifted below the backlog while every gate stayed green, so
+    an agent following the instruction as written was handed ids that were already
+    taken, and found out from the duplicate-id error, after the task files existed and
+    had been cross-referenced.
+
+    The population is a manifest that disagrees with the tree it describes. The cases
+    that must stay silent matter as much as the one that must fire: this validator ships
+    into every repository the scaffold touches, and a warning on a clean adopter tree is
+    the outcome this file's own comments say to design against.
+    """
+
+    module = tv
+
+    def _write_task(self, tid):
+        """Write one open task file carrying `tid`, named after it."""
+        ttype = tid.split("-", 1)[0]
+        text = (TASK.format(external="")
+                .replace("id: feat-0099", f"id: {tid}")
+                .replace("type: feat", f"type: {ttype}"))
+        (self.tasks / f"{tid}-test.md").write_text(text, encoding="utf-8")
+
+    def _manifest_path(self):
+        return self.tasks / self.module.SCAFFOLD_MANIFEST
+
+    def _write_manifest(self, raw):
+        """Write the manifest verbatim, so a malformed one is expressible."""
+        self._manifest_path().write_text(raw, encoding="utf-8")
+
+    def _write_high_water(self, **recorded):
+        self._write_manifest(json.dumps({"generator": "init-worktracking",
+                                         "id_high_water": recorded}))
+
+    def _run_lenient(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = self.module.main([])
+        return code, buf.getvalue()
+
+    def test_a_recorded_high_water_below_the_tree_is_reported(self):
+        # The defect itself, and the acceptance criterion. chore-0007 is in the tree and
+        # the manifest says the highest chore is 5, which is exactly the state that
+        # hands the next author an id already taken.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a stale manifest\n{out}")
+        self.assertIn(".scaffold.json", out)
+        self.assertIn("chore-0007", out)
+
+    def test_the_finding_names_both_numbers(self):
+        # The message is the deliverable. "The manifest is stale" sends the reader off
+        # to scan the tree by hand, which is the work the record exists to save.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        _, out = self._run()
+        self.assertIn("is 5", out)
+        self.assertIn("chore-0007", out)
+
+    def test_the_finding_is_a_warning_that_only_strict_promotes(self):
+        # A recorded decision, not an accident of implementation, and the same one the
+        # mislabelled-link check made: a default run in an adopter's tree reports this
+        # without failing, and only --strict, which a backlog gate runs, promotes it.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        code, out = self._run_lenient()
+        self.assertEqual(code, 0,
+                         f"a default run must not fail an adopter's tree\n{out}")
+        self.assertIn("WARN", out)
+        self.assertIn(".scaffold.json", out)
+
+    def test_a_manifest_level_with_the_tree_is_silent(self):
+        self._write_task("chore-0007")
+        self._write_high_water(chore=7)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_ahead_of_the_tree_is_silent(self):
+        # Ahead is the normal state, not a finding: an id is consumed when a task is
+        # authored, and a task can be abandoned without its id ever being reused.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=9)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_type_the_tree_has_never_used_is_not_compared(self):
+        # The adopter case the task named outright: a scaffolded tree that has never
+        # filed a bug must not be told its bug high-water is wrong. The seeded manifest
+        # lists all four types with zeros, and three of them match nothing for a long
+        # time.
+        self._write_task("chore-0007")
+        self._write_high_water(bug=0, feat=0, chore=7, epic=0)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_an_absent_manifest_is_not_a_finding(self):
+        # A tracker with no manifest has no second source of truth to be wrong about.
+        self._write_task("chore-0007")
+        self.assertFalse(self._manifest_path().exists())
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_without_the_key_is_not_a_finding(self):
+        self._write_task("chore-0007")
+        self._write_manifest(json.dumps({"generator": "init-worktracking",
+                                         "tier": "lite"}))
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_an_empty_high_water_object_is_not_a_finding(self):
+        self._write_task("chore-0007")
+        self._write_high_water()
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_that_is_not_valid_json_is_reported_rather_than_raising(self):
+        # This check reads a file nothing else here reads, so a corrupt one must not
+        # take the run down. Reporting rather than skipping is the other half: a
+        # manifest that cannot be parsed is a guard that has silently stopped guarding,
+        # which is the failure this check was added to close rather than to join.
+        self._write_task("chore-0007")
+        self._write_manifest("{ not json at all\n")
+        code, out = self._run()          # would raise if the parse were unguarded
+        self.assertEqual(code, 1, out)
+        self.assertIn(".scaffold.json", out)
+        self.assertIn("not valid JSON", out)
+
+    def test_a_manifest_that_is_not_utf8_is_reported_rather_than_raising(self):
+        self._write_task("chore-0007")
+        self._manifest_path().write_bytes(
+            b'{"id_high_water": {"chore": 5}, "note": "\xff\xfe"}')
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("not valid UTF-8", out)
+
+    def test_a_high_water_that_is_not_a_number_is_reported_rather_than_skipped(self):
+        # Same reasoning as the unreadable manifest: a value no comparison can use means
+        # the check quietly does nothing while the record still looks authoritative.
+        self._write_task("chore-0007")
+        self._write_high_water(chore="7")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn(".scaffold.json", out)
+
+    def test_a_boolean_is_not_mistaken_for_a_number(self):
+        # `True == 1` in Python, so a bool passes an isinstance(int) test and would be
+        # compared as the number one, reporting a stale high-water that says nothing
+        # about what is actually wrong with the file.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=True)
+        _, out = self._run()
+        self.assertIn("not a whole number", out)
+
+    def test_a_current_manifest_over_a_real_backlog_is_unaffected(self):
+        # The negative case. A check that reported every manifest it read would satisfy
+        # the assertions above without telling two states apart.
+        self._write_task("chore-0007")
+        self._write_task("bug-0003")
+        self._write_high_water(bug=3, feat=0, chore=7, epic=0)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 error(s), 0 warning(s)", out)
+
+
+class ScaffoldManifestTemplateTests(ScaffoldManifestTests):
+    """The same guard in the copy `init-worktracking` writes into other repositories.
+
+    The manifest is written by that skill, into the tree this template lands in, so the
+    adopter's copy is where a stale high-water actually costs an id. Run as a loaded
+    module rather than compared as text, for the reason the undecodable-file suite gives
+    above: the two files differ by design, and it is the behaviour that has to match.
     """
 
     module = tvt

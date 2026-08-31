@@ -64,7 +64,7 @@ obligations, all inside the normal procedure:
 1. Confirm `.tasks/` exists. If not, this repo has no work-tracking system yet: point the user to the `init-worktracking` skill and stop.
 2. **Check whether `ROADMAP.md` exists**, in the same breath and for the same reason. Its absence is the `init-worktracking` **lite** tier, which ships task files deliberately without a roadmap or a changelog, and it changes what `parent` may name (see Step 4). Absence is a valid state here, not a problem to fix: do not offer to create a roadmap.
 3. Read `AGENTS.md`: the section that lists the repo's technical commands (for the acceptance command), the section that states its conventions, and the section that describes the work-altitude model. Read `.tasks/_TEMPLATE.md` for the exact frontmatter shape.
-4. Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`; otherwise scan `.tasks/` and `.tasks/done/` for the highest `NNNN` per `type` and continue from there. Ids are stable and never reused.
+4. Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`; otherwise scan `.tasks/` and `.tasks/done/` for the highest `NNNN` per `type` and continue from there. Ids are stable and never reused. What makes that preference safe is that the shipped validator compares the record against the tree and reports every type it has fallen below, so a manifest in a repository whose backlog gate is green is current. Where no such run has happened since the last task landed, scan as well and take whichever is higher: the record is written by hand at closeout, and an author who trusts a stale one is handed an id that is already taken and finds out only from the duplicate-id error, after the file exists and has been cross-referenced.
 5. If the input references a ROADMAP Feature, read that Feature. If it references existing tasks (as dependencies), note their ids and whether they are in `done/`.
 
 ### Step 2: elicit intent (ask before decomposing)
@@ -114,8 +114,8 @@ Follow the repo's own conventions from the conventions section of `AGENTS.md` (d
 
 ### Step 6: self-check and update bookkeeping
 
-1. Run the shipped validator: `python .tasks/validate.py --strict`. Every `touched_files` path already exists by the rule in Step 3, so `--strict` is the mode to check against, and it is the mode a backlog gate in CI runs. Fix anything it flags. Do not hand over a task file that does not pass.
-2. If `.tasks/.scaffold.json` exists, update its `id_high_water` for the types you consumed, so the next author does not collide.
+1. Run the shipped validator: `python .tasks/validate.py --strict`. Every `touched_files` path already exists by the rule in Step 3, so `--strict` is the mode to check against, and it is the mode a backlog gate in CI runs. Fix anything it flags. Do not hand over a task file that does not pass. Expect one finding you have not fixed yet: the ids you just consumed put the tree above the scaffold manifest, and Step 6.2 is what clears it, so do that and run this again.
+2. If `.tasks/.scaffold.json` exists, update its `id_high_water` for the types you consumed, so the next author does not collide. The validator checks this, so skipping it fails the backlog gate now rather than costing the next author a rename later.
 3. If you added a ROADMAP Feature, write that one line now (with user assent).
 
 ### Step 7: report and offer the handoff

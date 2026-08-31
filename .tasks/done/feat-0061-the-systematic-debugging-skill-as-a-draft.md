@@ -212,7 +212,7 @@ principle in the skill's own words instead.
 blessed, and two skills are now in that state: `agent-observatory` and this one. Its opening states a
 binary, shipped or planned, and neither is true of a draft. Inventing a third status in a
 reader-facing document is a documentation decision rather than a knock-on of adding a skill, so it is
-[`chore-0079`](../chore-0079-the-catalog-has-no-slot-for-a-skill-that-is-built-but-not-blessed.md)
+[`chore-0079`](chore-0079-the-catalog-has-no-slot-for-a-skill-that-is-built-but-not-blessed.md)
 rather than an edit made here.
 
 ### What is still owed
