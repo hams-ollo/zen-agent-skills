@@ -456,11 +456,13 @@ class TheCommittedRegistrationActuallyRuns(unittest.TestCase):
         for label, command in ([("claude", c) for c in self.commands()]
                                + [("codex", c) for c in self.codex_commands()]):
             with self.subTest(wiring=label, command=command[:50]):
-                names = {t for t in command.split() if not t.endswith(".py")}
-                self.assertTrue(
-                    any(wanted == n.strip('"\'') or n.strip('"\'').endswith(f"/{wanted}")
-                        or wanted in n for n in names),
-                    f"the {label} wiring never names {wanted!r}")
+                names = {
+                    Path(t.strip('"\'')).name
+                    for t in command.split()
+                    if not t.endswith(".py") and t != "||"
+                }
+                self.assertIn(wanted, names,
+                              f"the {label} wiring never names {wanted!r}")
 
         plugin = (REPO_ROOT / ".opencode" / "plugins" / "zen-hooks.mjs").read_text(
             encoding="utf-8")
