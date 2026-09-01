@@ -52,11 +52,19 @@ second copy this generator exists to prevent.
 Every write lands inside <out>. A skill's frontmatter `name` becomes a path
 component of the two inlining destinations, so a `..` segment in one would walk
 out of the output root and write wherever it landed (bug-0060). Two things stop
-that: a `name` that is not the source directory's name is refused before any
-emitter is dispatched, which is the rule validate-skills.py already states, and
-`_write` compares the resolved destination against the resolved root for every
-file it places. Either refusal fails the whole run with exit 2, in a preview as
-well as in a real run, rather than skipping the skill and emitting the rest.
+that: a `name` that is not the source directory's name is refused, which is the
+rule validate-skills.py already states, and `_write` compares the resolved
+destination against the resolved root for every file it places. Either refusal
+fails the whole run with exit 2, in a preview as well as in a real run, rather
+than skipping the skill and emitting the rest.
+
+The name rule runs as a pre-pass over every discovered skill, before the first
+file of the run is written, and it reports every offending skill rather than the
+first one it meets (bug-0062). It used to be applied inside the emit loop, which
+left every skill sorted ahead of the offender on disk, and the shared material
+with them, under an output root that defaults to the working directory. Goal 6
+of the contract is to fail clearly on an unusable invocation rather than write a
+partial result, and only the first half of that was true.
 
 Standard library only. Generated adapters are overwritten each run (they are
 derived artifacts); do not hand-edit them, edit the SKILL.md instead.
@@ -519,6 +527,64 @@ def _write(dest: Path, content: str, dry: bool, root: Path):
 EMITTERS = {"cursor": emit_cursor, "vscode": emit_vscode, "plugin": emit_plugin}
 
 
+def name_refusals(named_skills, targets, out: Path, tag: str = "") -> list[str]:
+    """One refusal message per skill whose frontmatter `name` is not its directory.
+
+    `named_skills` is `(skill_dir, name)` pairs, in discovery order. An empty list
+    means the tree is usable, which is the only thing `_main` proceeds on.
+
+    Two properties, and neither is the rule itself. The rule is validate-skills.py's,
+    borrowed rather than moved (bug-0060), and it is applied here exactly as it was
+    applied per skill before.
+
+    The first is *when*. `_main` calls this over every discovered skill before it
+    writes anything at all, so an unusable tree leaves nothing behind rather than
+    everything sorted ahead of the first offender, plus the shared rules module that
+    is placed before the loop even begins (bug-0062).
+
+    The second is *how much*. Every offender is reported rather than the first, so one
+    run tells an adopter the whole set to fix instead of one name per run. That is why
+    this returns a list and prints nothing: the caller decides how a refusal is shown,
+    and this is the only place that knows how many there are.
+
+    `_write`'s containment check is unaffected and stays where it is. This is a second
+    line of defence in front of that boundary rather than a replacement: it covers the
+    names that become path components, and the boundary covers every destination,
+    including whatever a rule about names does not reach.
+    """
+    # One destination is shown rather than one per requested target, and it is read
+    # from NAME_DESTINATIONS rather than rebuilt here: a refusal that reconstructed the
+    # path would drift into naming something this tool no longer emits, which is a
+    # confident citation pointing at nothing. Computed once, because it depends on the
+    # requested targets and not on the skill.
+    shown = next((t for t in targets if t in NAME_DESTINATIONS), None)
+    messages = []
+    for skill_dir, name in named_skills:
+        if name == skill_dir.name:
+            continue
+        if shown is None:
+            # A plugin-only run. Nothing requested derives a path from `name`, so there
+            # is no destination to show and inventing one would be false.
+            where = ("No requested target derives a destination from it, so nothing "
+                     f"would leave the output root {out}")
+        else:
+            # The message names a destination and not only the root, because the root
+            # alone leaves a reader unable to see that the name escapes at all, which
+            # is the fact that carries the severity. It is one target's destination out
+            # of however many were requested, so it is labelled representative rather
+            # than offered as the only one. No emitter is dispatched to obtain it.
+            would_be = NAME_DESTINATIONS[shown](name, out).resolve()
+            side = "inside" if would_be.is_relative_to(out) else "outside"
+            where = (f"Representative, for target {shown!r}: {would_be}, {side} the "
+                     f"output root {out}")
+        messages.append(
+            f"{tag}Refusing to emit skill {skill_dir.name!r}: frontmatter name "
+            f"{name!r} != directory {skill_dir.name!r}, and that name becomes a path "
+            f"component of every inlining target's destination. {where}. Fix the "
+            f"SKILL.md frontmatter; validate-skills.py states the same rule.")
+    return messages
+
+
 def main(argv=None) -> int:
     """Entry point. `argv` defaults to sys.argv[1:]; pass a list to drive it in a test.
 
@@ -582,6 +648,28 @@ def _main(argv=None) -> int:
             layouts.append(LAYOUTS[t])
 
     tag = "[dry-run] " if args.dry_run else ""
+
+    # Every SKILL.md is read and parsed here, before anything is dispatched or placed,
+    # and the result is carried into the loop below. Two reasons, both bug-0062. The
+    # name rule has to be applied to the whole set before the first write, and the first
+    # write of a run belongs to emit_rules_module() rather than to the loop, so a check
+    # merely hoisted to the top of the loop would still leave the shared module behind.
+    # And reading each file once means an undecodable SKILL.md is reported once, by the
+    # one read, rather than giving two chances to describe the same failure differently.
+    parsed = {d: split_frontmatter(read_text_utf8(d / "SKILL.md")) for d in skills}
+
+    refusals = name_refusals(((d, fm.get("name", d.name)) for d, (fm, _) in parsed.items()),
+                             targets, out, tag)
+    if refusals:
+        for message in refusals:
+            print(message)
+        # The whole set, and the assurance that goes with refusing before writing. An
+        # adopter reading one refused run learns every name to fix and that the tree it
+        # ran against is untouched, which for a default run is the working directory.
+        print(f"{tag}Refusing the whole run: {len(refusals)} of {len(skills)} skill(s) "
+              f"named above. No file was written under {out}.")
+        return 2
+
     n = 0
     # The rules module is one copy shared by every skill, so it is emitted per
     # layout and outside the per-skill loop. Inside it, a preview counted it once
@@ -589,39 +677,9 @@ def _main(argv=None) -> int:
     assets = sum(len(emit_rules_module(out, args.dry_run, layout))
                  for layout in layouts)
     for d in skills:
-        fm, body = split_frontmatter(read_text_utf8(d / "SKILL.md"))
+        fm, body = parsed[d]
         name = fm.get("name", d.name)
         desc = fm.get("description", "")
-        if name != d.name:
-            # The rule validate-skills.py already states, borrowed rather than moved
-            # (bug-0060). `name` becomes a path component in both inlining emitters,
-            # so a name that is not the directory it came from is refused before any
-            # emitter is dispatched, and a `..` in one never reaches a path at all.
-            # Run-level rather than a skipped skill: goal 6 of the contract is to fail
-            # clearly on an unusable invocation rather than write a partial result.
-            #
-            # The message names a destination and not only the root, because the root
-            # alone leaves a reader unable to see that the name escapes at all, which is
-            # the fact that carries the severity. It is one target's destination out of
-            # however many were requested, so it is labelled representative rather than
-            # offered as the only one, and it is read from NAME_DESTINATIONS rather than
-            # rebuilt here. No emitter is dispatched to obtain it.
-            shown = next((t for t in targets if t in NAME_DESTINATIONS), None)
-            if shown is None:
-                # A plugin-only run. Nothing requested derives a path from `name`, so
-                # there is no destination to show and inventing one would be false.
-                where = ("No requested target derives a destination from it, so nothing "
-                         f"would leave the output root {out}")
-            else:
-                would_be = NAME_DESTINATIONS[shown](name, out).resolve()
-                side = "inside" if would_be.is_relative_to(out) else "outside"
-                where = (f"Representative, for target {shown!r}: {would_be}, {side} the "
-                         f"output root {out}")
-            print(f"{tag}Refusing to emit skill {d.name!r}: frontmatter name {name!r} "
-                  f"!= directory {d.name!r}, and that name becomes a path component of "
-                  f"every inlining target's destination. {where}. Fix the SKILL.md "
-                  f"frontmatter; validate-skills.py states the same rule.")
-            return 2
         for t in targets:
             try:
                 dest = EMITTERS[t](d, name, desc, body, out, args.dry_run)

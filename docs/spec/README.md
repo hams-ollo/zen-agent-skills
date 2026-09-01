@@ -73,13 +73,14 @@ not machine-readable: that is the known cost of this convention, not an oversigh
 ### The author's re-approval queue
 
 Every spec listed below is approved and carries an amendment the author has not re-read. Some carry
-more than one: `install` carries two, `build-adapters` three, since `chore-0043` and again since
-`chore-0062`, `cloud-executable` three, since `chore-0061` and again since `chore-0049`, and
+more than one: `install` carries two, `build-adapters` four, since `chore-0043`, again since
+`chore-0062`, and again since `chore-0087`, `cloud-executable` three, since `chore-0061` and again
+since `chore-0049`, and
 `validate-skills` five, since `chore-0047`, again since `chore-0054`, again since `chore-0065`, and again since `feat-0064`.
 
 | Spec | Amendment | Amended |
 |---|---|---|
-| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`); `S-019`, what a relative link inside an emitted lens must satisfy (`chore-0062`) | 2026-08-06, 2026-08-19, 2026-08-27 |
+| [`build-adapters`](build-adapters.md) | `S-015` to `S-017`, the `plugin` target (`feat-0034`); `S-018`, the code-span and fence exception (`chore-0043`); `S-019`, what a relative link inside an emitted lens must satisfy (`chore-0062`); `S-020` and the `Exit code` surface element, a destination outside the output root refused rather than written (`chore-0087`) | 2026-08-06, 2026-08-19, 2026-08-27, 2026-09-01 |
 | [`cloud-executable`](cloud-executable.md) | `S-017` and `S-018` repointed from `bug-0018`, closed 2026-08-08, to the open `bug-0020` (`chore-0051`); `S-020` and the `Output` surface element, what a passing gate's entry carries (`chore-0061`); the `Gate set` surface element restated as a property rather than a count (`chore-0049`) | 2026-08-20, 2026-08-27, 2026-08-28 |
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
@@ -138,7 +139,7 @@ something else today.
 | Spec | Status | Scenarios | Siblings |
 |---|---|---|---|
 | [`agent-observatory`](agent-observatory.md) | approved | 22 | [conformance](agent-observatory.conformance.md) (22 of 22 built), [readiness](agent-observatory.readiness.md) |
-| [`build-adapters`](build-adapters.md) | approved | 19 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
+| [`build-adapters`](build-adapters.md) | approved | 20 | [conformance](build-adapters.conformance.md), [readiness](build-adapters.readiness.md) |
 | [`cloud-executable`](cloud-executable.md) | approved | 20 | [conformance](cloud-executable.conformance.md), [readiness](cloud-executable.readiness.md), [verification: S-001 to S-016](cloud-executable.s001-s016.verification.md) (**fail**, fixed same day), [verification: the proof run](cloud-executable.verification.md) (**blocked**), [runbook](cloud-executable.runbook.md) |
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
@@ -150,12 +151,14 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 26 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-Twelve specs, 185 scenarios, all approved. **All twelve now carry a conformance matrix**, holding
-all 185 of those scenarios, recomputed from the files on 2026-08-29 rather than incremented: the
-twelve counts in the column above sum to 185, and no spec is now without a matrix. The figure moved
-from 184 the same day, when `feat-0064` amended `validate-skills` with `S-026`; it was recomputed
-by counting `### Scenario S-NNN` headings across all twelve files rather than by adding one, which
-is the discipline `chore-0075` is open to mechanise.
+Twelve specs, 186 scenarios, all approved. **All twelve now carry a conformance matrix**, holding
+all 186 of those scenarios, recomputed from the files on 2026-08-29 rather than incremented: the
+twelve counts in the column above sum to 186, and no spec is now without a matrix. The figure moved
+from 184 to 185 on 2026-08-29, when `feat-0064` amended `validate-skills` with `S-026`, and to 186
+on 2026-09-01, when `chore-0087` amended `build-adapters` with `S-020`. The 2026-08-29 figure was
+recomputed by counting `### Scenario S-NNN` headings across all twelve files rather than by adding
+one; this one was incremented by hand from the row it changed, which is the discipline `chore-0075`
+is open to mechanise and the reason it is worth mechanising.
 [`systematic-debugging`](systematic-debugging.md) was the last one, audited at `feat-0061`'s
 closeout on 2026-08-29.
 
