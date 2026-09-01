@@ -2113,7 +2113,7 @@ class TestLiveWatcher(ServeTestCase):
                              "the surviving thread exits and none replaces it")
             self.append_record("a2")
             try:
-                event = channel.get(timeout=10)
+                event = channel.get(timeout=2)
             except queue.Empty:
                 self.fail("a report opened after another closed never saw new work, so "
                           "the page shows a live indicator over a stalled report")
