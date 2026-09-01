@@ -1442,6 +1442,32 @@ class DependencyCycleTests(TasksRootTestCase):
              "is not a known task id"],
             out)
 
+    def test_a_ring_written_with_scalar_depends_on_is_still_reported(self):
+        # The consequence the `chore-0089` task file understated, found by independent
+        # verification and measured on the base commit: a scalar contributed **no edge**
+        # to the graph, so a ring written that way was invisible to the cycle search
+        # entirely. The run still failed, on eighteen single-character "unresolved"
+        # errors and no cycle line at all, which reads as two broken files rather than
+        # as a ring. The task said the scalar shape "cannot manufacture a false cycle",
+        # which is true and is the wrong direction: it suppressed a true one.
+        #
+        # Measured at 648a140 with both tasks written this way: exit 1, 0 cycle lines,
+        # 18 unresolved lines. After the normalisation: exit 1, 1 cycle line, 0
+        # unresolved. This is the single most valuable consequence of that change and
+        # nothing else pins it.
+        self._write_scalar_task("feat-0098", "feat-0099")
+        self._write_scalar_task("feat-0099", "feat-0098")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0098"],
+            out)
+        # And the eighteen bogus diagnostics are gone, which is what makes the ring
+        # legible rather than merely detected.
+        self.assertEqual(self._unresolved_lines(out), [], out)
+
     def test_a_chain_and_a_diamond_are_valid(self):
         # The false positive worth designing against. Two paths that meet again are not a
         # ring, and a search that only asks whether a node has been seen before reports

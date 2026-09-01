@@ -40,12 +40,16 @@ test.
 above where `scenarios` gets scalar-to-list normalisation. A scalar `depends_on: feat-0001` is
 therefore walked character by character.
 
-**This is pre-existing and cannot currently manufacture a false cycle**, because a single character
-is never a known id, so no edge is recorded and the only symptom is a run of `depends_on
-unresolved` errors naming single letters. It is filed rather than fixed silently because the
-asymmetry with the field four lines below reads as an oversight to every future reader, and because
-`bug-0061` now builds a graph from that same loop, which raises the cost of the asymmetry from
-confusing to load-bearing.
+**This is pre-existing, and the direction stated here was wrong.** It cannot manufacture a *false*
+cycle, because a single character is never a known id, so no edge is recorded. That is exactly why
+it **suppresses a true one**: a ring whose members write `depends_on` as a scalar contributes no
+edges at all, so `bug-0061`'s cycle search never sees it. Measured at `648a140` on a two-node ring
+written that way: exit 1, **zero** cycle lines, eighteen single-character unresolved errors. After
+the normalisation: exit 1, one correct cycle line, no unresolved errors. The run failed either way,
+which is what hid it, but it failed reading as two broken files rather than as a ring. Corrected at
+reconciliation after independent verification found it; pinned by
+`test_a_ring_written_with_scalar_depends_on_is_still_reported`, which was added in the same pass and
+confirmed failing against the base in both validator copies.
 
 ## Scope
 
