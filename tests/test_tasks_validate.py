@@ -1296,10 +1296,32 @@ class DependencyCycleTests(TasksRootTestCase):
             directory.mkdir(exist_ok=True)
         (directory / f"{tid}-test.md").write_text(text, encoding="utf-8")
 
+    def _write_scalar_task(self, tid, dep):
+        """One task file whose depends_on is a bare scalar rather than a list.
+
+        Legal YAML, and a shape a person writes by hand for a single dependency. It
+        differs from _write_task above in exactly that: the value is not a list.
+        """
+        ttype = tid.split("-", 1)[0]
+        text = (TASK.format(external="")
+                .replace("id: feat-0099", f"id: {tid}")
+                .replace("type: feat", f"type: {ttype}")
+                .replace("depends_on: []", f"depends_on: {dep}"))
+        (self.tasks / f"{tid}-test.md").write_text(text, encoding="utf-8")
+
     @staticmethod
     def _cycle_lines(out):
         """The reported cycle lines, whole, so a change to the message cannot slip by."""
         return [line for line in out.splitlines() if "depends_on cycle" in line]
+
+    @staticmethod
+    def _unresolved_lines(out):
+        """The reported unresolved-dependency lines, whole.
+
+        Whole rather than counted, because the defect this pins is what the message
+        names: one line per character reads as nine unrelated findings.
+        """
+        return [line for line in out.splitlines() if "depends_on unresolved" in line]
 
     def test_a_two_node_cycle_is_reported_as_an_error(self):
         # The defect itself. Two otherwise valid tasks naming each other, which passed
@@ -1387,6 +1409,64 @@ class DependencyCycleTests(TasksRootTestCase):
         code, out = self._run()
         self.assertEqual(code, 0, out)
         self.assertIn("0 error(s), 0 warning(s)", out)
+
+    def test_a_ring_with_a_member_in_done_is_reported(self):
+        # The case above pins a dependency *into* done/ as satisfied and silent. This is
+        # the other shape and the opposite answer: a ring one of whose members lives in
+        # done/ is a genuine backlog defect, because the open member waits on an id that
+        # waits on it and can never be dispatched. The behaviour was already correct and
+        # nothing asserted it, so a later change could make a done member terminate the
+        # search and hide exactly the defect the check exists for (`chore-0089`).
+        self._write_task("chore-0001", ["feat-0098"], done=True)
+        self._write_task("feat-0098", ["chore-0001"])
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a ring through done/\n{out}")
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/done/chore-0001-test.md: depends_on cycle: "
+             "chore-0001 -> feat-0098 -> chore-0001"],
+            out)
+
+    def test_a_scalar_depends_on_is_read_as_one_id_and_not_as_characters(self):
+        # A scalar is legal YAML and the frontmatter parser returns it as a string, so
+        # the loop walked it character by character and reported one unresolved
+        # dependency per letter. Harmless to the graph, since a single character is
+        # never a known id, and unreadable to the person holding the output
+        # (`chore-0089`).
+        self._write_scalar_task("feat-0098", "feat-0099")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._unresolved_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on unresolved: 'feat-0099' "
+             "is not a known task id"],
+            out)
+
+    def test_a_ring_written_with_scalar_depends_on_is_still_reported(self):
+        # The consequence the `chore-0089` task file understated, found by independent
+        # verification and measured on the base commit: a scalar contributed **no edge**
+        # to the graph, so a ring written that way was invisible to the cycle search
+        # entirely. The run still failed, on eighteen single-character "unresolved"
+        # errors and no cycle line at all, which reads as two broken files rather than
+        # as a ring. The task said the scalar shape "cannot manufacture a false cycle",
+        # which is true and is the wrong direction: it suppressed a true one.
+        #
+        # Measured at 648a140 with both tasks written this way: exit 1, 0 cycle lines,
+        # 18 unresolved lines. After the normalisation: exit 1, 1 cycle line, 0
+        # unresolved. This is the single most valuable consequence of that change and
+        # nothing else pins it.
+        self._write_scalar_task("feat-0098", "feat-0099")
+        self._write_scalar_task("feat-0099", "feat-0098")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0098"],
+            out)
+        # And the eighteen bogus diagnostics are gone, which is what makes the ring
+        # legible rather than merely detected.
+        self.assertEqual(self._unresolved_lines(out), [], out)
 
     def test_a_chain_and_a_diamond_are_valid(self):
         # The false positive worth designing against. Two paths that meet again are not a

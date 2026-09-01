@@ -689,7 +689,17 @@ def main(argv=None) -> int:
         if not in_done and status == "done":
             warn(rel, "status is done but file is not in done/")
 
-        for dep in fm.get("depends_on", []) or []:
+        # A single dependency written as a scalar is legal YAML and a shape a person
+        # writes by hand, and the frontmatter parser returns it as the string it is.
+        # Normalised to a one-element list in the same shape `scenarios` uses below,
+        # rather than a second one: without it the loop walks the id character by
+        # character and reports one unresolved dependency per letter (`chore-0089`).
+        # A value that is neither a string nor a list is deliberately not coerced, so
+        # nothing that is not an id can be read as one.
+        depends_on = fm.get("depends_on", []) or []
+        if isinstance(depends_on, str):
+            depends_on = [depends_on]
+        for dep in depends_on:
             if dep == tid:
                 err(rel, f"depends_on lists itself: {dep}")
             elif dep not in all_ids:

@@ -2,7 +2,7 @@
 id: chore-0088
 title: Both README copies enumerate the validator's checks and omit cycle detection, so a scaffolded adopter gets the check with nothing explaining it
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0061]
@@ -14,10 +14,10 @@ created: 2026-08-31
 
 ## Problem
 
-[`bug-0061`](done/bug-0061-the-strict-backlog-gate-accepts-a-dependency-cycle.md) adds cycle detection to
+[`bug-0061`](bug-0061-the-strict-backlog-gate-accepts-a-dependency-cycle.md) adds cycle detection to
 both copies of the validator. One sentence describes what that validator checks, and it exists
-verbatim and identically in two files, [`.tasks/README.md`](README.md) line 25 and
-[`tasks-README.md.tmpl`](../.agents/skills/init-worktracking/templates/tasks-README.md.tmpl) line
+verbatim and identically in two files, [`.tasks/README.md`](../README.md) line 25 and
+[`tasks-README.md.tmpl`](../../.agents/skills/init-worktracking/templates/tasks-README.md.tmpl) line
 25:
 
 > It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task,
@@ -64,20 +64,41 @@ and leave the voice alone, which is exactly what that skill is for.
 `.tasks/README.md` links resolve from `.tasks/`, and the template's resolve from wherever
 `init-worktracking` places it. Do not copy a link from one into the other.
 
+## Decisions
+
+- **Rejected: a separate enumeration item for the cycle check.** The clause was folded into the
+  existing `depends_on` item instead, because cycle detection is a second property of the same field
+  rather than a new subject, and a fifth item would have implied otherwise. The wording is lifted
+  verbatim from the module docstring that `bug-0061` wrote into both validators, so the two READMEs
+  and both `validate.py` copies now describe the check in identical words.
+- **Seam left open deliberately: the two copies still diverge outside this sentence, and one of
+  those divergences is not what this entry first called it.** `.tasks/README.md` carries a
+  re-anchoring incident paragraph the template omits, links its `external` prose to
+  `docs/spec/tracker-links.md` where the template restates it self-contained, and words the
+  `external` table cell for GitHub-here rather than for a tracker generally. Those three are
+  deliberate this-repository versus scaffolded-repository retargeting, and reconciling them is out
+  of scope per this task's Scope section. **The fourth is not retargeting**: the template carries a
+  `title` frontmatter row that `.tasks/README.md` lacks, and `title` is in both `_TEMPLATE.md`
+  copies and used by 21 of the 22 open task files here, so the repository's own README is missing a
+  row for a field it actively uses. Corrected at reconciliation after independent verification
+  named it; filed as `chore-0091` rather than left in an archived task file. The divergences are
+  named rather than counted, per the house style, because a count beside the thing it counts stops
+  being true the moment either file moves.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] `git grep -n "id uniqueness" -- .tasks/README.md .agents/skills/init-worktracking/templates/`
+- [x] `git grep -n "id uniqueness" -- .tasks/README.md .agents/skills/init-worktracking/templates/`
       returns two lines, and both now name the cycle check.
-- [ ] The two sentences still say the same thing as each other, confirmed by reading them side by
+- [x] The two sentences still say the same thing as each other, confirmed by reading them side by
       side, with only the deliberate this-repository versus scaffolded-repository retargeting
       differing.
-- [ ] The `doc links` gate passes, so no link was broken by the edit.
+- [x] The `doc links` gate passes, so no link was broken by the edit.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
