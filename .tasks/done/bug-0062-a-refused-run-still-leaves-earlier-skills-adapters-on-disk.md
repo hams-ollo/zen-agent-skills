@@ -2,7 +2,7 @@
 id: bug-0062
 title: A refused adapter run still leaves earlier skills' files on disk, so goal 6's no-partial-result promise is half kept
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: [bug-0060]
@@ -16,11 +16,11 @@ created: 2026-08-31
 
 ## Problem
 
-[`bug-0060`](done/bug-0060-a-frontmatter-name-can-write-outside-the-adapter-output-root.md) closes the
+[`bug-0060`](bug-0060-a-frontmatter-name-can-write-outside-the-adapter-output-root.md) closes the
 path escape and refuses the run at exit 2. It refuses **inside** the per-skill loop in `_main`, so
 every skill sorted before the offending one has already been emitted by the time the refusal fires.
 
-Goal 6 of [`build-adapters.md`](../docs/spec/build-adapters.md) is "fail clearly on an unusable
+Goal 6 of [`build-adapters.md`](../../docs/spec/build-adapters.md) is "fail clearly on an unusable
 invocation rather than writing a partial result", and `bug-0060`'s own Scope quotes it as the reason
 the refusal is run-level rather than a skipped skill. Half of that is now true: the run fails
 clearly. The other half is not.
@@ -87,23 +87,52 @@ that twice gives two chances to report the same failure differently.
 pre-pass has to come before that call as well, not merely before the loop. This is the detail that
 makes the fix slightly less trivial than it sounds, and it is the one to get right.
 
+## Decisions
+
+- **Rejected: re-reading each `SKILL.md` in the emit loop.** The pre-pass parses once into a dict
+  keyed by skill directory and the loop reads from it, because two reads give `read_text_utf8` two
+  chances to describe the same `NotUTF8` differently. The widening that follows is deliberate: an
+  undecodable `SKILL.md` now also refuses before anything is written, not only an offending `name`.
+- **Rejected: iterating the cached parses directly, as `for d, fm, body in parsed`.** The loop header
+  stays `for d in skills:` verbatim because the rewrite buys nothing the dict does not already give:
+  the parse has to exist before `emit_rules_module` either way, and keeping the header is the smaller
+  diff over a function this task is not otherwise restructuring.
+- **Premise that turned out false: that the S-001 citation forced that shape.** This section first
+  claimed the rewrite would have left `check-citations.py` resolving nowhere, and independent
+  verification disproved it. The cited phrase `for d in skills` occurs twice in the fixed file, once
+  in the pre-pass comprehension and once in the loop header, so rewriting the header leaves the
+  citation resolving against the comprehension; the verifier confirmed it still resolves. The
+  decision above stands on its own reasons, and this one was never load-bearing.
+- **Rejected: a module-level assertion tying `NAME_DESTINATIONS` to `EMITTERS`.** A test drives each
+  emitter with a name that disagrees with its directory instead, so the coupling is decided by where
+  a destination actually lands. Comparing the two key sets to each other restates the mapping rather
+  than testing it, and would still pass for an entry pointing where its emitter does not write.
+- **Seam left open: the pre-pass applies the name rule and nothing else.** `_write`'s containment
+  check stays the boundary for every destination, per this task's out-of-scope list, so a future
+  destination built from something other than `name` is still refused at its first write rather than
+  by the pre-pass. One consequence of reading every `SKILL.md` up front, measured rather than
+  predicted: on a tree carrying both an undecodable file and a name offender, the run now reports the
+  `NotUTF8` and never names the offender, because the read precedes the check. Both shapes refuse the
+  whole run at exit 2 and write nothing, and the base was incomplete in the mirror direction, so this
+  is a change in which half is reported rather than a regression.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] A tree with one offending skill among several leaves **no file at all** under the output root,
+- [x] A tree with one offending skill among several leaves **no file at all** under the output root,
       asserted on the filesystem.
-- [ ] That test fails against the current code. Confirm the failure before the fix.
-- [ ] The refusal names every offending skill, not only the first.
-- [ ] The shared rules module is not written either, so the pre-pass precedes `emit_rules_module`.
-- [ ] A valid tree emits byte-identical output: same file count, same destinations, same stdout as
+- [x] That test fails against the current code. Confirm the failure before the fix.
+- [x] The refusal names every offending skill, not only the first.
+- [x] The shared rules module is not written either, so the pre-pass precedes `emit_rules_module`.
+- [x] A valid tree emits byte-identical output: same file count, same destinations, same stdout as
       before the change.
-- [ ] `--dry-run` refuses the same input a real run refuses.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] `--dry-run` refuses the same input a real run refuses.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

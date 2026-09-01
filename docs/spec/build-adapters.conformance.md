@@ -7,7 +7,9 @@ re_audited: 2026-07-27 (chore-0015), 2026-08-06 (feat-0034), 2026-08-19 (chore-0
   2026-08-27 (chore-0062, partial: S-019 only),
   2026-08-27 (chore-0068, partial: S-009, S-010, S-011, S-012, S-014, S-016 and the
   Emitted shared paths surface row only),
-  2026-08-27 (chore-0045, partial: the S-018 test-coverage row only)
+  2026-08-27 (chore-0045, partial: the S-018 test-coverage row only),
+  2026-09-01 (chore-0087, partial: S-020, plus the Exit code and Emitted per-skill paths
+  surface rows)
 ---
 
 # build-adapters conformance matrix
@@ -102,6 +104,31 @@ claim wrong independently of the retag: the row said all five tests run against 
 extensions, and four of them do. The fifth targets the plugin, which inlines nothing and has no
 extension to vary, which is the reason for having it. Corrected in the row rather than left standing.
 
+Re-audited 2026-09-01 by `chore-0087`, and **partially**: one scenario, `S-020`, which that task adds,
+plus two Proposed Surface rows, `Exit code` and `Emitted per-skill paths`. Every other row below
+carries its previous audit date and was not looked at in this pass. That chore is the contract half
+`bug-0060` recorded as owed and deliberately put outside its own scope, the split `chore-0043` made for
+`bug-0028`: the containment boundary shipped on 2026-08-31 with no scenario requiring it, so this
+matrix could have gone on reporting full coverage over a tool that had quietly stopped containing its
+writes. The amendment is **pending the author's re-approval**, stated in the spec's header and
+repeated here for the reason the paragraphs above give. No file under `scripts/` or `tests/` was
+touched in this pass. The work began on 2026-08-31 and this pass carries 2026-09-01, the date it was
+recorded, which is what every other date in this ledger means; where 2026-08-31 appears below it names
+when `bug-0060`'s behaviour arrived, which is a different fact and keeps its own date.
+
+The two surface rows are re-audited for two different reasons, and the difference matters more than
+the pair. **`Exit code` changed on the contract side**: it read "non-zero for an unrecognized target,
+zero otherwise", which stopped being true the day `bug-0060` added two more non-zero exits, and which
+`S-020` would otherwise have contradicted from inside the same document. **`Emitted per-skill paths`
+is a re-anchor and its verdict is untouched**: `bug-0060` moved the two inlining path shapes into
+`NAME_DESTINATIONS` so the refusal message and the emitters could not disagree about where a name
+lands, and a reader following the old citation to the `dest` expressions in `emit_cursor()` and
+`emit_vscode()` then found a lookup rather than the shapes the row asserts. The emitted paths did not
+move, which is what makes this the re-anchor `review-quality`'s evidence gate prescribes rather than a
+re-classification. The `matrix citations` gate cannot see this class: `emit_cursor()` still resolves as
+a symbol, so a citation that resolves and no longer shows what it claims is exactly the residual that
+gate leaves, and it falls to a reader.
+
 The reach of the new rule was measured rather than asserted, which is what makes it checkable. Across
 the twenty shipped `SKILL.md` bodies, `bug-0028` measured 131 links matched by `LINK_RE` and 0 newly
 suppressed by the guard, so every generated adapter is byte-identical before and after the fix.
@@ -131,7 +158,7 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 
 | Section | Item | Status | Evidence | Note |
 |---|---|---|---|---|
-| Scenarios | S-001 one adapter per skill per requested target | Conformed | `main()` / the `for d in skills` loop over `targets`, with the summary print and `return 0` | only requested targets are dispatched, via `EMITTERS[t]` |
+| Scenarios | S-001 one adapter per skill per requested target | Conformed | `_main()` / the per-skill emit loop, anchored on `dest = EMITTERS[t]`, its single dispatch site, with the `Generated {n} adapter file(s)` summary print and `return 0` | only requested targets are dispatched, via `EMITTERS[t]`. **Re-anchored 2026-09-01 (`chore-0087`), verdict unchanged, and caused by a sibling task rather than by `bug-0060`.** The row cited the phrase `for d in skills`, unique in this worktree and about to stop being so: `bug-0062` adds a pre-pass that parses every skill's frontmatter before anything is written, and its comprehension carries the same phrase, so the citation would go on resolving and would resolve ambiguously. That is the worse half of this failure class, because a later refactor of the emit loop alone would leave the gate green with the cited construct gone, where a citation that dangles at least fails loudly. The new anchor sits inside the loop and is independent of how the frontmatter reaches it, which is the part `bug-0062` changes. The enclosing function is named `_main()` here rather than `main()`, its wrapper, for the same reason the Exit code row is. Verified unique in this worktree; it could not be verified against the landed combination, which is not readable from here |
 | Scenarios | S-002 harness frontmatter and do-not-edit banner | Conformed | `emit_cursor()` and `emit_vscode()` content strings, with `BANNER`, and `split_frontmatter()` / `BLOCK_SCALAR_RE.sub("", value, count=1)` | cursor gets `description` plus `alwaysApply: false`, vscode gets `mode: agent` plus `description`; both prepend the banner naming the source `SKILL.md`. **Diverged when re-audited 2026-07-28 and fixed the same day (`bug-0006`)**: `split_frontmatter()` captured a YAML block-scalar indicator as part of the value, so the four skills writing `description: >-` emitted `description: ">- Turns ..."`, eight of the 38 files a full run produces. The scenario says the adapter opens with the skill's `description`, and that string is the scalar's serialisation rather than its value, so the contract already covered it and no amendment was needed |
 | Scenarios | S-003 sibling link points at the adapter beside it | Conformed | `rewrite_links()` / `SIBLING_RE` branch | emits `<sibling><ext>`, a same-directory reference. Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only for a link outside every code span and fence (S-018) |
 | Scenarios | S-004 anchor survives the rewrite | Conformed | `rewrite_links()` / `SIBLING_RE` branch, `sibling.group(2)` | the captured anchor is reattached. Re-audited 2026-08-19 (`chore-0043`): unchanged, and now reached only outside a code span or fence (S-018) |
@@ -147,35 +174,42 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
 | Scenarios | S-011 generating into the kit is a no-op | Conformed | `emit_rules_module()` / `dest.resolve() == src.resolve() or dest.exists()` and `emit_skill_assets()` / `dest.resolve() == src.resolve()`, the same-file test in each | confirmed by execution: a run against the repo root reports `plus 0 shared asset file(s)`. Re-audited 2026-08-27 (`chore-0068`): `bug-0025`'s split left the same-file guard in each function rather than twice in one, and both halves of the Then still hold, since a skipped file is also one never appended to the returned list `main()` sums. Re-confirmed by execution on that date |
 | Scenarios | S-012 a preview run writes nothing | Conformed | `_write()` / its `if dry:` early return, `emit_plugin()` / its `if dry:` early return of an unwritten `dest`, and the `if not dry:` guards in `emit_rules_module()` and `emit_skill_assets()`; and, for the count half of the Then, `main()` / its `assets` accumulator, a `sum()` over `layouts` calling `emit_rules_module()` once per distinct layout, hoisted out of the per-skill loop | confirmed by execution: zero files written into a temp root. Re-audited 2026-08-27 (`chore-0068`), and this is the row the re-derivation changed most, because **its Then has two halves and the evidence named only the first**. Nothing writes on a preview, and that held throughout. The second half, that the reported counts describe what would have been produced, was false when this row was first audited on 2026-07-27 and nothing in the row named it: a preview counted the rules module once per skill and reported 74 shared assets against the 17 a real run writes, which `bug-0025` measured and fixed on 2026-08-08 with the hoist now cited above. The verdict is correct today and the evidence now covers both halves rather than one. Re-confirmed by execution on 2026-08-27: a preview into an empty root wrote 0 files and reported the same 17 shared assets a real run into that root then wrote |
 | Scenarios | S-013 an unrecognized target is rejected | Conformed | `main()` / the `bad` check returning 2 | the check precedes any emission, so nothing partial is written; confirmed by execution (exit 2, zero files) |
+| Scenarios | S-020 a destination outside the output root is refused | Conformed | `_write()` / `resolved = dest.resolve()` and `if not resolved.is_relative_to(root):` raising `OutsideOutputRoot`, both ahead of its `if dry:` early return; `_main()` / the `name_refusals` pre-pass taken before any emitter is dispatched and before `emit_rules_module`, and its `except OutsideOutputRoot` handler, each returning 2 and each naming the skill. **Re-anchored at reconciliation on 2026-09-01**, verdict unchanged: this row cited a phrase from the in-loop name refusal, which `bug-0062` removed from the emit loop in the same wave when it moved the name rule into a pre-pass. The dead phrase is described rather than quoted here on purpose: a backticked span is itself extracted as a citation, so quoting it would have re-created the very pointer this re-anchor removes, so the pointer resolved in neither task's worktree alone and only the combined tree could show it; `NAME_DESTINATIONS`, read by the two inlining emitters and by the refusal message | added by `chore-0087`, writing down what `bug-0060` built on 2026-08-31 and left out of its own scope. The check sits at the one boundary every emitted file passes through rather than in each emitter, so a target added later inherits it, which is why this row can be a claim about destinations rather than about names. Covered by the six tests in `TestDestinationContainment`, whose oracle is the filesystem in every case: `test_a_traversal_name_writes_nothing_outside_the_output_root` and `test_the_write_boundary_refuses_before_the_preview_branch` drive the boundary directly, below the name check that now stands in front of it; `test_a_traversal_name_fails_the_run_naming_the_skill_and_a_destination` and `test_the_named_destination_follows_the_requested_target` drive the run-level refusal and assert the message names a path that resolves outside the root rather than the root alone; `test_a_preview_refuses_the_same_input_a_real_run_refuses` holds the preview half of the When; and `test_a_name_matching_its_directory_still_emits_both_adapters` holds the guard invisible on valid input. Audited by reading and by those tests rather than by a hand-run execution, which this pass did not perform and does not claim |
 | Scenarios | S-015 the plugin target emits an installable plugin tree | Conformed | `emit_plugin()` / `dest = out / "skills" / src.name / "SKILL.md"`, and `emit_plugin_manifests()` / the `marketplace` literal and the `for fname, obj in ...` write loop, dispatched from `main()` by `if "plugin" in targets` | added by `feat-0034`. Both manifests are derived from the single `PLUGIN` mapping, so the marketplace entry cannot name a plugin other than the one emitted beside it. The destination uses `src.name`, the source *directory* name, because `../<dir>/SKILL.md` is what a sibling link names. Confirmed by execution: `claude plugin validate --strict` passes against the generated tree |
 | Scenarios | S-016 nothing in an emitted plugin tree points outside it | Conformed | `LAYOUTS` / its `"plugin": Layout("rules", "skills")` entry, consumed by `emit_rules_module()` / `out / layout.rules_dir` and `emit_skill_assets()` / `out / layout.assets_dir`; and `emit_plugin()`, which copies the source `SKILL.md` verbatim and calls no rewriter | added by `feat-0034`, and the reason the target exists. The layout, not a rewrite, is what makes the links resolve: `skills/<name>/` reaching `../../rules/<file>` lands on `rules/<file>`, the same geometry `.agents/skills/<name>/` has to `.agents/rules/<file>` with the `.agents/` parent dropped. Confirmed by execution: 117 relative links resolved on disk from the emitted root, none broken and none leaving it, with one copy of `review-quality.md` at `rules/review-quality.md`. Confirmed to **fail** when the plugin layout is given the inlining targets' `.agents/rules`, which dangles all 28 rules links, so it is an oracle over the layout decision rather than a restatement of it. Re-audited 2026-08-27 (`chore-0068`): the two `dest` expressions now sit in the two functions `bug-0025` split the original one into, neither changed, and the layout rather than a rewrite is still what makes the links resolve. Re-measured by execution on that date, resolving each link from the directory of the skill holding it: 128 relative links, 0 dangling and 0 leaving the plugin root, still exactly one copy of `review-quality.md` at `rules/review-quality.md` |
 | Scenarios | S-017 the plugin target is opt-in | Conformed | `main()` / the `--target` `default="cursor,vscode"`, and the `if "plugin" in targets` guard on `emit_plugin_manifests()` | added by `feat-0034`. Confirmed to **fail** when `plugin` is added to the default, which also breaks the pre-existing S-011 test, since a default run into the kit would then write `rules/` and `skills/` trees the no-op guard does not cover |
 | Proposed Surface | Invocation and its three flags | Conformed | `main()` / the `argparse` definitions for `--target`, `--out`, `--dry-run` | `--target` defaults to `cursor,vscode` and `--out` to the working directory. Amended by `feat-0034`: the default is the two inlining targets rather than every supported one, per S-017 |
-| Proposed Surface | Emitted per-skill paths | Conformed | `emit_cursor()`, `emit_vscode()` and `emit_plugin()` `dest` expressions | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md`, `skills/<name>/SKILL.md` |
+| Proposed Surface | Emitted per-skill paths | Conformed | `NAME_DESTINATIONS`, whose two entries `emit_cursor()` and `emit_vscode()` read their `dest` from, and `emit_plugin()` / `dest = out / "skills" / src.name / "SKILL.md"` | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md`, `skills/<name>/SKILL.md`. **Re-anchored 2026-09-01 (`chore-0087`), verdict unchanged.** The citation used to name the `dest` expressions in the three emitters; `bug-0060` moved the two inlining shapes into `NAME_DESTINATIONS`, so two thirds of that pointer led to a lookup rather than to the paths this row asserts. The paths themselves did not move, which is what keeps this a re-anchor rather than a re-classification. `emit_plugin()` is untouched and still builds its destination from the source *directory* name, which is why a frontmatter `name` is never a path component there (S-020) |
 | Proposed Surface | Emitted per-plugin-run paths | Conformed | `emit_plugin_manifests()` / `dest = out / ".claude-plugin" / fname` | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, written once per run rather than per skill |
 | Proposed Surface | Emitted shared paths | Conformed | `emit_rules_module()` / `dest = out / layout.rules_dir / src.relative_to(RULES_DIR)` and `emit_skill_assets()` / `dest = out / layout.assets_dir / skill_dir.name / rel`, with the distinct-layout loop in `main()` | `.agents/rules/<file>` and `.agents/skills/<name>/<path>` for the inlining targets, `rules/<file>` and `skills/<name>/<path>` for the plugin. `cursor` and `vscode` share one layout, so requesting both still emits one copy. Re-audited 2026-08-27 (`chore-0068`): both `dest` expressions survive `bug-0025`'s split unchanged, one to each function, and the emitted paths are identical. What did change is the mechanism behind that last sentence, recorded because the surface it describes did not move: one copy used to be the *result* of the rules loop running once per skill and short-circuiting on `dest.exists()` after the first, and it is now produced by construction, since `Layout` is a namedtuple and `LAYOUTS["cursor"] == LAYOUTS["vscode"]`, so the dedupe in `main()` yields a single `emit_rules_module()` call. Confirmed by execution on that date: a default `cursor,vscode` run emits exactly three files under `.agents/rules/` |
-| Proposed Surface | Exit code | Conformed | `main()` / `return 2` for a bad target, `return 0` otherwise | |
+| Proposed Surface | Exit code | Conformed | `_main()` / `return 2` for an unrecognized target, `return 2` for a frontmatter `name` that disagrees with its directory, whose message separates the two cases at `side = "inside" if would_be.is_relative_to(out) else "outside"`, and `return 2` in its `except OutsideOutputRoot` handler; `main()` / `return 2` on `NotUTF8`, and its deliberately unreachable `OutsideOutputRoot` backstop; `return 0` otherwise | Re-audited 2026-09-01 (`chore-0087`), and the surface text moved with it, **twice**. It read "non-zero for an unrecognized target, zero otherwise", which `bug-0060` made false the day it landed. The first correction named only `S-020`'s refusal and was still false, which independent verification caught by measurement: a frontmatter name refused whose destination lands *inside* the root exits 2, and so does an undecodable `SKILL.md`, and both fall under "otherwise" in that wording. A note saying the row claimed neither did not repair it, because `zero otherwise` is a universal claim that claims both. The element now names the class instead, a run that refuses rather than proceeds, which is true of every reachable arm, of the backstop arm that is unreachable today, and of the wider refusal `bug-0062` is adding, whose pre-pass refuses a whole run before anything is written and names every offending skill rather than the first. Which refusals are *required* stays a scenario's question, `S-013` and `S-020`, so this row leaves the name rule where it lives, in `validate-skills.py`, which this task's scope puts outside the contract |
 | Proposed Surface | Output | Conformed | `main()` / the per-emission print, the manifest print, the closing summary and its manifest-count line | the summary names the shared roots actually written, so a plugin run reports `under rules/, skills/.` where an inlining run reports `under .agents/.` |
 
 ## Coverage proof
 
-- **audited**: the spec now carries 19 scenarios and six Proposed Surface elements, and every one of
-  the 25 items has a row below. The arithmetic, stated rather than asserted: the 2026-08-19 pass
+- **audited**: the spec now carries 20 scenarios and six Proposed Surface elements, and every one of
+  the 26 items has a row below. The arithmetic, stated rather than asserted: the 2026-08-19 pass
   checked all 18 scenarios then in the spec plus all 6 surface elements, 24 items; `chore-0062` adds
-  `S-019` and audits it; 18 + 1 = 19 scenarios, and 19 + 6 = 25 rows. S-018 is numbered
+  `S-019` and audits it, 18 + 1 = 19 scenarios and 19 + 6 = 25 rows; `chore-0087` adds `S-020` and
+  audits it, 19 + 1 = 20 scenarios and 20 + 6 = 26 rows. S-018 is numbered
   after S-017 and placed beside S-008 in both documents, because it is the exception those rewrite
   rows are read against; `S-019` is numbered after S-018 and placed beside S-009 for the same kind of
-  reason, since it is the outbound half of the pair S-009 opens.
-- **not re-audited in this pass**: 13 of the 19 scenarios and 5 of the 6 surface elements. The
-  `chore-0068` pass re-audited **6 scenarios**, `S-009`, `S-010`, `S-011`, `S-012`, `S-014` and
-  `S-016`, plus **1 surface element**, `Emitted shared paths`, which are the seven rows that cited the
-  function `bug-0025` removed, and nothing else. The arithmetic, stated rather than asserted:
-  19 - 6 = 13 scenarios and 6 - 1 = 5 surface elements stand on the dates they carry and are not
-  re-asserted here, and 6 audited now + 13 standing = 19, which is the whole scenario set and is the
-  only sense in which this document covers it. Two passes share the date 2026-08-27 and they are
-  distinct: `chore-0062` audited **1**, `S-019`, and this pass did not look at it. The 2026-08-22 pass
-  re-audited **2**, `S-009` and `S-016`, and this pass re-derived both again, because both cited the
-  removed function and neither that pass nor its date is what made the citation stale.
+  reason, since it is the outbound half of the pair S-009 opens; `S-020` is numbered after `S-019` and
+  placed beside `S-013` in both documents, since a refused destination and an unrecognized target are
+  the two invocations this contract requires the tool to fail on rather than serve.
+- **not re-audited in this pass**: 19 of the 20 scenarios and 4 of the 6 surface elements. The
+  `chore-0087` pass audited **1 scenario**, `S-020`, which it adds, plus **2 surface elements**,
+  `Exit code` and `Emitted per-skill paths`, and nothing else. The arithmetic, stated rather than
+  asserted: 20 - 1 = 19 scenarios and 6 - 2 = 4 surface elements stand on the dates they carry and are
+  not re-asserted here, and 1 audited now + 19 standing = 20, which is the whole scenario set and is
+  the only sense in which this document covers it. The earlier passes are not superseded and their
+  arithmetic is kept: `chore-0068` re-audited **6 scenarios**, `S-009`, `S-010`, `S-011`, `S-012`,
+  `S-014` and `S-016`, plus **1 surface element**, `Emitted shared paths`, which are the seven rows
+  that cited the function `bug-0025` removed; `chore-0062` audited **1**, `S-019`; and the 2026-08-22
+  pass re-audited **2**, `S-009` and `S-016`, both of which `chore-0068` re-derived again, because
+  both cited the removed function and neither that pass nor its date is what made the citation stale.
+  Three passes share the date 2026-08-27 and they are three, and this pass looked at none of the rows
+  any of them settled.
 - **unreconciled**: none. The single item this section carried from 2026-08-22 is now closed rather
   than dropped, and it is worth saying how, because it was a contract gap presenting as a clean
   matrix. It read: **no scenario states what a file in the rules module may link to**, since every
@@ -188,6 +222,15 @@ scenarios, which was the shared-asset re-run behavior: unstated at the time, and
   lens resolves where the lens landed, rather than as the fix `bug-0044` chose, so a future layout
   that made more forms resolve would not have to amend the contract to use them. Between 2026-08-22
   and this amendment the rule was held by `TestEmittedRulesModuleResolves` alone.
+
+  One item is **owed** rather than unreconciled, and is named here so it is not lost. The module
+  docstring of [`test_build_adapters.py`](../../tests/test_build_adapters.py) states that
+  `TestDestinationContainment` carries no scenario id, because no scenario governs where a write may
+  land, and names `chore-0087` as the amendment that would change that. As of this pass the sentence
+  is stale in both halves: `S-020` states the rule, and those tests are acceptance tests for it rather
+  than characterization tests of unstated behaviour. The retag is a change to a test file, which
+  `chore-0087` writes nothing in, so it is left to a follow-up in the shape `chore-0045` used for
+  `S-018` after `chore-0043` stated it. Nothing about the implementation is unreconciled by it.
 
 ## Test coverage of spec invariants
 
@@ -209,11 +252,13 @@ lacks one. Against [`tests/test_build_adapters.py`](../../tests/test_build_adapt
 | S-016 | present | added by `feat-0034`, two tests: one resolving every relative link in every emitted skill on disk and asserting none is broken and none escapes the plugin root, one on `house-review` reaching its rubric and finding `blocker` in the file it lands on, with exactly one copy of the module in the tree. This is the invariant `claude plugin validate` cannot check, so these tests are the only thing holding it |
 | S-017 | present | added by `feat-0034`. Asserts both halves, since asserting the absence alone would pass against a target that emitted nothing |
 | S-018 | present | added by `bug-0028`, five tests in `TestRewriteLinksInsideCodeSpansAndFences`. The four on `rewrite_links()` each run against both inlining extensions; the fifth targets the plugin, which inlines nothing and has no extension to vary. Two positives use whole-string equality rather than a substring, because "emitted unchanged" is a claim about the whole body. The negatives carry the weight, since the cheap way to remove a false rewrite is to stop rewriting: a real link beside a *closed* fence and one below an *unterminated* fence must both still be repointed. The fenced case holds all three rewritten classes at once (S-003, S-006, S-007), because one surviving proves nothing about the other two. That fifth test asserts the plugin target copies a body byte for byte, so the criterion "unchanged in every target" is asserted rather than assumed. **The tests predate the id and no longer carry the older tags**: `bug-0028` wrote them before any scenario stated the rule, `chore-0043` stated it on 2026-08-19, and `chore-0045` retagged the class and all five cases to `S-018` on 2026-08-27, deleting the docstring paragraph that called the amendment the author's open call. Re-audited on that date against the retagged file: five tests, unchanged in what they assert, and the tags now name what they cover rather than less |
+| S-020 | present | added by `bug-0060`, six tests in `TestDestinationContainment`. Two drive the write boundary directly, which is the only way to reach it with a name the run-level check now rejects before dispatch; three drive the run through `main()`, asserting the exit code, that the message names the skill and a destination that resolves outside the root rather than the root alone, and that a preview refuses what a real run refuses; the sixth asserts the guard is invisible on valid input, the same fixture with an honest name emitting exactly the two adapters it emitted before the guard existed. The oracle in every one of them is the filesystem, deliberately: an emitter that returned an escaping path and wrote nothing would be harmless and one that returned a contained path and wrote outside would be the defect, and a return-value assertion cannot tell those apart. **The tests predate the id and still carry no tag**: `bug-0060` wrote them on 2026-08-31 when no scenario stated the rule, and its module docstring says so and names this task. `S-020` now states it, so the retag is owed, and it is a change to a test file this task writes nothing in. Recorded as owed in the coverage proof above rather than performed here |
 
 Every scenario has a covering test, including the shared-asset re-run behavior that had neither a
 scenario nor a test when this matrix was first written, and the code-span rule that had tests before
 it had a scenario. `S-019` is the third of that kind: a test held it from 2026-08-22, and the
-contract sentence arrived on 2026-08-27.
+contract sentence arrived on 2026-08-27. `S-020` is the fourth, and the shortest-lived: tests held it
+from 2026-08-31 and the contract sentence arrived the next day.
 
 The S-015 through S-017 tests were each confirmed to fail against a mutation of the decision they
 protect: pointing the plugin layout at the inlining targets' `.agents/rules` (which dangles all 28

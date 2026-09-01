@@ -21,7 +21,9 @@ a preview run, so it asserts the no-op without depending on it.
 the spec governs where a write may land, so it is a characterization test pinning
 observed behavior rather than an acceptance test deriving from the contract, and
 tagging it with an id would claim a contract line that does not exist. Amending the
-spec is chore-0087.
+spec is chore-0087. `TestRefusalPrecedesEveryWrite` and
+`TestNameDestinationsCoverEveryInliningTarget` carry none for the same reason
+(bug-0062).
 """
 import contextlib
 import importlib.util
@@ -846,6 +848,228 @@ class TestDestinationContainment(unittest.TestCase):
             [".cursor/rules/traversal-fixture.mdc",
              ".github/prompts/traversal-fixture.prompt.md"])
         self.assertEqual(self._outside(root, out), [])
+
+
+class TestRefusalPrecedesEveryWrite(unittest.TestCase):
+    """bug-0062: the name refusal fired inside the per-skill loop, so every skill
+    sorted before the offending one was already on disk when the run reported failure.
+
+    test-quality notes: characterization, not acceptance. See the module docstring for
+    why there is no S-NNN id.
+
+    The oracle is the filesystem, and it is deliberately stronger than
+    `TestDestinationContainment`'s: nothing at all under the output root, rather than
+    nothing outside it. The escape that class pins is closed, and what it cannot see is
+    a refused run that still emitted both adapters for the skill sorted first. Exit code
+    and message are no oracle here either, because the build this class was written
+    against already exits 2 and already names the offender.
+
+    The fixture carries a populated rules directory rather than an absent one, which is
+    the detail that makes this more than a restatement. `emit_rules_module` writes the
+    shared material before the per-skill loop begins, so a check merely hoisted to the
+    top of that loop would still leave that file behind, and every other assertion here
+    would pass. `test_the_shared_rules_module_is_not_written_either` runs the same
+    fixture twice, refusing and clean, so the absence it asserts is known to be one the
+    fixture can actually produce.
+
+    Every path stays inside a `TemporaryDirectory`. The traversal names carry exactly
+    enough `..` segments to leave `<out>` and land in the sandbox directory above it, so
+    a partial write is provable without one ever reaching a real location.
+    """
+
+    ESCAPING = "../../../escaped"
+
+    def _sandbox(self):
+        """A temp root holding nothing but the output root, two levels down."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name).resolve()
+        return root, root / "nested" / "out"
+
+    def _kit(self, skills):
+        """A fixture kit in its own temp directory: `skills` maps directory to `name`.
+
+        Kept apart from the sandbox so the sandbox holds only what the run wrote. The
+        rules module is real rather than redirected to an absent path, because whether
+        it lands is the ordering evidence this class exists for.
+        """
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name).resolve()
+        for directory, name in skills.items():
+            d = base / "skills" / directory
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: a fixture skill\n---\n\nBody.\n",
+                encoding="utf-8")
+        (base / "rules").mkdir()
+        (base / "rules" / "house-style.md").write_text("# fixture lens\n",
+                                                       encoding="utf-8")
+        return mock.patch.multiple(ba, SKILLS_DIR=base / "skills",
+                                   RULES_DIR=base / "rules")
+
+    def _files(self, root):
+        """Every file under `root`, relative and posix, or `[]` when it does not exist."""
+        if not root.exists():
+            return []
+        return sorted(p.relative_to(root).as_posix()
+                      for p in root.rglob("*") if p.is_file())
+
+    def test_one_offending_skill_leaves_no_file_at_all_under_the_output_root(self):
+        # `aaa-good` sorts before `zzz-bad`, so a build that refuses inside the loop
+        # emits it first and its two adapters survive the run that reported failure.
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good", "zzz-bad": self.ESCAPING}):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 2, f"the run must fail, not emit; it printed:\n{printed}")
+        self.assertEqual(
+            self._files(out), [],
+            "a refused run left a partial result under the output root, which "
+            f"defaults to the working directory; it printed:\n{printed}")
+        self.assertEqual([str(p) for p in root.rglob("*") if p.is_file()], [],
+                         "a refused run wrote somewhere in the sandbox")
+
+    def test_the_shared_rules_module_is_not_written_either(self):
+        # The ordering evidence. `emit_rules_module` is called before the per-skill
+        # loop, so the pre-pass has to precede that call and not merely the loop.
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good", "zzz-bad": self.ESCAPING}):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 2, printed)
+        module = out / ".agents" / "rules" / "house-style.md"
+        self.assertFalse(module.exists(),
+                         f"a refused run placed the shared rules module at {module}")
+
+        # The same fixture with the offending name repaired does write it. Without this
+        # half, the assertion above would also pass against a fixture that could never
+        # have produced the file at all.
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good", "zzz-bad": "zzz-bad"}):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 0, printed)
+        self.assertTrue((out / ".agents" / "rules" / "house-style.md").is_file(),
+                        "the fixture cannot produce the file the refusal must suppress")
+
+    def test_the_refusal_names_every_offending_skill(self):
+        # One run tells an adopter everything to fix, rather than one name per run.
+        offenders = {"mmm-bad": "../../../escaped-mmm",
+                     "zzz-bad": "../../../escaped-zzz"}
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good", **offenders}):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 2, printed)
+        for directory, name in offenders.items():
+            self.assertIn(directory, printed,
+                          f"the refusal does not name {directory}:\n{printed}")
+            self.assertIn(name, printed,
+                          f"the refusal does not name {name}:\n{printed}")
+        self.assertNotIn("aaa-good", printed,
+                         "a refused run reported emitting a usable skill")
+        self.assertEqual(self._files(out), [])
+
+    def test_a_preview_refuses_the_same_input_and_reports_the_same_set(self):
+        # --dry-run is the one place run-checks.py exercises this tool, so a preview
+        # that previewed a run the real one refuses would be the misleading half.
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good",
+                        "mmm-bad": "../../../escaped-mmm",
+                        "zzz-bad": "../../../escaped-zzz"}):
+            code, printed = _run(["--out", str(out), "--dry-run"])
+        self.assertEqual(code, 2, f"a preview must refuse what a real run refuses; "
+                                  f"it printed:\n{printed}")
+        self.assertIn("escaped-mmm", printed)
+        self.assertIn("escaped-zzz", printed)
+        self.assertNotIn("aaa-good", printed,
+                         "a refused preview reported emitting a usable skill")
+        self.assertEqual([str(p) for p in root.rglob("*") if p.is_file()], [])
+
+    def test_a_usable_tree_still_emits_every_skill_and_the_shared_module(self):
+        # The pre-pass must be invisible on valid input: same destinations, same count.
+        root, out = self._sandbox()
+        with self._kit({"aaa-good": "aaa-good", "zzz-good": "zzz-good"}):
+            code, printed = _run(["--out", str(out)])
+        self.assertEqual(code, 0, printed)
+        self.assertEqual(self._files(out), [
+            ".agents/rules/house-style.md",
+            ".cursor/rules/aaa-good.mdc",
+            ".cursor/rules/zzz-good.mdc",
+            ".github/prompts/aaa-good.prompt.md",
+            ".github/prompts/zzz-good.prompt.md",
+        ])
+        self.assertIn("Generated 4 adapter file(s) for 2 skill(s)", printed)
+
+
+class TestNameDestinationsCoverEveryInliningTarget(unittest.TestCase):
+    """bug-0062: nothing related `NAME_DESTINATIONS` to `EMITTERS`.
+
+    test-quality notes: characterization, not acceptance. See the module docstring for
+    why there is no S-NNN id.
+
+    The oracle is behavioral rather than a comparison of two literals. Each emitter is
+    driven with a frontmatter `name` that disagrees with its source directory, and a
+    target whose destination carries that name is one that derives a path from it.
+    Comparing the two key sets to each other would restate the coupling instead of
+    testing it, and comparing either to a hardcoded pair would only move the drift here.
+
+    What the coupling buys is the honesty of one sentence. `_main`'s refusal reads the
+    destination it shows out of `NAME_DESTINATIONS`, and says no requested target
+    derives a destination from the name when none of them is in that mapping. An
+    inlining target added to `EMITTERS` and not to `NAME_DESTINATIONS` would make that
+    false. The consequence is a misleading message rather than an escape, because
+    `_write`'s containment check still refuses the write, which is why this rides along
+    with the pre-pass rather than carrying its own task.
+
+    A preview run, so the mapping is exercised without writing anything: `_write`
+    resolves and checks a destination before its `dry` early return.
+    """
+
+    NAME = "zzz-marker-name"
+
+    def _fixture(self, base):
+        """A one-skill source tree whose directory and frontmatter `name` disagree."""
+        skill = base / "skills" / "marker-directory"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            f"---\nname: {self.NAME}\ndescription: a fixture skill\n---\n\nBody.\n",
+            encoding="utf-8")
+        return skill
+
+    def test_every_emitter_that_derives_a_path_from_the_name_is_in_the_mapping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            skill = self._fixture(base)
+            out = base / "out"
+            derives = {t for t, emit in ba.EMITTERS.items()
+                       if self.NAME in str(emit(skill, self.NAME, "a fixture skill",
+                                                "Body.\n", out, True))}
+            self.assertEqual(
+                derives, set(ba.NAME_DESTINATIONS),
+                "every target whose destination is built from the frontmatter name "
+                "must appear in NAME_DESTINATIONS, which is what the name refusal "
+                "reads to decide whether any requested target escapes")
+            self.assertEqual([p for p in base.rglob("*") if p.is_file()],
+                             [skill / "SKILL.md"], "a preview wrote something")
+
+    def test_each_mapped_destination_is_the_one_its_emitter_writes(self):
+        # What this can actually fail on is an emitter that stopped reading the mapping,
+        # which is the direction worth stating plainly. Both inlining emitters call
+        # NAME_DESTINATIONS at call time, so patching an entry moves both sides of the
+        # equality together and leaves this green; patching EMITTERS["cursor"] to an
+        # emitter that builds its own path fails it. Confirmed both ways rather than
+        # assumed. The refusal reads the mapping to name where a rejected name would
+        # land, so an emitter that stopped agreeing with it would make that citation
+        # point at a path this tool does not write.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            skill = self._fixture(base)
+            out = base / "out"
+            for target, destination in ba.NAME_DESTINATIONS.items():
+                with self.subTest(target=target):
+                    self.assertEqual(
+                        destination(self.NAME, out),
+                        ba.EMITTERS[target](skill, self.NAME, "a fixture skill",
+                                            "Body.\n", out, True),
+                        f"{target}'s mapped destination is not where its emitter writes")
 
 
 if __name__ == "__main__":
