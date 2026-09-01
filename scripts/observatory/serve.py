@@ -2088,6 +2088,9 @@ class LiveWatcher:
         self._lock = threading.Lock()
         self._listeners: list = []
         self._thread = None
+        # Whether a loop is running, as state this class sets rather than as a property of
+        # a thread object it does not sequence. See `_keep_running` (bug-0064).
+        self._running = False
         self._stop = threading.Event()
         self._spool_offset = 0
         self._fingerprint = None
@@ -2098,11 +2101,35 @@ class LiveWatcher:
         channel: queue.Queue = queue.Queue(maxsize=32)
         with self._lock:
             self._listeners.append(channel)
-            start = self._thread is None or not self._thread.is_alive()
-            if start:
-                self._stop.clear()
+            # Both halves of this are bug-0064, and they fix one defect from two ends.
+            #
+            # The clear is unconditional: a stop the previous unsubscribe requested must not
+            # outlive it. It used to happen only on the start branch, so a subscribe that
+            # did not start a thread left the request standing and the surviving thread
+            # honoured it.
+            #
+            # The start is decided on `_running` rather than on `Thread.is_alive()`, because
+            # liveness is not a state this class sequences: a thread that had already decided
+            # to leave still reported alive, so this took the no-restart branch and nothing
+            # replaced it. Closing a report and opening another produces exactly that pair,
+            # and it left a listener attached to a watcher that never polled again while the
+            # page went on showing its live indicator.
+            self._stop.clear()
+            if not self._running:
+                self._running = True
                 self._thread = threading.Thread(target=self._run, daemon=True)
-                self._thread.start()
+                try:
+                    self._thread.start()
+                except RuntimeError:
+                    # The one way `_running` can be set with no thread behind it, and it is a
+                    # hazard this change introduced rather than found: under the old code a
+                    # thread that never started reported `is_alive()` false, so the next
+                    # subscribe retried. Left set, nothing would ever start one again. The
+                    # channel goes back out too, so a caller that sees the failure has not
+                    # silently left a listener the watcher will keep polling for.
+                    self._running = False
+                    self._listeners.remove(channel)
+                    raise
         return channel
 
     def unsubscribe(self, channel) -> None:
@@ -2198,15 +2225,38 @@ class LiveWatcher:
         self.publish(event)
         return event
 
+    def _keep_running(self) -> bool:
+        """Whether the loop runs again, decided under the lock that sets the flag.
+
+        The decision and the `_running` reset are one critical section, so a `subscribe`
+        holding the lock never observes a thread that has already decided to leave. That is
+        the guarantee `Thread.is_alive()` could not give, and its absence was bug-0064.
+
+        The listener list is the authority rather than the stop event, which is what this
+        class already promises: it runs while somebody is listening. The event stays as the
+        wake-up, so the last page closing does not have to wait out a poll interval.
+        """
+        with self._lock:
+            if self._listeners:
+                return True
+            self._running = False
+            return False
+
     def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                self.poll_once()
-            except Exception:                # noqa: BLE001
-                # A watcher that dies takes live updates with it and leaves the page
-                # looking correct, so it survives anything the corpus throws at it.
-                pass
-            self._stop.wait(self.poll_seconds)
+        try:
+            while self._keep_running():
+                try:
+                    self.poll_once()
+                except Exception:                # noqa: BLE001
+                    # A watcher that dies takes live updates with it and leaves the page
+                    # looking correct, so it survives anything the corpus throws at it.
+                    pass
+                self._stop.wait(self.poll_seconds)
+        finally:
+            # The loop can still leave by something the guard above cannot catch, and a flag
+            # left set would mean no later subscribe ever starts a thread.
+            with self._lock:
+                self._running = False
 
 
 class ObservatoryServer(ThreadingHTTPServer):

@@ -342,7 +342,15 @@ function actionControl(action, row) {
     });
   }
 
-  var text = action.template.replace("{" + action.field + "}", value);
+  /* Split and join rather than `replace`, and not as a style preference. `value` came out of
+     a session transcript, and as `replace`'s replacement argument it goes through
+     GetSubstitution, which interprets a dollar-sign escape inside it instead of inserting
+     it. `copy-cwd` carries a working directory, where those characters are legal on every
+     platform this kit targets, so a recorded path containing one was copied as a different
+     path with no signal: the button still says Copied (bug-0065). Split and join has no
+     pattern language in it. The suite has no JavaScript runtime, so a test pins this form
+     rather than the behaviour; do not tidy it back. */
+  var text = action.template.split("{" + action.field + "}").join(value);
   if (!(navigator.clipboard && navigator.clipboard.writeText)) {
     /* No clipboard API, so present the command as selectable text instead of a button that
        would do nothing. S-019 asks that the command reach a person, not that a button exist. */
