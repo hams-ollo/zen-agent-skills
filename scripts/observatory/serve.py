@@ -2256,7 +2256,8 @@ class LiveWatcher:
             # The loop can still leave by something the guard above cannot catch, and a flag
             # left set would mean no later subscribe ever starts a thread.
             with self._lock:
-                self._running = False
+                if threading.current_thread() is self._thread:
+                    self._running = False
 
 
 class ObservatoryServer(ThreadingHTTPServer):
