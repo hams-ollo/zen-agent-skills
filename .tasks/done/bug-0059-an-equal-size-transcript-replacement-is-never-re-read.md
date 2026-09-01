@@ -2,7 +2,7 @@
 id: bug-0059
 title: A transcript replaced with a file of the same byte count is classified as unchanged and never re-read
 type: bug
-status: open
+status: done
 priority: P1
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
@@ -17,7 +17,7 @@ created: 2026-08-31
 
 ## Problem
 
-`ingest` in [`ingest.py`](../scripts/observatory/ingest.py) decides whether a transcript needs
+`ingest` in [`ingest.py`](../../scripts/observatory/ingest.py) decides whether a transcript needs
 reading from two fields, and the row it writes three statements later carries a third:
 
     row = conn.execute(
@@ -34,7 +34,7 @@ some other change moves its size, because nothing in the decision ever looks at 
 change.
 
 **The subsystem already knows this case occurs.** `corpus_fingerprint` in
-[`serve.py`](../scripts/observatory/serve.py) states the counter-argument in its own docstring:
+[`serve.py`](../../scripts/observatory/serve.py) states the counter-argument in its own docstring:
 
 > Size and modification time together, because either alone misses a case: a rewritten transcript
 > can keep its size, and a same-second append can keep its timestamp.
@@ -45,7 +45,7 @@ subsystem disagree about the same file.
 **The live path makes it worse rather than better.** `LiveWatcher.poll_once` notices the change
 through `corpus_fingerprint`, calls `ingest`, gets `records: 0` back, and returns `None` without
 publishing an event. An open page receives nothing and keeps showing the superseded figures. That
-is the shape [`SECURITY.md`](../SECURITY.md) names as a safety problem rather than a bug: a step
+is the shape [`SECURITY.md`](../../SECURITY.md) names as a safety problem rather than a bug: a step
 that appears to work while quietly doing nothing.
 
 **Measured on 2026-08-31**, in a temporary corpus and a temporary store, both removed afterwards.
@@ -64,7 +64,7 @@ The last line is the fix in one measurement: the discriminator is already in the
 correct, and the decision simply does not consult it.
 
 The existing regression test, `test_a_shortened_transcript_is_re_read_without_duplicating_rows` in
-[`test_observatory.py`](../tests/test_observatory.py), covers only the case where the replacement is
+[`test_observatory.py`](../../tests/test_observatory.py), covers only the case where the replacement is
 **shorter** than the recorded offset, which the `stat.st_size < start` reset above already handles.
 Nothing reaches the equal-size case.
 
@@ -78,7 +78,7 @@ Nothing reaches the equal-size case.
   and not only on the returned counts, since a run that re-reads and stores nothing new would pass a
   counts-only assertion.
 - Update the `S-005` row of
-  [`agent-observatory.conformance.md`](../docs/spec/agent-observatory.conformance.md), whose
+  [`agent-observatory.conformance.md`](../../docs/spec/agent-observatory.conformance.md), whose
   evidence currently states the mechanism this task changes: "`ingest` skips a transcript whose
   recorded size and offset both match the file on disk."
 
@@ -110,24 +110,48 @@ equal serialized length, which `record("a1")` and `record("a2")` give for free.
 ingest has already run, so a same-tick collision is the only failure mode; if it proves flaky on a
 coarse filesystem, set the replacement's mtime explicitly with `os.utime` rather than sleeping.
 
+## Decisions
+
+- **A premise that turned out false.** The Scope's first bullet says the fix is `mtime_ns` in the
+  `SELECT` and in the unchanged condition. That alone declines the cheap path and still reads
+  nothing: a same-size replacement leaves the recorded offset at the end of the file, and
+  `scan_file` seeking there returns an empty buffer. Measured against exactly that variant, on the
+  fixture this task's test uses: `files_read=1 records=0 stored_uuids=['a1']` while the file on disk
+  held `a2`. The marker is needed in two places, so the mismatch also resets the offset to zero, the
+  way the existing shrink branch already does. This is why the acceptance criterion asks for the
+  stored content: the counts-only version of the same test passes on the insufficient fix.
+- **A rejected alternative.** Resetting the offset whenever `mtime_ns` disagrees, without also
+  requiring the size to match, was rejected: every ordinary append moves the marker, so it would
+  re-read each growing transcript from byte zero and break `S-006`'s promise that a second run reads
+  only the appended bytes. The reset is therefore conditioned on the size being unchanged, which is
+  the only case where the offset cannot be trusted and the size cannot say so.
+- **A seam left open deliberately.** A replacement that also changes the byte count still resumes
+  from the recorded offset rather than re-reading, so a rewrite that happens to grow the file is
+  still read as an append. Separating those two needs a content signal, which the Scope puts out of
+  scope, and `mtime_ns` cannot tell them apart on its own. The seam also needs a different trigger
+  than the one the Scope gives it: reaching for a fingerprint "only if the test proves it is not
+  enough on some platform" cannot be decided by this test, which manufactures the `mtime_ns` delta
+  with `os.utime` and so can never observe a platform where the real marker failed to move. The
+  determinism was bought deliberately, and the escalation criterion is what it cost.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python scripts/run-checks.py
 
-- [ ] A new test replaces a transcript with different content of **identical byte length** and
+- [x] A new test replaces a transcript with different content of **identical byte length** and
       asserts the store holds the replacement's content afterwards, not the original's.
-- [ ] That test fails against the current code. Confirm the failure before the fix.
-- [ ] `test_a_shortened_transcript_is_re_read_without_duplicating_rows` still passes unchanged, and
+- [x] That test fails against the current code. Confirm the failure before the fix.
+- [x] `test_a_shortened_transcript_is_re_read_without_duplicating_rows` still passes unchanged, and
       the shortened replacement still does not duplicate rows.
-- [ ] `test_s005_reingesting_an_unchanged_corpus_adds_no_rows` still passes: a genuinely unchanged
+- [x] `test_s005_reingesting_an_unchanged_corpus_adds_no_rows` still passes: a genuinely unchanged
       corpus must still take the cheap path, and a fix that simply always re-reads is not a fix.
-- [ ] The `S-005` row of the conformance matrix names the three-field comparison and cites the new
+- [x] The `S-005` row of the conformance matrix names the three-field comparison and cites the new
       test.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

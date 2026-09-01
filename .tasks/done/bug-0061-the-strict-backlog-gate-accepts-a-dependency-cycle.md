@@ -2,7 +2,7 @@
 id: bug-0061
 title: The strict backlog gate accepts a dependency cycle, in both copies of the validator
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic A: broadly shareable (the public kit)"
 depends_on: []
@@ -15,7 +15,7 @@ created: 2026-08-31
 
 ## Problem
 
-[`validate.py`](validate.py) checks two things about each `depends_on` entry and nothing about the
+[`validate.py`](../validate.py) checks two things about each `depends_on` entry and nothing about the
 graph they form:
 
     for dep in fm.get("depends_on", []) or []:
@@ -28,7 +28,7 @@ A task naming itself is caught. Two tasks naming each other are not, and neither
 `all_ids` is fully populated by this point, so the information needed is present and unused.
 
 The consequence is specific to how this backlog is dispatched. The lifecycle rule in
-[`AGENTS.md`](../AGENTS.md) is that a task is dispatchable once every id in its `depends_on` is in
+[`AGENTS.md`](../../AGENTS.md) is that a task is dispatchable once every id in its `depends_on` is in
 `.tasks/done/`, and `fix-batch` applies it. Neither member of a cycle can ever satisfy that, so the
 gate certifies as valid a pair that is permanently undispatchable, and the only thing that surfaces
 it is a person noticing that a batch has nothing ready.
@@ -42,12 +42,12 @@ scaffold template: exit=0  Checked 2 task files: 0 error(s), 0 warning(s).
 ```
 
 **The gap is in both copies, and that is the load-bearing half of this task.**
-[`templates/validate.py`](../.agents/skills/init-worktracking/templates/validate.py) is the file
+[`templates/validate.py`](../../.agents/skills/init-worktracking/templates/validate.py) is the file
 `init-worktracking` scaffolds into an adopter's repository, and it carries the same two checks with
 the same omission. `bug-0026` is the recorded incident for fixing only one of them: the `external`
 guard and the injectable `main(argv=None)` landed in the copy that authored them, so "every
 repository the kit scaffolds got the feature `pr-describe` ships and none of the check that makes it
-safe". [`test_tasks_validate.py`](../tests/test_tasks_validate.py) drives both copies from one
+safe". [`test_tasks_validate.py`](../../tests/test_tasks_validate.py) drives both copies from one
 fixture for exactly that reason, and this fix has to arrive through that pairing rather than beside
 it.
 
@@ -94,6 +94,28 @@ chosen, the count line, `Checked N task files: X error(s)`, has to stay accurate
 The two copies are not byte-identical, so apply the change to each rather than copying one file over
 the other.
 
+## Decisions
+
+- **Rejected: enumerating every elementary cycle.** Johnson's algorithm, or a simple-path walk
+  restarted at every node, reports rings that a back-edge search can miss: one whose nodes all sit
+  inside a subtree the walk has already finished hides behind the ring reported there. Both are
+  exponential in the worst case, and this gate has to finish on somebody else's backlog, so the
+  back-edge search is what shipped. The bound is written into `dependency_cycles()`'s own docstring
+  rather than left to be rediscovered, along with the recovery: a hidden ring surfaces on the next
+  run, once the edge that was named is cut.
+- **Rejected: reporting a cycle as a warning that `--strict` promotes.** That is the shape the two
+  other checks shipping into adopter trees use, and it is wrong here for the reason those two give
+  in their own comments: they report a judgement (a link that may be mislabelled, a manifest that
+  may be stale) and a ring is a fact. `depends_on lists itself` is already an unconditional `err()`,
+  and a cycle is the same claim over a longer path.
+- **Seam left open deliberately: both README copies still enumerate the old check set.**
+  [`.tasks/README.md`](../README.md) and
+  [`tasks-README.md.tmpl`](../../.agents/skills/init-worktracking/templates/tasks-README.md.tmpl) carry
+  one identical sentence beginning "It verifies frontmatter schema, id uniqueness, that every
+  `depends_on` resolves to a real task", which this change leaves incomplete in the same two places
+  the validator was. Both are outside this task's `touched_files`, so it is reported as a finding
+  and not applied here.
+
 ## Risks and rollback
 
 Both copies of a distributed tool change together, which is two audiences: this repository's own
@@ -110,20 +132,20 @@ that already received the fix keeps a strictly more capable validator.
 
     python scripts/run-checks.py
 
-- [ ] A two-node cycle is reported as an error under `--strict`, with a non-zero exit.
-- [ ] A three-node cycle is reported as an error under `--strict`, with a non-zero exit.
-- [ ] Both cases run against **both** copies of the validator, through the existing paired fixture in
+- [x] A two-node cycle is reported as an error under `--strict`, with a non-zero exit.
+- [x] A three-node cycle is reported as an error under `--strict`, with a non-zero exit.
+- [x] Both cases run against **both** copies of the validator, through the existing paired fixture in
       `test_tasks_validate.py`.
-- [ ] Those tests fail against the current code. Confirm the failure before the fix.
-- [ ] The existing `depends_on lists itself` message still fires for a one-node case, unchanged.
-- [ ] A task depending on an id that is already in `.tasks/done/` is still valid.
-- [ ] Run against this repository's real `.tasks/` tree, `--strict` reports zero cycles and the same
+- [x] Those tests fail against the current code. Confirm the failure before the fix.
+- [x] The existing `depends_on lists itself` message still fires for a one-node case, unchanged.
+- [x] A task depending on an id that is already in `.tasks/done/` is still valid.
+- [x] Run against this repository's real `.tasks/` tree, `--strict` reports zero cycles and the same
       error and warning counts as before the change.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
