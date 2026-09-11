@@ -85,6 +85,7 @@ since `chore-0049`, and
 | [`doc-sync`](doc-sync.md) | `skipped` and `not_audited` split into two fields (`chore-0027`) | 2026-08-05 |
 | [`house-review`](house-review.md) | `S-014` to `S-018`, the evidence gate and finding signature (`feat-0040`) | 2026-08-05 |
 | [`install`](install.md) | `S-015`, the draft-skill axis (`feat-0036`); `S-016` to `S-018`, Goal 10 and `--replace-adopted`, the adopted-versus-derived axis (`bug-0018`) | 2026-08-05, 2026-08-07 |
+| [`sitrep`](sitrep.md) | `S-022` and `S-025` restated at the next board, the session-moments table, a new term, `S-040`, and the configuration file's name, all from the Open Question spike (`chore-0093`) | 2026-09-11 |
 | [`spec-author`](spec-author.md) | `S-006` and `S-007`, the spec location (`chore-0027`) | 2026-08-05 |
 | [`systematic-debugging`](systematic-debugging.md) | `S-014` and `S-015`, where instrumentation may live and what happens where it cannot live anywhere, settling both Open Questions before anything was built against the contract (`chore-0078`) | 2026-08-29 |
 | [`validate-skills`](validate-skills.md) | `S-022`, the code-span and fence exception (`chore-0039`); `S-023` and the "what it reads" surface entry, the lens-composition rule (`chore-0047`); `S-024` and the `Output` and "what it reads" surface entries, the supporting-file link rule (`chore-0054`); `S-025` and the same two surface entries again, the non-skill `.agents/` markdown link rule (`chore-0065`); `S-026` and the "what it reads" entry again, the universal-lens rule (`feat-0064`) | 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-27, 2026-08-29 |
@@ -144,7 +145,7 @@ something else today.
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
-| [`sitrep`](sitrep.md) | draft | 39 | none yet: a forward spec, nothing built |
+| [`sitrep`](sitrep.md) | approved | 40 | none yet: a forward spec, nothing built |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
 | [`systematic-debugging`](systematic-debugging.md) | approved | 15 | [conformance](systematic-debugging.conformance.md) (15 of 15), [verification](systematic-debugging.verification.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
@@ -152,7 +153,7 @@ something else today.
 | [`validate-skills`](validate-skills.md) | approved | 26 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
 
-[`sitrep`](sitrep.md) is the one draft, added 2026-09-11 and pending the author's approval. The figures in the next paragraph count the approved specs and do not include it.
+[`sitrep`](sitrep.md) was added and approved on 2026-09-11, after the figures in the next paragraph were computed, so they do not include it.
 
 Twelve specs, 186 scenarios, all approved. **All twelve now carry a conformance matrix**, holding
 all 186 of those scenarios, recomputed from the files on 2026-08-29 rather than incremented: the

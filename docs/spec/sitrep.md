@@ -1,6 +1,6 @@
 ---
 title: sitrep
-status: draft
+status: approved
 ---
 
 # sitrep
@@ -9,6 +9,19 @@ Behavioral contract for the sitrep: a personal board generated from a repository
 an evidence tier on every figure, placed into the person's local sessions when they start. Drafted
 2026-09-11 by the `spec-author` skill for Hans Havlik, and self-checked to `ready` with the
 `spec-quality` lens. A forward spec: nothing implements it yet.
+
+**Approved by Hans Havlik on 2026-09-11**, with his answers to two of the three Open Questions
+folded in: the name stays `sitrep`, and a repository's board configuration is committed in that
+repository.
+
+**Amended 2026-09-11 by `chore-0093`, pending the author's re-approval.** The spike the third Open
+Question called for settled it: a prompt a person typed can be told apart from one nobody typed,
+but from the session transcript, which marks each prompt's author, and not from the prompt hook's
+own input, which carries only the prompt. So the watermark moves when the next board is
+generated rather than at the moment of the message. `S-022` and `S-025` state their outcome at
+the next board, the session-moments table under Proposed Surface changed to match, a term was
+added for a prompt typed by a person, `S-040` is new, and the configuration file is named
+`.sitrep.json`.
 
 ## Problem
 
@@ -246,8 +259,9 @@ far to trust a number.
 
 - **Given** a session whose sitrep described revision A, and a commit B made after the sitrep was shown
 - **When** the person sends a message in that session
-- **Then** the person's watermark for the repository becomes A, the next board lists B under changed
-  since you caught up with the watermark kind `caught-up`, and nothing inside the repository changes
+- **Then** the next board generated for that person has its watermark at A with the kind
+  `caught-up`, lists B under changed since you caught up, and nothing inside the repository has
+  changed
 
 ### Scenario S-023: a session the person never writes in leaves the watermark alone
 
@@ -268,7 +282,8 @@ far to trust a number.
 - **Given** two people who have each installed the sitrep and each have a watermark for the same
   repository
 - **When** one of them sends a message after being shown a sitrep
-- **Then** that person's watermark moves and the other person's is unchanged
+- **Then** the next board for that person reflects the move, and the next board for the other
+  person does not
 
 ### Scenario S-026: an explicit since leaves the watermark alone
 
@@ -371,6 +386,13 @@ far to trust a number.
 - **Then** in flight lists no branches, still lists worktrees with uncommitted changes, and the board
   carries the notice `no integration branch`
 
+### Scenario S-040: a prompt nobody is marked as typing never moves the watermark
+
+- **Given** a session that received a sitrep and holds prompts, none of which its transcript marks
+  as typed by a person, such as a print-mode run
+- **When** the next board is generated
+- **Then** that session does not move the person's watermark
+
 ## Proposed Surface
 
 ### Terms
@@ -387,6 +409,7 @@ far to trust a number.
 | integration branch | the branch finished work merges into |
 | tracked | held by git at the current revision |
 | tracked test file | a tracked file whose name starts with `test_` or contains `.test.` or `_test.` |
+| typed by a person | marked in the session's transcript as coming from a person, which Claude Code records on each prompt |
 
 ### Command
 
@@ -401,8 +424,8 @@ far to trust a number.
 
 | Moment | Effect |
 |---|---|
-| the session starts, resumes, is cleared, or is compacted | adds the sitrep and the reporting rules to the session's context |
-| the person sends a message | moves that person's watermark for the repository to the revision the session's most recent sitrep described; adds nothing to the context |
+| the session starts, resumes, is cleared, or is compacted | adds the sitrep and the reporting rules to the session's context, and records for the person which revision that sitrep described |
+| the next board is generated | moves the person's watermark to the most recent revision any of their sitreps described, among sessions whose transcript holds a prompt typed by a person after that sitrep; a prompt without that mark never counts |
 
 ### Sitrep sections
 
@@ -465,7 +488,8 @@ A count of entries carries the lowest tier among the entries it counts.
 
 ### Repository board configuration (optional)
 
-Where it lives is Open Question 3. With none, the board is derived from task files and git alone.
+It is committed in the repository it describes, as `.sitrep.json` at the repository's top level.
+With none, the board is derived from task files and git alone.
 
 | Field | Holds | When omitted |
 |---|---|---|
@@ -476,17 +500,7 @@ Where it lives is Open Question 3. With none, the board is derived from task fil
 
 ## Open Questions
 
-1. **What is the skill called?** The working name is `sitrep` for the skill and its command, with
-   "HUD" left as the name for the family of surfaces it feeds. Recommendation: keep `sitrep`. It says
-   what the output is, and it does not collide with any skill in this kit or with Claude HUD, a
-   separate community status-line plugin.
-2. **Can a message from the person be told apart from a prompt no person typed?** `S-022` and
-   `S-023` assume the harness distinguishes a person typing from a background, print-mode or
-   sub-agent session, and nothing here has verified that it does. Recommendation: before this spec is
-   decomposed, run a short spike that records what the harness reports for each kind of session. If
-   they cannot be told apart, amend `S-022` so the watermark moves only on an explicit acknowledgement
-   from the person, which Hans Havlik considered and ranked second on 2026-09-11.
-3. **Where does a repository's board configuration live?** Either committed in the repository, or in
-   the person's own configuration keyed by repository. Recommendation: committed in the repository. It
-   describes that repository's own files and would drift from them if kept elsewhere, and it does
-   nothing unless someone runs the sitrep. The cost is one extra file that a collaborator can see.
+None. The name and where a repository's board configuration lives were answered by Hans Havlik at
+approval on 2026-09-11 and are folded into the contract above. Whether a prompt a person typed can
+be told apart from one nobody typed was settled by `chore-0093`'s spike the same day, and its
+outcome is the amendment recorded in the header.
