@@ -154,6 +154,7 @@ KIT_SKILL_NAMES = frozenset({
     "project-bootstrap",
     "reconcile-worktrees",
     "review-depth",
+    "sitrep",
     "spec-author",
     "spec-conformance",
     "spec-plan-readiness",

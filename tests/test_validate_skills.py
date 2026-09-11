@@ -1372,7 +1372,8 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
             for kind, n in vs.check_supporting_files(
                     d, names, d.name, [], skills_dir.parent.resolve()).items():
                 counts[kind] += n
-        self.assertEqual(counts, {"markdown": 1, "template": 8, "other": 5})
+        # 6 since feat-0066 added `sitrep/scripts/sitrep.py`.
+        self.assertEqual(counts, {"markdown": 1, "template": 8, "other": 6})
 
     def test_a_byte_cache_is_not_counted_as_a_supporting_file(self):
         # The count has to be a fact about the kit and not about whether the tests have

@@ -144,12 +144,15 @@ something else today.
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
+| [`sitrep`](sitrep.md) | approved | 40 | [conformance](sitrep.conformance.md) (21 of 40 built), [readiness](sitrep.readiness.md) (implementable) |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
 | [`systematic-debugging`](systematic-debugging.md) | approved | 15 | [conformance](systematic-debugging.conformance.md) (15 of 15), [verification](systematic-debugging.verification.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |
 | [`tracker-links`](tracker-links.md) | approved | 9 | [conformance](tracker-links.conformance.md), [verification](tracker-links.verification.md) |
 | [`validate-skills`](validate-skills.md) | approved | 26 | [conformance](validate-skills.conformance.md), [verification](validate-skills.verification.md) |
 | [`verifier-agent`](verifier-agent.md) | approved | 11 | [conformance](verifier-agent.conformance.md) |
+
+[`sitrep`](sitrep.md) was added and approved on 2026-09-11, after the figures in the next paragraph were computed, so they do not include it.
 
 Twelve specs, 186 scenarios, all approved. **All twelve now carry a conformance matrix**, holding
 all 186 of those scenarios, recomputed from the files on 2026-08-29 rather than incremented: the
