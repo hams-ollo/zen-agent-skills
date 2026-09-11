@@ -14,7 +14,7 @@ an evidence tier on every figure, placed into the person's local sessions when t
 folded in: the name stays `sitrep`, and a repository's board configuration is committed in that
 repository.
 
-**Amended 2026-09-11 by `chore-0093`, pending the author's re-approval.** The spike the third Open
+**Amended 2026-09-11 by `chore-0093`, and re-approved by Hans Havlik the same day.** The spike the third Open
 Question called for settled it: a prompt a person typed can be told apart from one nobody typed,
 but from the session transcript, which marks each prompt's author, and not from the prompt hook's
 own input, which carries only the prompt. So the watermark moves when the next board is
