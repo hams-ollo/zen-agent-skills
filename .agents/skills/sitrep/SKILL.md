@@ -16,7 +16,8 @@ reads the tracked task files and says what they say.
 **This skill is a draft.** It ships with no profile and reaches no adopter until it has been used
 on real work and blessed, per the contribution bar in the target repository's `AGENTS.md`. It is
 also being built in stages, and this body describes only what exists so far: what waits on you,
-what is in flight, what is blocked, and the figures a repository declares, each with its tier.
+what is in flight, what is blocked, what changed since you last caught up, and the figures a
+repository declares, each with its tier.
 
 ## When to use
 
@@ -32,7 +33,8 @@ what is in flight, what is blocked, and the figures a repository declares, each 
 ## Procedure
 
 1. Run [`scripts/sitrep.py`](scripts/sitrep.py) from anywhere inside the repository. It prints what
-   waits on you, what is in flight, and what is blocked, each task naming its file.
+   waits on you, what is in flight, what is blocked, and what changed since you last caught up,
+   each task naming its file.
 2. Report what it printed, leading with what waits on the person. Quote the reason each task is
    waiting (`open question` or `needs a human eye`) and, for a blocked task, what it waits on.
 3. If it printed a notice, report the notice. `no task tracking` means the repository has no tracked
@@ -52,6 +54,16 @@ branches and says `no integration branch`.
 
 A task under `.tasks/done/` never waits on you. Only files git tracks are read, so a task file that
 exists on one machine and was never committed is not part of the board.
+
+## Since you last caught up
+
+Changed-since starts from the person's watermark: the revision of the most recent sitrep they were
+shown and then typed a reply after, read from that session's transcript. It is kept per person
+and per repository under the person's own home directory, never inside the repository, and
+nothing a person did not type moves it: not a background agent reporting back, not a sub-agent,
+not a print-mode run, and not a prompt from before the sitrep in a resumed session. With no
+watermark the board is a first look over the last seven days; with one naming a commit the
+repository no longer has, it says `watermark reset` and looks back seven days instead.
 
 ## Figures and their tiers
 

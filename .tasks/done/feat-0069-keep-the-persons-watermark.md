@@ -2,7 +2,7 @@
 id: feat-0069
 title: Keep the person's watermark, and move it only on a prompt a person typed
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7d: project board"
 depends_on: [feat-0068]
@@ -51,6 +51,30 @@ This task extends `.agents/skills/sitrep/scripts/sitrep.py` and creates
 - Scenario layer: integration, with a temporary home, throwaway repositories, and JSONL transcripts
   shaped like the records `chore-0093` measured.
 
+## Decisions
+
+- **A seam left open deliberately.** `build_board()`'s temporary `base` parameter from `feat-0067`
+  became `since`, the one-run override the spec's command table names, and `feat-0067`'s `S-011`
+  test now passes its base that way.
+- **A seam left open deliberately.** The first look uses the newest commit older than seven days
+  as its base, and the empty tree when there is none, so commit count and task closures come from
+  one range and cannot disagree. With linear history that range is exactly the commits dated
+  within the window; with merges it is the commits reachable since that base.
+- **A seam left open deliberately.** An explicit `since` that does not resolve falls back to a
+  first look and names the revision in a notice, rather than failing the board.
+- **A seam left open deliberately.** A person's state remembers at most fifty shown sitreps, and
+  forgets every one at or before the sitrep that last moved the watermark, since none of those can
+  move it further. Running a board without any shown sitrep writes nothing at all, so tests and
+  one-off runs never create state under a real home directory.
+- **Proven by breaking it.** Nine deliberate breaks were made to a copy of the script, one at a
+  time, and each failed at least one test in `tests/test_sitrep_watermark.py`: an unmarked prompt
+  counting, a side-chain prompt counting, a prompt from before the sitrep counting, the oldest
+  answered sitrep winning, an explicit `since` consulting the watermark, a vanished watermark being
+  trusted, state kept inside the repository, a seventy-day first look, and one state shared by
+  every person. Four of the nine are caught only by tests added or strengthened after the first
+  draft passed: a resumed session's earlier prompts, a marked side-chain prompt, two answered
+  sitreps, and an explicit `since` with an answered sitrep pending.
+
 ## Risks and rollback
 
 Required: this introduces a persisted per-person state format, and it reads a transcript field that
@@ -66,14 +90,15 @@ Anthropic does not document as a contract.
     python -m unittest discover -s tests -p "test_sitrep_watermark.py" -v
     python scripts/run-checks.py
 
-- [ ] Every scenario in `scenarios` has a test whose docstring names its id, and each passes.
-- [ ] A test proves no file inside the repository changes when the watermark moves.
-- [ ] `docs/spec/sitrep.conformance.md` classifies these scenarios.
-- [ ] Existing tests still pass.
+- [x] Every scenario in `scenarios` has a test whose docstring names its id, and each passes.
+- [x] A test proves no file inside the repository changes when the watermark moves.
+- [x] `docs/spec/sitrep.conformance.md` classifies these scenarios.
+- [x] Existing tests still pass.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed, including no co-author trailer.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed, including no co-author trailer.
+- [ ] `doc-sync` not run in full: this task changes the draft skill's own body and nothing a
+      reader-facing document describes, and the skill is not listed anywhere until `feat-0071`.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

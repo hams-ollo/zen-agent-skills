@@ -6,14 +6,14 @@
 The behavioural contract is `docs/spec/sitrep.md` in the Zen Agent Skills repository. This file
 implements it one task at a time, in the order that spec's readiness record sets: `feat-0066`
 built what waits on the person and what is blocked, `feat-0067` added in-flight work and what
-changed since a revision, `feat-0068` adds evidence tiers and the figures a repository declares,
-and the tasks after it add the watermark, the renderings, and the session-start hook. Sections owed
-to a later task are present in the board with an empty value, so the board's shape never changes
-under a reader.
+changed since a revision, `feat-0068` added evidence tiers and declared figures, `feat-0069` adds
+the person's watermark, and the tasks after it add the renderings and the session-start hook.
+Sections owed to a later task are present in the board with an empty value, so the board's shape
+never changes under a reader.
 
 Standard library only, so it runs on a bare Python 3 wherever the skill is installed.
 
-Five properties are load-bearing and shape everything below.
+Six properties are load-bearing and shape everything below.
 
 **Only tracked records are state.** Task files are found with `git ls-files`, never with a
 directory listing, because an untracked file on one machine is not part of the repository. The
@@ -36,13 +36,21 @@ looks equally solid is how a wrong number survives, so each figure carries the t
 earns and no more: an untracked file cannot rise above White whatever it is declared as, and Gold
 needs a named test this script can actually find.
 
+**The watermark is the person's, and only the person moves it.** Several sessions share one
+checkout, and the prototype moved its "since you last looked" marker whenever any of them started,
+so it was cleared before anyone had read a thing. Here it lives outside the repository, and it moves
+only when a session transcript shows a prompt marked as typed by a person after a sitrep was shown.
+`chore-0093` settled that the transcript, and not the prompt hook's input, is where that can be told.
+
 **Nothing in the repository changes.** Every git call runs with optional locks off, so not even
-`git status` refreshes the index behind the person's back.
+`git status` refreshes the index behind the person's back, and the person's state is written only
+under their own home directory.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import os
 import re
@@ -79,8 +87,21 @@ SEGMENT_RE = re.compile(r"^([^\[\]]*)(?:\[([^=\[\]]+)=([^\[\]]*)\])?$")
 # The spec's "tracked test file": a name starting `test_`, or containing `.test.` or `_test.`.
 TEST_FILE_GLOBS = (":(glob)**/test_*", ":(glob)**/*.test.*", ":(glob)**/*_test.*")
 
+# The tree git uses for "nothing", so a first look over a young repository covers all of it.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+FIRST_LOOK_DAYS = 7
+# How many shown sitreps a person's state remembers. Enough to span several sessions a day for a
+# week; older ones can no longer move the watermark forward anyway once a later one has.
+SHOWN_KEPT = 50
+
+KIND_CAUGHT_UP = "caught-up"
+KIND_FIRST_LOOK = "first-look"
+KIND_RESET = "reset"
+KIND_EXPLICIT = "explicit"
+
 NOTICE_NO_TASKS = "no task tracking"
 NOTICE_NO_INTEGRATION = "no integration branch"
+NOTICE_RESET = "watermark reset"
 REASON_OPEN_QUESTION = "open question"
 REASON_HUMAN_EYE = "needs a human eye"
 LABEL_UNTRACKED = "untracked"
@@ -140,6 +161,10 @@ def repository_facts(repo):
 def held_at_head(top, rel):
     """True when the current revision holds `rel`, which is the spec's meaning of tracked."""
     return git_quiet(top, "cat-file", "-e", f"HEAD:{rel}") is not None
+
+
+def is_commit(top, revision):
+    return bool(revision) and git_quiet(top, "cat-file", "-e", f"{revision}^{{commit}}") is not None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -354,13 +379,15 @@ def branch_entries(top, integration):
 def changes_since(top, base):
     """What changed between `base` and HEAD: how many commits, which tasks closed, which updated.
 
-    A task is closed when its file arrives under `.tasks/done/` in the range, and updated when its
-    file changed in place outside it. Ids come from the file names, which the kit's validator keeps
-    equal to each file's `id`.
+    `base` may be `EMPTY_TREE`, for a first look over a repository younger than the window, and then
+    the whole history counts. A task is closed when its file arrives under `.tasks/done/` in the
+    range, and updated when its file changed in place outside it. Ids come from the file names,
+    which the kit's validator keeps equal to each file's `id`.
     """
     if not base:
         return {"commits": 0, "closed": [], "updated": []}
-    commits = (git(top, "rev-list", "--count", f"{base}..HEAD") or "0").strip()
+    span = "HEAD" if base == EMPTY_TREE else f"{base}..HEAD"
+    commits = (git(top, "rev-list", "--count", span) or "0").strip()
     closed, updated = set(), set()
     diff = git(top, "diff", "--name-status", "-M", base, "HEAD", "--", ".tasks")
     for line in diff.splitlines():
@@ -528,22 +555,181 @@ def figures_from_config(top, config):
 
 
 # ---------------------------------------------------------------------------------------------
-# The board
+# The person's watermark
 # ---------------------------------------------------------------------------------------------
 
 def _utc_now():
     return _dt.datetime.now(_dt.timezone.utc)
 
 
-def _iso(moment):
-    return moment.astimezone(_dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def _iso(moment, timespec="seconds"):
+    return moment.astimezone(_dt.timezone.utc).isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
-def build_board(repo=".", *, base=None, integration=None, now=None):
+def _parse_iso(text):
+    """An aware UTC datetime from an ISO 8601 string, or None. A naive one is read as UTC."""
+    try:
+        moment = _dt.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=_dt.timezone.utc)
+
+
+def state_root():
+    """The person's own sitrep folder. Computed on each call, so it follows the home directory."""
+    return Path.home() / ".claude" / "sitrep"
+
+
+def state_path(top):
+    """Where this person keeps the state for this repository, keyed by its git common directory.
+
+    Every worktree of one clone shares a common directory, so they share one watermark, which is the
+    spec's definition of a repository: one clone, including every worktree of it.
+    """
+    common = Path(git(top, "rev-parse", "--git-common-dir").strip())
+    if not common.is_absolute():
+        common = Path(top) / common
+    identity = os.path.normcase(str(common.resolve()))
+    return state_root() / f"{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:16]}.json"
+
+
+def load_state(top):
+    """(path, state). Missing or unreadable state reads as none, never as an error."""
+    path = state_path(top)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    return path, {"watermark": raw.get("watermark") or None, "shown": list(raw.get("shown") or [])}
+
+
+def save_state(path, state):
+    """Write the person's state atomically, under their home directory and nowhere else."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def record_shown(top, revision, session_id, transcript_path, now=None):
+    """Remember that a sitrep describing `revision` was shown in a session, for a later board.
+
+    Called by the session-start path, which `feat-0071` adds. Recording is all it does: nothing
+    moves until a later board finds, in that session's transcript, a prompt the person typed.
+    """
+    path, state = load_state(top)
+    state["shown"].append({
+        "session_id": session_id, "transcript_path": transcript_path, "revision": revision,
+        "shown_at": _iso(now or _utc_now(), "milliseconds"),
+    })
+    state["shown"] = state["shown"][-SHOWN_KEPT:]
+    save_state(path, state)
+
+
+def human_prompt_after(transcript_path, after):
+    """True when a transcript holds a prompt marked as typed by a person, later than `after`.
+
+    Only a main-thread `user` record whose `origin.kind` is `human` counts. `chore-0093` measured
+    that every typed prompt carries that mark, that background completions arrive as
+    `task-notification`, that sub-agent prompts sit in the side chain unmarked, and that a
+    print-mode prompt is unmarked too. Anything without the mark counts as nobody (S-040), and a
+    missing or unreadable transcript counts as no prompt at all. `after` is an aware datetime.
+    """
+    if not transcript_path:
+        return False
+    try:
+        with open(transcript_path, "rb") as handle:
+            for raw in handle:
+                try:
+                    record = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(record, dict) or record.get("type") != "user":
+                    continue
+                if record.get("isSidechain"):
+                    continue
+                origin = record.get("origin")
+                if not isinstance(origin, dict) or origin.get("kind") != "human":
+                    continue
+                stamp = _parse_iso(record.get("timestamp"))
+                if stamp is not None and stamp > after:
+                    return True
+    except OSError:
+        return False
+    return False
+
+
+def advance_watermark(top):
+    """Move the watermark to the newest shown sitrep the person has since replied after.
+
+    The most recent qualifying sitrep wins, and every sitrep shown at or before it is forgotten,
+    since none of them can move the watermark further. Returns the watermark, possibly unchanged.
+    """
+    path, state = load_state(top)
+    current = state["watermark"]
+    current_at = _parse_iso((current or {}).get("shown_at"))
+    candidates = []
+    for entry in state["shown"]:
+        shown_at = _parse_iso(entry.get("shown_at"))
+        if shown_at is not None and (current_at is None or shown_at > current_at):
+            candidates.append((shown_at, entry))
+    for shown_at, entry in sorted(candidates, key=lambda pair: pair[0], reverse=True):
+        if human_prompt_after(entry.get("transcript_path"), shown_at):
+            state["watermark"] = {"revision": entry.get("revision"), "shown_at": entry.get("shown_at")}
+            state["shown"] = [s for s in state["shown"]
+                              if (_parse_iso(s.get("shown_at")) or shown_at) > shown_at]
+            save_state(path, state)
+            return state["watermark"]
+    return current
+
+
+def first_look_base(top, now=None):
+    """The newest commit older than the first-look window, or the empty tree when there is none.
+
+    The cutoff is spelled in git's own date form with an explicit offset, so the window does not
+    depend on how git reads a trailing `Z` or on the timezone of the machine running it.
+    """
+    cutoff = (now or _utc_now()) - _dt.timedelta(days=FIRST_LOOK_DAYS)
+    stamp = cutoff.astimezone(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S +0000")
+    older = (git_quiet(top, "rev-list", "-1", f"--before={stamp}", "HEAD") or "").strip()
+    return older or EMPTY_TREE
+
+
+def resolve_since(top, revision, since=None, now=None):
+    """(base, kind, notices) for changed-since.
+
+    An explicit `since` is used for this run only and touches no state (S-026). Otherwise the
+    watermark is advanced from transcripts first, then used; with none it is a first look (S-021),
+    and one naming a commit this repository no longer has resets to a first look (S-024).
+    """
+    if not revision:
+        return None, KIND_FIRST_LOOK, []
+    if since:
+        resolved = (git_quiet(top, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}")
+                    or "").strip()
+        if resolved:
+            return resolved, KIND_EXPLICIT, []
+        return first_look_base(top, now), KIND_FIRST_LOOK, [f"since revision not found: {since}"]
+    watermark = advance_watermark(top)
+    if not watermark:
+        return first_look_base(top, now), KIND_FIRST_LOOK, []
+    if is_commit(top, watermark.get("revision")):
+        return watermark["revision"], KIND_CAUGHT_UP, []
+    return first_look_base(top, now), KIND_RESET, [NOTICE_RESET]
+
+
+# ---------------------------------------------------------------------------------------------
+# The board
+# ---------------------------------------------------------------------------------------------
+
+def build_board(repo=".", *, since=None, integration=None, now=None):
     """Everything the sitrep derives for one repository, as one dictionary.
 
-    `base` is the revision changed-since starts from, a parameter until `feat-0069` supplies the
-    watermark. `integration` overrides the `integration_branch` a `.sitrep.json` declares.
+    `since` is an explicit revision for changed-since, used for this run only; without it the
+    person's watermark decides. `integration` overrides the `integration_branch` a `.sitrep.json`
+    declares.
     """
     repository, revision = repository_facts(repo)
     top = repository["path"]
@@ -559,6 +745,8 @@ def build_board(repo=".", *, base=None, integration=None, now=None):
         in_flight += branch_entries(top, branch)
     declared, figure_notices = figures_from_config(top, config)
     notices += figure_notices
+    base, kind, since_notices = resolve_since(top, revision, since, now)
+    notices += since_notices
     figures = [
         count_figure("waiting on you", waiting, "green"),
         count_figure("blocked", blocked, "green"),
@@ -569,12 +757,12 @@ def build_board(repo=".", *, base=None, integration=None, now=None):
         "repository": repository,
         "revision": revision,
         "generated": _iso(now or _utc_now()),
-        "watermark": {"revision": base, "kind": None},
+        "watermark": {"revision": None if base == EMPTY_TREE else base, "kind": kind},
         "waiting": waiting,
         "blocked": blocked,
         "planned": planned,
         "in_flight": in_flight,
-        "changed": changes_since(top, base) if revision else changes_since(top, None),
+        "changed": changes_since(top, base),
         "figures": figures,
         "notices": notices,
     }
@@ -601,6 +789,9 @@ def main(argv=None):
         print(f"{title} ({len(board[key])})")
         for entry in board[key]:
             print(f"  {_describe(entry)}")
+    changed = board["changed"]
+    print(f"changed since ({board['watermark']['kind']}): {changed['commits']} commits, "
+          f"closed {changed['closed']}, updated {changed['updated']}")
     print("figures")
     for figure in board["figures"]:
         print(f"  {figure['name']}: {figure['value']}  [{TIER_NAMES[figure['tier']]}] "

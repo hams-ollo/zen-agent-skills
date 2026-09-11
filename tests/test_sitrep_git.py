@@ -188,7 +188,7 @@ class ChangedSinceTests(unittest.TestCase):
         repo.write("notes.txt", "unrelated\n")
         repo.commit("unrelated")
 
-        board = sitrep.build_board(repo.dir, base=base)
+        board = sitrep.build_board(repo.dir, since=base)
         self.assertEqual(board["changed"],
                          {"commits": 2, "closed": ["feat-0001"], "updated": ["feat-0002"]})
 
