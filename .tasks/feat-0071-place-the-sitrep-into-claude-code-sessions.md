@@ -45,8 +45,9 @@ Files this task creates, with their exact paths:
 - `tests/test_hooks_sitrep.py`: the hook's tests.
 
 Files this task edits: `scripts/install.py` (one `HOOK_REGISTRATIONS` entry, with an empty matcher so
-every source fires), `.codex/hooks.json` and `.opencode/plugins/zen-hooks.mjs` (see the readiness
-record), `.agents/hooks/README.md` (its table), `docs/CATALOG.md` (the drafts table and the hooks
+every source fires), `.codex/hooks.json` and `.opencode/plugins/zen-hooks.mjs` (every hook in the
+module is wired into each harness it supports; the spec's Non-Goals say so since the author's
+decision of 2026-09-11), `.agents/hooks/README.md` (its table), `docs/CATALOG.md` (the drafts table and the hooks
 table), and `.agents/skills/sitrep/SKILL.md` (the session-start half).
 
 **Out of scope:** committing a registration into any repository, which the spec forbids, and any cloud
@@ -57,10 +58,12 @@ session.
 - The hook honours `.agents/hooks/README.md`: one JSON object or nothing on stdout, exit 0 on every
   path, standard library only, `main(stdin=None, stdout=None)`, and no import from this repository and
   no `sys.path` edit, which `tests/test_hooks.py` checks.
-- It runs the skill as a separate program rather than importing it. The skill is found at
-  `../skills/sitrep/scripts/sitrep.py` relative to the hook's own directory, which is the same geometry
-  in this repository (`.agents/hooks` beside `.agents/skills`) and in a user-scope install
-  (`~/.claude/hooks` beside `~/.claude/skills`). Absent means not installed, and the hook is silent.
+- It runs the skill as a separate program rather than importing it, and it looks for the skill only
+  in the person's own user-scope install: `~/.claude/skills/sitrep/` for Claude Code, then
+  `~/.agents/skills/sitrep/`, the base `install.py` uses for opencode. Absent means not installed,
+  and the hook is silent. It deliberately does not look beside itself: in this repository the
+  skill's source sits next to the hook, and a Codex or opencode session here would otherwise show a
+  board to someone who never installed it, which `S-032` forbids.
 - The interpreter the hook uses to run the skill is its own, `sys.executable`, so the `python3` trap
   (`bug-0050`) cannot recur inside it.
 - Scenario layers: S-031 and S-032 are process-level tests that run the hook as the harness does, with

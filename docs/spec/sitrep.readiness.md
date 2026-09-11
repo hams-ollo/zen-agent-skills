@@ -80,3 +80,22 @@ between the spec and the hooks module's own rule, not a missing mapping, so the 
 given in full.
 
 **What this authorises.** Nothing, until the gap is resolved and the gate is run again.
+
+## Run of 2026-09-11, after the author's decision
+
+Hans Havlik chose resolution (a) the same day. The spec's Non-Goal and its registration Constraint
+now say the session-start hook is wired into every harness the hooks module supports, and
+`feat-0071` looks for the skill only in the person's own user-scope install, so `S-032` holds in
+those harnesses too. Nothing else in the spec or the task set changed.
+
+```text
+verdict: implementable
+blocking_gaps: []
+scenario_to_test_map: unchanged from the run above
+task_to_scenario_map: unchanged from the run above
+first_safe_task: feat-0066
+```
+
+`feat-0066` has no dependency, names its affected surface, carries its acceptance command, and maps
+to nine scenarios whose test layers are known. The rest follow in id order, each depending on the
+one before it.

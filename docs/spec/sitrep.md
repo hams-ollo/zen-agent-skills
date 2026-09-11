@@ -23,6 +23,13 @@ the next board, the session-moments table under Proposed Surface changed to matc
 added for a prompt typed by a person, `S-040` is new, and the configuration file is named
 `.sitrep.json`.
 
+**Amended again 2026-09-11 for `feat-0071`, approved by Hans Havlik the same day.** The
+readiness gate found that the Non-Goal excluding other harnesses contradicted the hooks module's
+rule that every hook is wired into each harness it supports (`tests/test_hooks.py`). That
+Non-Goal and the registration Constraint now say the session-start hook is wired into Codex and
+opencode as well. `S-032` still holds there, because the sitrep counts as installed only when
+the skill sits in the person's own user-scope install.
+
 ## Problem
 
 Agent sessions produce work faster than the person directing them can hold its state, and that state
@@ -82,8 +89,11 @@ far to trust a number.
 - Blocking anything: no CI gate, no refused commit, no refused session. Decided by Hans Havlik on
   2026-09-11: display only.
 - A status line, whose rendering in the Claude desktop app is unverified.
-- Session-start registration for any harness other than Claude Code. The board itself runs anywhere
-  Python does.
+- Behaviour tuned for any harness other than Claude Code. The hooks module wires every hook into
+  each harness it supports, so the session-start hook is wired into Codex and opencode too, where
+  those wirings reach only a repository that ships `.agents/hooks/`. Only Claude Code's transcript
+  marks which prompts a person typed, so elsewhere the watermark never moves (`S-040`). The board
+  itself runs anywhere Python does.
 - Pull request state, or anything else that needs a network service. The board reads the local clone
   only; an unmerged branch is visible there, and that is what in flight reports.
 - Push notifications.
@@ -97,8 +107,9 @@ far to trust a number.
   reminder shape. Its registration names the interpreter by the rule `hook_interpreter()` in
   [`install.py`](../../scripts/install.py) applies, never a bare `python3`, which on Windows is a
   Microsoft Store stub (`bug-0050`).
-- Registration is at user scope only, printed by `install.py --with-hooks` for the person to place. No
-  repository commits a sitrep registration.
+- The Claude Code registration is at user scope only, printed by `install.py --with-hooks` for the
+  person to place, and no repository commits a Claude Code registration for the sitrep. This kit's
+  committed Codex and opencode wirings carry it, as they carry every hook in the module.
 - The skill enters the kit as a draft (`metadata.status: draft`), which `install.py` places under no
   profile until the author blesses it, per the contribution bar in `AGENTS.md` and `S-015` of
   [`install.md`](install.md).
