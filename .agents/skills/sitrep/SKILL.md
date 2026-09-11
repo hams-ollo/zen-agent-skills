@@ -1,6 +1,6 @@
 ---
 name: sitrep
-description: Use to answer "where are we?" about one repository from its own records instead of from memory. Reports what is waiting on you, because a task carries an open question no decision answers or work held for a human eye, and what is blocked on an unfinished dependency, reading only the task files git tracks and changing nothing in the repository. Trigger on "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this repo", or any request to report on a project's state rather than on a session's. Distinct from agent-observatory, which reports what agents did across sessions, not what is true about the work.
+description: Use to answer "where are we?" about one repository from its own records instead of from memory. Reports what is waiting on you, because a task carries an open question no decision answers or work held for a human eye, what is blocked on an unfinished dependency, and what is in flight in worktrees with uncommitted changes or branches not yet merged, reading only the task files git tracks and changing nothing in the repository. Trigger on "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this repo", or any request to report on a project's state rather than on a session's. Distinct from agent-observatory, which reports what agents did across sessions, not what is true about the work.
 license: MIT
 metadata:
   status: draft
@@ -15,8 +15,8 @@ reads the tracked task files and says what they say.
 
 **This skill is a draft.** It ships with no profile and reaches no adopter until it has been used
 on real work and blessed, per the contribution bar in the target repository's `AGENTS.md`. It is
-also being built in stages, and this body describes only what exists so far: what waits on you and
-what is blocked.
+also being built in stages, and this body describes only what exists so far: what waits on you,
+what is in flight, and what is blocked.
 
 ## When to use
 
@@ -32,7 +32,7 @@ what is blocked.
 ## Procedure
 
 1. Run [`scripts/sitrep.py`](scripts/sitrep.py) from anywhere inside the repository. It prints what
-   waits on you and what is blocked, each entry naming its task file.
+   waits on you, what is in flight, and what is blocked, each task naming its file.
 2. Report what it printed, leading with what waits on the person. Quote the reason each task is
    waiting (`open question` or `needs a human eye`) and, for a blocked task, what it waits on.
 3. If it printed a notice, report the notice. `no task tracking` means the repository has no tracked
@@ -44,6 +44,11 @@ what is blocked.
 |---|---|
 | the task's last `## Open question` heading has no `## Decision` heading below it | its `depends_on` names a task with no file under `.tasks/done/` |
 | any heading contains the words `held open for a human eye` | |
+
+In flight is read from git, never from a task's `status`: a worktree with uncommitted changes,
+untracked files included, and a local branch holding commits the integration branch lacks. The
+integration branch is `origin`'s default branch, else `main`; with neither, the board lists no
+branches and says `no integration branch`.
 
 A task under `.tasks/done/` never waits on you. Only files git tracks are read, so a task file that
 exists on one machine and was never committed is not part of the board.

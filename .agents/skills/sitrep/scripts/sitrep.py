@@ -5,14 +5,14 @@
 
 The behavioural contract is `docs/spec/sitrep.md` in the Zen Agent Skills repository. This file
 implements it one task at a time, in the order that spec's readiness record sets: `feat-0066`
-builds what waits on the person and what is blocked, and the tasks after it add in-flight work,
-evidence tiers, the watermark, the renderings, and the session-start hook. Sections owed to a later
-task are present in the board with an empty value, so the board's shape never changes under a
-reader.
+built what waits on the person and what is blocked, `feat-0067` adds in-flight work and what
+changed since a revision, and the tasks after it add evidence tiers, the watermark, the renderings,
+and the session-start hook. Sections owed to a later task are present in the board with an empty
+value, so the board's shape never changes under a reader.
 
 Standard library only, so it runs on a bare Python 3 wherever the skill is installed.
 
-Three properties are load-bearing and shape everything below.
+Four properties are load-bearing and shape everything below.
 
 **Only tracked records are state.** Task files are found with `git ls-files`, never with a
 directory listing, because an untracked file on one machine is not part of the repository. The
@@ -24,6 +24,11 @@ where a fresh run reported 74, and it looked exactly as authoritative as everyth
 headings exist anywhere marked such a task answered and dropped the only P1 from the prototype's
 queue, so the rule here is positional: the task waits while its last open question has no decision
 below it.
+
+**In flight comes from git, not from task status.** No task file in any of the author's
+repositories sets `status: in_progress`, and the prototype reported nothing in progress while a
+worktree held uncommitted work. Worktrees and unmerged branches are what work in flight actually
+looks like.
 
 **Nothing in the repository changes.** Every git call runs with optional locks off, so not even
 `git status` refreshes the index behind the person's back.
@@ -61,6 +66,7 @@ HUMAN_EYE_RE = re.compile(r"^#{1,6}[ \t]+.*held open for a human eye", re.M | re
 PRIORITY_RE = re.compile(r"^P(\d+)$", re.I)
 
 NOTICE_NO_TASKS = "no task tracking"
+NOTICE_NO_INTEGRATION = "no integration branch"
 REASON_OPEN_QUESTION = "open question"
 REASON_HUMAN_EYE = "needs a human eye"
 
@@ -246,6 +252,110 @@ def classify(tasks):
 
 
 # ---------------------------------------------------------------------------------------------
+# In flight and changed, from git
+# ---------------------------------------------------------------------------------------------
+
+def worktree_entries(top):
+    """Every worktree of this clone with uncommitted changes, its branch, and how many paths.
+
+    A path counts as changed when `git status --porcelain` lists it, untracked files included,
+    because a new file nobody has added yet is exactly the work the prototype missed. A worktree
+    whose directory is gone is skipped rather than reported, since there is nothing to look at.
+    """
+    entries = []
+    for block in git(top, "worktree", "list", "--porcelain").strip().split("\n\n"):
+        fields = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(" ")
+            fields[key] = value
+        path = fields.get("worktree")
+        if not path or "bare" in fields or not Path(path).is_dir():
+            continue
+        status = git_quiet(path, "status", "--porcelain")
+        changed = len([line for line in (status or "").splitlines() if line.strip()])
+        if not changed:
+            continue
+        branch = fields.get("branch", "")
+        branch = branch[len("refs/heads/"):] if branch.startswith("refs/heads/") else "(detached)"
+        entries.append({
+            "kind": "worktree", "name": path, "branch": branch, "changed_paths": changed,
+            "tier": "purple", "provenance": "git",
+        })
+    return entries
+
+
+def resolve_integration(top, declared=None):
+    """The branch finished work merges into, and a notice when there is none (S-039).
+
+    The spec's surface order: the declared branch, else the default branch of remote `origin`,
+    else `main`. A declared branch that does not resolve is reported rather than silently replaced
+    by the default, because a board that quietly compares against the wrong branch reports the
+    wrong work as in flight and nothing on it says so.
+    """
+    if declared:
+        if git_quiet(top, "rev-parse", "--verify", "--quiet", f"{declared}^{{commit}}"):
+            return declared, None
+        return None, f"integration branch not found: {declared}"
+    origin_head = (git_quiet(top, "symbolic-ref", "--quiet", "--short",
+                             "refs/remotes/origin/HEAD") or "").strip()
+    if origin_head:
+        return origin_head, None
+    if git_quiet(top, "rev-parse", "--verify", "--quiet", "refs/heads/main"):
+        return "main", None
+    return None, NOTICE_NO_INTEGRATION
+
+
+def branch_entries(top, integration):
+    """Local branches holding commits the integration branch does not, most recent first.
+
+    Compared with the integration ref exactly as resolved, so when that is `origin/main`, a local
+    `main` carrying unpushed commits is listed: work nobody else can see yet is in flight.
+    """
+    rows = []
+    listing = git(top, "for-each-ref", "--format=%(refname:short)%09%(committerdate:unix)",
+                  "refs/heads")
+    for line in listing.splitlines():
+        name, _, stamp = line.partition("\t")
+        if not name or name == integration:
+            continue
+        count = (git_quiet(top, "rev-list", "--count", f"{integration}..{name}") or "0").strip()
+        unmerged = int(count) if count.isdigit() else 0
+        if unmerged:
+            rows.append((int(stamp) if stamp.isdigit() else 0, name, unmerged))
+    rows.sort(key=lambda row: (-row[0], row[1]))
+    return [{"kind": "branch", "name": name, "unmerged_commits": unmerged,
+             "tier": "purple", "provenance": "git"} for _, name, unmerged in rows]
+
+
+def changes_since(top, base):
+    """What changed between `base` and HEAD: how many commits, which tasks closed, which updated.
+
+    A task is closed when its file arrives under `.tasks/done/` in the range, and updated when its
+    file changed in place outside it. Ids come from the file names, which the kit's validator keeps
+    equal to each file's `id`.
+    """
+    if not base:
+        return {"commits": 0, "closed": [], "updated": []}
+    commits = (git(top, "rev-list", "--count", f"{base}..HEAD") or "0").strip()
+    closed, updated = set(), set()
+    diff = git(top, "diff", "--name-status", "-M", base, "HEAD", "--", ".tasks")
+    for line in diff.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        code, path = parts[0][:1], parts[-1]
+        match = TASK_PATH_RE.match(path)
+        if not match:
+            continue
+        if path.startswith(".tasks/done/") and code in ("A", "R", "C"):
+            closed.add(match.group(1))
+        elif code == "M" and not path.startswith(".tasks/done/"):
+            updated.add(match.group(1))
+    return {"commits": int(commits) if commits.isdigit() else 0,
+            "closed": sorted(closed), "updated": sorted(updated - closed)}
+
+
+# ---------------------------------------------------------------------------------------------
 # The board
 # ---------------------------------------------------------------------------------------------
 
@@ -257,29 +367,46 @@ def _iso(moment):
     return moment.astimezone(_dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def build_board(repo=".", *, now=None):
+def build_board(repo=".", *, base=None, integration=None, now=None):
     """Everything the sitrep derives for one repository, as one dictionary.
 
-    Keys owed to later tasks are present and empty: `in_flight` and `changed` are `feat-0067`'s,
-    `figures` is `feat-0068`'s, and `watermark` is `feat-0069`'s.
+    `base` is the revision changed-since starts from and `integration` a declared integration
+    branch; both are parameters until `feat-0069` supplies the watermark and `feat-0068` reads
+    `.sitrep.json`. `figures` is `feat-0068`'s and `watermark` is `feat-0069`'s.
     """
     repository, revision = repository_facts(repo)
-    tasks, notices = load_tasks(repository["path"])
+    top = repository["path"]
+    tasks, notices = load_tasks(top)
     waiting, blocked, planned = classify(tasks)
+    in_flight = worktree_entries(top)
+    branch, notice = resolve_integration(top, integration)
+    if notice:
+        notices.append(notice)
+    if branch:
+        in_flight += branch_entries(top, branch)
     return {
         "schema_version": SCHEMA_VERSION,
         "repository": repository,
         "revision": revision,
         "generated": _iso(now or _utc_now()),
-        "watermark": {"revision": None, "kind": None},
+        "watermark": {"revision": base, "kind": None},
         "waiting": waiting,
         "blocked": blocked,
         "planned": planned,
-        "in_flight": [],
-        "changed": {"commits": 0, "closed": [], "updated": []},
+        "in_flight": in_flight,
+        "changed": changes_since(top, base) if revision else changes_since(top, None),
         "figures": [],
         "notices": notices,
     }
+
+
+def _describe(entry):
+    if entry.get("kind") == "worktree":
+        return f"worktree {entry['name']} [{entry['branch']}]  {entry['changed_paths']} changed paths"
+    if entry.get("kind") == "branch":
+        return f"branch {entry['name']}  {entry['unmerged_commits']} unmerged commits"
+    detail = entry.get("reason") or ", ".join(entry.get("waits_on", []))
+    return f"{entry['priority'] or '-'} {entry['id']}  {entry['title']}  ({detail})"
 
 
 def main(argv=None):
@@ -289,11 +416,11 @@ def main(argv=None):
     except SitrepError as exc:
         print(f"sitrep could not be produced: {exc}", file=sys.stderr)
         return 1
-    for title, key in (("waiting on you", "waiting"), ("blocked", "blocked")):
+    for title, key in (("waiting on you", "waiting"), ("in flight", "in_flight"),
+                       ("blocked", "blocked")):
         print(f"{title} ({len(board[key])})")
         for entry in board[key]:
-            detail = entry.get("reason") or ", ".join(entry.get("waits_on", []))
-            print(f"  {entry['priority'] or '-'} {entry['id']}  {entry['title']}  ({detail})")
+            print(f"  {_describe(entry)}")
     for notice in board["notices"]:
         print(f"notice: {notice}")
     return 0

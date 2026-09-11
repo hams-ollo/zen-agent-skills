@@ -10,22 +10,22 @@ Spec-vs-implementation audit of `.agents/skills/sitrep/` against [`sitrep.md`](s
 at `feat-0066`'s closeout. The decomposition is `feat-0066` to `feat-0071`, in that order, gated by
 [`sitrep.readiness.md`](sitrep.readiness.md), and each task updates this matrix as it closes.
 
-**Nine of the forty scenarios are built.** `feat-0066` built what waits on the person and what is
-blocked, which is `S-001` to `S-007`, `S-010` and `S-014`. Every other row is not-built and names the
-task that owes it.
+**Thirteen of the forty scenarios are built.** `feat-0066` built what waits on the person and what
+is blocked, which is `S-001` to `S-007`, `S-010` and `S-014`; `feat-0067` added in-flight work and
+changes from git, which is `S-008`, `S-009`, `S-011` and `S-039`. Every other row is not-built and
+names the task that owes it.
 
-**Conformed is not unbounded.** `S-010`'s Then asks that a board with no task tracking still carry
-in-flight work and changes since the watermark. Those sections are present and empty until
-`feat-0067` fills them, and that task's tests run the scenario again against a repository with work
-in flight.
+**Conformed is not unbounded.** `S-011` is proven with the base revision passed in directly;
+where that revision comes from is the watermark, which is `feat-0069`'s, and until then the board
+reports no changes unless a base is given.
 
 Citations are by symbol and by test name, never by line number, per the convention `bug-0037`
 established and `scripts/check-citations.py` enforces.
 
 ## Coverage proof
 
-The spec carries **40** scenarios, `S-001` to `S-040`. This matrix has **40** rows: **9** conformed,
-**0** diverged, **31** not-built. 9 + 0 + 31 = 40, and the arithmetic is stated rather than the
+The spec carries **40** scenarios, `S-001` to `S-040`. This matrix has **40** rows: **13** conformed,
+**0** diverged, **27** not-built. 13 + 0 + 27 = 40, and the arithmetic is stated rather than the
 claim.
 
 ## Matrix
@@ -39,10 +39,10 @@ claim.
 | `S-005`: a closed task never waits | **conformed** | `classify()` in `.agents/skills/sitrep/scripts/sitrep.py` skips every task `parse_task()` marks closed. Proven by `test_s005_a_closed_task_never_waits_on_the_person`. |
 | `S-006`: waiting entries ordered by priority | **conformed** | `by_priority()` and `priority_rank()` in `.agents/skills/sitrep/scripts/sitrep.py`. Proven by `test_s006_waiting_entries_are_ordered_by_priority_then_id`. |
 | `S-007`: a task with an unfinished dependency is blocked | **conformed** | `classify()` in `.agents/skills/sitrep/scripts/sitrep.py` names each dependency with no file under the done directory. Proven by `test_s007_a_task_with_an_unfinished_dependency_is_blocked` and `test_s007_a_task_whose_dependencies_are_all_done_is_not_blocked`. |
-| `S-008`: uncommitted work in a worktree is in flight | not-built | Owed to `feat-0067`. |
-| `S-009`: a branch with unmerged commits is in flight | not-built | Owed to `feat-0067`. |
-| `S-010`: a repository without task tracking still gets a board | **conformed** | `load_tasks()` in `.agents/skills/sitrep/scripts/sitrep.py` raises `NOTICE_NO_TASKS` when nothing is tracked under `.tasks/`, and `build_board()` still returns every section. Proven by `test_s010_a_repository_without_task_tracking_still_gets_a_board`. Bound: the in-flight and changed sections are empty until `feat-0067`. |
-| `S-011`: changes since the watermark are summarised | not-built | Owed to `feat-0067`. |
+| `S-008`: uncommitted work in a worktree is in flight | **conformed** | `worktree_entries()` in `.agents/skills/sitrep/scripts/sitrep.py` reads the porcelain worktree listing and counts the lines git status reports for each worktree, untracked files included, and never reads task status. Proven by `test_s008_uncommitted_work_in_a_worktree_is_in_flight` and `test_s008_a_clean_worktree_is_not_in_flight`. |
+| `S-009`: a branch with unmerged commits is in flight | **conformed** | `branch_entries()` in `.agents/skills/sitrep/scripts/sitrep.py` counts each local branch against the integration branch `resolve_integration()` chose. Proven by `test_s009_a_branch_with_unmerged_commits_is_in_flight`; `test_s009_the_default_branch_of_origin_is_the_integration_branch` and `test_s009_a_declared_branch_that_does_not_exist_is_reported` pin the surface's resolution order. |
+| `S-010`: a repository without task tracking still gets a board | **conformed** | `load_tasks()` in `.agents/skills/sitrep/scripts/sitrep.py` raises `NOTICE_NO_TASKS` when nothing is tracked under `.tasks/`, and `build_board()` still returns every section. Proven by `test_s010_a_repository_without_task_tracking_still_gets_a_board`. `test_s010_a_board_without_task_tracking_carries_its_work_in_flight` proves the in-flight half. |
+| `S-011`: changes since the watermark are summarised | **conformed** | `changes_since()` in `.agents/skills/sitrep/scripts/sitrep.py` counts the commits from the base to HEAD and reads the rename-aware name-status diff over the task directory. Proven by `test_s011_changes_since_a_revision_are_summarised`. Bound: the base is passed in until `feat-0069`. |
 | `S-012`: a count over a tracked file is Purple | not-built | Owed to `feat-0068`. |
 | `S-013`: a value read from a tracked file is Blue | not-built | Owed to `feat-0068`. |
 | `S-014`: a task entry is Green | **conformed** | `task_entry()` in `.agents/skills/sitrep/scripts/sitrep.py` sets the tier to Green and the provenance to the task file. Proven by `test_s014_a_task_entry_is_green_and_names_its_task_file`; `test_an_untracked_task_file_is_not_state` proves only tracked task files are read. |
@@ -70,5 +70,5 @@ claim.
 | `S-036`: generating a board changes nothing in the repository | not-built | Owed to `feat-0070`. |
 | `S-037`: the board needs no network | not-built | Owed to `feat-0070`. |
 | `S-038`: the board is one versioned document | not-built | Owed to `feat-0070`. |
-| `S-039`: no integration branch reports no branches | not-built | Owed to `feat-0067`. |
+| `S-039`: no integration branch reports no branches | **conformed** | `resolve_integration()` in `.agents/skills/sitrep/scripts/sitrep.py` returns `NOTICE_NO_INTEGRATION`, and `build_board()` then lists no branches but still lists worktrees. Proven by `test_s039_a_repository_with_no_integration_branch_reports_no_branches_and_says_so`. |
 | `S-040`: an unmarked prompt never moves the watermark | not-built | Owed to `feat-0069`. |
