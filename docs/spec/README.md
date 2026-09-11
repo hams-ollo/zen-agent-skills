@@ -144,7 +144,7 @@ something else today.
 | [`doc-sync`](doc-sync.md) | approved | 15 | [conformance](doc-sync.conformance.md) |
 | [`house-review`](house-review.md) | approved | 18 | [conformance](house-review.conformance.md), [verification](house-review.verification.md) |
 | [`install`](install.md) | approved | 18 | [conformance](install.conformance.md), [characterization](install.characterization.md) |
-| [`sitrep`](sitrep.md) | approved | 40 | [conformance](sitrep.conformance.md) (13 of 40 built), [readiness](sitrep.readiness.md) (implementable) |
+| [`sitrep`](sitrep.md) | approved | 40 | [conformance](sitrep.conformance.md) (21 of 40 built), [readiness](sitrep.readiness.md) (implementable) |
 | [`spec-author`](spec-author.md) | approved | 7 | [conformance](spec-author.conformance.md) |
 | [`systematic-debugging`](systematic-debugging.md) | approved | 15 | [conformance](systematic-debugging.conformance.md) (15 of 15), [verification](systematic-debugging.verification.md) |
 | [`test-author`](test-author.md) | approved | 5 | [conformance](test-author.conformance.md) |

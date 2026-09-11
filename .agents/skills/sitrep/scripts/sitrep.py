@@ -5,14 +5,15 @@
 
 The behavioural contract is `docs/spec/sitrep.md` in the Zen Agent Skills repository. This file
 implements it one task at a time, in the order that spec's readiness record sets: `feat-0066`
-built what waits on the person and what is blocked, `feat-0067` adds in-flight work and what
-changed since a revision, and the tasks after it add evidence tiers, the watermark, the renderings,
-and the session-start hook. Sections owed to a later task are present in the board with an empty
-value, so the board's shape never changes under a reader.
+built what waits on the person and what is blocked, `feat-0067` added in-flight work and what
+changed since a revision, `feat-0068` adds evidence tiers and the figures a repository declares,
+and the tasks after it add the watermark, the renderings, and the session-start hook. Sections owed
+to a later task are present in the board with an empty value, so the board's shape never changes
+under a reader.
 
 Standard library only, so it runs on a bare Python 3 wherever the skill is installed.
 
-Four properties are load-bearing and shape everything below.
+Five properties are load-bearing and shape everything below.
 
 **Only tracked records are state.** Task files are found with `git ls-files`, never with a
 directory listing, because an untracked file on one machine is not part of the repository. The
@@ -30,6 +31,11 @@ repositories sets `status: in_progress`, and the prototype reported nothing in p
 worktree held uncommitted work. Worktrees and unmerged branches are what work in flight actually
 looks like.
 
+**A figure's tier is derived from where it came from, never asserted.** A page where every number
+looks equally solid is how a wrong number survives, so each figure carries the tier its source
+earns and no more: an untracked file cannot rise above White whatever it is declared as, and Gold
+needs a named test this script can actually find.
+
 **Nothing in the repository changes.** Every git call runs with optional locks off, so not even
 `git status` refreshes the index behind the person's back.
 """
@@ -37,6 +43,7 @@ looks like.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import re
 import subprocess
@@ -65,14 +72,26 @@ DECISION_RE = re.compile(r"^##[ \t]+decision", re.M | re.I)
 HUMAN_EYE_RE = re.compile(r"^#{1,6}[ \t]+.*held open for a human eye", re.M | re.I)
 PRIORITY_RE = re.compile(r"^P(\d+)$", re.I)
 
+# The repository's own board configuration, committed at its top level.
+CONFIG_FILE = ".sitrep.json"
+# One `name` or `name[field=value]` per dotted segment.
+SEGMENT_RE = re.compile(r"^([^\[\]]*)(?:\[([^=\[\]]+)=([^\[\]]*)\])?$")
+# The spec's "tracked test file": a name starting `test_`, or containing `.test.` or `_test.`.
+TEST_FILE_GLOBS = (":(glob)**/test_*", ":(glob)**/*.test.*", ":(glob)**/*_test.*")
+
 NOTICE_NO_TASKS = "no task tracking"
 NOTICE_NO_INTEGRATION = "no integration branch"
 REASON_OPEN_QUESTION = "open question"
 REASON_HUMAN_EYE = "needs a human eye"
+LABEL_UNTRACKED = "untracked"
 
 
 class SitrepError(Exception):
     """The board could not be produced, with a reason a person can act on."""
+
+
+class FigureError(Exception):
+    """One declared figure could not be read. The board reports it and carries on."""
 
 
 # ---------------------------------------------------------------------------------------------
@@ -116,6 +135,11 @@ def repository_facts(repo):
     origin = (git_quiet(top, "remote", "get-url", "origin") or "").strip() or None
     revision = (git_quiet(top, "rev-parse", "HEAD") or "").strip() or None
     return {"path": top, "origin": origin}, revision
+
+
+def held_at_head(top, rel):
+    """True when the current revision holds `rel`, which is the spec's meaning of tracked."""
+    return git_quiet(top, "cat-file", "-e", f"HEAD:{rel}") is not None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -356,6 +380,154 @@ def changes_since(top, base):
 
 
 # ---------------------------------------------------------------------------------------------
+# Figures and their tiers
+# ---------------------------------------------------------------------------------------------
+
+def tier_rank(tier):
+    return TIERS.index(tier)
+
+
+def lowest_tier(tiers, default):
+    """The weakest tier among `tiers`, or `default` when there are none to compare."""
+    known = [tier for tier in tiers if tier in TIERS]
+    return min(known, key=tier_rank) if known else default
+
+
+def count_figure(name, entries, default):
+    """A count of board entries, carrying the lowest tier among what it counts (S-019).
+
+    A count is only as good as the weakest thing in it: eight tasks read out of task files make a
+    Green eight, however exactly they were counted. `default` is the tier of the source the list
+    comes from, used when the list is empty and there is nothing to take the minimum over.
+    """
+    return {"name": name, "value": len(entries),
+            "tier": lowest_tier([e.get("tier") for e in entries], default),
+            "provenance": "count of board entries"}
+
+
+def load_config(top):
+    """The repository's `.sitrep.json`, or an empty configuration, plus any notice.
+
+    Read from the working tree, so a person editing it sees the effect before committing it. The
+    data files it points at are read at the current revision instead, because their tier depends on
+    what the repository holds rather than on what one machine has edited.
+    """
+    path = Path(top) / CONFIG_FILE
+    if not path.is_file():
+        return {}, []
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        return {}, [f"configuration could not be read: {CONFIG_FILE} ({exc.__class__.__name__})"]
+    if not isinstance(config, dict):
+        return {}, [f"configuration could not be read: {CONFIG_FILE} is not an object"]
+    return config, []
+
+
+def select(data, path):
+    """Follow a dotted path, with at most one `[field=value]` filter on an array.
+
+    A filter compares a string field as it is and any other value in its JSON spelling, so
+    `[released=true]` matches a JSON `true` rather than Python's `True`.
+    """
+    current, filtered = data, False
+    for segment in (path or "").split("."):
+        match = SEGMENT_RE.match(segment)
+        if not match:
+            raise FigureError(f"selection {path!r} is not a dotted path")
+        key, field, value = match.groups()
+        if key:
+            if not isinstance(current, dict) or key not in current:
+                raise FigureError(f"nothing at {key!r} in selection {path!r}")
+            current = current[key]
+        if field is not None:
+            if filtered:
+                raise FigureError(f"selection {path!r} has more than one filter")
+            if not isinstance(current, list):
+                raise FigureError(f"selection {path!r} filters something that is not an array")
+
+            def keep(item):
+                if not isinstance(item, dict) or field not in item:
+                    return False
+                found = item[field]
+                return (found if isinstance(found, str) else json.dumps(found)) == value
+
+            current, filtered = [item for item in current if keep(item)], True
+    return current
+
+
+def declared_figure(top, declaration):
+    """One figure from `.sitrep.json`, with the tier its source earns (S-012, S-013, S-015)."""
+    rel = str(declaration.get("file") or "").replace("\\", "/")
+    kind = declaration.get("kind")
+    if kind not in ("count", "value"):
+        raise FigureError(f"kind must be count or value, not {kind!r}")
+    if not rel:
+        raise FigureError("no file is named")
+    tracked = held_at_head(top, rel)
+    if tracked:
+        text = git(top, "show", f"HEAD:{rel}")
+    else:
+        try:
+            text = (Path(top) / rel).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise FigureError(f"{rel} does not exist") from None
+        except (OSError, UnicodeDecodeError) as exc:
+            raise FigureError(f"{rel} could not be read ({exc.__class__.__name__})") from None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        raise FigureError(f"{rel} is not JSON") from None
+    selected = select(data, declaration.get("select", ""))
+    if kind == "count":
+        if not isinstance(selected, (list, dict)):
+            raise FigureError(f"selection {declaration.get('select')!r} is not something to count")
+        value, tier = len(selected), "purple"
+    else:
+        if isinstance(selected, (list, dict)):
+            raise FigureError(f"selection {declaration.get('select')!r} is not a single value")
+        value, tier = selected, "blue"
+    figure = {"name": declaration.get("name"), "value": value, "tier": tier, "provenance": rel}
+    if not tracked:
+        figure["tier"], figure["label"] = "white", LABEL_UNTRACKED
+    return figure
+
+
+def test_name_present(top, name):
+    """True when a tracked test file at the current revision contains `name`."""
+    found = git_quiet(top, "grep", "-F", "-l", "-e", name, "HEAD", "--", *TEST_FILE_GLOBS)
+    return bool(found and found.strip())
+
+
+def figures_from_config(top, config):
+    """Every declared, pinned and hand-entered figure, plus a notice for each one that failed."""
+    figures, notices = [], []
+    for declaration in config.get("figures") or []:
+        name = (declaration or {}).get("name") or "(unnamed)"
+        try:
+            figures.append(declared_figure(top, declaration or {}))
+        except FigureError as exc:
+            notices.append(f"figure {name} could not be read: {exc}")
+    by_name = {figure["name"]: figure for figure in figures}
+    for pin in config.get("pins") or []:
+        figure, test = by_name.get((pin or {}).get("figure")), (pin or {}).get("test")
+        if figure is None:
+            notices.append(f"pin names no figure: {(pin or {}).get('figure')}")
+            continue
+        if figure["tier"] not in ("blue", "purple"):
+            continue  # an untracked source stays White whatever pins it (S-015)
+        if test and test_name_present(top, test):
+            figure["tier"], figure["pinned_by"] = "gold", test
+        else:
+            notices.append(f"pinned test not found: {test} (figure {figure['name']})")
+    for entry in config.get("manual") or []:
+        entry = entry or {}
+        figures.append({"name": entry.get("name"), "value": entry.get("value"), "tier": "white",
+                        "provenance": entry.get("source") or "no source given"})
+    return figures, notices
+
+
+# ---------------------------------------------------------------------------------------------
 # The board
 # ---------------------------------------------------------------------------------------------
 
@@ -370,20 +542,28 @@ def _iso(moment):
 def build_board(repo=".", *, base=None, integration=None, now=None):
     """Everything the sitrep derives for one repository, as one dictionary.
 
-    `base` is the revision changed-since starts from and `integration` a declared integration
-    branch; both are parameters until `feat-0069` supplies the watermark and `feat-0068` reads
-    `.sitrep.json`. `figures` is `feat-0068`'s and `watermark` is `feat-0069`'s.
+    `base` is the revision changed-since starts from, a parameter until `feat-0069` supplies the
+    watermark. `integration` overrides the `integration_branch` a `.sitrep.json` declares.
     """
     repository, revision = repository_facts(repo)
     top = repository["path"]
-    tasks, notices = load_tasks(top)
+    config, notices = load_config(top)
+    tasks, task_notices = load_tasks(top)
+    notices += task_notices
     waiting, blocked, planned = classify(tasks)
     in_flight = worktree_entries(top)
-    branch, notice = resolve_integration(top, integration)
+    branch, notice = resolve_integration(top, integration or config.get("integration_branch"))
     if notice:
         notices.append(notice)
     if branch:
         in_flight += branch_entries(top, branch)
+    declared, figure_notices = figures_from_config(top, config)
+    notices += figure_notices
+    figures = [
+        count_figure("waiting on you", waiting, "green"),
+        count_figure("blocked", blocked, "green"),
+        count_figure("in flight", in_flight, "purple"),
+    ] + declared
     return {
         "schema_version": SCHEMA_VERSION,
         "repository": repository,
@@ -395,7 +575,7 @@ def build_board(repo=".", *, base=None, integration=None, now=None):
         "planned": planned,
         "in_flight": in_flight,
         "changed": changes_since(top, base) if revision else changes_since(top, None),
-        "figures": [],
+        "figures": figures,
         "notices": notices,
     }
 
@@ -421,6 +601,10 @@ def main(argv=None):
         print(f"{title} ({len(board[key])})")
         for entry in board[key]:
             print(f"  {_describe(entry)}")
+    print("figures")
+    for figure in board["figures"]:
+        print(f"  {figure['name']}: {figure['value']}  [{TIER_NAMES[figure['tier']]}] "
+              f"{figure['provenance']}")
     for notice in board["notices"]:
         print(f"notice: {notice}")
     return 0

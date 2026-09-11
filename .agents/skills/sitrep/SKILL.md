@@ -1,6 +1,6 @@
 ---
 name: sitrep
-description: Use to answer "where are we?" about one repository from its own records instead of from memory. Reports what is waiting on you, because a task carries an open question no decision answers or work held for a human eye, what is blocked on an unfinished dependency, and what is in flight in worktrees with uncommitted changes or branches not yet merged, reading only the task files git tracks and changing nothing in the repository. Trigger on "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this repo", or any request to report on a project's state rather than on a session's. Distinct from agent-observatory, which reports what agents did across sessions, not what is true about the work.
+description: Use to answer "where are we?" about one repository from its own records instead of from memory. Reports what is waiting on you, because a task carries an open question no decision answers or work held for a human eye, what is blocked on an unfinished dependency, and what is in flight in worktrees with uncommitted changes or branches not yet merged, with an evidence tier on every figure so a guess never reads like a measurement, reading only the task files git tracks and changing nothing in the repository. Trigger on "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this repo", or any request to report on a project's state rather than on a session's. Distinct from agent-observatory, which reports what agents did across sessions, not what is true about the work.
 license: MIT
 metadata:
   status: draft
@@ -16,7 +16,7 @@ reads the tracked task files and says what they say.
 **This skill is a draft.** It ships with no profile and reaches no adopter until it has been used
 on real work and blessed, per the contribution bar in the target repository's `AGENTS.md`. It is
 also being built in stages, and this body describes only what exists so far: what waits on you,
-what is in flight, and what is blocked.
+what is in flight, what is blocked, and the figures a repository declares, each with its tier.
 
 ## When to use
 
@@ -52,6 +52,33 @@ branches and says `no integration branch`.
 
 A task under `.tasks/done/` never waits on you. Only files git tracks are read, so a task file that
 exists on one machine and was never committed is not part of the board.
+
+## Figures and their tiers
+
+Every figure on the board carries a tier, derived from where it came from and never asserted:
+
+| Tier | Given to |
+|---|---|
+| White | a figure over a file git does not hold at the current revision, and a hand-entered value |
+| Green | a task entry, and a count of task entries |
+| Blue | a figure of kind `value` read from a tracked file |
+| Purple | a figure of kind `count` over a tracked file, and anything read from git's current state |
+| Gold | a Blue or Purple figure pinned to a test name a tracked test file contains |
+
+A repository declares its own figures in a committed `.sitrep.json` at its top level:
+
+```json
+{
+  "integration_branch": "developer",
+  "figures": [{"name": "approved", "file": "banks/math.json", "kind": "count",
+               "select": "items[review_status=approved_for_demo]"}],
+  "pins": [{"figure": "approved", "test": "test_bank_counts"}],
+  "manual": [{"name": "minutes per review", "value": 1.3, "source": "n50 packet, 2026-08"}]
+}
+```
+
+When you report a figure, report its tier with it. A figure that could not be read appears only as
+a notice, and that is the answer: do not fill the gap with a remembered number.
 
 ## Conventions
 

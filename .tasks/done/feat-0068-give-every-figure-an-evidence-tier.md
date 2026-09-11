@@ -2,7 +2,7 @@
 id: feat-0068
 title: Give every figure an evidence tier, and read declared figures from .sitrep.json
 type: feat
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7d: project board"
 depends_on: [feat-0067]
@@ -47,6 +47,23 @@ as colours (`feat-0070`).
 - Scenario layers: the selection, tier and count rules are unit tests; S-012, S-013, S-015, S-016 and
   S-017 run against a throwaway repository, because tracked-ness is a repository fact.
 
+## Decisions
+
+- **A seam left open deliberately.** `.sitrep.json` itself is read from the working tree, so a
+  person editing it sees the effect before committing. The data files it points at are read at
+  `HEAD`, because their tier is a claim about what the repository holds.
+- **A rejected alternative.** Showing a figure that could not be read with an empty value. `S-020`
+  asks for no value and a notice, and an entry with a blank number next to a tier would read as a
+  measurement of nothing, so the figure is left off the board and only the notice names it.
+- **A seam left open deliberately.** A filter compares a string field as written and any other
+  value in its JSON spelling, so `[released=true]` means JSON `true`. The spec's surface says a
+  filter is `[field=value]` and says nothing about types; this is the reading a person writing JSON
+  expects.
+- **A seam left open deliberately.** Gold is found with `git grep` for the test's name in files
+  matching the spec's test-file term, at `HEAD`. It proves the name is present in a test file, not
+  that the test passes or asserts the figure; that is the tier's stated meaning, and nothing
+  stronger is claimed.
+
 ## Risks and rollback
 
 Required: this introduces a persisted format, `.sitrep.json`, that repositories will commit.
@@ -62,13 +79,14 @@ Required: this introduces a persisted format, `.sitrep.json`, that repositories 
     python -m unittest discover -s tests -p "test_sitrep_figures.py" -v
     python scripts/run-checks.py
 
-- [ ] Every scenario in `scenarios` has a test whose docstring names its id, and each passes.
-- [ ] `docs/spec/sitrep.conformance.md` classifies these scenarios.
-- [ ] Existing tests still pass.
+- [x] Every scenario in `scenarios` has a test whose docstring names its id, and each passes.
+- [x] `docs/spec/sitrep.conformance.md` classifies these scenarios.
+- [x] Existing tests still pass.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed, including no co-author trailer.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed, including no co-author trailer.
+- [ ] `doc-sync` not run in full: this task changes the draft skill's own body and nothing a
+      reader-facing document describes, and the skill is not listed anywhere until `feat-0071`.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
