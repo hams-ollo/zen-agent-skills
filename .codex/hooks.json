@@ -72,6 +72,17 @@
             "timeout": 20
           }
         ]
+      },
+      {
+        "matcher": "shell|exec_command|^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/hooks/worktree-boundary-reminder.py\" || python \"$(git rev-parse --show-toplevel)/.agents/hooks/worktree-boundary-reminder.py\"",
+            "statusMessage": "Worktree boundary",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "Stop": [

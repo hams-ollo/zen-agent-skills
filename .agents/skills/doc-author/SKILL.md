@@ -1,17 +1,12 @@
 ---
 name: doc-author
 description: >-
-  Writes new Markdown documentation for the repository it is used in, grounded in the actual
-  code. Handles READMEs (technical or for non-technical readers), architecture docs with
-  Mermaid diagrams, setup and deployment guides, contributing guides, design docs, and
-  architecture decision records. Use this whenever the user wants to create documentation that
-  does not exist yet. Trigger on phrases like: "create a README", "write an architecture doc
-  with mermaid diagrams", "document this project for non-technical users", "scaffold the repo
-  docs", "set up the docs folder", "write a deployment guide", "create a CLAUDE.md for this
-  repo", "we need a design doc for X", or any request to produce a new .md document describing
-  the codebase or project. When the document already exists and the user wants it updated,
-  revised, or its links fixed, use doc-revise instead. When the user does not know which
-  document is wrong, use doc-sync instead.
+  Writes new Markdown documentation grounded in the repository's actual code: READMEs for technical
+  or non-technical readers, architecture docs with Mermaid diagrams, setup, deployment, and
+  contributing guides, design docs, and decision records. Use when a document does not exist yet:
+  "create a README", "write an architecture doc", "document this for non-technical users", "write a
+  deployment guide", "create a CLAUDE.md for this repo", "we need a design doc for X". To change an
+  existing document use doc-revise; to find which document is wrong use doc-sync.
 license: MIT
 ---
 

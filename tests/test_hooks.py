@@ -110,6 +110,28 @@ class PreciseFilterTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
 
+    def test_a_background_launch_is_silent(self):
+        # 2026-10 kit refresh, audit finding 4.6: the tool call that launches a background
+        # agent returns at once, before any report exists, so a reminder there says
+        # "a delegated agent just returned a report" about nothing.
+        for tool in ("Task", "Agent"):
+            with self.subTest(tool=tool):
+                payload = post_tool_use(tool)
+                payload["tool_input"] = {"prompt": "x", "run_in_background": True}
+                code, out = run_payload(payload)
+                self.assertEqual(code, 0)
+                self.assertEqual(out, "")
+
+    def test_a_foreground_delegation_still_fires(self):
+        # The other direction: the fix must not silence the case the hook exists for.
+        for flag in (False, None):
+            with self.subTest(run_in_background=flag):
+                payload = post_tool_use("Agent")
+                payload["tool_input"] = {"prompt": "x", "run_in_background": flag}
+                code, out = run_payload(payload)
+                self.assertEqual(code, 0)
+                self.assertIn("DELEGATION CHECKPOINT", out)
+
 
 class RobustnessTests(unittest.TestCase):
     """Malformed input exits 0 and emits nothing. A guardrail must not break the session."""

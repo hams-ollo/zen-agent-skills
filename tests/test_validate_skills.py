@@ -186,7 +186,9 @@ class TestDescriptionCeiling(unittest.TestCase):
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=exact))
         code, out = _run(self.root)
         self.assertEqual(code, 0)
-        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+        # At the cap, so over the 700-char advisory: a warning, never an error.
+        self.assertIn("Checked 1 skill(s): 0 error(s), 1 warning(s).", out)
+        self.assertIn("over the 700-char advisory", out)
 
     def test_block_scalar_description_is_measured_without_its_indicator(self):
         # Scenario S-018: the measured value excludes the `>-` indicator. Written as a
@@ -197,7 +199,9 @@ class TestDescriptionCeiling(unittest.TestCase):
         _write_skill(self.root, "alpha", frontmatter)
         code, out = _run(self.root)
         self.assertEqual(code, 0, "a block scalar at the limit must not be measured 3 over")
-        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+        # At the cap, so over the 700-char advisory: a warning, never an error.
+        self.assertIn("Checked 1 skill(s): 0 error(s), 1 warning(s).", out)
+        self.assertIn("over the 700-char advisory", out)
 
     def test_block_scalar_indicators_are_stripped_but_plain_scalars_are_not(self):
         # Scenario S-018 at the parser layer, across every indicator form. The negative
@@ -676,6 +680,7 @@ class TestLensComposition(unittest.TestCase):
     """
 
     LENS_OPENING = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "It governs something.\n"
@@ -808,7 +813,10 @@ class TestLensComposition(unittest.TestCase):
         # "lens", which any rules document may use when describing its neighbours. Only
         # the opening is a declaration about *this* file, so a mention further down must
         # not conscript a document into being a lens.
-        deep = self.PLAIN_RULES_DOC + "\n" * 40 + "This file is a **swappable module**.\n"
+        # `paths` frontmatter so the always-loaded budget, a separate rule, stays out of
+        # a test about the declaration window.
+        deep = ("---\npaths:\n  - \"**/rules/README.md\"\n---\n" + self.PLAIN_RULES_DOC
+                + "\n" * 40 + "This file is a **swappable module**.\n")
         self._write_rules("README.md", deep)
         _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
         code, out = _run(self.skills)
@@ -821,7 +829,12 @@ class TestLensComposition(unittest.TestCase):
         # bug-0026 asks a drift assertion to be bounded: if a future lens declares itself
         # later than this, the constant is what moves, and this test says so.
         rules_dir = REPO_ROOT / ".agents" / "rules"
-        for path in sorted(rules_dir.glob("*.md")):
+        # The lenses are the files that load on demand; `core.md` is always loaded on
+        # purpose and is deliberately not a lens (2026-10 kit refresh).
+        lenses = [p for p in sorted(rules_dir.glob("*.md"))
+                  if vs.loads_on_demand(p.read_text(encoding="utf-8"))]
+        self.assertTrue(lenses, "no rules file loads on demand, so no lens was checked")
+        for path in lenses:
             lines = path.read_text(encoding="utf-8").splitlines()
             declaring = [i + 1 for i, line in enumerate(lines)
                          if vs.LENS_DECLARATION_RE.search(line)]
@@ -921,11 +934,13 @@ class TestUniversalLensScope(unittest.TestCase):
     """
 
     UNIVERSAL_LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "**Scope: universal.** Every skill in this kit references this module.\n"
     )
     TOPICAL_LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "It governs something only some skills do.\n"
@@ -1372,8 +1387,9 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
             for kind, n in vs.check_supporting_files(
                     d, names, d.name, [], skills_dir.parent.resolve()).items():
                 counts[kind] += n
-        # 6 since feat-0066 added `sitrep/scripts/sitrep.py`.
-        self.assertEqual(counts, {"markdown": 1, "template": 8, "other": 6})
+        # 6 since feat-0066 added `sitrep/scripts/sitrep.py`. Markdown 2 since chore-0094
+        # moved `fix-batch`'s incident record into `fix-batch/references/incidents.md`.
+        self.assertEqual(counts, {"markdown": 2, "template": 8, "other": 6})
 
     def test_a_byte_cache_is_not_counted_as_a_supporting_file(self):
         # The count has to be a fact about the kit and not about whether the tests have
@@ -1972,6 +1988,152 @@ class UndecodableSkillFileTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("not valid UTF-8", out)
         self.assertIn("example.md", out)
+
+
+class TestRulesLoadOnDemand(unittest.TestCase):
+    """What the rules module puts in every session before any skill runs (2026-10 refresh).
+
+    Claude Code loads every `.md` under `~/.claude/rules/`, where `install.py` places this
+    module, into every session in every project unless the file carries `paths`
+    frontmatter. The kit refresh audit measured the cost of not knowing that: 488 lines of
+    lens text in every session, most of it citations. A lens must load on demand, and the
+    files that do load always stay inside a line budget.
+    """
+
+    LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**.\n"
+    )
+    BODY = "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.skills = root / "agents" / "skills"
+        self.rules = root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                     body=self.BODY)
+
+    def test_a_lens_with_paths_frontmatter_passes(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 error(s), 0 warning(s)", out)
+
+    def test_a_lens_without_paths_frontmatter_errors(self):
+        lens = self.LENS.split("---\n\n", 1)[1]
+        (self.rules / "example.md").write_text(lens, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("carries no `paths` frontmatter", out)
+        self.assertIn("example.md", out)
+
+    def test_a_small_always_loaded_file_that_is_not_a_lens_passes(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        (self.rules / "core.md").write_text("# Core rules\n\n- One line per rule.\n",
+                                            encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_always_loaded_files_over_the_budget_error(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        big = "# Core rules\n\n" + "- a rule\n" * vs.ALWAYS_LOADED_MAX_LINES
+        (self.rules / "core.md").write_text(big, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("always-loaded rules files total", out)
+        self.assertIn("core.md", out)
+
+    def test_the_shipped_module_keeps_one_small_always_loaded_file(self):
+        # Against the real tree: the property the audit found broken, pinned in the
+        # direction it broke.
+        rules = REPO_ROOT / ".agents" / "rules"
+        always = sorted(p.name for p in rules.glob("*.md")
+                        if not vs.loads_on_demand(p.read_text(encoding="utf-8")))
+        self.assertEqual(always, ["core.md"])
+        errors = []
+        vs.check_rules_load_on_demand(rules, errors)
+        self.assertEqual(errors, [])
+
+
+class TestEmDashes(unittest.TestCase):
+    """The house-style lens forbids em-dashes, and nothing enforced it over the kit's text.
+
+    Read from the lens, so an adopter whose house style allows them is not overruled.
+    """
+
+    HOUSE_STYLE = ("---\npaths:\n  - \"**/rules/house-style.md\"\n---\n\n"
+                   "# House style lens\n\nThis file is a **swappable module**.\n\n"
+                   "- **No em-dashes.** Use commas.\n")
+    BODY = "Write as [`house-style.md`](../../rules/house-style.md) says.\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.skills = root / "agents" / "skills"
+        self.rules = root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+
+    def _skill(self, extra):
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                     body=self.BODY + extra)
+
+    def test_an_em_dash_in_a_skill_body_errors_with_its_line(self):
+        (self.rules / "house-style.md").write_text(self.HOUSE_STYLE, encoding="utf-8")
+        self._skill("A clause \u2014 and another.\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("SKILL.md:6: an em-dash", out)
+
+    def test_an_em_dash_inside_a_fence_is_allowed(self):
+        (self.rules / "house-style.md").write_text(self.HOUSE_STYLE, encoding="utf-8")
+        self._skill("```\nshown \u2014 not written\n```\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_house_style_without_the_rule_allows_them(self):
+        allowing = self.HOUSE_STYLE.replace("- **No em-dashes.** Use commas.\n", "")
+        (self.rules / "house-style.md").write_text(allowing, encoding="utf-8")
+        self._skill("A clause \u2014 and another.\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_an_em_dash_in_a_rules_file_errors(self):
+        (self.rules / "house-style.md").write_text(
+            self.HOUSE_STYLE + "\nA note \u2014 here.\n", encoding="utf-8")
+        self._skill("")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("house-style.md", out)
+        self.assertIn("an em-dash", out)
+
+
+class TestDescriptionAdvisory(unittest.TestCase):
+    """A long description is a warning, not an error: the cap is the harness's, this is advice."""
+
+    def test_a_description_over_the_advisory_warns_and_still_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skills = Path(tmp) / "agents" / "skills"
+            desc = "Use this skill when " + "it is needed for a reason, " * 30
+            self.assertGreater(len(desc), vs.DESC_ADVISORY_CHARS)
+            self.assertLessEqual(len(desc), vs.MAX_DESC_CHARS)
+            _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=desc))
+            code, out = _run(skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("over the 700-char advisory", out)
+
+    def test_every_shipped_description_is_inside_the_advisory(self):
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        over = []
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            fm, _ = vs.parse_frontmatter((d / "SKILL.md").read_text(encoding="utf-8"))
+            if len(fm.get("description", "")) > vs.DESC_ADVISORY_CHARS:
+                over.append(d.name)
+        self.assertEqual(over, [])
 
 
 if __name__ == "__main__":

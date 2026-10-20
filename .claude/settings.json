@@ -53,8 +53,27 @@
     "`install.py`'s hook_interpreter() picks one name per platform, which it can because it",
     "runs at registration time and knows the machine. This file cannot, and no longer has to.",
     "",
-    "Contract for the module: .agents/hooks/README.md"
+    "Contract for the module: .agents/hooks/README.md",
+    "",
+    "Two non-hook keys were added by the 2026-10 kit refresh, and neither is a hook, so the",
+    "one-hook exception above is unchanged (docs/reviews/2026-10-kit-refresh-audit.md):",
+    "",
+    "worktree.baseRef = head. Subagent and --worktree worktrees otherwise branch from",
+    "origin's default branch, which is how fix-batch recorded three waves cut from main while",
+    "the dispatch branch was developer (finding 3.5). With head they start from the session's",
+    "own HEAD. fix-batch still pins an explicit sha, because other harnesses have no setting.",
+    "",
+    "attribution.commit = empty. Claude Code adds a Co-Authored-By trailer by default, and",
+    "AGENTS.md forbids it here because it deadlocks the main protection ruleset (finding",
+    "4.3). Setting it removes the default at the source instead of relying on every agent to",
+    "remember the rule. Pull request attribution is left at its default."
   ],
+  "worktree": {
+    "baseRef": "head"
+  },
+  "attribution": {
+    "commit": ""
+  },
   "hooks": {
     "SessionStart": [
       {

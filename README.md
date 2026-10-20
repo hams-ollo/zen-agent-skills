@@ -78,6 +78,27 @@ The front door scaffolds a project and its work tracker. A rough idea becomes a 
 
 Three report-only lenses are composed by the skills above rather than run on their own: `spec-quality` (specification well-formedness), `test-quality` (test design), and `review-quality` (code review). See [`docs/CATALOG.md`](docs/CATALOG.md) for the complete inventory and the status of each skill.
 
+### Choosing a path
+
+The full spine is something a change earns, not the default. Most changes take a shorter path:
+
+```mermaid
+flowchart TD
+  A[A change] --> B{Behaviour a person must agree before it is built?}
+  B -- yes --> S[spec-author, then the full spine]
+  B -- no --> C{More than one sitting, or other agents involved?}
+  C -- yes --> T[new-task file with an acceptance command]
+  C -- no --> D[Do it directly and run the acceptance command]
+  T --> V[verifier-agent before it lands]
+  D --> R[a review if wanted]
+```
+
+- **Direct.** A change you will finish in one sitting, with no contract to agree: make it, run the project's acceptance command, and review it if the change warrants one.
+- **Task file.** Work that spans sittings or goes to another agent: `new-task` writes one file with an acceptance command, and `verifier-agent` checks it before it lands. No spec needed.
+- **Full spine.** Behaviour a person has to agree before anyone builds it: `spec-author`, approval, then the rest of the chain above.
+
+Where you draw the line between them is your call; the point is that the light path is named, so nobody has to infer it.
+
 ## Quick start
 
 Requires Python 3.11 or newer. The floor and the newest release are both exercised by CI on Linux, macOS, and Windows; the kit does not claim a version it does not test.

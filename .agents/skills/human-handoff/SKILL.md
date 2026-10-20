@@ -1,17 +1,12 @@
 ---
 name: human-handoff
 description: >-
-  Packages the current state of a project into a handoff for a person: a business partner,
-  a client, or a team member. Produces a document or a short message, in plain language,
-  tuned to the reader, with internals and costs redacted when the reader is a client. Use
-  this whenever the user wants to bring a person up to speed, ask a collaborator to decide
-  something, prep for a meeting, or draft an update. Trigger on phrases like: "write an
-  update for my partner", "draft a message to a teammate about where we are", "summary for
-  the client", "onboard the new dev", "prep for the meeting with the other engineering team",
-  "what should I tell a stakeholder about the open questions", "put together a handoff doc for
-  whoever picks this up", or any request to explain project status to a person rather than
-  an agent. If the handoff target is a fresh agent session or a spawned subagent that will
-  execute work, use agent-handoff instead.
+  Packages a project's current state into a handoff for a person (a business partner, client, or
+  teammate) as a document or short message in plain language tuned to the reader, with internals and
+  costs redacted for a client. Use to bring someone up to speed, ask a collaborator to decide
+  something, or prep a meeting: "write an update for my partner", "summary for the client", "onboard
+  the new dev", "what should I tell a stakeholder", "put together a handoff doc". When the target is
+  an agent or a new session that will execute work, use agent-handoff.
 license: MIT
 ---
 

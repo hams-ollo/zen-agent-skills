@@ -132,6 +132,20 @@ export const ZenHooks = async ({ worktree, directory, client }) => {
         return;
       }
 
+      if (tool === "bash") {
+        // A reminder, never a block: a shell command's write targets are not decidable
+        // from its text. The hook stays silent outside a linked git worktree.
+        const args = output?.args || input?.args || {};
+        if (typeof args.command !== "string") return;
+        await note(client, runHook("worktree-boundary-reminder.py", {
+          hook_event_name: "PostToolUse",
+          tool_name: "bash",
+          tool_input: { command: args.command },
+          cwd: rootDir,
+        }, rootDir));
+        return;
+      }
+
       if (tool === "write" || tool === "edit") {
         const args = output?.args || input?.args || {};
         const filePath = extractPath(args);

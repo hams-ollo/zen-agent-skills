@@ -1,6 +1,13 @@
 ---
 name: verifier-agent
-description: Use before reconciling or landing an implementation to independently verify it against its approved spec and its task's acceptance criteria. Runs the declared verification commands and records each exact outcome, composes the spec-conformance lens so a contract divergence fails the run even when every command passes, maps each acceptance criterion to met or unmet with named evidence, and returns a deterministic pass, fail, or blocked verdict. Returns blocked rather than guessing when the spec is unapproved or no command is declared, so a verification that could not run is never recorded as a pass. Distinct from spec-conformance (the report-only lens it composes), test-author (which writes tests), house-review (which judges quality), and fix-batch (which dispatches the work). It verifies and reports; it never edits what it verifies.
+description: >-
+  Independently verifies an implementation against its approved spec and its task's acceptance
+  criteria before it is reconciled or landed. Runs the declared commands and records each exact
+  outcome, composes spec-conformance so a contract divergence fails the run even when every command
+  passes, maps each criterion to met or unmet with named evidence, and returns pass, fail, or
+  blocked. Returns blocked rather than guessing when the spec is unapproved or no command is
+  declared. Use for "verify this", "is this really done", or before landing delegated work. Verifies
+  and reports; never edits what it verifies.
 license: MIT
 ---
 
@@ -209,6 +216,10 @@ Rules:
   conformance rows can be read against each other.
 - A passing verdict is a statement about evidence, not about quality. It does not mean the code is
   well designed; that is [`house-review`](../house-review/SKILL.md).
+- In Claude Code, `/goal` keeps a session working until a condition holds, judged from the
+  conversation alone: its evaluator runs no commands and reads no files. This skill is the
+  opposite shape, so the two compose. A goal condition such as "verifier-agent returned pass for
+  this task" keeps the implementing session going until an independent check agrees.
 
 ## Conventions
 

@@ -1,16 +1,12 @@
 ---
 name: init-worktracking
 description: >-
-  Scaffold a portable, agent-optimized spec-driven work-tracking system into the current
-  repository: AGENTS.md (global rules + agent reading protocol), a .tasks/ directory of atomic
-  task files, and (by tier) ROADMAP.md, CHANGELOG.md, a validate.py checker, and thin
-  CLAUDE.md/Cursor/Copilot pointers. Choose a footprint tier (lite/standard/team) so small repos
-  are not buried. Seeds AGENTS.md by inspecting the repo (package manager, test runner, CI,
-  layout) instead of leaving blanks. Safe to re-run, and detects a pre-existing tracker before
-  writing. Use when the user wants to set up work-item tracking, a backlog, a todo/changelog
-  system, or task files that parallel subagents can pick up, or says things like "add work
-  tracking here", "set up the task system", or "scaffold the backlog". Feeds the new-task and
-  fix-batch skills: one task file per worktree-isolated agent.
+  Scaffolds a portable, agent-ready work-tracking system into the current repository: AGENTS.md with
+  an agent reading protocol, a .tasks/ directory of atomic task files with validate.py, and by tier
+  a ROADMAP.md, a CHANGELOG.md, and Claude Code, Cursor, and Copilot pointers. Picks a lite,
+  standard, or team tier so a small repo is not buried, seeds AGENTS.md from what the repo actually
+  uses, and detects an existing tracker first. Use for "add work tracking here", "set up the task
+  system", "scaffold the backlog", or task files that parallel agents can pick up.
 license: MIT
 ---
 
@@ -22,7 +18,7 @@ Scaffold a spec-driven, low-context-bloat work-tracking system into whatever rep
 - **`.tasks/`** - atomic, agent-assignable task files, one per work item, with `done/` for completed ones and a shipped `validate.py`.
 - **`ROADMAP.md`** - the strategic Epic/Feature layer.
 - **`CHANGELOG.md`** - append-only ledger of finished tasks.
-- **`CLAUDE.md`** and optional Cursor/Copilot files - thin pointers to `AGENTS.md`, the one canonical source every agent flavor reads.
+- **`CLAUDE.md`**, which imports `AGENTS.md` with `@AGENTS.md`, and optional Cursor/Copilot files that point at it: `AGENTS.md` is the one canonical source every agent flavor reads.
 
 Templates live in [`templates/`](templates/). Fill their `{{PLACEHOLDERS}}` from the actual repo and write them in, without clobbering anything that already exists.
 
@@ -105,8 +101,8 @@ Handle each case:
 - **New file**: write the filled template.
 - **`.tasks/` directory**: create `.tasks/`, `.tasks/done/`, `.tasks/README.md`, `.tasks/_TEMPLATE.md`, `.tasks/validate.py` (copied verbatim, every tier), and an empty `.tasks/done/.gitkeep` so the empty dir is committable. At lite, apply the tier stripping above to `README.md` and `_TEMPLATE.md` as you write them.
 - **A target file already exists** (`AGENTS.md`, `ROADMAP.md`, `CHANGELOG.md`): do not overwrite. Show what the scaffold would add and offer to merge the missing sections into their file, or write the new version alongside as `AGENTS.scaffold.md` for them to reconcile. Let them choose.
-- **`CLAUDE.md` already exists**: if it already points at `AGENTS.md`, leave it. If it has real content, offer to prepend a one-line pointer to `AGENTS.md`. Only write the pointer-only `CLAUDE.md` when none exists.
-- **Pointer pick-list**: `AGENTS.md` is canonical and Cursor, Codex, and OpenCode read it natively, so most repos need only the `CLAUDE.md` pointer. Do not reflexively create `.cursorrules` (legacy). Offer `.github/copilot-instructions.md` and `.cursor/rules/agents.mdc` only if the user uses those tools; mention them as available.
+- **`CLAUDE.md` already exists**: if it already imports `AGENTS.md` (a line reading `@AGENTS.md`), leave it. If it only tells the reader in words to read `AGENTS.md`, offer to replace that sentence with the import: Claude Code reads only `CLAUDE.md` when one exists and follows a prose pointer only when the model decides to open the file. If it has real content, offer to add the `@AGENTS.md` line. Only write the template `CLAUDE.md` when none exists.
+- **Pointer pick-list**: `AGENTS.md` is canonical and Cursor, Codex, and OpenCode read it natively, so most repos need only the `CLAUDE.md` import. Do not reflexively create `.cursorrules` (legacy). Offer `.github/copilot-instructions.md` and `.cursor/rules/agents.mdc` only if the user uses those tools; mention them as available.
 
 ### Step 5: re-run (upgrade, do not clobber)
 

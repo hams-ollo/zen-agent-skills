@@ -489,6 +489,10 @@ HOOK_REGISTRATIONS = [
     # observatory needs, and a hook on every tool call would spool twenty lines for one
     # turn's worth of the same hint. No tool matcher, because this event carries no tool.
     ("observatory-event.py", "Stop", ""),
+    # Shell tools only: Claude Code already refuses an edit tool aimed at the main
+    # checkout, and what it does not watch is a shell command's write targets (2026-10
+    # kit refresh, audit finding 4.2). The hook re-checks the tool name itself.
+    ("worktree-boundary-reminder.py", "PostToolUse", "^Bash$|^PowerShell$"),
 ]
 
 

@@ -40,7 +40,17 @@ It also enforces the rest of the skill schema, which is external and not the kit
 
 ### Distribution tooling
 
-[`scripts/install.py`](../scripts/install.py) places the canonical skill directories into the global discovery locations used by Claude Code and OpenCode. It is idempotent, defaults to copies on Windows and symlinks on POSIX systems, and avoids overwriting unmanaged targets. It also places [`.agents/rules/`](../.agents/rules/) as the sibling of the installed skills directory, which is where every skill's `../../rules/<file>.md` reference resolves to. Without it a composed lens dangles, and `house-review` in particular arrives with no rubric, since its severities and categories live entirely in the lens.
+[`scripts/install.py`](../scripts/install.py) places the canonical skill directories into the global discovery locations used by Claude Code and OpenCode. It is idempotent, defaults to copies on Windows and symlinks on POSIX systems, and avoids overwriting unmanaged targets. It also places [`.agents/rules/`](../.agents/rules/) as the sibling of the installed skills directory, which is where every skill's `../../rules/<file>.md` reference resolves to. Without it a composed lens dangles, and `house-review` in particular arrives with no rubric, since its severities and categories live entirely in the lens. For Claude Code that sibling is `~/.claude/rules/`, which Claude Code also loads into every session, so each lens carries `paths` frontmatter and loads only when a skill reads it, while [`core.md`](../.agents/rules/core.md), one line per autonomy rule, is the part every session gets.
+
+```mermaid
+flowchart LR
+  A[install.py] --> B["~/.claude/skills/name/SKILL.md"]
+  A --> C["~/.claude/rules/core.md"]
+  A --> D["~/.claude/rules/lens.md with paths"]
+  C -- "loaded at launch" --> E[Every session]
+  B -- "reads ../../rules/lens.md" --> D
+  D -- "loaded when read" --> F[The session running that skill]
+```
 
 Because a copy is a snapshot, an installed skill silently ages against its source: it stays a valid skill, passes every validator, reads correctly, and is out of date. The real `fix-batch` on the author's machine was a three-week-old copy missing an entire required section, and nothing said so. So the manifest now records a SHA256 per placed file and `--check` names every installed file that no longer matches the kit. A manifest written before that change reports `unknown` rather than `current`, because reporting a clean result for an unknown state is the failure the check exists to remove. The rules module is exempt from being called stale, since it is the one file an adopter is invited to rewrite; when the kit's copy moves underneath an edited lens the check says so without faulting it. One thing there is reported, and `bug-0022` is why: a lens file the installer placed and that is no longer on disk is named individually, because `house-review` reads its whole rubric out of that module and an install missing it behaves like a skill that never had one. Absence only, never content, so editing a lens is still nobody's business but the adopter's.
 

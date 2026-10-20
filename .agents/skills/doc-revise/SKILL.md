@@ -1,17 +1,12 @@
 ---
 name: doc-revise
 description: >-
-  Updates and revises existing Markdown documentation in place, without flattening its voice or
-  rewriting more than asked. Reconciles a doc with the current code or project state, fixes
-  cross-document links and references after files or folders have moved, keeps a set of docs
-  internally consistent. Use this whenever the
-  user wants to change documentation that already exists. Trigger on phrases like: "update the
-  docs to reflect this", "I moved these files, fix the links", "make sure the linking across the
-  docs is still valid", "revise the README with this new content", "move completed items to the
-  changelog", "the docs are out of date after these changes", "add contextual emojis to the
-  headings", or any request to edit, refresh, or reconcile existing .md files. When the document
-  does not exist yet and needs to be created from scratch, use doc-author instead. When the user
-  does not know which document is wrong, use doc-sync instead.
+  Revises existing Markdown documentation in place without flattening its voice or rewriting more
+  than asked: reconciles a doc with the current code, fixes cross-document links after files move,
+  and keeps a doc set consistent. Use when documentation already exists and needs changing: "update
+  the docs to reflect this", "I moved these files, fix the links", "revise the README", "move
+  completed items to the changelog", "the docs are out of date". To create a new document use doc-
+  author; to find which document is wrong use doc-sync.
 license: MIT
 ---
 

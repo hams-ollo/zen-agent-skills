@@ -727,3 +727,30 @@ flowchart LR
 
 Ranks 2 and 4 are best approved together, since the import is what makes the length of `AGENTS.md` a
 fixed cost.
+
+## Implementation status
+
+The scope was widened after this report was written: implement the list, keep anything that deletes a
+skill or removes a safety rule as a proposal, and change nothing under `~/.claude`. The same branch
+does that in a second commit, recorded as `chore-0094`, and its pull request maps each change to a
+finding here.
+
+| Rank | Status on this branch |
+| --- | --- |
+| 1 | not done: needs the maintainer's sign-in to run |
+| 2 | done: `CLAUDE.md` and `CLAUDE.md.tmpl` import `AGENTS.md`; `init-worktracking` upgrades a prose pointer |
+| 3 | done, by `paths` frontmatter on each lens rather than a directory move, plus `core.md`; history moved verbatim to `docs/rationale/` |
+| 4 | done: `AGENTS.md` from 255 to 198 lines, history moved to `docs/rationale/agents-md.md` |
+| 5 | not done: `~/.claude/CLAUDE.md` is the maintainer's own file; `house-style.md` no longer loads every session, so the contradiction now arises only while a skill is running |
+| 6 | done: `worktree.baseRef` set; `fix-batch`'s incident narrative moved to `references/incidents.md` |
+| 7 | done: `attribution.commit` set to an empty string |
+| 8 | done, with tests |
+| 9 | not done: proposal |
+| 10 | not done: retiring a skill stays a proposal; `review-depth` gained a mapping onto `/code-review` levels |
+| 11 | done: seventeen descriptions cut to 508 to 623 characters; "a little pushy" removed from `AGENTS.md` |
+| 12 | done: README "Choosing a path", the shipped `AGENTS.md` template, and a pointer from the getting-started guide |
+| 13 | done as a validator rule rather than a hook, because a hook would impose this kit's house style on every repository |
+| 14 | done: `worktree-boundary-reminder.py`, wired for Claude Code, Codex, and opencode |
+| 15 | not done: no configuration here is used only by unattended runs; `A8` now names the deny rule |
+| 16 | not done: proposal |
+| 17 | not done: `sitrep.md` is an approved contract, so its stale opening line is the maintainer's to change; the currency message is unchanged |
