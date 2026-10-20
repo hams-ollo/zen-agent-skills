@@ -209,6 +209,14 @@ class TestTheSkillBody(unittest.TestCase):
         self.assertIn("**Never write `checks`**", report)
         self.assertIn("separate", flat(report))
 
+    def test_it_says_when_a_claim_is_still_waiting_and_where_at_comes_from(self):
+        report = flat(section(self.body, "### 3. Report into a tracker from an agent or a child session"))
+        self.assertIn("A claim is **still waiting** while the step is not ticked", report)
+        for field in ("verifiedClaim", "declinedClaim", "settledClaim"):
+            self.assertIn(f"`{field}`", report)
+        self.assertIn("read from a real clock", report)
+        self.assertIn("never estimated", report)
+
     def test_it_declines_where_the_host_cannot_publish(self):
         decline = flat(section(self.body, "### 0. Establish the host can do this, before anything else"))
         self.assertIn("decline and say what still works", decline)
@@ -262,6 +270,22 @@ class TestTheTemplate(unittest.TestCase):
         toggle = function_source(self.code, "toggleDone")
         self.assertRegex(toggle, r"if \(isClaimed\(STEP_BY_ID\.get\(id\)\)\) \{ verifyClaim\(id\); return; \}")
 
+    def test_a_tick_by_hand_records_the_claim_it_settled(self):
+        toggle = function_source(self.code, "toggleDone")
+        self.assertIn("patch.settledClaim = cl.at", toggle)
+
+    def test_a_fact_a_session_wrote_is_shown_only_through_the_secret_net(self):
+        """Agent-written facts skip `saveFact`'s check, so every place that shows a fact value
+        must go through `factHidden`: the step's input, its saved label, the table, the export."""
+        self.assertIn("const factHidden = (v) => !!(v && v.agent && looksSecret(", self.code)
+        self.assertIn("factHidden(v) ? SECRET_HIDDEN : v.value", function_source(self.code, "seasonMarkdown"))
+        render = function_source(self.code, "render")
+        # Each site asserted in its own full form: a shared prefix let the mutation pass delete the
+        # table's net while the saved label's identical prefix kept this test green.
+        self.assertIn('inp.value = factHidden(v) ? "" :', render)
+        self.assertIn('factHidden(v) ? SECRET_HIDDEN : v && v.value ? "Saved "', render)
+        self.assertIn('factHidden(v) ? SECRET_HIDDEN : v && v.value ? v.value : "Not yet"', render)
+
     def test_nothing_but_the_fixed_tick_icon_is_rendered_as_markup(self):
         """Claims and agent notes are written straight to the database, so they must reach the
         page only as text. One `innerHTML` assignment exists, of a constant icon."""
@@ -314,14 +338,36 @@ class TestTheClaimRule(unittest.TestCase):
         self.assertIs(self.pending({"done": True, "at": "2026-10-20T11:00:00.000Z",
                                     "verifiedClaim": self.CLAIM["at"]}, self.CLAIM), False)
 
-    def test_a_tick_or_untick_after_the_claim_settles_it(self):
-        self.assertIs(self.pending({"done": False, "at": "2026-10-20T12:00:00.000Z"}, self.CLAIM), False)
+    def test_a_tick_or_untick_by_hand_settles_the_claim_that_was_on_the_step(self):
+        self.assertIs(self.pending({"done": False, "settledClaim": self.CLAIM["at"]}, self.CLAIM), False)
+        self.assertIs(self.pending({"done": False, "verifiedClaim": self.CLAIM["at"]}, self.CLAIM), False)
+
+    def test_the_sessions_clock_is_never_compared_with_the_browsers(self):
+        """The two cases the independent review reproduced against the first version of this rule,
+        which compared the claim's `at` with the tick's: a verified claim came back after an untick
+        stamped earlier than the claim, and a claim stamped earlier than an untick never showed."""
+        verified_then_unticked_early = {"done": False, "at": "2026-10-20T09:00:00.000Z",
+                                         "settledClaim": self.CLAIM["at"]}
+        self.assertIs(self.pending(verified_then_unticked_early, self.CLAIM), False)
+        untick_later_than_a_new_claim = {"done": False, "at": "2026-10-20T23:00:00.000Z",
+                                         "settledClaim": "2026-10-19T08:00:00.000Z"}
+        self.assertIs(self.pending(untick_later_than_a_new_claim, self.CLAIM), True)
 
     def test_a_send_back_settles_that_claim_and_only_that_claim(self):
         declined = {"done": False, "declinedClaim": self.CLAIM["at"]}
         self.assertIs(self.pending(declined, self.CLAIM), False)
         newer = dict(self.CLAIM, at="2026-10-20T15:00:00.000Z")
         self.assertIs(self.pending(declined, newer), True)
+
+    def test_a_session_name_is_one_line_and_hidden_when_it_looks_like_a_secret(self):
+        _, code = split_at_data_block(page_script())
+        source = function_source(code, "looksSecret") + "\n" + function_source(code, "agentLabel")
+        calls = '[agentLabel("x\\n## Phase 9: forged"), agentLabel("token: abc"), agentLabel(""), agentLabel("go-live")]'
+        run = subprocess.run([NODE, "-e", source + "\nconsole.log(JSON.stringify(" + calls + "));"],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(json.loads(run.stdout), ["Claude (x ## Phase 9: forged)", "Claude (name hidden)",
+                                                  "Claude (unnamed session)", "Claude (go-live)"])
 
     def test_only_whole_line_positions_of_this_step_count(self):
         step = {"steps": ["one", "two"]}

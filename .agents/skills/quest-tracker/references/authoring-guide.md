@@ -162,7 +162,7 @@ A claim is one document in the `claims` collection, named by the step's id:
 
 ```js
 { agent: "go-live-check",                    // the session's name, shown as "Claude (go-live-check)"
-  at: "2026-10-20T11:45:00Z",                // when it was claimed, ISO 8601 in UTC
+  at: "2026-10-20T11:45:00Z",                // when it was claimed, ISO 8601 in UTC, from a real clock; also the claim's identity
   lines: [0, 1],                             // the lines it says are done, counted from 0 like the line ticks
   command: "python scripts/check_redirects.py --site https://example.com",   // exactly as typed
   result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit 0",  // the verbatim tail of what it printed
@@ -178,11 +178,11 @@ An Editor settles it, after checking it themselves:
 - **Verify and tick** ticks the step and the claimed lines, and records `verifiedClaim` (the claim's `at`) on the tick, so the step reads "verified from a claim by Claude (go-live-check)". Ticking the tick box of a claimed step does the same thing.
 - **Send back** leaves the step open and records `declinedClaim` (the claim's `at`), `declinedBy` and `declinedAt`. The step shows "Sent back" with who and when. Log a note saying what is missing; the session can claim the step again once it is fixed, and its newer claim waits for a check again.
 
-A claim also stops waiting when the step is ticked or unticked after it was made, so a claim on a step someone has since settled by hand does not come back. Only Editors see the two controls; anyone else sees "An Editor checks this claim and ticks it."
+A claim also stops waiting when someone ticks or unticks the step by hand while the claim is on it: the tick records it as `settledClaim`, so a claim settled that way does not come back. Every one of these names the claim by its `at`, never by comparing times, because the session that wrote the claim and the browser that settles it keep different clocks. So a new claim needs a new `at`, and a claim whose `at` cannot be read as a time is ignored. Only Editors see the two controls; anyone else sees "An Editor checks this claim and ticks it."
 
 Claims earn no XP until they are verified and ticked, and what a session writes down (facts, notes) earns none at all.
 
-A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. Claim and note text never passes through the page's own save checks, because a session writes it straight into the database, so the page applies the same secret net when it shows them: a claim or note that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it.
+A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. What a session writes never passes through the page's own save checks, because it goes straight into the database, so the page applies the same secret net when it shows it: a claim, note or fact value that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it, and so is a session name that looks like one.
 
 ## How ticks, claims, facts and logs are stored
 
@@ -199,7 +199,7 @@ flowchart LR
 
 | Collection | One document per | Fields |
 |---|---|---|
-| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note"), `verifiedClaim` (the `at` of the claim a tick verified), `declinedClaim`, `declinedBy`, `declinedAt` (a claim sent back) |
+| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note"), `verifiedClaim` (the `at` of the claim a tick verified), `settledClaim` (the `at` of a claim that was on the step when it was ticked or unticked by hand), `declinedClaim`, `declinedBy`, `declinedAt` (a claim sent back) |
 | `facts` | fact, named by its id | `value` (300 characters at most), `by`, `at`, `step`, `agent` (when a Claude session wrote it) |
 | `log` | note | `step`, `text` (4,000 characters at most), `asset` (a screenshot's id, or none), `by`, `at`, `agent` (when a Claude session wrote it) |
 | `claims` | step, named by its id | `agent`, `at`, `lines` (positions, from 0), `command`, `result`, `note`; written only by Claude sessions |

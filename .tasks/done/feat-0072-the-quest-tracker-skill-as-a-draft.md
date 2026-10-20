@@ -105,19 +105,24 @@ surface people read as checked.
   exceptions on the person's instruction (porting a tracker, seeding a demonstration), because a
   write to `checks` is a tick and a tick by the working agent is the `A7` failure this task exists
   to remove.
-- **Rejected: a claim settled only by `verifiedClaim`.** Keyed on that alone, a hand tick would
-  have to preserve the field forever or an old claim comes back on the next untick. A claim instead
-  waits only while nothing has settled it since it was made: a tick or untick after it, or a
-  send-back of that claim (`declinedClaim`, `declinedBy`, `declinedAt`). The tick box on a claimed
-  step routes through verification, so the plain tick cannot skip the record.
+- **Rejected, after independent review: settling a claim by comparing times.** The first version
+  let a claim wait only while no tick or untick was later than it, which compares the session's
+  clock with the browser's. The review reproduced both failures under Node.js: a verified claim
+  came back after an untick stamped earlier than it, and a claim stamped earlier than an untick
+  never showed. A claim is now settled by identity, each record naming it by its own `at`:
+  `verifiedClaim` (Verify and tick), `declinedClaim` (Send back), and `settledClaim` (a tick or
+  untick by hand while it was on the step). The tick box on a claimed step routes through
+  verification, so the plain tick cannot skip the record, and the skill tells sessions to take
+  `at` from a real clock and give every claim a new one.
 - **Added beyond the brief, disclosed:** a "Send back" control, because a verify control with no
   "no" invites rubber-stamping and leaves a wrong claim amber forever; agent-written facts and
-  notes earn no XP, read from "no XP for claims"; a render-time secret net on claims and agent
-  notes, which reach the database without passing the page's save checks; the `agent` field shown
-  on facts as well as notes and claims; a data check when `templateVersion` is missing.
-- **A seam left open deliberately:** the secret net does not cover agent-written facts, and
-  nothing on the host can stop a session writing `checks`, because the database tool writes as
-  the person. Both are held by the skill's rules rather than by the page.
+  notes earn no XP, read from "no XP for claims"; a render-time secret net on claims, agent notes,
+  agent-written fact values, and session names, all of which reach the database without passing
+  the page's save checks; the `agent` field shown on facts as well as notes and claims; a data
+  check when `templateVersion` is missing.
+- **A seam left open deliberately:** nothing on the host can stop a session writing `checks`,
+  because the database tool writes as the person, so that rule is held by the skill rather than
+  by the page.
 - **A premise that turned out false:** the template hides closed steps with the `hidden`
   attribute while `.body` sets `display: grid`, so it relies on the reset the artifact host adds
   at publish. A headless render without that reset opens every step. Pre-existing, not changed

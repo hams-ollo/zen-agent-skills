@@ -176,20 +176,29 @@ the page shows it as "Claude (name)".
 | `facts` | one per fact, the fact's id | `value`, `at`, `step`, `agent` |
 | `checks` | one per step, the step's id | none: read only, except the port and seed writes section 2 allows |
 
-- **`at`** is the time of the write, as ISO 8601 in UTC.
+- **`at`** is the time of the write, as ISO 8601 in UTC, read from a real clock (for example
+  `date -u +%Y-%m-%dT%H:%M:%SZ`), never estimated. It is also the claim's identity: the page
+  settles a claim by its `at`, so every new claim needs a new one, and a claim whose `at` cannot be
+  read as a time is ignored. Where the session has no clock to read, it cannot claim; it logs a
+  note instead.
 - **`lines`** are positions in the step's `steps` list, counted from 0, the same positions the line
   ticks use. The page shows them counted from 1.
 - **`command`** is the command exactly as typed, and **`result`** is the verbatim tail of what it
   printed, ending with the exit status. Never a summary, never "tests pass". The two are separate
   fields and neither may stand in for the other.
 - **`note`** is anything the verifier needs that the result does not say.
-- **A claim replaces the step's previous claim.** Read the step's claim document first. If a claim
-  from another session is still waiting for its check, do not overwrite it: log a note instead.
+- **A claim replaces the step's previous claim.** Read the step's `claims` and `checks` documents
+  first. A claim is **still waiting** while the step is not ticked (`done` is not true) and its
+  `at` appears in none of `verifiedClaim`, `declinedClaim`, and `settledClaim` on the step's
+  `checks` document. If a claim from another session is still waiting, do not overwrite it: log a
+  note instead. A claim that was verified, sent back, or settled by a tick by hand is finished, and
+  a new claim may replace it.
 - **A log note's id** must be new and unique, for example the session name and the time.
 - **Write a fact only where it is empty.** A fact with a value was written by someone; propose a
   change as a note rather than overwriting it.
-- **Never write `checks`**, and never write `done`, `verifiedClaim`, or a send-back field. The
-  page's "Verify and tick" control is what records that a person checked a claim.
+- **Never write `checks`**, and never write `done`, `verifiedClaim`, `settledClaim`, or a
+  send-back field. The page's "Verify and tick" control is what records that a person checked a
+  claim.
 - **Claims earn no XP**, and neither does what an agent writes down. XP comes from the tick.
 
 A session dispatching child sessions to work tracker steps gives each one the tracker's link, the
@@ -197,10 +206,13 @@ step id, the name to report under, and the instruction to claim and never tick.
 
 ### 4. Bring a tracker onto a newer template
 
-Only on the person's go-ahead, because it replaces the page's code. Read the tracker's page, take
-its data block verbatim, put it into the newer template between the markers, keep the newer
-template's `templateVersion`, and republish to the tracker's **existing** page so its database is
-kept. Change no id while doing it.
+Only on the person's go-ahead, because it replaces the page's code. Read the tracker's page and
+take its data block. Put it into the newer template between the markers, unchanged except for
+`templateVersion`, which takes the newer template's value (a tracker older than 1.1.0 has none, so
+add it). Where the tracker kept the template's own `rules` and `reference` entries, bring across
+what the newer template added to them; 1.1.0 added the "Agents claim, people tick" rule and the
+`claims` row. Then republish to the tracker's **existing** page so its database is kept. Change
+no id while doing it.
 
 ## Host-specific: Claude artifacts
 
@@ -211,7 +223,10 @@ Nothing above depends on it.
   one-word icon, and `capabilities` of `{db: {}, user: {scopes: ["profile"]}, assets: {}}`. Omit
   `url` so it creates a new page. Never pass the template's own link as `url`.
 - **Read** a tracker's page with the `Artifact` tool's read action, and its state with the
-  `ArtifactData` tool's `list` on `checks`, `facts`, `log`, and `claims`.
+  `ArtifactData` tool's `list` on `checks`, `facts`, `log`, and `claims`. A `list` returns one
+  page (100 documents unless `limit` says otherwise), so follow its `next_cursor` until there is
+  none; a long season's log outgrows one page, and a partial read copied into the docs is a partial
+  record presented as a whole one.
 - **Write** with the `ArtifactData` tool's `set`: `collection` `claims` and `doc_id` the step's id
   for a claim; `log` and a new unique id for a note; `facts` and the fact's id for a fact. A write to
   a document that already exists needs the `if_version` from your read of it, and a write that

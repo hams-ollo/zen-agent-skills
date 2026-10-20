@@ -707,7 +707,7 @@ const ROUTE = QUESTS.length
   : STEP_INDEX.filter((s) => !s.optional);
 const ROUTE_IDS = new Set(ROUTE.map((s) => s.id));
 
-const checks = {};   // stepId -> {done, by, at, note, subs, verifiedClaim, declinedClaim, declinedBy, declinedAt}
+const checks = {};   // stepId -> {done, by, at, note, subs, verifiedClaim, settledClaim, declinedClaim, declinedBy, declinedAt}
 const facts = {};    // factId -> {value, by, at, step, agent}
 let logs = [];       // [{id, step, text, asset, at, by, agent}]
 const claims = {};   // stepId -> {agent, at, lines, command, result, note}, written by Claude sessions, never by this page
@@ -769,6 +769,8 @@ function looksSecret(text) {
 // so the same net is applied when they are shown: anything that looks like a secret is hidden, not shown.
 const SECRET_HIDDEN = "[hidden here: it looks like it holds a password, code or key. Ask the session to write it again without it.]";
 const claimLooksSecret = (cl) => !!cl && looksSecret([cl.agent, cl.command, cl.result, cl.note].map((x) => String(x || "")).join("\n"));
+// A fact a session wrote went past `saveFact`'s check too, so its value is shown only if it passes the same net.
+const factHidden = (v) => !!(v && v.agent && looksSecret(String(v.value || "")));
 
 function fmt(at) {
   if (!at) return "";
@@ -780,22 +782,23 @@ function saveOpen() { try { localStorage.setItem(KEY + "-open", JSON.stringify([
 const isDone = (s) => !!(checks[s.id] && checks[s.id].done);
 
 // Claims. A Claude session never ticks: it writes a claim, and someone else checks it and ticks.
-// A claim waits for that check while the step is unticked and nothing has settled it since it was made:
-// a tick or untick after the claim, or a send-back of this claim (keyed by the claim's own `at`).
-// So a newer claim on the same step waits again.
+// A claim waits for that check while the step is unticked and nothing has settled this claim: verified
+// (`verifiedClaim`), sent back (`declinedClaim`), or the step ticked or unticked by hand while it was on the
+// step (`settledClaim`). Each names the claim by its own `at`, so a newer claim on the same step waits again.
+// The page never compares the session's clock with the browser's: a claim is settled by which claim it is.
 function claimPending(st, cl) {
-  if (!cl || typeof cl.at !== "string") return false;
-  const made = Date.parse(cl.at);
-  if (!isFinite(made)) return false;
+  if (!cl || typeof cl.at !== "string" || !isFinite(Date.parse(cl.at))) return false;
   st = st || {};
   if (st.done) return false;
-  if (st.declinedClaim === cl.at) return false;
-  const settled = Date.parse(st.at);
-  return !(isFinite(settled) && settled >= made);
+  return st.verifiedClaim !== cl.at && st.declinedClaim !== cl.at && st.settledClaim !== cl.at;
 }
 const isClaimed = (s) => claimPending(checks[s.id], claims[s.id]);
-// Claim and agent text is written by a session, not through this page, so it is shown as plain text and kept short.
-const agentLabel = (a) => "Claude (" + (String(a || "").trim().slice(0, 60) || "unnamed session") + ")";
+// Claim and agent text is written by a session, not through this page, so it is shown as plain text, on one
+// line, kept short, and hidden when it looks like a secret.
+function agentLabel(a) {
+  const name = String(a || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  return "Claude (" + (!name ? "unnamed session" : looksSecret(name) ? "name hidden" : name) + ")";
+}
 // The line positions a claim names, kept to whole numbers that are lines of this step.
 function claimLines(s, cl) {
   const n = (s.steps || []).length;
@@ -1052,6 +1055,9 @@ function toggleDone(id) {
   if (done) { const s = STEP_BY_ID.get(id); burst($("#s-" + id + " .tick"), stepXP(s)); }
   const patch = { done, by: done ? myId : null, at: new Date().toISOString() };
   if (checks[id] && checks[id].verifiedClaim) patch.verifiedClaim = null;  // a tick made by hand verified no claim
+  // A claim on the step when it is ticked or unticked by hand is settled by that, so it does not come back.
+  const cl = claims[id];
+  if (cl && typeof cl.at === "string") patch.settledClaim = cl.at;
   writeCheck(id, patch);
 }
 
@@ -1128,7 +1134,7 @@ function seasonMarkdown() {
       const fromClaim = st.done && st.verifiedClaim ? ", verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") + " made " + day(st.verifiedClaim) : "";
       out.push("### " + s.t + " (`" + s.id + "`)", "");
       out.push("- State: " + (st.done ? "done " + day(st.at) + fromClaim : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
-      (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + v.value + " (" + day(v.at) + (v.agent ? ", " + agentLabel(v.agent) : "") + ")"); });
+      (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + (factHidden(v) ? SECRET_HIDDEN : v.value) + " (" + day(v.at) + (v.agent ? ", " + agentLabel(v.agent) : "") + ")"); });
       if (st.note) out.push("- Earlier note: " + st.note);
       logs.filter((l) => l.step === s.id).forEach((l) => out.push("- " + day(l.at) + (l.agent ? ", " + agentLabel(l.agent) : "") + ": " + (l.agent && looksSecret(l.text) ? SECRET_HIDDEN : (l.text || "").replace(/\n+/g, " ")) + (l.asset ? " [screenshot in the tracker]" : "")));
       if (claimPending(st, cl)) {
@@ -1419,9 +1425,9 @@ async function render() {
       }
       (s.facts || []).forEach((f) => {
         const inp = $("#fact-" + f.id); const v = facts[f.id];
-        if (document.activeElement !== inp) inp.value = (v && v.value) || "";
+        if (document.activeElement !== inp) inp.value = factHidden(v) ? "" : (v && v.value) || "";
         inp.disabled = !writable;
-        li.querySelector('[data-role="fact-saved-' + f.id + '"]').textContent = v && v.value ? "Saved " + fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : "") : "";
+        li.querySelector('[data-role="fact-saved-' + f.id + '"]').textContent = factHidden(v) ? SECRET_HIDDEN : v && v.value ? "Saved " + fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : "") : "";
       });
       const mine = logs.filter((l) => l.step === s.id);
       const lc = li.querySelector('[data-role="logcount"]');
@@ -1579,7 +1585,7 @@ async function render() {
   FACT_INDEX.forEach((f) => {
     const v = facts[f.id]; const tr = el("tr");
     tr.append(el("td", null, f.label));
-    tr.append(el("td", "val" + (v && v.value ? "" : " empty"), v && v.value ? v.value : "Not yet"));
+    tr.append(el("td", "val" + (v && v.value && !factHidden(v) ? "" : " empty"), factHidden(v) ? SECRET_HIDDEN : v && v.value ? v.value : "Not yet"));
     const td = el("td"); td.append(stepLink(f.step)); tr.append(td);
     tr.append(el("td", null, v && v.value ? fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : v.by ? " by " + nameOf(v.by) : "") : ""));
     fb.append(tr);
