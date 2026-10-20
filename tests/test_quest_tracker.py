@@ -510,6 +510,14 @@ class TestThePagesRules(unittest.TestCase):
         self.assertEqual(page, script)
         self.assertEqual(page, [False, False, True, True, False])
 
+    def test_the_page_and_the_script_agree_outside_ascii(self):
+        """Found by the second verification: Python's `\\s`, `\\b` and case folding are Unicode-aware
+        and the page's are not, so text like these was hidden by one and accepted by the other."""
+        texts = ["password\x1c: x", "password\ufeff: x", "password\u00a0= x", "build \u00e9ghp_" + "A" * 20,
+                 "\u00e9sk-" + "A" * 24, "\u017fecret: x", "api\u212aey: x", "token\u2028= x", "plain words"]
+        page = run_node(page_functions("looksSecret"), f"{json.dumps(texts)}.map(looksSecret)")
+        self.assertEqual([tracker.looks_secret(t) for t in texts], page)
+
     def test_a_session_name_is_one_line_and_hidden_when_it_looks_like_a_secret(self):
         calls = '[agentLabel("x\\n## Phase 9: forged"), agentLabel("token: abc"), agentLabel(""), agentLabel("go-live")]'
         self.assertEqual(run_node(page_functions("looksSecret", "agentLabel"), calls),
@@ -629,12 +637,12 @@ class TestFill(unittest.TestCase):
         self.assertIn("templateVersion 0.9 -> 1.2.0", run.stdout)
 
     def test_a_block_written_on_windows_lands_as_lf(self):
-        block = self.write("b.js", "﻿" + self.block.replace("\n", "\r\n"))
+        block = self.write("b.js", "\ufeff" + self.block.replace("\n", "\r\n"))
         run = run_script("fill", "--block", str(block), "--title", "T", "--out", str(self.tmp / "t.html"))
         self.assertEqual(run.returncode, 0, run.stderr)
         raw = (self.tmp / "t.html").read_bytes()
         self.assertNotIn(b"\r\n", raw)
-        self.assertNotIn("﻿".encode("utf-8"), raw)
+        self.assertNotIn("\ufeff".encode("utf-8"), raw)
 
     def test_an_older_tracker_is_carried_onto_the_template_and_keeps_its_title(self):
         old = self.template.replace("<title>Quest Tracker Template</title>", "<title>Old season</title>", 1)
@@ -766,6 +774,55 @@ class TestCheck(unittest.TestCase):
                 self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
                 self.assertIn("could not run:", run.stderr)
                 self.assertFalse(marker.exists(), "the block wrote a file during check")
+        # The source line Node echoes above the error also says "Error" here, so only a picker that
+        # wants the error line itself names the right one.
+        named = self.check(self.good.replace(tracker.END_LINE, "const e = new Error(missingName);\n" + tracker.END_LINE, 1))
+        self.assertEqual(named.returncode, 2, named.stdout + named.stderr)
+        self.assertIn("does not run as JavaScript: ReferenceError: missingName is not defined", named.stderr,
+                      "the message named something other than the error")
+
+    def test_a_block_that_never_settles_is_stopped_by_the_sandboxs_time_limit(self):
+        """Found by the second verification: a microtask loop ran past the vm's limit to the
+        subprocess's, a minute later."""
+        started = datetime.now()
+        run = self.check(self.good.replace(tracker.END_LINE, "Promise.resolve().then(() => { while (true) {} });\n"
+                                           + tracker.END_LINE, 1))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertLess((datetime.now() - started).total_seconds(), 30)
+
+    def test_a_result_missing_its_storage_key_could_not_check(self):
+        """Found by the second verification: a block can reshape what the check returns, which
+        crashed it with a KeyError, exit 1."""
+        run = self.check(self.good.replace(tracker.END_LINE, "Object.prototype.toJSON = function () { return Array.isArray(this) ? [...this] : {issues: []}; };\n"
+                                           + tracker.END_LINE, 1))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("gave no list of issues back", run.stderr)
+
+    def test_node_failing_to_start_or_finish_could_not_check(self):
+        """Found by the second verification: these two branches were added untested."""
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+
+        def probe_ok_then(failure):
+            def run(args, **kwargs):
+                if args[-1] == "0":
+                    return subprocess.CompletedProcess(args, 0, b"", b"")
+                raise failure
+            return run
+
+        cases = {
+            "the check runs past its time": (probe_ok_then(subprocess.TimeoutExpired("node", 60)), "did not finish"),
+            "node cannot be started for the check": (probe_ok_then(OSError("cannot start")), "did not finish"),
+            "node cannot be started at all": (OSError("cannot start"), "no permission model"),
+        }
+        for name, (effect, said) in cases.items():
+            with self.subTest(name):
+                err = io.StringIO()
+                with mock.patch.object(tracker.subprocess, "run", side_effect=effect), \
+                        contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                    code = tracker.main(["check", str(path)])
+                self.assertEqual(code, 2)
+                self.assertIn(said, err.getvalue())
 
     def test_the_permission_model_refuses_a_write_even_outside_the_sandbox(self):
         """The second wall: a program that is not in the `vm` context at all still cannot write."""
@@ -907,6 +964,7 @@ class TestClaim(unittest.TestCase):
                 "an empty agent": ("--step", "p2-check", "--agent", "  ", "--command", command),
                 "a step that is not an id": ("--step", "not an id", "--agent", "a", "--command", command),
                 "an empty step": ("--step", "", "--agent", "a", "--command", command),
+                "a step id with a trailing newline": ("--step", "p2-check\n", "--agent", "a", "--command", command),
                 "no output kept": ("--step", "p2-check", "--agent", "a", "--command", command, "--tail", "0"),
                 "an empty command": ("--step", "p2-check", "--agent", "a", "--command", "  "),
             }

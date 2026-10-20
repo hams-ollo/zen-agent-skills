@@ -166,7 +166,7 @@ A claim is one document in the `claims` collection, named by the step's id:
   at: "2026-10-20T11:45:00Z",                // when it was claimed, ISO 8601 in UTC, from a real clock; also the claim's identity
   lines: [0, 1],                             // the lines it says are done, counted from 0 like the line ticks
   command: "python scripts/check_redirects.py --site https://example.com",   // exactly as typed
-  result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit 0",  // the verbatim tail of what it printed
+  result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit status 0",  // the verbatim tail of what it printed
   note: "The test message is in the shared inbox, marked TEST." }
 ```
 

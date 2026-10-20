@@ -137,6 +137,16 @@ the diff from #90 reads on its own.
     now checked first, the step against the page's own id rule. The acceptance criterion claiming
     every refusal and could-not-run path was exercised was not true then; the paths it missed are
     now tested.
+- **Found by a second independent verification, of the fixes (`b42f61a`, verdict fail on one
+  point):** two could-not-run branches the fixes added were untested, so the criterion above was
+  still overclaimed; both are now tested. Also fixed from it: a step id with a trailing newline
+  passed Python's `$`; a result reshaped by the block crashed `check` with exit 1; a microtask loop
+  outran the sandbox's time limit; the error message could name an echoed source line rather than
+  the error; and the script's secret patterns used Python's Unicode-aware `\s`, `\b` and case
+  folding where the page's are not, so a few non-ASCII texts were hidden by one and accepted by the
+  other. **A limit it found and this leaves standing:** a hostile block can still lie to the check
+  about itself, because the checker runs beside it, as the page's own check does; the sandbox
+  stops it doing anything else, and the script's docstring says so.
 - **A seam left open deliberately:** nothing on the host stops a session writing `checks`, because
   the database tool writes as the person, so that rule is held by the skill rather than the page.
 

@@ -20,7 +20,9 @@ end marker. **The data block is JavaScript, and checking it runs it.** A page sa
 tracker may have been written by someone else, so the block runs in an empty `vm` context (no
 `require`, no `process`, no `eval`), inside a Node.js started with its permission model on, so file
 writes and child processes are refused even if the context were escaped. A Node.js without a
-permission model is reported as could-not-check, never run without one.
+permission model is reported as could-not-check, never run without one. What the sandbox stops is a
+block doing anything; it cannot stop a hostile block lying to the check about itself, because the
+checker runs beside it, and the page's own check has the same limit.
 
 `claim` runs the command that checks a step, and builds the claim document from what it printed:
 the command exactly as given, the verbatim tail of its output ending with the exit status, and the
@@ -65,6 +67,12 @@ SECRET_PATTERNS = [
     (r"\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{12,}", 0),
     (r"\bsk-[A-Za-z0-9_-]{20,}", 0),
 ]
+# Compiled to mean what they mean in the page. A JavaScript regular expression without the `u` flag
+# has an ASCII-only `\b` and case folding, which `re.ASCII` gives, and a `\s` of the ECMAScript
+# white space and line terminators, which Python's own `\s` is not (it matches `\x1c` and misses
+# `\ufeff`), so `\s` is spelled out.
+JS_SPACE = "[\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]"
+_SECRETS = [re.compile(p.replace("\\s", JS_SPACE), f | re.ASCII) for p, f in SECRET_PATTERNS]
 
 
 class Unusable(Exception):
@@ -72,7 +80,7 @@ class Unusable(Exception):
 
 
 def looks_secret(text: str) -> bool:
-    return bool(text) and any(re.search(p, text, f) for p, f in SECRET_PATTERNS)
+    return bool(text) and any(r.search(text) for r in _SECRETS)
 
 
 def read(path: Path) -> str:
@@ -142,7 +150,7 @@ def cmd_fill(args) -> int:
         m = TITLE_RE.search(old)
         title = args.title or (m.group(1).strip() if m else "")
     else:
-        block = read(Path(args.block)).lstrip("﻿")   # read_text has already made CRLF into LF
+        block = read(Path(args.block)).lstrip("\ufeff")   # read_text has already made CRLF into LF
         if START_MARK in block or END_LINE in block:
             raise Unusable("--block holds the data block markers; give only the code between them")
         title = args.title or ""
@@ -188,9 +196,11 @@ def function_source(code: str, name: str) -> str:
 SANDBOX = (
     'let src = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (d) => { src += d; });'
     ' process.stdin.on("end", () => { const vm = require("vm");'
-    ' const box = vm.createContext(Object.create(null), {codeGeneration: {strings: false, wasm: false}});'
+    ' const box = vm.createContext(Object.create(null),'
+    ' {codeGeneration: {strings: false, wasm: false}, microtaskMode: "afterEvaluate"});'
     ' process.stdout.write(JSON.stringify(vm.runInContext(src, box, {timeout: 5000}))); });'
 )
+ERROR_LINE_RE = re.compile(r"^[A-Za-z]*Error\b")   # "ReferenceError: ...", not the echoed source line
 NO_NODE = "Open the published page and read its \"Data block check\" box before handing it over."
 
 
@@ -221,13 +231,14 @@ def evaluate(block: str, checker: str) -> dict:
     if run.returncode != 0:
         err = (run.stderr.strip().splitlines() or ["(no message)"])
         raise Unusable("the data block does not run as JavaScript: " + next(
-            (line for line in err if "Error" in line), err[-1]))
+            (line for line in err if ERROR_LINE_RE.match(line)), err[-1]))
     try:
         result = json.loads(run.stdout)
     except ValueError:
         result = None
     if not (isinstance(result, dict) and isinstance(result.get("issues"), list)
-            and all(isinstance(i, str) for i in result["issues"])):
+            and all(isinstance(i, str) for i in result["issues"])
+            and "storageKey" in result and isinstance(result["storageKey"], (str, type(None)))):
         raise Unusable("checking the data block gave no list of issues back, so it was not checked")
     return result
 
@@ -238,7 +249,7 @@ def cmd_check(args) -> int:
     result = evaluate(block, function_source(template, "dataIssues"))
     issues, notices = list(result["issues"]), []
     t_version, version = template_version(t_block), template_version(block)
-    if result["storageKey"] and result["storageKey"] == STORAGE_RE.search(t_block).group(1):
+    if result.get("storageKey") and result["storageKey"] == STORAGE_RE.search(t_block).group(1):
         issues.append(f"`storageKey` is still the template's (`{result['storageKey']}`): give this "
                       f"project its own, so viewers' remembered filters do not mix.")
     title, t_title = TITLE_RE.search(page), TITLE_RE.search(template)
@@ -287,7 +298,7 @@ def cmd_claim(args) -> int:
     # Every argument is checked before the command runs, so a mistake here never leaves the
     # command's side effects behind with no claim to show for them.
     lines = parse_lines(args.lines)
-    if not STEP_ID_RE.match(args.step):
+    if not STEP_ID_RE.fullmatch(args.step):   # fullmatch: Python's `$` also matches before a final newline
         raise Unusable(f"--step {args.step!r} is not a step id: letters, digits, - or _")
     if not args.agent.strip():
         raise Unusable("--agent is empty: a claim names the session that makes it")
@@ -309,7 +320,7 @@ def cmd_claim(args) -> int:
         return 1
     document = {"agent": args.agent.strip(), "at": utc_now(), "lines": lines,
                 "command": args.command, "result": result, "note": args.note}
-    hits =[k for k in ("agent", "command", "result", "note") if looks_secret(document[k])]
+    hits = [k for k in ("agent", "command", "result", "note") if looks_secret(document[k])]
     if hits:
         print(f"refused: the claim's {', '.join(hits)} looks like it holds a password, code or key, "
               f"and the page would hide it. Trim the output with --tail or rephrase, then run again.")
