@@ -17,9 +17,11 @@ that field names the code below the block, never the project.
 current rules), plus what only a comparison with the template can show: a `storageKey` or a title
 still the template's, a `templateVersion` that does not name the code, and code edited below the
 end marker. **The data block is JavaScript, and checking it runs it.** A page saved from a published
-tracker may have been written by someone else, so the block runs in an empty `vm` context (no
-`require`, no `process`, no `eval`), inside a Node.js started with its permission model on, so file
-writes and child processes are refused even if the context were escaped. A Node.js without a
+tracker may have been written by someone else, so the block, the page's checker, and the turning of
+its answer into text all run in an empty `vm` context (no `require`, no `process`, no `eval`), and
+the program outside reads back only that text or an error Node.js raised itself, never touching
+anything the block made. That program runs in a Node.js started with its permission model on, so
+file writes and child processes are refused even if the context were escaped. A Node.js without a
 permission model is reported as could-not-check, never run without one. What the sandbox stops is a
 block doing anything; it cannot stop a hostile block lying to the check about itself, because the
 checker runs beside it, and the page's own check has the same limit.
@@ -193,26 +195,56 @@ def function_source(code: str, name: str) -> str:
 # output is the JSON of the program's last expression. The program travels on stdin, not on the
 # command line, because Windows caps a command line at 32,767 characters and a season's block
 # passes that.
-SANDBOX = (
-    'let src = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (d) => { src += d; });'
-    ' process.stdin.on("end", () => { const vm = require("vm");'
-    ' const box = vm.createContext(Object.create(null),'
-    ' {codeGeneration: {strings: false, wasm: false}, microtaskMode: "afterEvaluate"});'
-    ' process.stdout.write(JSON.stringify(vm.runInContext(src, box, {timeout: 5000}))); });'
-)
-ERROR_LINE_RE = re.compile(r"^[A-Za-z]*Error\b")   # "ReferenceError: ...", not the echoed source line
+#
+# The program's last expression turns the answer into text inside the context, under the same time
+# limit, because serialising outside it ran the block's own `toJSON` hooks on the outer call stack,
+# where they could reach the outer program's functions (found by independent verification). So the
+# outer program accepts only a string, and when the block throws it reads the error's own data
+# properties and nothing else: no getter, no proxy trap, no inspection of what the block made.
+SANDBOX = """
+const fail = (line) => { process.stderr.write(line + "\\n"); process.exit(3); };
+process.on("uncaughtException", () => fail("Error: the data block threw outside the check"));
+process.on("unhandledRejection", () => fail("Error: the data block left a promise rejected"));
+let src = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (d) => { src += d; });
+process.stdin.on("end", () => {
+  const vm = require("vm"), util = require("util");
+  const box = vm.createContext(Object.create(null),
+    {codeGeneration: {strings: false, wasm: false}, microtaskMode: "afterEvaluate"});
+  let out;
+  try { out = vm.runInContext(src, box, {timeout: 5000}); } catch (e) {
+    const own = (o, k) => {
+      if (o === null || (typeof o !== "object" && typeof o !== "function") || util.types.isProxy(o)) return undefined;
+      const p = Object.getOwnPropertyDescriptor(o, k);
+      return p && typeof p.value === "string" ? p.value : undefined;
+    };
+    if (e === null || (typeof e !== "object" && typeof e !== "function")) fail("Error: the data block threw " + String(e));
+    const proto = util.types.isProxy(e) ? null : Object.getPrototypeOf(e);
+    fail((own(e, "name") || own(proto, "name") || "Error") + ": " + (own(e, "message") || "the data block threw"));
+  }
+  if (typeof out !== "string") fail("Error: the check gave back no text");
+  setImmediate(() => process.stdout.write(out));
+});
+"""
+ERROR_LINE_RE = re.compile(r"^[A-Za-z]*Error\b")   # the sandbox's own one-line report, "ReferenceError: ..."
 NO_NODE = "Open the published page and read its \"Data block check\" box before handing it over."
 
 
 def permission_flag(node: str) -> str:
     """Node.js's flag for its permission model: `--permission` from 22.13, earlier experimental."""
+    started, failure = False, None
     for flag in ("--permission", "--experimental-permission"):
         try:
             probe = subprocess.run([node, flag, "-e", "0"], capture_output=True, timeout=30)
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            failure = exc
             continue
+        started = True
         if probe.returncode == 0:
             return flag
+    if not started:
+        raise Unusable(f"Node.js could not be started ({failure}). " + NO_NODE)
     raise Unusable("this Node.js has no permission model, and the data block is not run without "
                    "one. " + NO_NODE)
 
@@ -222,7 +254,7 @@ def evaluate(block: str, checker: str) -> dict:
     if not node:
         raise Unusable("no `node` on PATH, so the data block cannot be checked here. " + NO_NODE)
     program = (block + "\n" + checker
-               + "\n({issues: dataIssues(TRACKER), storageKey: TRACKER.storageKey || null});\n")
+               + "\nJSON.stringify({issues: dataIssues(TRACKER), storageKey: TRACKER.storageKey || null});\n")
     try:
         run = subprocess.run([node, permission_flag(node), "-e", SANDBOX], input=program,
                              capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -230,7 +262,7 @@ def evaluate(block: str, checker: str) -> dict:
         raise Unusable(f"Node.js did not finish checking the data block: {exc}") from None
     if run.returncode != 0:
         err = (run.stderr.strip().splitlines() or ["(no message)"])
-        raise Unusable("the data block does not run as JavaScript: " + next(
+        raise Unusable("checking the data block failed: " + next(
             (line for line in err if ERROR_LINE_RE.match(line)), err[-1]))
     try:
         result = json.loads(run.stdout)
@@ -361,10 +393,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args = ap.parse_args(argv)
     # Step titles and claims carry text a Windows console code page cannot encode, and a crash
-    # half-way through printing a claim is worse than an odd glyph on a console.
+    # half-way through printing a claim is worse than an odd glyph on a console. `replace` covers
+    # half an emoji in a step title too: the check echoes titles, and a lone surrogate cannot be
+    # encoded at all (found by independent verification).
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8")
+            stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
     try:

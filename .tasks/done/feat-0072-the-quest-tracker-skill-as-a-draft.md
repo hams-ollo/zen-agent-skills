@@ -147,6 +147,16 @@ the diff from #90 reads on its own.
   other. **A limit it found and this leaves standing:** a hostile block can still lie to the check
   about itself, because the checker runs beside it, as the page's own check does; the sandbox
   stops it doing anything else, and the script's docstring says so.
+- **Found by a third independent verification, of `d11c277` (every second-round fix confirmed,
+  including a 3.9-million-sample parity sweep of the secret patterns, and fail on one point):**
+  the sandbox's first wall had a gap. The answer was turned into text outside the `vm` context, so
+  a `toJSON` hook the block set ran on the outer call stack, outside the time limit, and could read
+  the outer program's own function, one step from its `Function` constructor; the permission model
+  still held. The answer is now turned into text inside the context, the outer program accepts
+  only a string, and when the block throws it reads only the error's own data properties, never a
+  getter or a proxy. Also from it: half an emoji in a step title crashed `check` with exit 1 when
+  the issue echoing it was printed, and Node failing to start was reported as a missing permission
+  model.
 - **A seam left open deliberately:** nothing on the host stops a session writing `checks`, because
   the database tool writes as the person, so that rule is held by the skill rather than the page.
 

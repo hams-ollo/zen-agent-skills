@@ -749,7 +749,7 @@ class TestCheck(unittest.TestCase):
     def test_a_block_that_does_not_run_could_not_be_checked(self):
         run = self.check(self.good.replace("const TRACKER = {", "const TRACKER = {{", 1))
         self.assertEqual(run.returncode, 2)
-        self.assertIn("does not run as JavaScript", run.stderr)
+        self.assertIn("checking the data block failed: SyntaxError", run.stderr)
 
     def test_a_season_too_long_for_a_command_line_is_checked(self):
         """Found by independent verification: the block went to Node on the command line, which
@@ -778,7 +778,7 @@ class TestCheck(unittest.TestCase):
         # wants the error line itself names the right one.
         named = self.check(self.good.replace(tracker.END_LINE, "const e = new Error(missingName);\n" + tracker.END_LINE, 1))
         self.assertEqual(named.returncode, 2, named.stdout + named.stderr)
-        self.assertIn("does not run as JavaScript: ReferenceError: missingName is not defined", named.stderr,
+        self.assertIn("checking the data block failed: ReferenceError: missingName is not defined", named.stderr,
                       "the message named something other than the error")
 
     def test_a_block_that_never_settles_is_stopped_by_the_sandboxs_time_limit(self):
@@ -789,6 +789,67 @@ class TestCheck(unittest.TestCase):
                                            + tracker.END_LINE, 1))
         self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
         self.assertLess((datetime.now() - started).total_seconds(), 30)
+
+    def with_line(self, line: str) -> str:
+        return self.good.replace(tracker.END_LINE, line + "\n" + tracker.END_LINE, 1)
+
+    def test_nothing_the_block_makes_runs_outside_the_sandbox(self):
+        """Found by the third verification: the answer was turned into text outside the context, so
+        a `toJSON` hook ran on the outer call stack and could read the outer program's own function,
+        one step from its `Function` constructor; and the time limit did not cover it."""
+        probe = ("Object.prototype.toJSON = function toJSON() { if (Array.isArray(this)) return [...this];"
+                 " let c = null; try { c = toJSON.caller; } catch (e) { c = 'threw'; }"
+                 " return {issues: [String(c)], storageKey: null}; };")
+        run = self.check(self.with_line(probe))
+        self.assertNotIn("process.stdin", run.stdout + run.stderr, "a hook reached the outer program")
+        self.assertNotIn("require(", run.stdout + run.stderr, "a hook reached the outer program")
+        started = datetime.now()
+        looped = self.check(self.with_line("Object.prototype.toJSON = function () { for (;;) {} };"))
+        self.assertEqual(looped.returncode, 2, looped.stdout + looped.stderr)
+        self.assertIn("timed out", looped.stderr)
+        self.assertLess((datetime.now() - started).total_seconds(), 30)
+
+    def test_what_the_block_throws_or_returns_is_never_read_by_its_own_code(self):
+        cases = {
+            "a replaced JSON.stringify": ("JSON.stringify = () => ({});", "gave back no text"),
+            "an error whose message is a getter": (
+                "const e = new Error('x'); Object.defineProperty(e, 'message', {get() { return 'getter ran'; }}); throw e;",
+                "Error: the data block threw"),
+            "a thrown proxy": ("throw new Proxy({}, {get() { return 'trap ran'; }, getOwnPropertyDescriptor() {"
+                               " return {value: 'trap ran', writable: true, enumerable: true, configurable: true}; }});",
+                               "Error: the data block threw"),
+            "a rejected promise": ("Promise.reject(new Error('later'));", "left a promise rejected"),
+            "a thrown string": ("throw 'boom';", "threw boom"),
+        }
+        for name, (line, said) in cases.items():
+            with self.subTest(name):
+                run = self.check(self.with_line(line))
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn(said, run.stderr)
+                self.assertNotIn("getter ran", run.stderr)
+                self.assertNotIn("trap ran", run.stderr)
+
+    def test_a_crash_of_the_checking_program_itself_names_its_error(self):
+        """Node echoes the failing source line above an uncaught error, and here that line says
+        "Error" too, so only a picker that wants the error line itself names the right one."""
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        err = io.StringIO()
+        with mock.patch.object(tracker, "SANDBOX", 'throw new TypeError("the checker broke");'), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = tracker.main(["check", str(path)])
+        self.assertEqual(code, 2)
+        self.assertIn("checking the data block failed: TypeError: the checker broke", err.getvalue())
+
+    def test_half_an_emoji_in_a_title_is_reported_not_crashed_on(self):
+        """Found by the third verification: the check echoes titles, and printing a lone surrogate
+        raised, so a typo in a title crashed `check` with exit 1 and a traceback."""
+        page = self.good.replace('t: "Make a copy for the new project"', 't: "Pack the ' + chr(92) + 'ud83d", oops: 1', 1)
+        page = page.replace('{ id: "p0-copy", t: "Pack', '{ t: "Pack', 1)
+        run = self.check(page)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("needs an id", run.stdout)
+        self.assertNotIn("Traceback", run.stderr)
 
     def test_a_result_missing_its_storage_key_could_not_check(self):
         """Found by the second verification: a block can reshape what the check returns, which
@@ -813,7 +874,7 @@ class TestCheck(unittest.TestCase):
         cases = {
             "the check runs past its time": (probe_ok_then(subprocess.TimeoutExpired("node", 60)), "did not finish"),
             "node cannot be started for the check": (probe_ok_then(OSError("cannot start")), "did not finish"),
-            "node cannot be started at all": (OSError("cannot start"), "no permission model"),
+            "node cannot be started at all": (OSError("cannot start"), "Node.js could not be started"),
         }
         for name, (effect, said) in cases.items():
             with self.subTest(name):
