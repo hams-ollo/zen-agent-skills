@@ -735,6 +735,42 @@ def check_rules_load_on_demand(rules_dir: Path, errors: list) -> None:
         )
 
 
+FOLDED_HYPHEN_RE = re.compile(r"[A-Za-z]-\s*$")
+
+
+def check_folded_hyphen_break(text: str, rel: str, errors: list) -> None:
+    """Flag a folded description whose line ends inside a hyphenated word.
+
+    A `>` block scalar folds each line break into a space, so a description wrapped as
+    `doc-` then `author` reads "doc- author" to every YAML parser, which names a skill that
+    does not exist. The kit refresh shipped three of these from a wrapper that broke on
+    hyphens, and the independent verification caught them rather than this script.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return
+    try:
+        end = lines.index("---", 1)
+    except ValueError:
+        return
+    folded, block = False, []
+    for raw in lines[1:end]:
+        if re.match(r"^\w[\w-]*:", raw):
+            if folded:
+                break
+            folded = raw.startswith("description:") and raw.split(":", 1)[1].strip().startswith(">")
+            continue
+        if folded and raw.strip():
+            block.append(raw)
+    for line in block[:-1]:
+        if FOLDED_HYPHEN_RE.search(line):
+            errors.append(
+                f"{rel}/SKILL.md: a folded description line ends in a hyphen ({line.strip()[-20:]!r}), "
+                f"and YAML joins it to the next line with a space; rewrap so the hyphenated word "
+                f"stays on one line")
+            return
+
+
 def house_style_forbids_em_dashes(rules_dir: Path) -> bool:
     """True when the house-style lens in this tree states the no-em-dash rule.
 
@@ -1011,6 +1047,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
         if forbids_em_dashes:
             check_no_em_dashes(skill_md, text, errors)
         check_frontmatter_is_parseable(text, rel, errors)
+        check_folded_hyphen_break(text, rel, errors)
         check_declared_shape(text, rel, warnings)
         check_status_contradiction(text, rel, warnings)
 

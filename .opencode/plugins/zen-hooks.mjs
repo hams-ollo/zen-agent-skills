@@ -15,6 +15,7 @@
 //   spec-conformance-gate      -> tool.execute.after (write/edit): throw.    [enforced]
 //   skill-reachability-reminder -> event (session start):          warn log. [best-effort]
 //   install-currency-reminder  -> event (session start):           warn log. [best-effort]
+//   worktree-boundary-reminder -> tool.execute.after (bash):       warn log. [best-effort]
 //
 // The reachability reminder inherits the same weakness as the delegation one: it surfaces
 // as a warn log rather than as context the model reads. That is worth stating twice,

@@ -2,11 +2,12 @@
 name: agent-handoff
 description: >-
   Turns the current session's context into a self-contained, execution-ready brief that a fresh
-  agent session or subagent can run without this conversation. Use when the user wants to hand work
-  to another agent or a new session with the instructions written down first: "draft a prompt for a
-  new session", "hand this off", "prep this plan for the agents", "write a brief the next session
-  can follow", or before switching models or context windows. For a person (partner, client,
-  teammate) rather than an agent, use human-handoff.
+  agent session or subagent can run without this conversation. Use when work moves to another agent
+  or a new session and the instructions should be written down first: "draft a prompt for a new
+  session", "craft a prompt I can paste into a new session", "hand this off", "prep this plan for
+  the agents", "spin up an agent to do X, write the instructions first", or before switching models
+  or context windows. For a person (partner, client, teammate) rather than an agent, use
+  human-handoff.
 license: MIT
 ---
 

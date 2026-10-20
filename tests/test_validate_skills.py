@@ -2112,6 +2112,42 @@ class TestEmDashes(unittest.TestCase):
         self.assertIn("an em-dash", out)
 
 
+class TestFoldedHyphenBreak(unittest.TestCase):
+    """A `>` description wrapped inside a hyphenated word reads with a space in it.
+
+    The kit refresh's first pass shipped "use doc- author" this way; independent
+    verification with a real YAML parser caught it, and this pins it.
+    """
+
+    def _run_desc(self, block):
+        with tempfile.TemporaryDirectory() as tmp:
+            skills = Path(tmp) / "agents" / "skills"
+            fm = "---\nname: alpha\ndescription: >-\n" + block + "---\n"
+            _write_skill(skills, "alpha", fm)
+            return _run(skills)
+
+    def test_a_line_ending_mid_hyphenated_word_errors(self):
+        code, out = self._run_desc(
+            "  Revises documents in place for any reader. To create a new one use doc-\n"
+            "  author instead, and to find which one is wrong use doc-sync.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ends in a hyphen", out)
+
+    def test_a_hyphenated_word_kept_on_one_line_passes(self):
+        code, out = self._run_desc(
+            "  Revises documents in place for any reader. To create a new one use\n"
+            "  doc-author instead, and to find which one is wrong use doc-sync.\n")
+        self.assertEqual(code, 0, out)
+
+    def test_no_shipped_description_has_one(self):
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        errors = []
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            vs.check_folded_hyphen_break((d / "SKILL.md").read_text(encoding="utf-8"),
+                                         d.name, errors)
+        self.assertEqual(errors, [])
+
+
 class TestDescriptionAdvisory(unittest.TestCase):
     """A long description is a warning, not an error: the cap is the harness's, this is advice."""
 

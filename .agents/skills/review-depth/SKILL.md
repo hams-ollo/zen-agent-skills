@@ -2,11 +2,12 @@
 name: review-depth
 description: >-
   Decides how much review a change has earned before reviewing it: selects quick, standard, or deep
-  from stated signals (changed lines, directory spread, trust-boundary flags, blast radius, docs-
-  only scope), reports the signal table and the rule that fired, then runs house-review at that
+  from stated signals (changed lines, directory spread, trust-boundary flags, blast radius,
+  docs-only scope), reports the signal table and the rule that fired, then runs house-review at that
   depth. Use when a change is trivially small or large enough that one effort setting is wrong:
-  "quick look", "deep review", "how carefully should I review this", or a review of a whole branch.
-  An explicit depth from the user always wins.
+  "quick look", "deep review", "how carefully should I review this", "is this worth a full review",
+  or a review of a whole branch. An explicit depth from the user always wins. It selects effort and
+  does not review.
 license: MIT
 ---
 

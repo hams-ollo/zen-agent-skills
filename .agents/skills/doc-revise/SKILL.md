@@ -4,9 +4,10 @@ description: >-
   Revises existing Markdown documentation in place without flattening its voice or rewriting more
   than asked: reconciles a doc with the current code, fixes cross-document links after files move,
   and keeps a doc set consistent. Use when documentation already exists and needs changing: "update
-  the docs to reflect this", "I moved these files, fix the links", "revise the README", "move
-  completed items to the changelog", "the docs are out of date". To create a new document use doc-
-  author; to find which document is wrong use doc-sync.
+  the docs to reflect this", "I moved these files, fix the links", "make sure the linking across the
+  docs is still valid", "revise the README", "move completed items to the changelog", "add
+  contextual emojis to the headings". To create a new document use doc-author; to find which
+  document is wrong use doc-sync.
 license: MIT
 ---
 

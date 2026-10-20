@@ -4,10 +4,10 @@ description: >-
   Derives runnable tests from an approved spec's Given/When/Then scenarios and a task's acceptance
   criteria, one faithful test per scenario tagged with its S-NNN id, in the repository's own test
   framework. Composes the test-quality lens for the lowest faithful layer and an exact-outcome
-  oracle, writes characterization tests for legacy code with no coverage, and reports gaps rather
-  than writing low-value passing tests. Stops on a spec that is not approved. Use after an
-  implementation, or when a task names a test that does not exist yet. Writes tests, never
-  production code.
+  oracle, writes characterization tests for legacy code and regression tests for bug fixes, and
+  reports gaps rather than writing low-value passing tests. Stops on a spec that is not approved.
+  Use after an implementation. Writes tests, never production code. Distinct from spec-conformance
+  (audits code against a spec) and fix-batch (runs tests).
 license: MIT
 ---
 
