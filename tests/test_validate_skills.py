@@ -1389,7 +1389,10 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
                 counts[kind] += n
         # 6 since feat-0066 added `sitrep/scripts/sitrep.py`. Markdown 2 since chore-0094
         # moved `fix-batch`'s incident record into `fix-batch/references/incidents.md`.
-        self.assertEqual(counts, {"markdown": 2, "template": 8, "other": 6})
+        # feat-0072 added `quest-tracker/references/authoring-guide.md`, read in place and so
+        # link-checked, and two files that are not markdown: the template page
+        # `quest-tracker/templates/quest-tracker.html` and `quest-tracker/scripts/tracker.py`.
+        self.assertEqual(counts, {"markdown": 3, "template": 8, "other": 8})
 
     def test_a_byte_cache_is_not_counted_as_a_supporting_file(self):
         # The count has to be a fact about the kit and not about whether the tests have
