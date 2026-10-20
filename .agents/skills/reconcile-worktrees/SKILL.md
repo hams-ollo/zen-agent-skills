@@ -1,15 +1,12 @@
 ---
 name: reconcile-worktrees
 description: >-
-  Safely consolidate one or more isolated git worktrees (for example left behind by parallel
-  background agents, or from the fix-batch skill) into the main working tree, without committing
-  or merging blindly. Use whenever asked to "reconcile the worktrees", "merge these agent
-  branches", "bring the worktree changes back into main", "clean up the worktrees", or when
-  multiple agent worktree directories exist and their changes need to land in the primary
-  checkout. It is the landing step of the kit spine: new-task authors, fix-batch dispatches to
-  isolated agents, reconcile-worktrees consolidates the verified results, and doc-sync follows it.
-  Also use it proactively after a fix-batch run once every spawned agent has been individually
-  verified, as the natural next step.
+  Lands the work in one or more git worktrees (left by parallel agents or by fix-batch) in the main
+  working tree deliberately, without blind commits or merges: finds each worktree's real base,
+  catches untracked files, binary assets, and overlaps, and applies one worktree at a time. Use for
+  "reconcile the worktrees", "merge these agent branches", "bring the worktree changes back", "clean
+  up the worktrees", and after a fix-batch run once every agent is verified. The landing step of the
+  kit spine; doc-sync follows it.
 license: MIT
 ---
 
@@ -245,6 +242,12 @@ The worktree paths are harness-specific. When the worktrees were created by `fix
 Claude Code, they are the ones `git worktree list` reports for the background agents (commonly
 under a `.claude/worktrees/` or similarly named directory). The git procedure above is identical
 regardless of which harness created them, so no part of this skill depends on a particular tool.
+
+Claude Code also runs a periodic sweep that removes the worktrees it created for subagents and
+background sessions once they are older than its `cleanupPeriodDays` setting, keeping any that still
+hold changed or untracked files or unpushed commits. So a worktree with work in it waits for this
+skill, and an agent worktree you expected but cannot find may simply have held nothing. Neither the
+sweep nor the exit prompt lands anything: landing is still this procedure.
 
 ## Conventions
 

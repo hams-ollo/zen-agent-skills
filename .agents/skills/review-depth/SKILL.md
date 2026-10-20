@@ -1,15 +1,13 @@
 ---
 name: review-depth
 description: >-
-  Decide how much review a change has earned, before reviewing it. Selects quick, standard, or deep
-  from stated signals (reviewable changed lines, directory spread, trust-boundary risk flags, blast
-  radius, documentation-only scope), reports the signal table and the rule that fired, then runs
-  house-review at the selected depth. Use when the user asks for a review and the change is either
-  trivially small or big enough that one uniform effort setting is wrong, or when they say "quick
-  look", "deep review", "how carefully should I review this", "is this worth a full review", or ask
-  for a review of a whole branch. An explicit depth from the user always wins and detection only
-  fills the gap. It selects effort, it does not review: the rubric, the severities, and the
-  report-only posture stay in house-review and the review-quality lens.
+  Decides how much review a change has earned before reviewing it: selects quick, standard, or deep
+  from stated signals (changed lines, directory spread, trust-boundary flags, blast radius,
+  docs-only scope), reports the signal table and the rule that fired, then runs house-review at that
+  depth. Use when a change is trivially small or large enough that one effort setting is wrong:
+  "quick look", "deep review", "how carefully should I review this", "is this worth a full review",
+  or a review of a whole branch. An explicit depth from the user always wins. It selects effort and
+  does not review.
 license: MIT
 ---
 
@@ -356,6 +354,15 @@ Rules:
 - Future direction (not built): `house-review` names a multi-lens deep review that would run several
   lenses and reconcile their findings. If that is built, `deep` is where it plugs in, and the
   selection rule above is what would decide when it runs.
+
+## Running this in Claude Code
+
+Claude Code's built-in `/code-review` takes its own effort level, `low` through `max`, or `ultra`
+for a cloud review. When the user wants the built-in rather than `house-review`, pass the selected
+depth through as a level: quick as `low`, standard as `medium` or `high`, deep as `max`, and
+`ultra` only when the user asks for a cloud review. What this skill still adds is the reason for
+the level, the signal table and the rule that fired, and an explicit level from the user still
+wins.
 
 ## Conventions
 

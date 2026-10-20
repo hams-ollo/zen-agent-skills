@@ -1,6 +1,12 @@
 ---
 name: sitrep
-description: Use to answer "where are we?" about one repository from its own records instead of from memory. Reports what is waiting on you, because a task carries an open question no decision answers or work held for a human eye, what is blocked on an unfinished dependency, and what is in flight in worktrees with uncommitted changes or branches not yet merged, with an evidence tier on every figure so a guess never reads like a measurement, reading only the task files git tracks and changing nothing in the repository. Trigger on "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this repo", or any request to report on a project's state rather than on a session's. Distinct from agent-observatory, which reports what agents did across sessions, not what is true about the work.
+description: >-
+  Answers "where are we?" about one repository from its own records rather than memory: what waits
+  on the person (an open question no decision answers, or work held for a human eye), what is
+  blocked on an unfinished dependency, and what is in flight in worktrees and unmerged branches,
+  with an evidence tier on every figure. Reads only tracked task files and git, and changes nothing.
+  Use for "where are we", "what is waiting on me", "what is blocked", "sitrep", "status of this
+  repo". agent-observatory reports what agents did; this reports what is true about the work.
 license: MIT
 metadata:
   status: draft

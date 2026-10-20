@@ -15,6 +15,7 @@
 //   spec-conformance-gate      -> tool.execute.after (write/edit): throw.    [enforced]
 //   skill-reachability-reminder -> event (session start):          warn log. [best-effort]
 //   install-currency-reminder  -> event (session start):           warn log. [best-effort]
+//   worktree-boundary-reminder -> tool.execute.after (bash):       warn log. [best-effort]
 //
 // The reachability reminder inherits the same weakness as the delegation one: it surfaces
 // as a warn log rather than as context the model reads. That is worth stating twice,
@@ -127,6 +128,20 @@ export const ZenHooks = async ({ worktree, directory, client }) => {
         await note(client, runHook("delegation-reminder.py", {
           hook_event_name: "PostToolUse",
           tool_name: "Task",
+          cwd: rootDir,
+        }, rootDir));
+        return;
+      }
+
+      if (tool === "bash") {
+        // A reminder, never a block: a shell command's write targets are not decidable
+        // from its text. The hook stays silent outside a linked git worktree.
+        const args = output?.args || input?.args || {};
+        if (typeof args.command !== "string") return;
+        await note(client, runHook("worktree-boundary-reminder.py", {
+          hook_event_name: "PostToolUse",
+          tool_name: "bash",
+          tool_input: { command: args.command },
           cwd: rootDir,
         }, rootDir));
         return;

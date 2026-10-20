@@ -1,16 +1,12 @@
 ---
 name: new-task
 description: >-
-  Author one or more atomic, agent-ready task files for the .tasks/ work-tracking system, at a
-  gold-standard bar. Turns a rough idea, a bug report, or a ROADMAP.md Feature into task files
-  with honest touched_files, a real parent up-link, resolved depends_on, and a
-  mechanically-verifiable acceptance command, then self-checks them with validate.py. Deliberately
-  elicits and decomposes before writing, because a sharp task is worth 3-10x its authoring time
-  downstream. Assigns collision-safe ids from the existing backlog. Use when the user says "write
-  a task for X", "add this to the backlog", "spec out this bug", "turn this into task files",
-  "break this feature into tasks", or hands over an idea they want made executable. Requires an
-  existing .tasks/ system (run init-worktracking first if absent). Feeds fix-batch: one task file
-  per worktree-isolated agent.
+  Authors atomic, agent-ready task files for a .tasks/ system: honest touched_files, a real parent,
+  resolved depends_on, and a mechanically verifiable acceptance command, self-checked with
+  validate.py and given collision-safe ids. Elicits and decomposes before writing. Use for "write a
+  task for X", "add this to the backlog", "spec out this bug", "turn this into task files", "break
+  this feature into tasks", or an idea to make executable. Needs an existing .tasks/ system (run
+  init-worktracking first). Feeds fix-batch. A change finished in one sitting needs no task file.
 license: MIT
 ---
 
@@ -32,7 +28,7 @@ A good task is self-contained: an agent that reads only `AGENTS.md`, the task fi
 
 ## Why this skill blocks a little
 
-Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experience say the same thing: jumping straight to code on an underspecified task wastes far more time than the few minutes of elicitation. So this skill asks its questions and shows its decomposition before writing files. That friction is the feature. Do not skip it for anything non-trivial.
+Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experience say the same thing: jumping straight to code on an underspecified task wastes far more time than the few minutes of elicitation. So this skill asks its questions and shows its decomposition before writing files. That friction is the feature. Do not skip it for anything non-trivial. The other side of that line is real too: a change finished in one sitting, with no behaviour anyone has to agree first, is not a task at all. Make it directly and run the acceptance command; a task file earns its place when work spans sittings or goes to another agent.
 
 ## Decomposing an approved spec
 

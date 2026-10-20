@@ -10,7 +10,12 @@ parser can read. It also checks that inline relative links resolve
 on disk, that `../<name>/SKILL.md` references point at a skill that actually
 exists, that every self-declared lens under `.agents/rules/` is referenced by at
 least one skill, that a skill declaring itself a lens is not built as a
-workflow, and warns when a skill asserts both draft and shipped status. A link inside
+workflow, and warns when a skill asserts both draft and shipped status. Since the
+2026-10 kit refresh it also checks what the rules module costs every session: a lens
+must carry `paths` frontmatter so Claude Code loads it on demand, and the rules files
+without it (the always-loaded core) stay under `ALWAYS_LOADED_MAX_LINES`. It flags an
+em-dash in a skill body or a rules file when the house-style lens forbids one, and warns
+on a description over `DESC_ADVISORY_CHARS`. A link inside
 an inline code span or a fenced code block is left alone, because it renders as
 literal text and opens nothing, so a skill may show an example link. Standard
 library only. Exits non-zero on error.
@@ -63,6 +68,15 @@ MIN_DESC_CHARS = 40           # a real "what + when" description is not tiny
 # by the harness, and the skill then simply never gets selected. Five skills
 # shipped over this limit before the check existed (bug-0005).
 MAX_DESC_CHARS = 1024
+# Advisory, not a limit. Claude Code lists every installed skill's description in a budget
+# of about 1% of the context window and drops descriptions, least-used first, when the list
+# overflows; the kit refresh audit (2026-10) watched four of this kit's skills appear by
+# name alone. A warning, because the cap above is the harness's and this is a judgment.
+DESC_ADVISORY_CHARS = 700
+# The always-loaded part of the rules module: files with no `paths` frontmatter, which
+# Claude Code loads into every session once installed. One line per rule fits easily.
+ALWAYS_LOADED_MAX_LINES = 40
+EM_DASH = "\u2014"
 
 # The frontmatter properties the skill schema permits. An unrecognised key is
 # rejected outright rather than ignored, so this is an allow-list and not a
@@ -668,6 +682,127 @@ def check_lenses_are_composed(rules_dir: Path, skill_texts: dict, errors: list) 
         )
 
 
+def loads_on_demand(text: str) -> bool:
+    """True when a rules file carries `paths` frontmatter, so Claude Code reads it on demand.
+
+    Claude Code loads every `.md` under `~/.claude/rules/`, which is where `install.py`
+    places this module, into every session in every project, unless the file's
+    frontmatter names `paths`: then it loads only when Claude reads or edits a matching
+    file. The kit refresh audit (2026-10) measured what the first case cost: three lenses
+    written to be read on demand, 488 lines in every session, most of it citations.
+    """
+    fm, _ = parse_frontmatter(text)
+    return bool(fm and fm.get("paths"))
+
+
+def check_rules_load_on_demand(rules_dir: Path, errors: list) -> None:
+    """Flag a lens that would load into every session, and an always-loaded part over budget.
+
+    Two rules, one question: what does this module put in front of every agent before it
+    has asked for anything. A self-declared lens is composed by the skills that point at
+    it, so it must carry `paths` frontmatter and load when one of them reads it. A file
+    with no `paths` is always loaded on purpose (`core.md`), and the always-loaded files
+    together stay under `ALWAYS_LOADED_MAX_LINES`, because that is the figure that grew
+    unwatched before.
+    """
+    if not rules_dir.is_dir():
+        return
+    always_loaded = []
+    for rules_file in sorted(rules_dir.glob("*.md")):
+        try:
+            text = read_text_utf8(rules_file)
+        except NotUTF8 as exc:
+            errors.append(str(exc))
+            continue
+        if loads_on_demand(text):
+            continue
+        if declares_itself_a_lens(text):
+            errors.append(
+                f"{_rel(rules_file)}: declares itself a lens but carries no `paths` "
+                f"frontmatter, so Claude Code loads it into every session in every project "
+                f"once installed. Add a `paths` list naming the lens file itself (for "
+                f"example `**/rules/{rules_file.name}`) so it loads when a skill reads it."
+            )
+        always_loaded.append((rules_file, len(text.splitlines())))
+    total = sum(n for _, n in always_loaded)
+    if total > ALWAYS_LOADED_MAX_LINES:
+        named = ", ".join(f"{p.name} ({n})" for p, n in always_loaded)
+        errors.append(
+            f"{_rel(rules_dir)}: the always-loaded rules files total {total} lines, over the "
+            f"{ALWAYS_LOADED_MAX_LINES}-line budget: {named}. Move detail into a lens that "
+            f"carries `paths` frontmatter, and keep one line per rule in the always-loaded "
+            f"file."
+        )
+
+
+FOLDED_HYPHEN_RE = re.compile(r"[A-Za-z]-\s*$")
+
+
+def check_folded_hyphen_break(text: str, rel: str, errors: list) -> None:
+    """Flag a folded description whose line ends inside a hyphenated word.
+
+    A `>` block scalar folds each line break into a space, so a description wrapped as
+    `doc-` then `author` reads "doc- author" to every YAML parser, which names a skill that
+    does not exist. The kit refresh shipped three of these from a wrapper that broke on
+    hyphens, and the independent verification caught them rather than this script.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return
+    try:
+        end = lines.index("---", 1)
+    except ValueError:
+        return
+    folded, block = False, []
+    for raw in lines[1:end]:
+        if re.match(r"^\w[\w-]*:", raw):
+            if folded:
+                break
+            folded = raw.startswith("description:") and raw.split(":", 1)[1].strip().startswith(">")
+            continue
+        if folded and raw.strip():
+            block.append(raw)
+    for line in block[:-1]:
+        if FOLDED_HYPHEN_RE.search(line):
+            errors.append(
+                f"{rel}/SKILL.md: a folded description line ends in a hyphen ({line.strip()[-20:]!r}), "
+                f"and YAML joins it to the next line with a space; rewrap so the hyphenated word "
+                f"stays on one line")
+            return
+
+
+def house_style_forbids_em_dashes(rules_dir: Path) -> bool:
+    """True when the house-style lens in this tree states the no-em-dash rule.
+
+    Read from the lens rather than assumed, because the lens is swappable: an adopter who
+    drops the rule from their copy has chosen to allow em-dashes, and this check follows
+    that choice instead of overruling it.
+    """
+    lens = rules_dir / "house-style.md"
+    try:
+        return lens.is_file() and "**No em-dashes.**" in read_text_utf8(lens)
+    except NotUTF8:
+        return False
+
+
+def check_no_em_dashes(path: Path, text: str, errors: list) -> None:
+    """Flag an em-dash outside fenced code in a skill body or a rules file.
+
+    Fences are skipped for the reason the lens rule skips them: a fence shows text rather
+    than writing it, and a skill may need to show the character it forbids.
+    """
+    fences = fenced_block_ranges(text)
+    start = text.find(EM_DASH)
+    while start != -1:
+        if not any(lo <= start < hi for lo, hi in fences):
+            line = text.count("\n", 0, start) + 1
+            errors.append(
+                f"{_rel(path)}:{line}: an em-dash, which the house-style lens forbids; use a "
+                f"comma, a colon, or parentheses")
+            return
+        start = text.find(EM_DASH, start + 1)
+
+
 def declares_universal_scope(text: str) -> bool:
     """True when a lens declares that **every** skill must reference it, not merely one.
 
@@ -847,6 +982,7 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     portable_root = skills_dir.parent.resolve()
     skill_texts: dict = {}
     supporting = {"markdown": 0, "template": 0, "other": 0}
+    forbids_em_dashes = house_style_forbids_em_dashes(portable_root / "rules")
 
     for d in skills:
         rel = _rel(d)
@@ -889,6 +1025,10 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             errors.append(f"{rel}/SKILL.md: description is {len(desc)} chars, over the "
                           f"{MAX_DESC_CHARS}-char limit both target harnesses enforce; "
                           f"cut prose that restates the body and keep the trigger phrases")
+        elif len(desc) > DESC_ADVISORY_CHARS:
+            warnings.append(f"{rel}/SKILL.md: description is {len(desc)} chars, over the "
+                            f"{DESC_ADVISORY_CHARS}-char advisory; a crowded skill listing "
+                            f"drops long descriptions first, so lead with the key use case")
         # Checked on the parsed value, not the raw line: a block scalar's field line
         # is literally `description: >-`, so a raw-text check would flag the twelve
         # skills that use one (S-020).
@@ -904,7 +1044,10 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
             warnings.append(f"{rel}/SKILL.md: body is {body_lines} lines "
                             f"(> {MAX_BODY_LINES}); push detail into referenced files")
         check_links(skill_md, text, skill_names, f"{rel}/SKILL.md", errors, portable_root)
+        if forbids_em_dashes:
+            check_no_em_dashes(skill_md, text, errors)
         check_frontmatter_is_parseable(text, rel, errors)
+        check_folded_hyphen_break(text, rel, errors)
         check_declared_shape(text, rel, warnings)
         check_status_contradiction(text, rel, warnings)
 
@@ -916,6 +1059,14 @@ def main(skills_dir: Path = SKILLS_DIR) -> int:
     # separate rule with a separate verdict: the one above asks whether anybody composes a
     # lens, this one asks whether everybody composes the ones that say they need it.
     check_universal_lenses_reach_every_skill(portable_root / "rules", skill_texts, errors)
+    # What the module costs every session before any skill runs (2026-10 kit refresh).
+    check_rules_load_on_demand(portable_root / "rules", errors)
+    if forbids_em_dashes and (portable_root / "rules").is_dir():
+        for rules_file in sorted((portable_root / "rules").glob("*.md")):
+            try:
+                check_no_em_dashes(rules_file, read_text_utf8(rules_file), errors)
+            except NotUTF8:
+                pass  # already reported by check_lenses_are_composed
     # And once over the markdown beside the skills tree, which is a different question
     # about the same files: check_lenses_are_composed asks whether a skill points *at*
     # a lens and never reads a link *out* of one (chore-0058). Deliberately not folded

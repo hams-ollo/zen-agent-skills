@@ -1,6 +1,13 @@
 ---
 name: systematic-debugging
-description: Use when a defect, test failure, flaky test, or unexpected behavior needs its cause established before anyone writes a task file or a fix. Reproduces the report first, localizes the failure to the boundary where behavior diverges, then tests one hypothesis at a time and returns a deterministic verdict, so a run that found nothing is never mistaken for one that did. It diagnoses and never repairs, and it never edits a tracked file, because instrumentation lives only in a copy it made for the purpose. The record it returns carries the facts a task file's bar demands and cannot otherwise obtain, so `new-task` writes a premise somebody checked. Trigger on "why is this failing", "find the root cause", "this test is flaky", "debug this", "the CI job broke and nobody knows why", or any defect that arrives without a cause. Distinct from `test-author`, which pins the observable this names, and from `fix-batch`, which dispatches the fix this refuses to write.
+description: >-
+  Establishes the cause of a defect, test failure, flaky test, or unexpected behavior before anyone
+  writes a task or a fix: reproduces it first, localizes the failure to the boundary where behavior
+  diverges, tests one hypothesis at a time, and returns a deterministic verdict, so a run that found
+  nothing never reads as one that did. Diagnoses only, never edits a tracked file, and hands
+  new-task a premise somebody checked. Use for "why is this failing", "find the root cause", "this
+  test is flaky", "debug this", "CI broke and nobody knows why". Distinct from test-author, which
+  pins what it names, and fix-batch, which dispatches the fix.
 license: MIT
 metadata:
   status: draft

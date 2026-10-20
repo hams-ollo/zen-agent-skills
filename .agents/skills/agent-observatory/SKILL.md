@@ -1,6 +1,13 @@
 ---
 name: agent-observatory
-description: Use to answer questions about agent sessions across every project at once, and to act on one where the harness allows it. Reports which sessions exist, which are running, what each cost, which skills were used, and what failed, by reading the local observatory store rather than one transcript at a time. Where the harness exposes session management, it can also rename a session and hand a message to another one. It never starts, resumes, interrupts, or ends a session, and where the harness exposes nothing it declines with the reason stated rather than finding another route. Trigger on "what sessions do I have running", "which of my agents is still working", "find the session that did X", "rename that session", "tell the other session about this", "what did that wave cost", or any question that spans more than one session. Distinct from the observatory's own page, which reports and offers no action at all.
+description: >-
+  Answers questions about agent sessions across every project at once by reading the local
+  observatory store: which sessions exist and are running, what each cost, which skills were used,
+  and what failed. Where the harness allows, it can rename a session or message another one; it
+  never starts, resumes, interrupts, or ends one. Use for "what sessions do I have running", "which
+  agent is still working", "find the session that did X", "rename that session", "tell the other
+  session about this", "what did that wave cost". Distinct from the observatory's own page, which
+  reports and offers no action.
 license: MIT
 metadata:
   status: draft

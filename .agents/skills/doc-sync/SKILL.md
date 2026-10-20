@@ -1,6 +1,13 @@
 ---
 name: doc-sync
-description: Use when code has moved and the documentation may not have, or when a documentation set needs auditing for stale claims. Detects documentation drift by checking prose claims against repository facts, classifies every document as current-state (correctable), contract (report-only, human-owned) or ledger (skipped), and reports each finding with a stable id, the fact that grounds it, and a grounded or suspected confidence. Dry run is the default and detection never changes a file; updating a current-state document requires explicit per-finding approval and leaves an audit trail, and a contract document is never edited because a disagreement there means the code is wrong. Distinct from doc-author (writes documents that do not exist), doc-revise (edits a document you have already decided to change, and which this composes for editing discipline), and spec-conformance (audits code against a spec). It finds what drifted; it does not silently fix it.
+description: >-
+  Detects documentation drift by checking prose claims against repository facts, after code has
+  moved or when a doc set needs auditing for stale claims. Classifies each document as
+  current-state, contract (report-only, human-owned), or ledger (skipped), and reports each finding
+  with a stable id, the grounding fact, and a confidence. Dry run by default: a current-state fix
+  needs per-finding approval, and a contract is never edited. Use for "are the docs still right",
+  "what did this change make stale", "audit the docs". It finds drift; doc-revise edits, doc-author
+  writes new, spec-conformance audits code against a spec.
 license: MIT
 ---
 

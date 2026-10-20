@@ -79,6 +79,10 @@ The rules module is handled differently on purpose. [`.agents/rules/`](../.agent
 
 Deleting a lens is the one thing there the check does report. A file the installer placed and that is no longer on disk is named individually and exits `1`, because a missing lens is a different claim from an edited one: `house-review` reads its entire rubric and severity scheme out of that module, and an install missing it behaves like a skill that never had one. The check still writes nothing, so the file is not restored. Re-install to have the removal recorded, after which the check stops reporting it, or run `--replace-adopted` to take the kit's copy back.
 
+## What the rules module puts in every session
+
+`install.py` places the rules module in `~/.claude/rules/`, so each skill's link to its lens resolves. Claude Code also loads every Markdown file in that directory into every session, in every project, unless the file carries `paths` frontmatter, in which case it loads only when Claude reads or edits a matching file. So each lens carries `paths` naming itself and loads when a skill reads it, and one small file, `core.md`, is loaded everywhere on purpose: the autonomy rules, one line each. Before the 2026-10 kit refresh all three lenses loaded into every session, about 500 lines; `validate-skills.py` now fails a lens without `paths` and holds the always-loaded files under a line budget. If you edited a lens, add the same frontmatter to your copy, because a re-install keeps your file as it is.
+
 ## Your edits to the rules module survive a re-install
 
 The same invitation binds the installer, not just the check. Re-running the install refreshes a rules file you have not touched, and keeps one you have, naming it:
