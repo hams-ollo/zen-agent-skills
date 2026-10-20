@@ -6,6 +6,7 @@ How to start and run a development season from the quest tracker template. The c
 
 One page that holds a whole season of work: phases of steps, each step opening into its lines to tick, a check, a stop, facts to write down, links, and a session log with screenshots. Everything on the page is drawn from **one data block** at the top of the page's script, between the `DATA BLOCK` and `END OF DATA BLOCK` markers. Edit that block and the rest follows:
 
+- the "Waiting on you" strip at the top: claims ready for a check, and stops the work has reached
 - the quest board (who does what, in order), the route strip and the "steps left to" counter, which names the goal
 - open blocker tags and the "Stop and check in" stripes
 - the season map, the burndown of steps left, the People panel, Next up and Recent activity
@@ -16,12 +17,12 @@ Ticks, claims, facts and notes are saved live in the artifact's shared database 
 ## Start a new project's tracker
 
 1. Ask Claude: "start a quest tracker for the sourdough project", with whatever you already know (the goal, the people, the first phases). Claude takes the template from the `quest-tracker` skill.
-2. Claude writes the new project into the data block, sets the page's `<title>` to the tracker's name, and publishes it as a **new** private artifact with the capabilities `db`, `user` (scope `profile`) and `assets`. Never publish over the template itself: each project gets its own artifact and its own database.
-3. Claude sets a new `storageKey` (for example `qt-sourdough`), so remembered filters do not mix between trackers, and leaves `templateVersion` as copied.
-4. Open the new link. The yellow "Data block check" box under the header lists anything malformed (duplicate ids, a quest naming a step that does not exist, a step with nobody in `who`). Nothing shows when the block is clean.
+2. Claude writes the new project's data block, with a new `storageKey` (for example `qt-sourdough`) so remembered filters do not mix between trackers, and runs the skill's script: `tracker.py fill` puts the block into the template and the tracker's name into the page's `<title>`, changing nothing else, and `tracker.py check` lists anything malformed (duplicate ids, a quest naming a step that does not exist, a step with nobody in `who`, a `storageKey` or title still the template's) before anyone sees it.
+3. Claude publishes it as a **new** private artifact with the capabilities `db`, `user` (scope `profile`) and `assets`. Never publish over the template itself: each project gets its own artifact and its own database.
+4. Open the new link. The yellow "Data block check" box under the header runs the same check as the script, so it shows nothing when the block is clean.
 5. Share it from the page's Share menu: Editor for anyone who ticks or attaches screenshots, Viewer for anyone who only reads.
 
-Doing it by hand also works: copy the template's HTML, edit the data block, and publish the file as a new artifact with those three capabilities.
+Doing it by hand also works: copy the template's HTML, edit the data block, leave `templateVersion` as copied, and publish the file as a new artifact with those three capabilities.
 
 ## The data block
 
@@ -169,13 +170,13 @@ A claim is one document in the `claims` collection, named by the step's id:
   note: "The test message is in the shared inbox, marked TEST." }
 ```
 
-The command and its result are two fields, never one, and the result is what the command printed, never a summary of it. A claim with no command and no result says so on the page, because there is nothing to check it against.
+The command and its result are two fields, never one, and the result is what the command printed, never a summary of it. A claim with no command and no result says so on the page, because there is nothing to check it against. The skill's `tracker.py claim` builds the document by running the command itself: it keeps the command as given and the last lines of what it printed with the exit status, reads `at` from the clock, and refuses when the command fails or a field looks like a secret.
 
 While a claim waits, the step is in its own amber state, **Ready for check**: a tag beside the title, a dashed amber tick box, an amber line under the title with the session and the time, the claimed lines marked, an amber cell on the season map, "ready for check" on the quest board, and a count of waiting claims beside the steps-left counter. Opening the step shows the claim at the top: the session, the time, the lines, the command, the result, the note, and the step's own `check` beside them.
 
 An Editor settles it, after checking it themselves:
 
-- **Verify and tick** ticks the step and the claimed lines, and records `verifiedClaim` (the claim's `at`) on the tick, so the step reads "verified from a claim by Claude (go-live-check)". Ticking the tick box of a claimed step does the same thing.
+- **Verify and tick** ticks the step and the claimed lines, and records `verifiedClaim` (the claim's `at`) and `evidence` on the tick, so the step reads "verified from a claim by Claude (go-live-check)" and "checked by a command". Ticking the tick box of a claimed step does the same thing.
 - **Send back** leaves the step open and records `declinedClaim` (the claim's `at`), `declinedBy` and `declinedAt`. The step shows "Sent back" with who and when. Log a note saying what is missing; the session can claim the step again once it is fixed, and its newer claim waits for a check again.
 
 A claim also stops waiting when someone ticks or unticks the step by hand while the claim is on it: the tick records it as `settledClaim`, so a claim settled that way does not come back. Every one of these names the claim by its `at`, never by comparing times, because the session that wrote the claim and the browser that settles it keep different clocks. So a new claim needs a new `at`, and a claim whose `at` cannot be read as a time is ignored. Only Editors see the two controls; anyone else sees "An Editor checks this claim and ticks it."
@@ -183,6 +184,27 @@ A claim also stops waiting when someone ticks or unticks the step by hand while 
 Claims earn no XP until they are verified and ticked, and what a session writes down (facts, notes) earns none at all.
 
 A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. What a session writes never passes through the page's own save checks, because it goes straight into the database, so the page applies the same secret net when it shows it: a claim, note or fact value that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it, and so is a session name that looks like one.
+
+## What a tick rests on
+
+Every ticked step says what its tick rests on, beside the "Done" line, on its season map cell, and in the season log:
+
+| Mark | Saved as `evidence` | When |
+|---|---|---|
+| checked by a command | `command` | Verify and tick, on a claim that carried a command and that command's result |
+| claimed, no command on record | `claim` | Verify and tick, on a claim that carried no command or no result |
+| ticked by hand, no command on record | `hand` | the tick box, on a step with no claim waiting |
+
+A tick by hand may rest on a person's own look at the screen, or on someone's word in a chat, and the page cannot tell which, so it says only what it has on record. That is not a reproach: plenty of steps close on something only a person can see. It is how a reader tells a checked command from a remembered one, and why a session that can run a step's check claims it rather than asking for a tick. While the verified claim is still the step's claim, the season log carries its command and result under the step. Ticks saved before template 1.2.0 have no `evidence`: the page reads them from `verifiedClaim` instead.
+
+## What waits on you
+
+The strip at the top of the page lists what needs a person, and is hidden when nothing does:
+
+- **Check:** every claim still waiting, with the session that made it. Anyone can see it; an Editor settles it.
+- **Stop:** every stop the work has reached, with who it waits on. A stop is reached when it is the first open step of a quest under way (the one up next, or one marked `wait`), or of the route when there are no quests. Optional steps are passed over. A stop that carries a waiting claim is listed under Check instead.
+
+The strip leaves out what nobody can act on yet: a stop further down a quest waits until the steps before it are ticked.
 
 ## How ticks, claims, facts and logs are stored
 
@@ -199,7 +221,7 @@ flowchart LR
 
 | Collection | One document per | Fields |
 |---|---|---|
-| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note"), `verifiedClaim` (the `at` of the claim a tick verified), `settledClaim` (the `at` of a claim that was on the step when it was ticked or unticked by hand), `declinedClaim`, `declinedBy`, `declinedAt` (a claim sent back) |
+| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note"), `evidence` (what the tick rests on: `command`, `claim` or `hand`), `verifiedClaim` (the `at` of the claim a tick verified), `settledClaim` (the `at` of a claim that was on the step when it was ticked or unticked by hand), `declinedClaim`, `declinedBy`, `declinedAt` (a claim sent back) |
 | `facts` | fact, named by its id | `value` (300 characters at most), `by`, `at`, `step`, `agent` (when a Claude session wrote it) |
 | `log` | note | `step`, `text` (4,000 characters at most), `asset` (a screenshot's id, or none), `by`, `at`, `agent` (when a Claude session wrote it) |
 | `claims` | step, named by its id | `agent`, `at`, `lines` (positions, from 0), `command`, `result`, `note`; written only by Claude sessions |
@@ -235,9 +257,10 @@ A quest is one run of work, in order, usually one call or one person's sitting. 
 
 ## The views
 
+- **Waiting on you:** at the top, the claims ready for a check and the stops the work has reached, each opening its step.
 - **Quest board and route strip:** the chain of runs, with progress bars, blocker tags, "ready for check" on claimed steps, and who is on each open step. Beside the steps-left counter, the open blockers and the claims waiting for a check.
 - **XP and rank** (game skins): season XP, the rank, and the XP to the next rank.
-- **Season map:** every step of every phase as one cell, in phase order. Green is done, solid amber a claim waiting for a check, red outline an open blocker, amber stripes a stop, dashed optional, a ring on the route. Each cell opens its step.
+- **Season map:** every step of every phase as one cell, in phase order. Green is done (hover a cell for what its tick rests on), solid amber a claim waiting for a check, red outline an open blocker, amber stripes a stop, dashed optional, a ring on the route. Each cell opens its step.
 - **Steps left to the goal:** the burndown. One point per day from `started` to today, the dashed even-pace line to `goal.target`, and a hover read-out of the day's count and how many steps were ticked that day.
 - **People:** one card per person: their steps done, their open blockers, their next step, and a button to filter the page to them.
 - **Next up and Recent activity:** the next four route steps, and the last six ticks, claims, facts and notes with who and when.
@@ -255,6 +278,10 @@ Each of these reads only what the page already stores.
 ## Porting an existing sheet
 
 The NYFG run sheet's `PHASES`, `QUESTS` and `OWNERS` move across almost unchanged: put `PHASES` into `phases`, `QUESTS` into `quests` (its `cls` still works), and turn `OWNERS` into `people` with a tone for each. Keep every id exactly as it was; the saved ticks stay in the old artifact's database, so a port is a fresh start unless Claude copies the documents across with ArtifactData.
+
+## Bringing a tracker onto a newer template
+
+A tracker keeps the code it was published with. To give it a newer template's code, Claude saves the tracker's page and runs `tracker.py fill --from` on it: the data block comes across unchanged except for `templateVersion`, which takes the newer template's value, and the page keeps its title. Then `tracker.py check`, a look at what the newer template changed in its sample `rules` and `reference` entries, and a republish to the tracker's **existing** artifact, so its database and every tick in it are kept. Template 1.1.0 added claims; 1.2.0 added the "Waiting on you" strip and the evidence marks, and needs nothing new in the data block.
 
 ## House rules
 

@@ -152,6 +152,7 @@ KIT_SKILL_NAMES = frozenset({
     "new-task",
     "pr-describe",
     "project-bootstrap",
+    "quest-tracker",
     "reconcile-worktrees",
     "review-depth",
     "sitrep",

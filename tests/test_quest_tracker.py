@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Tests for the `quest-tracker` skill and its template page (`feat-0072`).
+"""Tests for the `quest-tracker` skill, its template page, and its script (`feat-0072`).
 
 The skill carries no spec, so these tests are derived from the task's acceptance criteria and
 from the claim-and-verify contract the skill body, the authoring guide and the template all state.
-Three kinds of assertion, and the bound on each is stated rather than left for a reader to find:
+Four kinds of assertion, and the bound on each is stated rather than left for a reader to find:
 
 - **Structural assertions over prose.** A skill body is instructions to a model, so a test can
   assert an instruction is present and cannot assert a model obeyed it. The precedent and the same
@@ -11,28 +11,35 @@ Three kinds of assertion, and the bound on each is stated rather than left for a
   its heading, so a phrase that drifts into the wrong section does not satisfy it.
 - **Structural assertions over the page's code**, outside the data block, for the properties a
   regression would break silently: the page reads claims and never writes them, settling a claim
-  is gated on an Editor, and nothing on the page renders text as markup except the one fixed icon.
-- **Behavior, under Node.js.** The claim rule (when a claim waits for a check) and the line filter
-  are pure functions, extracted from the page and run against fixed cases. These tests need a
-  `node` binary and skip, saying so, where there is none; the rest of the file needs nothing but
-  the standard library, matching the rest of `tests/`.
+  is gated on an Editor, a tick saves what it rests on, and nothing on the page renders text as
+  markup except the one fixed icon.
+- **Behavior, under Node.js.** The claim rule, the line filter, what a tick rests on, which stops
+  the work has reached, and the data block check are pure functions, extracted from the page and
+  run against fixed cases. These tests need a `node` binary and skip, saying so, where there is
+  none; the rest of the file needs nothing but the standard library, matching the rest of `tests/`.
+- **Behavior of `scripts/tracker.py`**, run as a person would run it, through its command line.
 
 What none of this covers is a real page against a real database. That was exercised by hand at
-`feat-0072` (a headless render and scripted clicks against a stubbed runtime) and is recorded in
-its task file rather than here.
+`feat-0072` (a render and scripted clicks against a stubbed runtime) and is recorded in its task
+file rather than here.
 """
 
 from __future__ import annotations
 
+import contextlib
+import importlib.util
 import io
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -44,16 +51,27 @@ SKILL_DIR = REPO_ROOT / ".agents" / "skills" / "quest-tracker"
 SKILL = SKILL_DIR / "SKILL.md"
 TEMPLATE = SKILL_DIR / "templates" / "quest-tracker.html"
 GUIDE = SKILL_DIR / "references" / "authoring-guide.md"
+SCRIPT = SKILL_DIR / "scripts" / "tracker.py"
+
+_vs_spec = importlib.util.spec_from_file_location("validate_skills", REPO_ROOT / "scripts" / "validate-skills.py")
+vs = importlib.util.module_from_spec(_vs_spec)
+_vs_spec.loader.exec_module(vs)
+_tr_spec = importlib.util.spec_from_file_location("quest_tracker_script", SCRIPT)
+tracker = importlib.util.module_from_spec(_tr_spec)
+_tr_spec.loader.exec_module(tracker)
 
 # The claim document's fields, from the task's scope. Written out here rather than read from any of
-# the three files that state them, because a test that reads its expectation out of the thing it
-# tests proves only that the thing agrees with itself.
+# the files that state them, because a test that reads its expectation out of the thing it tests
+# proves only that the thing agrees with itself.
 CLAIM_FIELDS = frozenset({"agent", "at", "lines", "command", "result", "note"})
+# What a tick can rest on, saved as `evidence` on the step's `checks` document.
+EVIDENCE_VALUES = frozenset({"command", "claim", "hand"})
 
 # The capabilities a tracker is published with, exactly as the skill must state them.
 CAPABILITIES = '{db: {}, user: {scopes: ["profile"]}, assets: {}}'
 
 NODE = shutil.which("node")
+EM_DASH = chr(0x2014)   # spelled out so this file does not carry the character it forbids
 
 
 def read(path: Path) -> str:
@@ -106,8 +124,8 @@ def flat(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def page_script() -> str:
-    scripts = re.findall(r"<script>(.*?)</script>", read(TEMPLATE), re.S)
+def page_script(path: Path = TEMPLATE) -> str:
+    scripts = re.findall(r"<script>(.*?)</script>", read(path), re.S)
     if len(scripts) != 1:
         raise AssertionError(f"expected one script block in the template, found {len(scripts)}")
     return scripts[0]
@@ -141,6 +159,29 @@ def function_source(code: str, name: str) -> str:
             if depth == 0:
                 return code[start:i + 1]
         i += 1
+
+
+def run_node(source: str, expression: str):
+    run = subprocess.run([NODE, "-e", source + "\nconsole.log(JSON.stringify(" + expression + "));"],
+                         capture_output=True, text=True, encoding="utf-8")
+    if run.returncode != 0:
+        raise AssertionError(run.stderr)
+    return json.loads(run.stdout)
+
+
+def page_functions(*names: str) -> str:
+    _, code = split_at_data_block(page_script())
+    return "\n".join(function_source(code, n) for n in names)
+
+
+def shell_command(*argv: str) -> str:
+    """A command line for the system shell `tracker.py claim` runs it in, quoted for that shell."""
+    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
+
+
+def run_script(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True,
+                          encoding="utf-8", cwd=cwd)
 
 
 class TestTheSkillIsADraft(unittest.TestCase):
@@ -183,6 +224,14 @@ class TestTheSkillBody(unittest.TestCase):
         self.assertRegex(frontmatter, r"(?m)^compatibility: ")
         self.assertIn("shared per-page database", flat(frontmatter))
 
+    def test_the_description_fits_the_kits_advisory(self):
+        """The 2026-10 refresh: a crowded skill listing drops long descriptions first."""
+        fm, _ = vs.parse_frontmatter(self.body)
+        desc = vs.BLOCK_SCALAR_RE.sub("", fm["description"])
+        self.assertLessEqual(len(desc), vs.DESC_ADVISORY_CHARS)
+        self.assertTrue(desc.startswith("Plans and logs a season of project work"),
+                        "the description no longer leads with the key use case")
+
     def test_every_rule_the_task_names_is_stated(self):
         rules = flat(section(self.body, "## The rules"))
         for phrase in ("Ids never change", "Never insert, reorder, or delete a ticked step's lines",
@@ -192,22 +241,31 @@ class TestTheSkillBody(unittest.TestCase):
         for rule in ("A4", "A7", "A10"):
             self.assertIn(f"`{rule}`", rules, f"the rules do not cite autonomy {rule}")
 
-    def test_a_tracker_is_published_new_with_its_capabilities_and_never_over_the_template(self):
+    def test_a_tracker_is_filled_checked_and_published_new_with_its_capabilities(self):
         start = flat(section(self.body, "### 1. Start a tracker for a project"))
-        self.assertIn("between the `DATA BLOCK` and `END OF DATA BLOCK` markers", start)
-        self.assertIn("a new `storageKey`", start)
+        self.assertIn("Set a new `storageKey`", start)
         self.assertIn("`skin`", start)
-        self.assertIn("Leave `templateVersion` exactly as copied", start)
+        self.assertIn("`fill --block <file> --title", start)
+        self.assertIn("`check <tracker.html>`", start)
+        self.assertIn("Fix and re-run until it exits 0", start)
         self.assertIn("**Never publish over the template**", start)
         host = flat(section(self.body, "## Host-specific: Claude artifacts"))
         self.assertIn(f"`capabilities` of `{CAPABILITIES}`", host)
+
+    def test_the_script_is_listed_and_a_run_that_could_not_check_is_never_a_pass(self):
+        holds = section(self.body, "## What this skill holds")
+        self.assertIn("[`scripts/tracker.py`](scripts/tracker.py)", holds)
+        procedure = flat(section(self.body, "## Procedure"))
+        self.assertIn("a 2 is reported to the person, never treated as a pass", procedure)
 
     def test_an_agent_writes_claims_with_exactly_the_contracted_fields_and_never_writes_checks(self):
         report = section(self.body, "### 3. Report into a tracker from an agent or a child session")
         rows = {r[0].strip("`"): r for r in table_rows(report)}
         self.assertEqual(backticked(rows["claims"][2]), CLAIM_FIELDS)
         self.assertIn("**Never write `checks`**", report)
+        self.assertIn("`evidence`", report)
         self.assertIn("separate", flat(report))
+        self.assertIn("**Build a claim with the script**", report)
 
     def test_it_says_when_a_claim_is_still_waiting_and_where_at_comes_from(self):
         report = flat(section(self.body, "### 3. Report into a tracker from an agent or a child session"))
@@ -217,14 +275,24 @@ class TestTheSkillBody(unittest.TestCase):
         self.assertIn("read from a real clock", report)
         self.assertIn("never estimated", report)
 
+    def test_a_session_reads_what_waits_on_a_person_the_way_the_page_does(self):
+        work = flat(section(self.body, "### 2. Work a session against a tracker"))
+        self.assertIn("every stop that is the first open step of a quest under way", work)
+        self.assertIn("\"ticked by hand, no command on record\"", work)
+
+    def test_an_upgrade_goes_through_the_script_onto_the_existing_page(self):
+        upgrade = flat(section(self.body, "### 4. Bring a tracker onto a newer template"))
+        self.assertIn("`fill --from <saved page> --out <new file>`", upgrade)
+        self.assertIn("republish to the tracker's **existing** page", upgrade)
+
     def test_it_declines_where_the_host_cannot_publish(self):
         decline = flat(section(self.body, "### 0. Establish the host can do this, before anything else"))
         self.assertIn("decline and say what still works", decline)
         self.assertIn("Attempt nothing else", decline)
 
 
-class TestTheThreeCopiesOfTheClaimShapeAgree(unittest.TestCase):
-    """The skill, the guide and the page each state the claim document. They must say the same thing."""
+class TestTheCopiesOfEachContractAgree(unittest.TestCase):
+    """The skill, the guide and the page each state the claim document and the evidence values."""
 
     def test_the_guide_lists_the_same_claim_fields(self):
         stored = section(read(GUIDE), "## How ticks, claims, facts and logs are stored")
@@ -236,6 +304,23 @@ class TestTheThreeCopiesOfTheClaimShapeAgree(unittest.TestCase):
         self.assertIsNotNone(declared, "the page no longer declares the claim document's shape")
         self.assertEqual({f.strip() for f in declared.group(1).split(",")}, CLAIM_FIELDS)
 
+    def test_the_guide_and_the_page_name_the_same_evidence_values(self):
+        rests = section(read(GUIDE), "## What a tick rests on")
+        self.assertEqual({c for r in table_rows(rests) for c in backticked(r[1])}, EVIDENCE_VALUES)
+        labels = re.search(r"const EVIDENCE = \{([^}]*)\};", page_script())
+        self.assertIsNotNone(labels, "the page no longer declares its evidence labels")
+        self.assertEqual(set(re.findall(r"(\w+):", labels.group(1))), EVIDENCE_VALUES)
+        stored = section(read(GUIDE), "## How ticks, claims, facts and logs are stored")
+        checks = {r[0].strip("`"): r for r in table_rows(stored)}["checks"][2]
+        self.assertIn("`evidence`", checks)
+
+    def test_the_script_refuses_exactly_what_the_page_hides(self):
+        """The page's `looksSecret` and the script's port: same patterns, same flags, same order."""
+        source = page_functions("looksSecret")
+        page = [(p, "i" in f) for p, f in re.findall(r"/((?:[^/\\\n]|\\.)+)/([a-z]*)\.test\(text\)", source)]
+        self.assertTrue(page, "found no patterns in the page's looksSecret")
+        self.assertEqual(page, [(p, bool(f & re.I)) for p, f in tracker.SECRET_PATTERNS])
+
 
 class TestTheTemplate(unittest.TestCase):
     """The page's code, read below the data block so sample data cannot satisfy an assertion."""
@@ -245,7 +330,7 @@ class TestTheTemplate(unittest.TestCase):
         cls.block, cls.code = split_at_data_block(page_script())
 
     def test_the_data_block_carries_a_template_version_and_the_footer_shows_it(self):
-        self.assertRegex(self.block, r'(?m)^\s*templateVersion: "\d+\.\d+\.\d+",')
+        self.assertRegex(self.block, r'(?m)^\s*templateVersion: "1\.2\.0",')
         build = function_source(self.code, "buildStatic")
         self.assertIn("TRACKER.templateVersion", build)
         self.assertIn('$("#footer")', build)
@@ -266,6 +351,19 @@ class TestTheTemplate(unittest.TestCase):
         self.assertIn("declinedClaim: cl.at", send_back)
         self.assertNotIn("done", send_back)
 
+    def test_every_tick_saves_what_it_rests_on(self):
+        verify = function_source(self.code, "verifyClaim")
+        self.assertIn('const evidence = cl.command && cl.result ? "command" : "claim";', verify)
+        self.assertIn("verifiedClaim: cl.at, evidence,", verify)
+        toggle = function_source(self.code, "toggleDone")
+        self.assertIn('evidence: done ? "hand" : null', toggle)
+
+    def test_the_tick_shows_what_it_rests_on(self):
+        render = function_source(self.code, "render")
+        self.assertIn('stamp.append(el("span", "ev ev-" + ev, EVIDENCE[ev]));', render)
+        self.assertIn('st.done ? "done, " + EVIDENCE[ev]', render)
+        self.assertIn("EVIDENCE[tickEvidence(st, cl)]", function_source(self.code, "seasonMarkdown"))
+
     def test_ticking_a_claimed_step_goes_through_verification(self):
         toggle = function_source(self.code, "toggleDone")
         self.assertRegex(toggle, r"if \(isClaimed\(STEP_BY_ID\.get\(id\)\)\) \{ verifyClaim\(id\); return; \}")
@@ -273,6 +371,25 @@ class TestTheTemplate(unittest.TestCase):
     def test_a_tick_by_hand_records_the_claim_it_settled(self):
         toggle = function_source(self.code, "toggleDone")
         self.assertIn("patch.settledClaim = cl.at", toggle)
+
+    def test_the_waiting_strip_is_fed_claims_and_reached_stops_and_hidden_when_empty(self):
+        render = function_source(self.code, "render")
+        self.assertIn("renderWaiting(ready, stopsReached(runs, isDone).filter((s) => !isClaimed(s)));", render)
+        self.assertIn('states.filter((x) => x.st === "next" || x.st === "wait")', render)
+        waiting = function_source(self.code, "renderWaiting")
+        self.assertIn("box.hidden = !ready.length && !stops.length;", waiting)
+        self.assertIn('<section class="waiting" id="waiting" aria-label="Waiting on you" hidden>', read(TEMPLATE))
+
+    def test_hidden_hides_whatever_display_a_class_sets(self):
+        """The page must not lean on the host's own reset: `.body` sets `display: grid`."""
+        self.assertIn("[hidden] { display: none !important; }", read(TEMPLATE))
+
+    def test_the_data_check_on_the_page_is_the_pure_function_the_script_runs(self):
+        self.assertIn("const issues = dataIssues(TRACKER);", function_source(self.code, "checkData"))
+        checker = function_source(self.code, "dataIssues")
+        for name in ("PHASES", "STEP_INDEX", "PEOPLE", "QUESTS", "STEP_BY_ID", "TRACKER", "$("):
+            self.assertNotIn(name, checker, f"dataIssues reads {name}, so the script's run of it "
+                                            f"would not see what the page sees")
 
     def test_a_fact_a_session_wrote_is_shown_only_through_the_secret_net(self):
         """Agent-written facts skip `saveFact`'s check, so every place that shows a fact value
@@ -285,6 +402,11 @@ class TestTheTemplate(unittest.TestCase):
         self.assertIn('inp.value = factHidden(v) ? "" :', render)
         self.assertIn('factHidden(v) ? SECRET_HIDDEN : v && v.value ? "Saved "', render)
         self.assertIn('factHidden(v) ? SECRET_HIDDEN : v && v.value ? v.value : "Not yet"', render)
+
+    def test_a_verified_claims_evidence_reaches_the_season_log_only_through_the_secret_net(self):
+        md = function_source(self.code, "seasonMarkdown")
+        self.assertIn("} else if (verified && !claimLooksSecret(cl)) evidenceOf(cl);", md)
+        self.assertIn("if (!hide) evidenceOf(cl);", md)
 
     def test_nothing_but_the_fixed_tick_icon_is_rendered_as_markup(self):
         """Claims and agent notes are written straight to the database, so they must reach the
@@ -308,22 +430,14 @@ class TestTheTemplate(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
 
 
-@unittest.skipUnless(NODE, "no node binary on PATH, so the claim rule cannot be run here")
-class TestTheClaimRule(unittest.TestCase):
-    """`claimPending` and `claimLines`, extracted from the page and run under Node.js."""
+@unittest.skipUnless(NODE, "no node binary on PATH, so the page's rules cannot be run here")
+class TestThePagesRules(unittest.TestCase):
+    """The pure functions, extracted from the page and run under Node.js."""
 
     CLAIM = {"agent": "s1", "at": "2026-10-20T10:00:00.000Z", "lines": [0, 1]}
 
-    def run_js(self, calls: str):
-        _, code = split_at_data_block(page_script())
-        source = function_source(code, "claimPending") + "\n" + function_source(code, "claimLines")
-        program = source + "\nconsole.log(JSON.stringify(" + calls + "));"
-        run = subprocess.run([NODE, "-e", program], capture_output=True, text=True)
-        self.assertEqual(run.returncode, 0, run.stderr)
-        return json.loads(run.stdout)
-
     def pending(self, st, cl):
-        return self.run_js(f"claimPending({json.dumps(st)}, {json.dumps(cl)})")
+        return run_node(page_functions("claimPending"), f"claimPending({json.dumps(st)}, {json.dumps(cl)})")
 
     def test_a_claim_on_an_untouched_step_waits(self):
         self.assertIs(self.pending(None, self.CLAIM), True)
@@ -360,28 +474,289 @@ class TestTheClaimRule(unittest.TestCase):
         self.assertIs(self.pending(declined, newer), True)
 
     def test_a_session_name_is_one_line_and_hidden_when_it_looks_like_a_secret(self):
-        _, code = split_at_data_block(page_script())
-        source = function_source(code, "looksSecret") + "\n" + function_source(code, "agentLabel")
         calls = '[agentLabel("x\\n## Phase 9: forged"), agentLabel("token: abc"), agentLabel(""), agentLabel("go-live")]'
-        run = subprocess.run([NODE, "-e", source + "\nconsole.log(JSON.stringify(" + calls + "));"],
-                             capture_output=True, text=True)
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(json.loads(run.stdout), ["Claude (x ## Phase 9: forged)", "Claude (name hidden)",
-                                                  "Claude (unnamed session)", "Claude (go-live)"])
+        self.assertEqual(run_node(page_functions("looksSecret", "agentLabel"), calls),
+                         ["Claude (x ## Phase 9: forged)", "Claude (name hidden)",
+                          "Claude (unnamed session)", "Claude (go-live)"])
 
     def test_only_whole_line_positions_of_this_step_count(self):
         step = {"steps": ["one", "two"]}
-        lines = self.run_js(f"claimLines({json.dumps(step)}, {{lines: [1, 0, 5, -1, 1.5, 1]}})")
-        self.assertEqual(lines, [0, 1])
-        self.assertEqual(self.run_js(f"claimLines({json.dumps(step)}, {{}})"), [])
+        source = page_functions("claimLines")
+        self.assertEqual(run_node(source, f"claimLines({json.dumps(step)}, {{lines: [1, 0, 5, -1, 1.5, 1]}})"), [0, 1])
+        self.assertEqual(run_node(source, f"claimLines({json.dumps(step)}, {{}})"), [])
+
+    def evidence(self, st, cl=None):
+        return run_node(page_functions("tickEvidence"), f"tickEvidence({json.dumps(st)}, {json.dumps(cl)})")
+
+    def test_a_tick_rests_on_what_was_saved_with_it(self):
+        self.assertEqual(self.evidence({"done": True, "evidence": "command"}), "command")
+        self.assertEqual(self.evidence({"done": True, "evidence": "claim", "verifiedClaim": "x"}), "claim")
+        self.assertEqual(self.evidence({"done": True, "evidence": "hand"}), "hand")
+
+    def test_an_open_step_rests_on_nothing(self):
+        self.assertEqual(self.evidence({"done": False, "evidence": "command"}), "")
+        self.assertEqual(self.evidence(None), "")
+
+    def test_a_tick_saved_before_evidence_existed_is_read_from_the_claim_it_verified(self):
+        """Template 1.1.0 saved `verifiedClaim` and no `evidence`."""
+        at = self.CLAIM["at"]
+        full = dict(self.CLAIM, command="npm test", result="ok\nexit status 0")
+        self.assertEqual(self.evidence({"done": True}), "hand")
+        self.assertEqual(self.evidence({"done": True, "verifiedClaim": at}, full), "command")
+        self.assertEqual(self.evidence({"done": True, "verifiedClaim": at}, dict(full, result="")), "claim")
+        replaced = dict(full, at="2026-10-21T10:00:00.000Z")
+        self.assertEqual(self.evidence({"done": True, "verifiedClaim": at}, replaced), "claim",
+                         "a newer claim's command was credited to a tick that verified an older one")
+        self.assertEqual(self.evidence({"done": True, "evidence": "forged", "verifiedClaim": at}, full), "command",
+                         "an unknown `evidence` value was shown instead of being read from the record")
+
+    def reached(self, runs, done):
+        program = page_functions("stopsReached") + f"\nconst done = new Set({json.dumps(done)});"
+        found = run_node(program, f"stopsReached({json.dumps(runs)}, (s) => done.has(s.id))")
+        return [s["id"] for s in found]
+
+    def test_a_stop_is_reached_when_everything_before_it_in_its_run_is_ticked(self):
+        run = [{"id": "a"}, {"id": "b", "gate": True}, {"id": "c"}]
+        self.assertEqual(self.reached([run], []), [])
+        self.assertEqual(self.reached([run], ["a"]), ["b"])
+        self.assertEqual(self.reached([run], ["a", "b"]), [])
+
+    def test_optional_steps_do_not_hold_a_stop_back_and_each_run_counts_once(self):
+        run = [{"id": "o", "optional": True}, {"id": "g", "gate": True}]
+        other = [{"id": "h", "gate": True}]
+        self.assertEqual(self.reached([run, other], []), ["g", "h"])
+        self.assertEqual(self.reached([run, run], []), ["g"])
+        self.assertEqual(self.reached([[{"id": "x"}]], []), [])
+
+    def issues(self, block: str):
+        return run_node(block + "\n" + page_functions("dataIssues"), "dataIssues(TRACKER)")
+
+    def test_the_templates_own_block_is_clean(self):
+        self.assertEqual(self.issues(tracker.data_block(read(TEMPLATE))), [])
+
+    def test_the_data_check_names_each_kind_of_mistake(self):
+        found = self.issues("""const TRACKER = {
+          people: { a: { name: "A" } },
+          phases: [
+            { id: "p1", title: "One", steps: [
+              { id: "s1", t: "First", who: ["a"], why: "w" },
+              { id: "s1", t: "Again", who: ["b"], check: "c" },
+              { id: "bad id", t: "Third", who: [], facts: [{ id: "f" }, { id: "f" }] } ] },
+            { id: "p1", title: "Twice", steps: [] } ],
+          quests: [{ title: "Q", ids: ["s1", "nope"] }, { title: "R" }],
+        };""")
+        flat_found = " | ".join(found)
+        for expected in ("Step id `s1` is used twice", "names `b`, who is not in `people`",
+                         "Step “Third” needs an id", "names nobody in `who`",
+                         "says neither why it matters", "Fact id `f` is used twice",
+                         "Phase id `p1` is used twice", "Phase `p1` has no steps",
+                         "lists `nope`, which is not a step", "Quest “R” has no list of step ids",
+                         "no `templateVersion`"):
+            self.assertIn(expected, flat_found)
+
+    def test_a_block_with_no_phases_is_reported_rather_than_crashing(self):
+        self.assertEqual(self.issues('const TRACKER = { templateVersion: "1.2.0" };'),
+                         ["The data block has no `phases` list."])
+
+
+class TestFill(unittest.TestCase):
+    """`tracker.py fill`: the data block goes in, the title goes on top, nothing else changes."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.template = read(TEMPLATE)
+        self.block = tracker.data_block(self.template).replace(
+            'storageKey: "quest-template"', 'storageKey: "qt-test"')
+
+    def write(self, name: str, text: str) -> Path:
+        path = self.tmp / name
+        path.write_text(text, encoding="utf-8", newline="")
+        return path
+
+    def test_carrying_the_template_onto_itself_changes_no_byte(self):
+        run = run_script("fill", "--from", str(TEMPLATE), "--out", str(self.tmp / "t.html"))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual((self.tmp / "t.html").read_bytes(), TEMPLATE.read_bytes())
+
+    def test_a_block_and_a_title_change_only_the_block_and_the_title(self):
+        block = self.write("b.js", self.block.replace('templateVersion: "1.2.0"', 'templateVersion: "0.9"'))
+        run = run_script("fill", "--block", str(block), "--title", "Sourdough season", "--out", str(self.tmp / "t.html"))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        page = read(self.tmp / "t.html")
+        self.assertTrue(page.startswith("<title>Sourdough season</title>\n"))
+        self.assertEqual(tracker.outside_block(page), tracker.outside_block(self.template))
+        self.assertIn('storageKey: "qt-test"', tracker.data_block(page))
+        self.assertEqual(tracker.template_version(tracker.data_block(page)), "1.2.0",
+                         "the block's own templateVersion survived: it names the code, not the project")
+        self.assertIn("templateVersion 0.9 -> 1.2.0", run.stdout)
+
+    def test_a_block_written_on_windows_lands_as_lf(self):
+        block = self.write("b.js", "﻿" + self.block.replace("\n", "\r\n"))
+        run = run_script("fill", "--block", str(block), "--title", "T", "--out", str(self.tmp / "t.html"))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        raw = (self.tmp / "t.html").read_bytes()
+        self.assertNotIn(b"\r\n", raw)
+        self.assertNotIn("﻿".encode("utf-8"), raw)
+
+    def test_an_older_tracker_is_carried_onto_the_template_and_keeps_its_title(self):
+        old = self.template.replace("<title>Quest Tracker Template</title>", "<title>Old season</title>", 1)
+        old = old.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1)
+        older = re.sub(r'\n\s*templateVersion: "1\.2\.0",[^\n]*', "", self.template, count=1)
+        for name, page, was in (("old.html", old, "1.1.0"), ("older.html", older, None)):
+            with self.subTest(was=was):
+                src = self.write(name, page)
+                out = self.tmp / ("up-" + name)
+                run = run_script("fill", "--from", str(src), "--out", str(out))
+                self.assertEqual(run.returncode, 0, run.stderr)
+                up = read(out)
+                self.assertEqual(tracker.template_version(tracker.data_block(up)), "1.2.0")
+                self.assertEqual(tracker.outside_block(up), tracker.outside_block(self.template))
+        self.assertTrue(read(self.tmp / "up-old.html").startswith("<title>Old season</title>"))
+
+    def test_it_refuses_rather_than_guess(self):
+        block = self.write("b.js", self.block)
+        existing = self.write("there.html", "a file someone made")
+        marked = self.write("m.js", tracker.END_LINE + "\n" + self.block)
+        cases = {
+            "an existing --out": ("--block", str(block), "--title", "T", "--out", str(existing)),
+            "no title": ("--block", str(block), "--out", str(self.tmp / "n.html")),
+            "markup in the title": ("--block", str(block), "--title", "<b>T</b>", "--out", str(self.tmp / "n.html")),
+            "the markers in the block": ("--block", str(marked), "--title", "T", "--out", str(self.tmp / "n.html")),
+        }
+        for name, args in cases.items():
+            with self.subTest(name):
+                run = run_script("fill", *args)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn("could not run:", run.stderr)
+        self.assertEqual(read(existing), "a file someone made")
+        self.assertFalse((self.tmp / "n.html").exists())
+
+
+@unittest.skipUnless(NODE, "no node binary on PATH, so `tracker.py check` cannot run here")
+class TestCheck(unittest.TestCase):
+    """`tracker.py check`: the page's own data check, plus what only the template can show."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.template = read(TEMPLATE)
+        self.good = self.template.replace('storageKey: "quest-template"', 'storageKey: "qt-test"', 1).replace(
+            "<title>Quest Tracker Template</title>", "<title>Test season</title>", 1)
+
+    def check(self, page: str) -> subprocess.CompletedProcess:
+        path = self.tmp / "t.html"
+        path.write_text(page, encoding="utf-8", newline="")
+        return run_script("check", str(path))
+
+    def test_a_good_tracker_is_ready_to_publish(self):
+        run = self.check(self.good)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("0 issue(s)", run.stdout)
+
+    def test_the_template_itself_is_not_a_tracker(self):
+        run = self.check(self.template)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("`storageKey` is still the template's", run.stdout)
+        self.assertIn("<title> is missing or still the template's", run.stdout)
+
+    def test_the_pages_own_data_check_runs(self):
+        run = self.check(self.good.replace('who: ["partner"],\n          why: "The lock', 'who: ["baker"],\n          why: "The lock', 1))
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("issue:  Step `p1-domain` names `baker`, who is not in `people`.", run.stdout)
+
+    def test_code_edited_below_the_end_marker_is_an_issue(self):
+        run = self.check(self.good.replace("const stepXP = (s) => 10 +", "const stepXP = (s) => 99 +", 1))
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("something below the end marker was edited", run.stdout)
+
+    def test_a_version_that_does_not_name_the_code_is_an_issue(self):
+        run = self.check(self.good.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1))
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("`templateVersion` says 1.1.0 but the code is template 1.2.0's", run.stdout)
+
+    def test_an_older_tracker_on_older_code_gets_a_notice_not_an_issue(self):
+        old = self.good.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1).replace(
+            "const stepXP = (s) => 10 +", "const stepXP = (s) =>  10 +", 1)
+        run = self.check(old)
+        self.assertEqual(run.returncode, 0, run.stdout)
+        self.assertIn("notice: This page is on template 1.1.0", run.stdout)
+
+    def test_a_block_that_does_not_run_could_not_be_checked(self):
+        run = self.check(self.good.replace("const TRACKER = {", "const TRACKER = {{", 1))
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("does not run as JavaScript", run.stderr)
+
+    def test_no_node_is_reported_as_could_not_check(self):
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        err = io.StringIO()
+        with mock.patch.object(tracker.shutil, "which", return_value=None), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = tracker.main(["check", str(path)])
+        self.assertEqual(code, 2)
+        self.assertIn("no `node` on PATH", err.getvalue())
+
+
+class TestClaim(unittest.TestCase):
+    """`tracker.py claim`: the check is run, and the document is built from what it printed."""
+
+    def claim(self, code: str, *extra: str) -> subprocess.CompletedProcess:
+        return run_script("claim", "--step", "p2-check", "--agent", "go-live",
+                          "--command", shell_command(sys.executable, "-c", code), *extra)
+
+    def test_a_passing_check_becomes_a_claim_with_exactly_the_contracted_fields(self):
+        before = datetime.now(timezone.utc)
+        run = self.claim("print('checked 42 addresses'); print('0 errors')", "--lines", "1,0,1", "--note", "inbox seen")
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        out = json.loads(run.stdout)
+        self.assertEqual((out["collection"], out["doc_id"]), ("claims", "p2-check"))
+        doc = out["document"]
+        self.assertEqual(set(doc), CLAIM_FIELDS)
+        self.assertEqual(doc["lines"], [0, 1])
+        self.assertEqual(doc["result"], "checked 42 addresses\n0 errors\nexit status 0")
+        self.assertEqual(doc["command"], shell_command(sys.executable, "-c", "print('checked 42 addresses'); print('0 errors')"))
+        self.assertRegex(doc["at"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+        at = datetime.strptime(doc["at"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        self.assertLessEqual(abs((at - before).total_seconds()), 120, "`at` was not read from the clock")
+
+    @unittest.skipUnless(NODE, "no node binary on PATH")
+    def test_the_page_shows_what_the_script_builds_as_waiting(self):
+        run = self.claim("print('ok')")
+        doc = json.loads(run.stdout)["document"]
+        self.assertIs(run_node(page_functions("claimPending"), f"claimPending(null, {json.dumps(doc)})"), True)
+
+    def test_only_the_tail_of_the_output_is_kept(self):
+        run = self.claim("[print(i) for i in range(30)]", "--tail", "3")
+        self.assertEqual(json.loads(run.stdout)["document"]["result"], "27\n28\n29\nexit status 0")
+
+    def test_a_failing_check_is_not_a_claim(self):
+        run = self.claim("import sys; print('boom'); sys.exit(3)")
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("refused: the command failed", run.stdout)
+        self.assertIn("boom\nexit status 3", run.stdout)
+        self.assertNotIn('"document"', run.stdout)
+
+    def test_a_claim_that_looks_like_it_holds_a_secret_is_refused(self):
+        run = self.claim("print('api_key=abc123')")
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("looks like it holds a password, code or key", run.stdout)
+        self.assertNotIn("abc123", run.stdout)
+
+    def test_bad_lines_could_not_run(self):
+        for lines in ("a", "-1"):
+            with self.subTest(lines=lines):
+                run = self.claim("print('ok')", "--lines", lines)
+                self.assertEqual(run.returncode, 2)
+                self.assertIn("--lines", run.stderr)
 
 
 class TestHouseStyle(unittest.TestCase):
 
     def test_no_em_dash_in_any_file_of_the_skill(self):
-        for path in sorted(p for p in SKILL_DIR.rglob("*") if p.is_file()):
+        for path in sorted(p for p in SKILL_DIR.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
             with self.subTest(path=path.relative_to(REPO_ROOT).as_posix()):
-                self.assertNotIn("—", read(path))
+                self.assertNotIn(EM_DASH, read(path))
 
 
 if __name__ == "__main__":

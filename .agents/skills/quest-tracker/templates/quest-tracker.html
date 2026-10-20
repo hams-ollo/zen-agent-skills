@@ -842,7 +842,7 @@ function stopsReached(runs, done) {
   const out = [];
   runs.forEach((steps) => {
     const first = steps.find((s) => !s.optional && !done(s));
-    if (first && first.gate && !out.includes(first)) out.push(first);
+    if (first && first.gate && !out.some((x) => x.id === first.id)) out.push(first);
   });
   return out;
 }
