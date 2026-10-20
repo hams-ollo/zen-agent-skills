@@ -4,9 +4,10 @@ description: >-
   Establishes the cause of a defect, test failure, flaky test, or unexpected behavior before anyone
   writes a task or a fix: reproduces it first, localizes the failure to the boundary where behavior
   diverges, tests one hypothesis at a time, and returns a deterministic verdict, so a run that found
-  nothing never reads as one that did. Diagnoses only, and never edits a tracked file. Use for "why
-  is this failing", "find the root cause", "this test is flaky", "debug this", "CI broke and nobody
-  knows why". test-author pins what it names; fix-batch dispatches the fix it refuses to write.
+  nothing never reads as one that did. Diagnoses only, never edits a tracked file, and hands
+  new-task a premise somebody checked. Use for "why is this failing", "find the root cause", "this
+  test is flaky", "debug this", "CI broke and nobody knows why". Distinct from test-author, which
+  pins what it names, and fix-batch, which dispatches the fix.
 license: MIT
 metadata:
   status: draft

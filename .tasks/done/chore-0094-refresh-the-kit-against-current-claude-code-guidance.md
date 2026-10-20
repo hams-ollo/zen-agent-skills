@@ -81,6 +81,12 @@ deleted and no safety rule was removed; `A1`, `A3`, `A8`, and `A10` keep their f
 - **Seam left open: a background agent's report.** The delegation reminder now stays silent on a
   background launch, but no documented event fires in the delegating session when a background
   report arrives, so that case is covered by `fix-batch` Step 6 rather than by a hook.
+- **Found by independent verification, and fixed.** The first pass wrapped descriptions with a
+  wrapper that broke on hyphens, so three `>-` scalars read "doc- author", "current- state", and
+  "docs- only" to any YAML parser; `validate-skills.py` now rejects that shape. The same pass found
+  dropped "distinct from" pointers and trigger phrases (restored), two rule clauses lost from
+  `AGENTS.md` (restored), a sentence lost from `autonomy.md` (restored), three `core.md` lines that
+  omitted part of their rule (completed), and the new hook reading `https://` as a drive (fixed).
 - **Seam left open: the validate-skills spec.** `docs/spec/validate-skills.md` has no scenarios for
   the three new checks. It is an approved contract, so it is not edited here; amending it is the
   maintainer's call.
@@ -99,7 +105,7 @@ the commit; nothing persisted changes format.
     python scripts/run-checks.py
 
 - [x] New tests for the worktree-boundary hook, the delegation fix, and the validator's on-demand,
-  always-loaded budget, em-dash, and description-advisory rules.
+  always-loaded budget, em-dash, folded-hyphen, and description-advisory rules.
 - [x] Existing tests still pass.
 - [x] `validate-skills.py` reports 0 errors, and no description is over the 700-character advisory.
 - [x] `AGENTS.md` is under 200 lines, and the always-loaded rules files are under 40.

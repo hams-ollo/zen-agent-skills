@@ -135,3 +135,6 @@ These are defaults, not laws. A skill may state a local exception, and a downstr
 raise or lower the ceiling, drop rules, or replace this module entirely. One default is worth keeping
 whatever else changes: **the asymmetry**. An adopter who relaxes A3 or A8 into "use your judgment"
 gets back the failure this module was written for, which is not an agent that did too little.
+
+The point of pulling it into its own file is that the override is a one-file edit, and no adopter
+inherits a ceiling they did not choose.

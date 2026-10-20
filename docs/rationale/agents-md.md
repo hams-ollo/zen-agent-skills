@@ -17,7 +17,7 @@ The re-anchoring clause is in that list because the move silently invalidates ev
 
 The `doc-sync` step is in that list because its absence has cost real work. `feat-0031` shipped a user-facing feature that was dogfooded, given a conformance matrix and a verification record, and left every reader-facing document with zero mention of it. Updating `CHANGELOG.md` and the task file is bookkeeping, not documentation: a feature only a maintainer can find out about has not shipped for anyone else.
 
-`cloud-executable` is the incident: approved 2026-08-07, with `feat-0045` and `feat-0046` both closed against it, it reached 2026-08-19 as the only approved spec of eleven with no matrix at all, having passed every stated obligation at both closeouts because no stated obligation mentioned the contract.
+The conformance step is in that list because nothing else here asks whether the implementation matches the contract. A task that declares a `spec` closes by producing or updating that spec's `<spec>.conformance.md` with [`spec-conformance`](../../.agents/skills/spec-conformance/SKILL.md), over the scenarios its `scenarios` field claims. **Deferring is legal, and for a forward spec it is the only honest answer**: a contract written before its implementation has nothing to audit yet, so a scenario nothing has built is recorded as not-built with what is owed, and a spec with no implementation at all keeps its matrix owed, said plainly in the task rather than invented. A matrix written to satisfy this step is worse than no matrix. `cloud-executable` is the incident: approved 2026-08-07, with `feat-0045` and `feat-0046` both closed against it, it reached 2026-08-19 as the only approved spec of eleven with no matrix at all, having passed every stated obligation at both closeouts because no stated obligation mentioned the contract.
 
 ## How the lens-shape rule came to be enforced
 
@@ -38,6 +38,17 @@ Which way that settles, reshaping the skill or rewording its declaration, is a c
 rather than to this file, and renaming its headings to clear the warning would be satisfying the
 validator instead of the rule.
 
+The paragraph that rule replaced in `AGENTS.md`, as it stood:
+
+**A skill's shape is declared in the skill and enforced by
+[`validate-skills.py`](../../scripts/validate-skills.py), not listed here.** A lens says so in its own
+body, in the form the bodies already use ("This skill is a lens", "This is a lens"), and the
+validator reads that declaration and warns when the headings underneath it are a workflow's. The
+declaration is what makes the check falsifiable: inferring the intended shape from the headings
+would make every skill conform by construction, and a check that cannot fail is unchecked. A list
+here would pass the day another lens is added and nobody edits it, which is the failure the
+universal-lens rule below was filed for.
+
 ## How the universal-lens rule came to be enforced
 
 The enforcement is new and the reason is worth keeping. This rule existed here in prose and nothing
@@ -47,6 +58,14 @@ a guarantee, and `autonomy.md` by five, for the twenty-one days since `A10`, the
 about material an agent did not author, was added to it. Every gate passed throughout, because the
 only lens rule in the validator asked whether **at least one** skill pointed at a module and one
 always did (`feat-0064`).
+
+The paragraph that rule replaced in `AGENTS.md`, as it stood:
+
+**Universality is declared in the lens and enforced by
+[`validate-skills.py`](../../scripts/validate-skills.py), not listed here.** A list in this file, or in
+that script, passes the day a fourth lens is added and nobody edits it, which is the failure
+`feat-0048` was filed for. A lens that wants the stronger rule says so in its opening; one that says
+nothing is topical and is still covered by the at-least-one rule.
 
 ## What the gates cannot see, by incident
 

@@ -6,7 +6,8 @@ description: >-
   a ROADMAP.md, a CHANGELOG.md, and Claude Code, Cursor, and Copilot pointers. Picks a lite,
   standard, or team tier so a small repo is not buried, seeds AGENTS.md from what the repo actually
   uses, and detects an existing tracker first. Use for "add work tracking here", "set up the task
-  system", "scaffold the backlog", or task files that parallel agents can pick up.
+  system", "scaffold the backlog". Feeds new-task and fix-batch: one task file per worktree-isolated
+  agent.
 license: MIT
 ---
 

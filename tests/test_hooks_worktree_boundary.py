@@ -117,6 +117,17 @@ class StaysQuietTests(_Layout):
         scratch = (Path(tempfile.gettempdir()) / "scratch.txt").as_posix()
         self.assertSilent(self.payload(f"echo x > {scratch}"))
 
+    def test_a_url_is_not_read_as_a_path(self):
+        # Found by independent verification: `https://` matched the drive-letter branch as
+        # `s:/`, so a download into the worktree named a path that does not exist.
+        self.assertSilent(self.payload("curl https://example.com/a/b > out.txt"))
+        self.assertSilent(self.payload("git clone git@github.com:org/repo.git > log.txt"))
+
+    def test_a_relative_escape_is_out_of_scope(self):
+        # The stated bound, pinned so nobody reads the silence as coverage: only absolute
+        # paths are resolved, so `../` out of the worktree is not caught.
+        self.assertSilent(self.payload("cp a ../../../README.md"))
+
     def test_a_non_shell_tool_is_silent(self):
         self.assertSilent(self.payload(f"cp a {self.outside()}", tool="Write"))
 

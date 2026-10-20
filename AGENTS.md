@@ -54,7 +54,7 @@ Task lifecycle `open -> in_progress -> done`. On completion: confirm the accepta
 
 **A spec is earned, not a default.** The spec chain (`spec-author` through `spec-conformance`) is for behaviour a person must agree before it is built. A task that changes no behavioural contract declares no `spec` and closes with the steps above minus the conformance one. The sizing rule adopters get is in the README under "Choosing a path".
 
-Why the re-anchoring, `doc-sync`, and conformance steps are in that list, each with the incident that put it there, is in the [rationale](docs/rationale/agents-md.md). On the conformance step: a task that declares a `spec` closes by producing or updating that spec's `<spec>.conformance.md` with [`spec-conformance`](.agents/skills/spec-conformance/SKILL.md), over the scenarios its `scenarios` field claims. **Deferring is legal, and for a forward spec it is the only honest answer**: a scenario nothing has built is recorded as not-built with what is owed, said plainly in the task rather than invented. A matrix written to satisfy this step is worse than no matrix.
+Why the re-anchoring, `doc-sync`, and conformance steps are in that list, each with the incident that put it there, is in the [rationale](docs/rationale/agents-md.md). On the conformance step: a task that declares a `spec` closes by producing or updating that spec's `<spec>.conformance.md` with [`spec-conformance`](.agents/skills/spec-conformance/SKILL.md), over the scenarios its `scenarios` field claims. **Deferring is legal, and for a forward spec it is the only honest answer**: a scenario nothing has built is recorded as not-built with what is owed, and a spec with no implementation at all keeps its matrix owed, said plainly in the task rather than invented. A matrix written to satisfy this step is worse than no matrix.
 
 ## 4. How a skill is structured
 
@@ -76,7 +76,7 @@ neither should be retrofitted onto the other.
   into another skill rather than run on their own. Giving a lens a step-by-step procedure invites an
   agent to run it standalone, which is the one thing it is not for.
 
-**A skill's shape is declared in the skill and enforced by [`validate-skills.py`](scripts/validate-skills.py), not listed here.** A lens says so in its own body ("This skill is a lens"), and the validator warns when the headings under that declaration are a workflow's. Inferring the shape from the headings instead would make every skill conform by construction.
+**A skill's shape is declared in the skill and enforced by [`validate-skills.py`](scripts/validate-skills.py), not listed here.** A lens says so in its own body ("This skill is a lens" or "This is a lens"), and the validator warns when the headings under that declaration are a workflow's. Inferring the shape from the headings instead would make every skill conform by construction.
 
 The history of this rule, including the `test-quality` warning it leaves standing on purpose, is in the [rationale](docs/rationale/agents-md.md).
 
@@ -163,9 +163,7 @@ The reason is mechanical: the `main protection` ruleset demands an extra approvi
 
 ### Provenance for material folded in from elsewhere
 
-Prose credit alone decays into folklore, so any file or region adapted from an external source carries a **provenance block** (the incident that taught this is in the [rationale](docs/rationale/agents-md.md)).
-
-So any file or region adapted from an external source carries a **provenance block**, and [`scripts/check-provenance.py`](scripts/check-provenance.py) re-fetches every recorded source and reports drift.
+Prose credit alone decays into folklore (the incident that taught this is in the [rationale](docs/rationale/agents-md.md)), so any file or region adapted from an external source carries a **provenance block**, and [`scripts/check-provenance.py`](scripts/check-provenance.py) re-fetches every recorded source and reports drift.
 
 | Field | Required | Content |
 |---|---|---|

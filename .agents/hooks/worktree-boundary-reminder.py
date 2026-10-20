@@ -63,8 +63,10 @@ WRITE_VERB_RE = re.compile(
 REDIRECT_RE = re.compile(r"(?<![<>&\d])>>?(?!&)")
 
 # Absolute path tokens in three spellings: Windows (`C:\x` or `C:/x`), POSIX (`/x/y`), and
-# home-relative (`~/x`). Quotes and shell punctuation end a token.
-PATH_RE = re.compile(r"""(?:[A-Za-z]:[\\/]|~[\\/]|(?<![\w.~])/)[^\s"'`|;&<>()]*""")
+# home-relative (`~/x`). Quotes and shell punctuation end a token. The lookbehinds keep a URL
+# out: without them the `s:/` in `https://` reads as a drive and `//host/path` as a root path.
+PATH_RE = re.compile(
+    r"""(?:(?<![A-Za-z])[A-Za-z]:[\\/]|~[\\/]|(?<![\w.~:/])/)[^\s"'`|;&<>()]*""")
 
 REMINDER = (
     "WORKTREE BOUNDARY: this session is in the linked worktree {root}, and the shell command "

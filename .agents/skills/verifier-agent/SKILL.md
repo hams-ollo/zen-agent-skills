@@ -5,9 +5,9 @@ description: >-
   criteria before it is reconciled or landed. Runs the declared commands and records each exact
   outcome, composes spec-conformance so a contract divergence fails the run even when every command
   passes, maps each criterion to met or unmet with named evidence, and returns pass, fail, or
-  blocked. Returns blocked rather than guessing when the spec is unapproved or no command is
-  declared. Use for "verify this", "is this really done", or before landing delegated work. Verifies
-  and reports; never edits what it verifies.
+  blocked, never guessing when the spec is unapproved or no command is declared. Use when work is
+  about to land or a delegated agent reports success. Distinct from test-author (writes tests),
+  house-review (judges quality), and fix-batch (dispatches the work).
 license: MIT
 ---
 

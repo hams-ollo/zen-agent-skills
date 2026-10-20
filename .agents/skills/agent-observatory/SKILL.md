@@ -5,8 +5,9 @@ description: >-
   observatory store: which sessions exist and are running, what each cost, which skills were used,
   and what failed. Where the harness allows, it can rename a session or message another one; it
   never starts, resumes, interrupts, or ends one. Use for "what sessions do I have running", "which
-  agent is still working", "find the session that did X", "what did that wave cost", or any question
-  spanning more than one session.
+  agent is still working", "find the session that did X", "rename that session", "tell the other
+  session about this", "what did that wave cost". Distinct from the observatory's own page, which
+  reports and offers no action.
 license: MIT
 metadata:
   status: draft
