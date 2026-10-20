@@ -747,7 +747,7 @@ finding here.
 | 8 | done, with tests |
 | 9 | not done: proposal |
 | 10 | not done: retiring a skill stays a proposal; `review-depth` gained a mapping onto `/code-review` levels |
-| 11 | done: seventeen descriptions cut to 508 to 623 characters; "a little pushy" removed from `AGENTS.md` |
+| 11 | done: seventeen descriptions cut to 508 to 639 characters, with their "distinct from" pointers kept; "a little pushy" removed from `AGENTS.md` |
 | 12 | done: README "Choosing a path", the shipped `AGENTS.md` template, and a pointer from the getting-started guide |
 | 13 | done as a validator rule rather than a hook, because a hook would impose this kit's house style on every repository |
 | 14 | done: `worktree-boundary-reminder.py`, wired for Claude Code, Codex, and opencode |
