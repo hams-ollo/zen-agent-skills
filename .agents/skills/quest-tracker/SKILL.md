@@ -28,8 +28,8 @@ session log with screenshots, a quest chain, a burndown, and a People panel. Eve
 drawn from **one data block** at the top of the page's script, and everything people do on it is
 saved in the page's own database, live, for everyone who can open it.
 
-This skill does three things with that page: start one for a project, work a session against one,
-and let agent sessions report into one without ever marking their own work done.
+This skill starts a tracker for a project, works a session against one, and lets agent sessions
+report into one without ever marking their own work done.
 
 **This skill is a draft.** `install.py` places it under no profile until it has been used on real
 work and blessed, per the contribution bar in the target repository's `AGENTS.md`. The tracker
