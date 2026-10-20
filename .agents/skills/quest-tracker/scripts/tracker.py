@@ -16,17 +16,23 @@ that field names the code below the block, never the project.
 `dataIssues` (run under Node.js, read from the bundled template so an older page is checked by the
 current rules), plus what only a comparison with the template can show: a `storageKey` or a title
 still the template's, a `templateVersion` that does not name the code, and code edited below the
-end marker.
+end marker. **The data block is JavaScript, and checking it runs it.** A page saved from a published
+tracker may have been written by someone else, so the block runs in an empty `vm` context (no
+`require`, no `process`, no `eval`), inside a Node.js started with its permission model on, so file
+writes and child processes are refused even if the context were escaped. A Node.js without a
+permission model is reported as could-not-check, never run without one.
 
 `claim` runs the command that checks a step, and builds the claim document from what it printed:
 the command exactly as given, the verbatim tail of its output ending with the exit status, and the
-time read from this machine's clock in UTC. It refuses when the command fails, because a claim says
-the check passed, and when any field looks like a secret, because the page would hide it anyway.
+time read from this machine's clock in UTC. It checks its own arguments before running anything,
+refuses when the command fails, because a claim says the check passed, and refuses when any field
+looks like a secret, because the page would hide it anyway.
 
 Standard library only, so it runs on a bare Python 3 wherever the skill is installed. Node.js is
 needed by `check` alone, and its absence is reported rather than passed over.
 
-Exit status: 0 done or clean, 1 refused or issues found, 2 could not run.
+Exit status: 0 done or clean; 1 issues found, or a claim refused; 2 could not run, which includes an
+input it will not work on (an `--out` that already exists, a missing title, a malformed page).
 """
 
 from __future__ import annotations
@@ -174,19 +180,56 @@ def function_source(code: str, name: str) -> str:
         i += 1
 
 
+# Runs what arrives on stdin in an empty context: a null-prototype global, so nothing reaches back
+# to `require` or `process`, with `eval` and `new Function` switched off and a time limit. Its one
+# output is the JSON of the program's last expression. The program travels on stdin, not on the
+# command line, because Windows caps a command line at 32,767 characters and a season's block
+# passes that.
+SANDBOX = (
+    'let src = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (d) => { src += d; });'
+    ' process.stdin.on("end", () => { const vm = require("vm");'
+    ' const box = vm.createContext(Object.create(null), {codeGeneration: {strings: false, wasm: false}});'
+    ' process.stdout.write(JSON.stringify(vm.runInContext(src, box, {timeout: 5000}))); });'
+)
+NO_NODE = "Open the published page and read its \"Data block check\" box before handing it over."
+
+
+def permission_flag(node: str) -> str:
+    """Node.js's flag for its permission model: `--permission` from 22.13, earlier experimental."""
+    for flag in ("--permission", "--experimental-permission"):
+        try:
+            probe = subprocess.run([node, flag, "-e", "0"], capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            return flag
+    raise Unusable("this Node.js has no permission model, and the data block is not run without "
+                   "one. " + NO_NODE)
+
+
 def evaluate(block: str, checker: str) -> dict:
     node = shutil.which("node")
     if not node:
-        raise Unusable("no `node` on PATH, so the data block cannot be checked here. Open the "
-                       "published page and read its \"Data block check\" box before handing it over.")
-    program = (block + "\n" + checker + "\nprocess.stdout.write(JSON.stringify({issues: dataIssues(TRACKER), "
-               "storageKey: TRACKER.storageKey || null}));\n")
-    run = subprocess.run([node, "-e", program], capture_output=True, text=True, encoding="utf-8")
+        raise Unusable("no `node` on PATH, so the data block cannot be checked here. " + NO_NODE)
+    program = (block + "\n" + checker
+               + "\n({issues: dataIssues(TRACKER), storageKey: TRACKER.storageKey || null});\n")
+    try:
+        run = subprocess.run([node, permission_flag(node), "-e", SANDBOX], input=program,
+                             capture_output=True, text=True, encoding="utf-8", timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Unusable(f"Node.js did not finish checking the data block: {exc}") from None
     if run.returncode != 0:
         err = (run.stderr.strip().splitlines() or ["(no message)"])
         raise Unusable("the data block does not run as JavaScript: " + next(
             (line for line in err if "Error" in line), err[-1]))
-    return json.loads(run.stdout)
+    try:
+        result = json.loads(run.stdout)
+    except ValueError:
+        result = None
+    if not (isinstance(result, dict) and isinstance(result.get("issues"), list)
+            and all(isinstance(i, str) for i in result["issues"])):
+        raise Unusable("checking the data block gave no list of issues back, so it was not checked")
+    return result
 
 
 def cmd_check(args) -> int:
@@ -202,7 +245,9 @@ def cmd_check(args) -> int:
     if not title or not title.group(1).strip() or title.group(1) == t_title.group(1):
         issues.append("The page's <title> is missing or still the template's: name the tracker.")
     same_code = outside_block(page) == outside_block(template)
-    if version == t_version and not same_code:
+    if not version:
+        pass   # `dataIssues` has said so already, and there is no version to compare
+    elif version == t_version and not same_code:
         issues.append(f"The page says template {version} but its code differs from that template's "
                       f"outside the data block: something below the end marker was edited.")
     elif version != t_version and same_code:
@@ -235,8 +280,17 @@ def parse_lines(text: str) -> list[int]:
     return lines
 
 
+STEP_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")   # the page's own id rule, in `dataIssues`
+
+
 def cmd_claim(args) -> int:
+    # Every argument is checked before the command runs, so a mistake here never leaves the
+    # command's side effects behind with no claim to show for them.
     lines = parse_lines(args.lines)
+    if not STEP_ID_RE.match(args.step):
+        raise Unusable(f"--step {args.step!r} is not a step id: letters, digits, - or _")
+    if not args.agent.strip():
+        raise Unusable("--agent is empty: a claim names the session that makes it")
     if args.tail < 1:
         raise Unusable("--tail keeps at least one line of output")
     if not args.command.strip():
@@ -255,9 +309,7 @@ def cmd_claim(args) -> int:
         return 1
     document = {"agent": args.agent.strip(), "at": utc_now(), "lines": lines,
                 "command": args.command, "result": result, "note": args.note}
-    if not document["agent"]:
-        raise Unusable("--agent is empty: a claim names the session that makes it")
-    hits = [k for k in ("agent", "command", "result", "note") if looks_secret(document[k])]
+    hits =[k for k in ("agent", "command", "result", "note") if looks_secret(document[k])]
     if hits:
         print(f"refused: the claim's {', '.join(hits)} looks like it holds a password, code or key, "
               f"and the page would hide it. Trim the output with --tail or rephrase, then run again.")

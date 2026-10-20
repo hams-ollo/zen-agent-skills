@@ -727,6 +727,9 @@ const facts = {};    // factId -> {value, by, at, step, agent}
 let logs = [];       // [{id, step, text, asset, at, by, agent}]
 const claims = {};   // stepId -> {agent, at, lines, command, result, note}, written by Claude sessions, never by this page
 let db = null, user = null, assets = null, canWrite = false, canEdit = false, myId = null;
+// Whether the saved ticks and claims have arrived from the database, not from a cache: the waiting strip says
+// nothing until both have, because what waits is worked out from them.
+const live = { checks: false, claims: false };
 let owner = "all", hideDone = false, open = new Set();
 const writeQueue = {};
 const pendingImg = {};
@@ -783,7 +786,9 @@ function looksSecret(text) {
 // A session writes claims and notes straight to the database, past the checks this page runs on save,
 // so the same net is applied when they are shown: anything that looks like a secret is hidden, not shown.
 const SECRET_HIDDEN = "[hidden here: it looks like it holds a password, code or key. Ask the session to write it again without it.]";
-const claimLooksSecret = (cl) => !!cl && looksSecret([cl.agent, cl.command, cl.result, cl.note].map((x) => String(x || "")).join("\n"));
+// Field by field, as the skill's script checks a claim before it is written: joined, a word at the end of one
+// field and a colon at the start of the next would read as a secret that neither field holds.
+const claimLooksSecret = (cl) => !!cl && [cl.agent, cl.command, cl.result, cl.note].some((x) => looksSecret(String(x || "")));
 // A fact a session wrote went past `saveFact`'s check too, so its value is shown only if it passes the same net.
 const factHidden = (v) => !!(v && v.agent && looksSecret(String(v.value || "")));
 
@@ -1116,11 +1121,12 @@ function toggleDone(id) {
 
 // Verify and tick: an Editor checked the claim and ticks the step. The claim's lines are ticked with it,
 // `verifiedClaim` records which claim this tick checked, and `evidence` what that claim gave to check it against.
-// The person ticking is never the claiming session.
+// The person ticking is never the claiming session. A claim the page hides cannot be checked against what it says,
+// so it can only be sent back.
 function verifyClaim(id) {
   if (!db || !canWrite || !canEdit) return;
   const s = STEP_BY_ID.get(id); const cl = claims[id];
-  if (!s || !claimPending(checks[id], cl)) return;
+  if (!s || !claimPending(checks[id], cl) || claimLooksSecret(cl)) return;
   const subs = (checks[id] && Array.isArray(checks[id].subs)) ? checks[id].subs.slice() : [];
   while (subs.length < (s.steps || []).length) subs.push(false);
   claimLines(s, cl).forEach((i) => { subs[i] = true; });
@@ -1331,7 +1337,10 @@ function renderClaim(box, s, st, cl, pend, nameOf, writable) {
   }
   if (s.check) { const c = el("span", "cmeta"); c.append(el("b", null, "What closes it: "), rich(s.check)); box.append(c); }
   const row = el("div", "row");
-  if (writable && canEdit) {
+  if (writable && canEdit && claimLooksSecret(cl)) {
+    const b = el("button", "attach", "Send back"); b.type = "button"; b.addEventListener("click", () => sendBack(s.id));
+    row.append(b, el("span", "hint", "This claim is hidden, so there is nothing here to check it against. Send it back and ask the session to claim again without it."));
+  } else if (writable && canEdit) {
     const v = el("button", "savebtn", "Verify and tick"); v.type = "button"; v.addEventListener("click", () => verifyClaim(s.id));
     const b = el("button", "attach", "Send back"); b.type = "button"; b.addEventListener("click", () => sendBack(s.id));
     row.append(v, b, el("span", "hint", "Check it yourself before you tick. When you send it back, log a note saying what is missing."));
@@ -1355,10 +1364,11 @@ function questStates() {
 }
 
 // Waiting on you, at the top of the page: claims ready for a person's check, and stops the work has reached.
-// Shown only when something waits, so it never reads "nothing waits" before the saved progress has loaded.
+// Shown only once the saved ticks and claims have loaded, and only when something waits, so it never lists a
+// settled claim or a stop worked out against ticks it has not seen, and never reads "nothing waits".
 function renderWaiting(ready, stops) {
   const box = $("#waiting"); box.textContent = "";
-  box.hidden = !ready.length && !stops.length;
+  box.hidden = !live.checks || !live.claims || (!ready.length && !stops.length);
   if (box.hidden) return;
   box.append(el("h2", null, "Waiting on you"));
   const ul = el("ul");
@@ -1493,9 +1503,10 @@ async function render() {
       const btn = li.querySelector(".tick");
       btn.setAttribute("aria-pressed", st.done ? "true" : "false");
       btn.setAttribute("aria-label", (pend ? "Verify the claim and tick: " : "Mark done: ") + s.t);
-      // A claimed step is ticked only by verifying the claim, which is an Editor's control.
-      btn.disabled = !writable || (pend && !canEdit);
-      btn.title = pend && !canEdit ? "An Editor checks this claim and ticks it." : "";
+      // A claimed step is ticked only by verifying the claim, which is an Editor's control, and a hidden claim not at all.
+      const hiddenClaim = pend && claimLooksSecret(cl);
+      btn.disabled = !writable || (pend && !canEdit) || hiddenClaim;
+      btn.title = hiddenClaim ? "This claim is hidden: send it back from the step." : pend && !canEdit ? "An Editor checks this claim and ticks it." : "";
       li.querySelector('[data-role="claimtag"]').hidden = !pend;
       const stamp = li.querySelector('[data-role="stamp"]');
       stamp.classList.toggle("claim", pend);
@@ -1716,6 +1727,7 @@ render();
   db.collection("checks").onSnapshot((snap) => {
     snap.docs.forEach((doc) => { if (doc.exists) checks[doc.id] = doc.data(); });
     snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete checks[ch.doc.id]; });
+    if (!snap.metadata.fromCache) live.checks = true;
     setConn(true, snap.metadata.fromCache ? "Loading saved progress…" : "Live: ticks, facts and notes are shared");
     if (first && !snap.metadata.fromCache) {
       first = false; liveSince = Date.now() + 2000;
@@ -1736,7 +1748,8 @@ render();
   db.collection("claims").onSnapshot((snap) => {
     snap.docs.forEach((doc) => { if (doc.exists) claims[doc.id] = doc.data(); });
     snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete claims[ch.doc.id]; });
+    if (!snap.metadata.fromCache) live.claims = true;
     render();
-  }, () => {});
+  }, () => { live.claims = true; render(); });  // with no claims to read, the strip still shows the stops
 })();
 </script>

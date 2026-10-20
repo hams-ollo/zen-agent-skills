@@ -89,6 +89,10 @@ the diff from #90 reads on its own.
 - `check` reads `dataIssues` from the bundled template rather than from the page it checks, so an
   older tracker is checked by the current rules, and reports a missing `node` as could-not-check
   (exit 2), never as clean.
+- The data block is JavaScript, so checking it runs it. `check` passes it on stdin to a Node.js
+  started with its permission model, which runs it in a `vm` context with a null-prototype global
+  and code generation from strings switched off: no `require`, no `process`, no `eval`, and no file
+  write even if the context were escaped. A Node.js with no permission model is could-not-check.
 
 ## Decisions
 
@@ -117,6 +121,22 @@ the diff from #90 reads on its own.
   refuses a failed command, because a claim says the check passed; the data check now reports a
   missing `phases` list and a quest with no `ids`; and `[hidden]` now hides whatever `display` a
   class sets, which #90 recorded as a pre-existing reliance on the host's own reset.
+- **Premises that turned out false, found by independent verification of `afe6a37`** (verdict fail,
+  every point reproduced before it was fixed):
+  - `check` passed the block to Node on the command line, which Windows caps at 32,767 characters,
+    so a season of about 35 steps crashed with exit 1; it now goes on stdin.
+  - `check` ran a block saved from someone else's page with all of Node.js, so a block could write
+    files and still be reported ready to publish; it now runs sandboxed, as the notes above say.
+  - The page joined a claim's fields before its secret test while the script tested each field, so
+    the page hid claims the script accepted; both now test field by field.
+  - A claim the page hid could still be verified, and its tick read "checked by a command" over a
+    command nobody was shown; a hidden claim can now only be sent back.
+  - The waiting strip was drawn before the saved ticks arrived, listing a claim already verified;
+    it now waits for the first ticks and claims that come from the database rather than a cache.
+  - `claim` ran the command before checking `--agent`, and took any `--step`; every argument is
+    now checked first, the step against the page's own id rule. The acceptance criterion claiming
+    every refusal and could-not-run path was exercised was not true then; the paths it missed are
+    now tested.
 - **A seam left open deliberately:** nothing on the host stops a session writing `checks`, because
   the database tool writes as the person, so that rule is held by the skill rather than the page.
 
