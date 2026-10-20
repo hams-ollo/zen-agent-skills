@@ -442,6 +442,20 @@ html[data-skin="zen"] .tone-plain { --tone: var(--muted); }
 .agent { font-weight: 600; color: var(--ink); }
 footer .tver { display: block; margin-top: 4px; font-family: var(--mono); font-size: 11.5px; }
 html[data-skin="zen"] .claimbox .clabel, html[data-skin="quest"] .claimbox .clabel { font-family: var(--label); }
+
+/* Waiting on you: claims ready for a check and stops the work has reached, at the top of the page */
+.waiting { border: 1px solid color-mix(in srgb, var(--gate) 55%, transparent); background: var(--gate-soft); border-radius: var(--radius); padding: 10px 12px; margin-block: 4px 14px; font-size: 14px; }
+.waiting h2 { margin: 0 0 6px; font-size: 15px; color: var(--gate); }
+.waiting ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.waiting li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; }
+.waiting li > b { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--gate); min-width: 4.5em; }
+.waiting .wwho { color: var(--muted); font-size: 12.5px; }
+html[data-skin="zen"] .waiting li > b, html[data-skin="quest"] .waiting li > b { font-family: var(--label); }
+/* What a tick rests on: a command and its result, a claim without one, or a tick by hand */
+.stamp .ev { margin-left: 8px; font-family: var(--mono); font-size: 11px; border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.stamp .ev-hand, .stamp .ev-claim { color: var(--muted); border-style: dashed; }
+/* Hidden means hidden, whatever display a class sets, so the page does not rely on a host's own reset */
+[hidden] { display: none !important; }
 </style>
 
 <div class="wrap">
@@ -453,6 +467,7 @@ html[data-skin="zen"] .claimbox .clabel, html[data-skin="quest"] .claimbox .clab
     <div class="status"><span><span class="dot" id="conn-dot"></span><span id="conn-text">Connecting to saved progress…</span></span><span id="who"></span><span id="status-note"></span></div>
   </header>
 
+  <section class="waiting" id="waiting" aria-label="Waiting on you" hidden></section>
   <div class="rulestrip" id="rules" aria-label="Session rules"></div>
   <div id="datacheck"></div>
   <div id="banner"></div>
@@ -551,7 +566,7 @@ const LINK = {
 };
 
 const TRACKER = {
-  templateVersion: "1.1.0",               // the template this page's code came from; shown in the footer so trackers on older code are visible
+  templateVersion: "1.2.0",            // the template this page's code came from; shown in the footer so trackers on older code are visible
   storageKey: "quest-template",          // prefix for this viewer's remembered filters; one per project
   skin: "zen",                            // default look: "zen" (Zen Solutions), "quest" (Main Quest Zen) or "field" (light work sheet). Each viewer can switch.
   ranks: ["Novice", "Apprentice", "Journeyman", "Adept", "Expert", "Master", "Grandmaster"],  // one rank per 100 XP
@@ -678,7 +693,7 @@ const TRACKER = {
     { title: "How this page saves things",
       text: ["Ticks, facts and notes are saved for everyone who can open the page, live. Filters and open steps are remembered only in your own browser."],
       table: { head: ["Saved as", "One record per", "Holds"], rows: [
-        ["`checks`", "step (by step id)", "done, who, when, the line ticks as a list by position, and which claim a tick verified"],
+        ["`checks`", "step (by step id)", "done, who, when, the line ticks as a list by position, which claim a tick verified, and what the tick rests on: a command and its result, a claim without one, or a tick by hand"],
         ["`facts`", "fact (by fact id)", "the value, who, when, and the step it came from"],
         ["`log`", "note", "the step id, the text, a screenshot id if any, who (or which Claude session), when"],
         ["`claims`", "step (by step id)", "a Claude session's report that the step is done: the session, when, the lines, the command it ran and its result, a note"],
@@ -707,7 +722,7 @@ const ROUTE = QUESTS.length
   : STEP_INDEX.filter((s) => !s.optional);
 const ROUTE_IDS = new Set(ROUTE.map((s) => s.id));
 
-const checks = {};   // stepId -> {done, by, at, note, subs, verifiedClaim, settledClaim, declinedClaim, declinedBy, declinedAt}
+const checks = {};   // stepId -> {done, by, at, note, subs, evidence, verifiedClaim, settledClaim, declinedClaim, declinedBy, declinedAt}
 const facts = {};    // factId -> {value, by, at, step, agent}
 let logs = [];       // [{id, step, text, asset, at, by, agent}]
 const claims = {};   // stepId -> {agent, at, lines, command, result, note}, written by Claude sessions, never by this page
@@ -809,27 +824,65 @@ function listLines(idx) {
   return nums.length < 2 ? nums.join("") : nums.slice(0, -1).join(", ") + " and " + nums[nums.length - 1];
 }
 
-// Author-facing check of the data block: shown only when something is off.
-function checkData() {
+// What a tick rests on, so a reader can tell a checked command from someone's word. Verify and tick saves
+// "command" when the claim it verified carried a command and that command's result, and "claim" when it did not;
+// a tick by hand saves "hand", because nothing on the page records how it was checked. Ticks saved before
+// `evidence` existed (template 1.1.0) are read from `verifiedClaim`, and from the claim while it is still that one.
+const EVIDENCE = { command: "checked by a command", claim: "claimed, no command on record", hand: "ticked by hand, no command on record" };
+function tickEvidence(st, cl) {
+  if (!st || !st.done) return "";
+  if (st.evidence === "command" || st.evidence === "claim" || st.evidence === "hand") return st.evidence;
+  if (!st.verifiedClaim) return "hand";
+  return cl && cl.at === st.verifiedClaim && cl.command && cl.result ? "command" : "claim";
+}
+
+// A stop the work has reached waits on the person named in it. Each run is a list of steps in order, and a stop is
+// reached when it is the first open step of its run: everything before it is ticked. Optional steps are passed over.
+function stopsReached(runs, done) {
+  const out = [];
+  runs.forEach((steps) => {
+    const first = steps.find((s) => !s.optional && !done(s));
+    if (first && first.gate && !out.includes(first)) out.push(first);
+  });
+  return out;
+}
+
+// Author-facing check of the data block, as a list of what to fix. The page shows it under its header, and the
+// skill's script runs this same function before a tracker is published, so it reads only the block it is given.
+function dataIssues(T) {
   const issues = [];
   const idRe = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  const people = T.people || {};
   const seen = new Set(), seenF = new Set(), seenP = new Set();
-  PHASES.forEach((p) => {
+  if (!Array.isArray(T.phases)) issues.push("The data block has no `phases` list.");
+  const steps = [];
+  (Array.isArray(T.phases) ? T.phases : []).forEach((p) => {
     if (!p.id || !idRe.test(p.id)) issues.push("Phase “" + p.title + "” needs an id of letters, digits, - or _.");
     if (seenP.has(p.id)) issues.push("Phase id `" + p.id + "` is used twice."); seenP.add(p.id);
     if (!(p.steps || []).length) issues.push("Phase `" + p.id + "` has no steps.");
+    (p.steps || []).forEach((s) => steps.push(s));
   });
-  STEP_INDEX.forEach((s) => {
+  steps.forEach((s) => {
+    const who = s.who || [];
     if (!s.id || !idRe.test(s.id)) issues.push("Step “" + s.t + "” needs an id of letters, digits, - or _.");
     if (seen.has(s.id)) issues.push("Step id `" + s.id + "` is used twice: their ticks would mix."); seen.add(s.id);
     if (!s.t) issues.push("Step `" + s.id + "` has no title (`t`).");
-    if (!s.who.length) issues.push("Step `" + s.id + "` names nobody in `who`.");
-    s.who.forEach((w) => { if (!PEOPLE[w]) issues.push("Step `" + s.id + "` names `" + w + "`, who is not in `people`."); });
+    if (!who.length) issues.push("Step `" + s.id + "` names nobody in `who`.");
+    who.forEach((w) => { if (!people[w]) issues.push("Step `" + s.id + "` names `" + w + "`, who is not in `people`."); });
     if (!s.optional && !s.why && !s.check) issues.push("Step `" + s.id + "` says neither why it matters (`why`) nor what closes it (`check`).");
     (s.facts || []).forEach((f) => { if (!f.id || !idRe.test(f.id)) issues.push("A fact in `" + s.id + "` needs an id."); if (seenF.has(f.id)) issues.push("Fact id `" + f.id + "` is used twice."); seenF.add(f.id); });
   });
-  QUESTS.forEach((q) => (q.ids || []).forEach((id) => { if (!STEP_BY_ID.has(id)) issues.push("Quest “" + q.title + "” lists `" + id + "`, which is not a step."); }));
-  if (!TRACKER.templateVersion) issues.push("The data block has no `templateVersion`. Copy it back from the template this page's code came from.");
+  (T.quests || []).forEach((q) => {
+    if (!Array.isArray(q.ids)) { issues.push("Quest “" + q.title + "” has no list of step ids (`ids`)."); return; }
+    q.ids.forEach((id) => { if (!seen.has(id)) issues.push("Quest “" + q.title + "” lists `" + id + "`, which is not a step."); });
+  });
+  if (!T.templateVersion) issues.push("The data block has no `templateVersion`. Copy it back from the template this page's code came from.");
+  return issues;
+}
+
+// Shown only when something is off.
+function checkData() {
+  const issues = dataIssues(TRACKER);
   const box = $("#datacheck"); box.textContent = "";
   if (!issues.length) return;
   const d = el("details", "datacheck"); d.open = true;
@@ -1053,7 +1106,7 @@ function toggleDone(id) {
   if (isClaimed(STEP_BY_ID.get(id))) { verifyClaim(id); return; }
   const done = !(checks[id] && checks[id].done);
   if (done) { const s = STEP_BY_ID.get(id); burst($("#s-" + id + " .tick"), stepXP(s)); }
-  const patch = { done, by: done ? myId : null, at: new Date().toISOString() };
+  const patch = { done, by: done ? myId : null, at: new Date().toISOString(), evidence: done ? "hand" : null };
   if (checks[id] && checks[id].verifiedClaim) patch.verifiedClaim = null;  // a tick made by hand verified no claim
   // A claim on the step when it is ticked or unticked by hand is settled by that, so it does not come back.
   const cl = claims[id];
@@ -1062,7 +1115,8 @@ function toggleDone(id) {
 }
 
 // Verify and tick: an Editor checked the claim and ticks the step. The claim's lines are ticked with it,
-// and `verifiedClaim` records which claim this tick checked. The person ticking is never the claiming session.
+// `verifiedClaim` records which claim this tick checked, and `evidence` what that claim gave to check it against.
+// The person ticking is never the claiming session.
 function verifyClaim(id) {
   if (!db || !canWrite || !canEdit) return;
   const s = STEP_BY_ID.get(id); const cl = claims[id];
@@ -1071,7 +1125,8 @@ function verifyClaim(id) {
   while (subs.length < (s.steps || []).length) subs.push(false);
   claimLines(s, cl).forEach((i) => { subs[i] = true; });
   burst($("#s-" + id + " .tick"), stepXP(s));
-  writeCheck(id, { done: true, by: myId, at: new Date().toISOString(), verifiedClaim: cl.at, subs });
+  const evidence = cl.command && cl.result ? "command" : "claim";
+  writeCheck(id, { done: true, by: myId, at: new Date().toISOString(), verifiedClaim: cl.at, evidence, subs });
 }
 
 // Send back: the check did not pass. The step stays open and the session can claim it again once it is fixed.
@@ -1122,6 +1177,11 @@ function seasonMarkdown() {
   const day = (at) => { const d = new Date(at); return isNaN(d) ? "" : d.toISOString().slice(0, 10); };
   // A fence longer than any run of backticks inside, so pasted output cannot close it early.
   const fence = (text) => { const runs = String(text).match(/`+/g) || []; return "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1))); };
+  // A claim's command and its result, as two separate fenced blocks.
+  const evidenceOf = (cl) => {
+    if (cl.command) { const c = String(cl.command); out.push("", "Command:", "", fence(c), c, fence(c)); }
+    if (cl.result) { const r = String(cl.result); out.push("", "Result:", "", fence(r), r, fence(r)); }
+  };
   const pending = STEP_INDEX.filter(isClaimed).length;
   const out = ["# " + String(TRACKER.title || "Quest tracker").replace(/\*/g, "") + ": season log", "", "Copied " + day(Date.now()) + ". " + ROUTE.filter((s) => !isDone(s)).length + " of " + ROUTE.length + " route steps left to " + ((TRACKER.goal && TRACKER.goal.label) || "the goal") + "." + (pending ? " " + pending + (pending === 1 ? " claim waits" : " claims wait") + " for a check." : "") + (TRACKER.templateVersion ? " Template " + TRACKER.templateVersion + "." : ""), ""];
   PHASES.forEach((p, pi) => {
@@ -1131,9 +1191,10 @@ function seasonMarkdown() {
       const st = checks[s.id] || {};
       const cl = claims[s.id];
       const subs = Array.isArray(st.subs) ? st.subs.filter(Boolean).length : 0;
-      const fromClaim = st.done && st.verifiedClaim ? ", verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") + " made " + day(st.verifiedClaim) : "";
+      const verified = !!(st.done && st.verifiedClaim && cl && cl.at === st.verifiedClaim);
+      const fromClaim = st.done && st.verifiedClaim ? ", verified from a claim by " + (verified ? agentLabel(cl.agent) : "a Claude session") + " made " + day(st.verifiedClaim) : "";
       out.push("### " + s.t + " (`" + s.id + "`)", "");
-      out.push("- State: " + (st.done ? "done " + day(st.at) + fromClaim : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
+      out.push("- State: " + (st.done ? "done " + day(st.at) + ", " + EVIDENCE[tickEvidence(st, cl)] + fromClaim : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
       (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + (factHidden(v) ? SECRET_HIDDEN : v.value) + " (" + day(v.at) + (v.agent ? ", " + agentLabel(v.agent) : "") + ")"); });
       if (st.note) out.push("- Earlier note: " + st.note);
       logs.filter((l) => l.step === s.id).forEach((l) => out.push("- " + day(l.at) + (l.agent ? ", " + agentLabel(l.agent) : "") + ": " + (l.agent && looksSecret(l.text) ? SECRET_HIDDEN : (l.text || "").replace(/\n+/g, " ")) + (l.asset ? " [screenshot in the tracker]" : "")));
@@ -1141,9 +1202,8 @@ function seasonMarkdown() {
         const ln = claimLines(s, cl);
         const hide = claimLooksSecret(cl);
         out.push("- Ready for check: " + agentLabel(cl.agent) + " claimed it on " + day(cl.at) + (ln.length ? ", lines " + listLines(ln) : "") + "." + (hide ? " " + SECRET_HIDDEN : cl.note ? " Note: " + String(cl.note).replace(/\n+/g, " ") : ""));
-        if (!hide && cl.command) { const c = String(cl.command); out.push("", "Command:", "", fence(c), c, fence(c)); }
-        if (!hide && cl.result) { const r = String(cl.result); out.push("", "Result:", "", fence(r), r, fence(r)); }
-      }
+        if (!hide) evidenceOf(cl);
+      } else if (verified && !claimLooksSecret(cl)) evidenceOf(cl);  // what the tick was checked against, while it is on record
       out.push("");
     });
   });
@@ -1279,6 +1339,42 @@ function renderClaim(box, s, st, cl, pend, nameOf, writable) {
   box.append(row);
 }
 
+// The quest board's states, in order: a quest with every step ticked is done, one with `wait` waits on someone,
+// the first other quest is up next, and the rest come later.
+function questStates() {
+  let nextFound = false;
+  return QUESTS.map((q) => {
+    const steps = (q.ids || []).map((id) => STEP_BY_ID.get(id)).filter(Boolean);
+    const nDone = steps.filter(isDone).length;
+    let st = "later", label = "Later";
+    if (nDone === steps.length) { st = "done"; label = "Done"; }
+    else if (q.wait) { st = "wait"; label = q.wait; }
+    else if (!nextFound) { st = "next"; label = "Up next"; nextFound = true; }
+    return { q, steps, nDone, st, label };
+  });
+}
+
+// Waiting on you, at the top of the page: claims ready for a person's check, and stops the work has reached.
+// Shown only when something waits, so it never reads "nothing waits" before the saved progress has loaded.
+function renderWaiting(ready, stops) {
+  const box = $("#waiting"); box.textContent = "";
+  box.hidden = !ready.length && !stops.length;
+  if (box.hidden) return;
+  box.append(el("h2", null, "Waiting on you"));
+  const ul = el("ul");
+  ready.forEach((s) => {
+    const cl = claims[s.id]; const li = el("li");
+    li.append(el("b", null, "Check"), stepLink(s), el("span", "wwho", agentLabel(cl.agent) + " claimed it " + fmt(cl.at) + (canEdit ? "" : " · an Editor checks it")));
+    ul.append(li);
+  });
+  stops.forEach((s) => {
+    const li = el("li");
+    li.append(el("b", null, "Stop"), stepLink(s), el("span", "wwho", "waits on " + s.who.map(nameOfPerson).join(", ")));
+    ul.append(li);
+  });
+  box.append(ul);
+}
+
 /* ---- Burndown: steps left on the route, one point per day ---- */
 const DAY = 864e5;
 const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -1403,9 +1499,11 @@ async function render() {
       li.querySelector('[data-role="claimtag"]').hidden = !pend;
       const stamp = li.querySelector('[data-role="stamp"]');
       stamp.classList.toggle("claim", pend);
+      const ev = tickEvidence(st, cl);
       if (st.done) {
         const via = st.verifiedClaim ? " · verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") : "";
         stamp.textContent = "Done " + fmt(st.at) + (st.by ? " by " + nameOf(st.by) : "") + via;
+        stamp.append(el("span", "ev ev-" + ev, EVIDENCE[ev]));
       } else stamp.textContent = pend ? "Claimed by " + agentLabel(cl.agent) + ", " + fmt(cl.at) + " · ready for check" : "";
       renderClaim(li.querySelector('[data-role="claim"]'), s, st, cl, pend, nameOf, writable);
       const isOpen = open.has(s.id);
@@ -1466,7 +1564,7 @@ async function render() {
       // season map cell
       const c = $('#cells-' + p.id + ' [data-step="' + s.id + '"]');
       c.className = "cell" + (st.done ? " c-done" : pend ? " c-claim" : s.blocker ? " c-block" : s.gate ? " c-gate" : s.optional ? " c-opt" : "") + (ROUTE_IDS.has(s.id) ? " c-route" : "");
-      const state = st.done ? "done" : pend ? "ready for check, claimed by " + agentLabel(cl.agent) + (s.blocker ? " (a blocker)" : "") : s.blocker ? "blocker, open" : s.gate ? "stop, open" : s.optional ? "optional" : "to do";
+      const state = st.done ? "done, " + EVIDENCE[ev] : pend ? "ready for check, claimed by " + agentLabel(cl.agent) + (s.blocker ? " (a blocker)" : "") : s.blocker ? "blocker, open" : s.gate ? "stop, open" : s.optional ? "optional" : "to do";
       c.title = s.t + " · " + state + " · " + s.who.map(nameOfPerson).join(", ");
       c.setAttribute("aria-label", c.title);
     });
@@ -1480,14 +1578,8 @@ async function render() {
   // Quest board and route strip
   const ql = $("#quest-list"); ql.textContent = "";
   const route = $("#route"); route.textContent = "";
-  let nextFound = false;
-  QUESTS.forEach((q) => {
-    const steps = q.ids.map((id) => STEP_BY_ID.get(id)).filter(Boolean);
-    const nDone = steps.filter(isDone).length;
-    let st = "later", label = "Later";
-    if (nDone === steps.length) { st = "done"; label = "Done"; }
-    else if (q.wait) { st = "wait"; label = q.wait; }
-    else if (!nextFound) { st = "next"; label = "Up next"; nextFound = true; }
+  const states = questStates();
+  states.forEach(({ q, steps, nDone, st, label }) => {
     const rn = el("li"); rn.append(el("span", "node st-" + st, q.short || q.title)); route.append(rn);
     // `tone` names a color; `cls` (as in the NYFG run sheet) names a person and borrows their color
     const qTone = q.tone || (q.cls && PEOPLE[q.cls] && PEOPLE[q.cls].tone) || "plain";
@@ -1513,7 +1605,7 @@ async function render() {
     box.append(ol); ql.append(box);
   });
   // Quest complete: announce only changes made after the saved progress has loaded
-  const doneQuests = new Set(QUESTS.filter((q) => q.ids.every((id) => !STEP_BY_ID.get(id) || isDone(STEP_BY_ID.get(id)))).map((q) => q.title));
+  const doneQuests = new Set(states.filter((x) => x.st === "done").map((x) => x.q.title));
   if (liveSince && Date.now() > liveSince && questBaseline) doneQuests.forEach((t) => { if (!questBaseline.has(t)) toast("Quest complete: " + t); });
   questBaseline = doneQuests;
 
@@ -1533,6 +1625,9 @@ async function render() {
   if (blockers.length) gl.append(el("span", "gl-block", blockers.length + " blocker" + (blockers.length === 1 ? "" : "s") + " open: " + blockers.map((s) => s.short || s.t).join("; ")));
   const ready = STEP_INDEX.filter(isClaimed);
   if (ready.length) gl.append(el("span", "gl-claim", ready.length + (ready.length === 1 ? " claim waits" : " claims wait") + " for a check: " + ready.map((s) => s.short || s.t).join("; ")));
+  // The runs under way: the quests up next or waiting on someone, or the whole route when there are no quests.
+  const runs = QUESTS.length ? states.filter((x) => x.st === "next" || x.st === "wait").map((x) => x.steps) : [ROUTE];
+  renderWaiting(ready, stopsReached(runs, isDone).filter((s) => !isClaimed(s)));
 
   // Next up
   const nx = $("#next"); nx.textContent = "";
