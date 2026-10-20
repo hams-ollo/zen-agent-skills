@@ -1,23 +1,23 @@
 # Quest tracker: authoring guide
 
-How to start and run a development season from the quest tracker template. The template is a private Claude artifact: [Quest tracker template](https://claude.ai/artifact/2CXWWBAuu9RfieCVn156LA). The first full season run on this pattern is the [NYFG launch run sheet](https://claude.ai/artifact/7feLZSDFECEty9PSDNHfbh) (October 2026).
+How to start and run a development season from the quest tracker template. The canonical copy of the template is [`quest-tracker.html`](../templates/quest-tracker.html), beside this guide in the `quest-tracker` skill; the author also keeps it published as a private Claude artifact, [Quest tracker template](https://claude.ai/artifact/2CXWWBAuu9RfieCVn156LA), which may lag the canonical copy. The first full season run on this pattern is the [NYFG launch run sheet](https://claude.ai/artifact/7feLZSDFECEty9PSDNHfbh) (October 2026).
 
 ## What the template is
 
 One page that holds a whole season of work: phases of steps, each step opening into its lines to tick, a check, a stop, facts to write down, links, and a session log with screenshots. Everything on the page is drawn from **one data block** at the top of the page's script, between the `DATA BLOCK` and `END OF DATA BLOCK` markers. Edit that block and the rest follows:
 
-- the quest board (who does what, in order), the route strip and the "steps left to <goal>" counter
+- the quest board (who does what, in order), the route strip and the "steps left to" counter, which names the goal
 - open blocker tags and the "Stop and check in" stripes
 - the season map, the burndown of steps left, the People panel, Next up and Recent activity
 - the owner filter chips, the facts table and the reference sections
 
-Ticks, facts and notes are saved live in the artifact's shared database and seen by everyone who can open the page. Filters and which steps are open are remembered only in each viewer's own browser.
+Ticks, claims, facts and notes are saved live in the artifact's shared database and seen by everyone who can open the page. Filters and which steps are open are remembered only in each viewer's own browser.
 
 ## Start a new project's tracker
 
-1. Ask Claude: "start a quest tracker for <project> from the template", and give it the template link above plus whatever you already know (the goal, the people, the first phases).
-2. Claude reads the template with the Artifact tool, writes the new project into the data block, and publishes it as a **new** private artifact with the capabilities `db`, `user` (scope `profile`) and `assets`. Never publish over the template itself: each project gets its own artifact and its own database.
-3. Claude sets a new `storageKey` (for example `ht-sourdough`), so remembered filters do not mix between trackers.
+1. Ask Claude: "start a quest tracker for the sourdough project", with whatever you already know (the goal, the people, the first phases). Claude takes the template from the `quest-tracker` skill.
+2. Claude writes the new project into the data block, sets the page's `<title>` to the tracker's name, and publishes it as a **new** private artifact with the capabilities `db`, `user` (scope `profile`) and `assets`. Never publish over the template itself: each project gets its own artifact and its own database.
+3. Claude sets a new `storageKey` (for example `qt-sourdough`), so remembered filters do not mix between trackers, and leaves `templateVersion` as copied.
 4. Open the new link. The yellow "Data block check" box under the header lists anything malformed (duplicate ids, a quest naming a step that does not exist, a step with nobody in `who`). Nothing shows when the block is clean.
 5. Share it from the page's Share menu: Editor for anyone who ticks or attaches screenshots, Viewer for anyone who only reads.
 
@@ -28,6 +28,7 @@ Doing it by hand also works: copy the template's HTML, edit the data block, and 
 | Field | What it holds |
 |---|---|
 | `LINK` | Base addresses (repository, docs folder, help sites) so step links stay short. |
+| `templateVersion` | The template release the page's code came from, shown in the footer so a tracker on older code is easy to spot. Not project data: leave it as copied. It changes only when the code below the data block is replaced from a newer template. |
 | `storageKey` | Prefix for each viewer's remembered filters. One per project. |
 | `skin` | The default look: `zen`, `quest` or `field` (see "The three looks"). Each viewer can switch with the Look picker. |
 | `ranks` | Rank titles, one per 100 XP, for the game skins. |
@@ -68,8 +69,10 @@ The game skins show season XP and a rank in the Season map panel. XP rewards wri
 | ...that is a stop | +10 |
 | A fact recorded | 5 |
 | A note logged | 3, +2 with a screenshot |
+| A claim from a Claude session | 0, until someone verifies it and ticks the step |
+| A fact or a note a Claude session wrote | 0 |
 
-Every 100 XP is a rank, named from `ranks`. XP is drawn from the saved ticks, facts and notes, so it is the same for everyone and goes down if a step is unticked. It never changes what a tick means: tick only checked work.
+Every 100 XP is a rank, named from `ranks`. XP is drawn from the saved ticks, facts and notes, so it is the same for everyone and goes down if a step is unticked. It never changes what a tick means: tick only checked work. XP is for the people on the page, which is why what a Claude session writes earns none: an agent filing notes would otherwise outrun everyone and make the ranks mean nothing.
 
 ## The season log, for the docs
 
@@ -91,7 +94,7 @@ The Reference section has a **Copy the log as Markdown** button: every phase and
 Every step carries its own context, so anyone can pick it up on any day without a call: **what** to do, **why** it matters, and **what closes it**.
 
 ```js
-{ id: "p1-namecheap", t: "Lock the domain and turn on auto-renew", who: ["santosh"],
+{ id: "p1-namecheap", t: "Lock the domain and turn on auto-renew", who: ["partner"],
   why: "The lock stops anyone with the password moving the domain away.",
   steps: [
     "At the registrar: [[Domain List]], [[Manage]], turn on [[Domain Lock]].",
@@ -151,24 +154,57 @@ The step-level tick (done or not) is safe: it is keyed by the step's id, not by 
 
 A tick means the work is done **and** its `check` passed. Not started, half done, or "should be fine" stays unticked. A step can have every line ticked and still be open, because the step's own tick is the claim that it was checked. The burndown, the season map and the quest board all count only the step's own tick.
 
-## How ticks, facts and logs are stored
+## Agents claim, people tick
+
+A Claude session never ticks a step, not even one it finished. A tick written by the agent that did the work would be that agent checking itself, on a page people read as a record of checked work, and it would carry nothing anyone could check. So a session reports finished work as a **claim**, and a person checks it and ticks it.
+
+A claim is one document in the `claims` collection, named by the step's id:
+
+```js
+{ agent: "go-live-check",                    // the session's name, shown as "Claude (go-live-check)"
+  at: "2026-10-20T11:45:00Z",                // when it was claimed, ISO 8601 in UTC
+  lines: [0, 1],                             // the lines it says are done, counted from 0 like the line ticks
+  command: "python scripts/check_redirects.py --site https://example.com",   // exactly as typed
+  result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit 0",  // the verbatim tail of what it printed
+  note: "The test message is in the shared inbox, marked TEST." }
+```
+
+The command and its result are two fields, never one, and the result is what the command printed, never a summary of it. A claim with no command and no result says so on the page, because there is nothing to check it against.
+
+While a claim waits, the step is in its own amber state, **Ready for check**: a tag beside the title, a dashed amber tick box, an amber line under the title with the session and the time, the claimed lines marked, an amber cell on the season map, "ready for check" on the quest board, and a count of waiting claims beside the steps-left counter. Opening the step shows the claim at the top: the session, the time, the lines, the command, the result, the note, and the step's own `check` beside them.
+
+An Editor settles it, after checking it themselves:
+
+- **Verify and tick** ticks the step and the claimed lines, and records `verifiedClaim` (the claim's `at`) on the tick, so the step reads "verified from a claim by Claude (go-live-check)". Ticking the tick box of a claimed step does the same thing.
+- **Send back** leaves the step open and records `declinedClaim` (the claim's `at`), `declinedBy` and `declinedAt`. The step shows "Sent back" with who and when. Log a note saying what is missing; the session can claim the step again once it is fixed, and its newer claim waits for a check again.
+
+A claim also stops waiting when the step is ticked or unticked after it was made, so a claim on a step someone has since settled by hand does not come back. Only Editors see the two controls; anyone else sees "An Editor checks this claim and ticks it."
+
+Claims earn no XP until they are verified and ticked, and what a session writes down (facts, notes) earns none at all.
+
+A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. Claim and note text never passes through the page's own save checks, because a session writes it straight into the database, so the page applies the same secret net when it shows them: a claim or note that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it.
+
+## How ticks, claims, facts and logs are stored
 
 ```mermaid
 flowchart LR
   D[Data block in the page] --> P[Page renders steps by id]
   P --> C[checks: one doc per step id]
+  P --> K[claims: one doc per step id]
   P --> F[facts: one doc per fact id]
   P --> L[log: one doc per note]
   L --> A[assets: screenshot files]
+  K -. verified by a person .-> C
 ```
 
 | Collection | One document per | Fields |
 |---|---|---|
-| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note") |
-| `facts` | fact, named by its id | `value` (300 characters at most), `by`, `at`, `step` |
-| `log` | note | `step`, `text` (4,000 characters at most), `asset` (a screenshot's id, or none), `by`, `at` |
+| `checks` | step, named by its id | `done`, `by` (a person id), `at` (when last ticked or unticked), `subs` (line ticks by position), `note` (an older free-text note, shown as "Earlier note"), `verifiedClaim` (the `at` of the claim a tick verified), `declinedClaim`, `declinedBy`, `declinedAt` (a claim sent back) |
+| `facts` | fact, named by its id | `value` (300 characters at most), `by`, `at`, `step`, `agent` (when a Claude session wrote it) |
+| `log` | note | `step`, `text` (4,000 characters at most), `asset` (a screenshot's id, or none), `by`, `at`, `agent` (when a Claude session wrote it) |
+| `claims` | step, named by its id | `agent`, `at`, `lines` (positions, from 0), `command`, `result`, `note`; written only by Claude sessions |
 
-Screenshots are uploaded to the artifact's asset store (Editors only) and shown from it. People are stored as opaque ids and their names looked up when the page renders, so a renamed account shows its new name. Claude can read and write all three collections with the ArtifactData tool, which is how a session's results get copied into the project's docs at the end of a session, and how example ticks are seeded.
+Screenshots are uploaded to the artifact's asset store (Editors only) and shown from it. People are stored as opaque ids and their names looked up when the page renders, so a renamed account shows its new name. A Claude session is not a person on the page: it is named by its `agent` field and shown as "Claude (name)", beside the person when the document also names one. Claude reads every collection with the ArtifactData tool, which is how a session's results get copied into the project's docs at the end of a session. It writes claims, notes and facts, and writes `checks` only when the person asks it to seed example ticks or to copy a tracker's ticks across in a port.
 
 The burndown is drawn from each route step's `at`. A step unticked and ticked again moves to its newer date; there is no separate history.
 
@@ -178,7 +214,7 @@ Facts are values someone will need again, written down while the screen is in fr
 
 - **Yes:** a folder path, a host name, a container or property ID, which login holds the domain, "on, 14 Oct", where the backup is kept, which phone holds the authenticator app, an expiry date, a yes or no answer to a question the step asks.
 - **Never:** a password, sign-in code, backup or recovery code, API key, token, form key, card number, or anything a person could log in with. The page refuses a fact or note that looks like one (`password:`, a UUID-shaped key, `ghp_...`, `AIza...`, `sk_live_...`), but the check is a net, not a guarantee.
-- Write the date and the person into the value when it matters ("Mon to Sat, 8 to 5, confirmed by Narine, 14 Oct").
+- Write the date and the person into the value when it matters ("Mon to Sat, 8 to 5, confirmed by the owner, 14 Oct").
 - At the end of a session Claude copies the facts into the project's own docs (an inventory or playbook), so the tracker is never the only copy.
 
 ## Quests and the route
@@ -186,9 +222,9 @@ Facts are values someone will need again, written down while the screen is in fr
 A quest is one run of work, in order, usually one call or one person's sitting. The `quests` list is the route to the goal:
 
 ```js
-{ tone: "accent", short: "2 Santosh call", title: "2. Santosh call: accounts and hosting prep",
+{ tone: "accent", short: "2 Partner call", title: "2. Partner call: accounts and hosting prep",
   note: "Who is needed, what to have ready, about how long.",
-  wait: "Waiting on Narine",          // optional: the quest sits with someone else
+  wait: "Waiting on the owner",          // optional: the quest sits with someone else
   ids: ["p1-google", "p2-org", "p1-namecheap"] }
 ```
 
@@ -199,12 +235,12 @@ A quest is one run of work, in order, usually one call or one person's sitting. 
 
 ## The views
 
-- **Quest board and route strip:** the chain of runs, with progress bars, blocker tags and who is on each open step.
+- **Quest board and route strip:** the chain of runs, with progress bars, blocker tags, "ready for check" on claimed steps, and who is on each open step. Beside the steps-left counter, the open blockers and the claims waiting for a check.
 - **XP and rank** (game skins): season XP, the rank, and the XP to the next rank.
-- **Season map:** every step of every phase as one cell, in phase order. Green is done, red outline an open blocker, amber stripes a stop, dashed optional, a blue ring on the route. Each cell opens its step.
-- **Steps left to <goal>:** the burndown. One point per day from `started` to today, the dashed even-pace line to `goal.target`, and a hover read-out of the day's count and how many steps were ticked that day.
+- **Season map:** every step of every phase as one cell, in phase order. Green is done, solid amber a claim waiting for a check, red outline an open blocker, amber stripes a stop, dashed optional, a ring on the route. Each cell opens its step.
+- **Steps left to the goal:** the burndown. One point per day from `started` to today, the dashed even-pace line to `goal.target`, and a hover read-out of the day's count and how many steps were ticked that day.
 - **People:** one card per person: their steps done, their open blockers, their next step, and a button to filter the page to them.
-- **Next up and Recent activity:** the next four route steps, and the last six ticks, facts and notes with who and when.
+- **Next up and Recent activity:** the next four route steps, and the last six ticks, claims, facts and notes with who and when.
 
 ## Ideas for more visualization, not built yet
 
@@ -225,5 +261,6 @@ The NYFG run sheet's `PHASES`, `QUESTS` and `OWNERS` move across almost unchange
 - No em-dashes; sentence-case headings, in the data block as anywhere else.
 - Every step says what, why, and what closes it. No bare titles.
 - Tick only verified work.
+- Agents claim, people tick: a Claude session reports work as a claim, and someone else verifies it.
 - Never move a step's lines once ticked.
-- No secrets in notes, facts or screenshots. Crop screenshots first.
+- No secrets in notes, facts, claims or screenshots. Crop screenshots first.

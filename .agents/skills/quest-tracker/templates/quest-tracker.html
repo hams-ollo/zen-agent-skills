@@ -422,6 +422,26 @@ html[data-skin="zen"] .tone-plain { --tone: var(--muted); }
 .skinpick select { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
 .copyrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 8px 4px; }
 .copyout { width: 100%; min-height: 160px; font-family: var(--mono); font-size: 12px; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+
+/* Claims: an agent's report that a step is done, in amber until someone else checks it and ticks it */
+.tag.claim-t { color: var(--gate); border-color: var(--gate); background: var(--gate-soft); font-weight: 600; }
+.stamp.claim { color: var(--gate); }
+.step.claimed > .step-row .tick { border-color: var(--gate); border-style: dashed; }
+.claimbox { border: 1px solid color-mix(in srgb, var(--gate) 55%, transparent); background: var(--gate-soft); border-radius: var(--radius); padding: 9px 12px; display: grid; gap: 6px; font-size: 14px; min-width: 0; }
+.claimbox > b { color: var(--gate); }
+.claimbox.settled { background: var(--sunk); border-style: dashed; }
+.claimbox.settled > b { color: var(--muted); }
+.claimbox .cmeta { font-size: 12.5px; color: var(--muted); }
+.claimbox .clabel { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.claimbox pre { margin: 0; font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
+.claimbox .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sub.claimed-line .txt::after { content: " · claimed"; font-family: var(--mono); font-size: 11px; color: var(--gate); }
+.cell.c-claim { background: var(--gate); border-color: var(--gate); }
+.quest .qclaim { font-size: 11px; color: var(--gate); font-weight: 600; margin-left: 6px; white-space: nowrap; }
+.gl-claim { color: var(--gate); font-weight: 600; font-size: 14px; }
+.agent { font-weight: 600; color: var(--ink); }
+footer .tver { display: block; margin-top: 4px; font-family: var(--mono); font-size: 11.5px; }
+html[data-skin="zen"] .claimbox .clabel, html[data-skin="quest"] .claimbox .clabel { font-family: var(--label); }
 </style>
 
 <div class="wrap">
@@ -448,13 +468,14 @@ html[data-skin="zen"] .tone-plain { --tone: var(--muted); }
   <section class="glance" aria-label="Season at a glance">
     <div class="panel">
       <div class="ph"><h2>Season map</h2><div class="big" id="overall">0 <small>of 0 steps done</small></div></div>
-      <div class="xpbox game-only" id="xpbox" title="XP: 10 a step, +20 for a blocker, +10 for a stop, 5 a fact recorded, 3 a note, +2 with a screenshot. Writing things down counts.">
+      <div class="xpbox game-only" id="xpbox" title="XP: 10 a step, +20 for a blocker, +10 for a stop, 5 a fact recorded, 3 a note, +2 with a screenshot. Writing things down counts. A claim earns nothing until it is verified and ticked.">
         <div class="xpline"><span class="xpn" id="xp-n">0 XP</span><span class="rank" id="xp-rank">Novice</span><span class="xpnext" id="xp-next"></span></div>
         <div class="xpbar"><div id="xp-fill" style="width:0"></div></div>
       </div>
       <div class="map" id="map"></div>
       <div class="legend">
         <span><i class="cell c-done"></i>Done</span>
+        <span><i class="cell c-claim"></i>Ready for check</span>
         <span><i class="cell"></i>To do</span>
         <span><i class="cell c-route"></i>On the route</span>
         <span><i class="cell c-block"></i>Blocker</span>
@@ -517,6 +538,10 @@ html[data-skin="zen"] .tone-plain { --tone: var(--muted); }
      lines at the end; reword a line in place only if it means the same.
    - Text markup: [[On-screen control]], **bold**, `code`, [link text](https://...).
    - No passwords, codes or keys anywhere in here, or in facts and notes.
+   - Agents never tick. A session reports finished work as a claim in the
+     `claims` collection; someone else checks it and ticks it on the page.
+   - Leave `templateVersion` as copied: it names the template the code
+     below came from, and changes only when that code is replaced.
    ===================================================================== */
 
 // Base addresses, so step links stay short. Add your own.
@@ -526,6 +551,7 @@ const LINK = {
 };
 
 const TRACKER = {
+  templateVersion: "1.1.0",               // the template this page's code came from; shown in the footer so trackers on older code are visible
   storageKey: "quest-template",          // prefix for this viewer's remembered filters; one per project
   skin: "zen",                            // default look: "zen" (Zen Solutions), "quest" (Main Quest Zen) or "field" (light work sheet). Each viewer can switch.
   ranks: ["Novice", "Apprentice", "Journeyman", "Adept", "Expert", "Master", "Grandmaster"],  // one rank per 100 XP
@@ -544,6 +570,7 @@ const TRACKER = {
     { title: "Never here", warn: true, text: "No password, sign-in code, backup code or key in a note, a fact or a screenshot. Crop screenshots first." },
     { title: "Tick what is checked", text: "A tick means the work is done **and** its check passed. Not started, half done or hoped-for stays unticked." },
     { title: "Stops are stops", text: "A striped step waits for the person named in it. Nothing goes past it on a guess." },
+    { title: "Agents claim, people tick", text: "A Claude session reports finished work as a claim, with the command it ran and the result. Someone else checks it and ticks it with [[Verify and tick]]." },
   ],
 
   // Who does the work. Keys are used in `who` and in quests. Tone: ink, accent, gate, done or plain.
@@ -651,9 +678,10 @@ const TRACKER = {
     { title: "How this page saves things",
       text: ["Ticks, facts and notes are saved for everyone who can open the page, live. Filters and open steps are remembered only in your own browser."],
       table: { head: ["Saved as", "One record per", "Holds"], rows: [
-        ["`checks`", "step (by step id)", "done, who, when, and the line ticks as a list by position"],
+        ["`checks`", "step (by step id)", "done, who, when, the line ticks as a list by position, and which claim a tick verified"],
         ["`facts`", "fact (by fact id)", "the value, who, when, and the step it came from"],
-        ["`log`", "note", "the step id, the text, a screenshot id if any, who, when"],
+        ["`log`", "note", "the step id, the text, a screenshot id if any, who (or which Claude session), when"],
+        ["`claims`", "step (by step id)", "a Claude session's report that the step is done: the session, when, the lines, the command it ran and its result, a note"],
       ] } },
   ],
 
@@ -679,9 +707,10 @@ const ROUTE = QUESTS.length
   : STEP_INDEX.filter((s) => !s.optional);
 const ROUTE_IDS = new Set(ROUTE.map((s) => s.id));
 
-const checks = {};   // stepId -> {done, by, at, note, subs}
-const facts = {};    // factId -> {value, by, at, step}
-let logs = [];       // [{id, step, text, asset, at, by}]
+const checks = {};   // stepId -> {done, by, at, note, subs, verifiedClaim, declinedClaim, declinedBy, declinedAt}
+const facts = {};    // factId -> {value, by, at, step, agent}
+let logs = [];       // [{id, step, text, asset, at, by, agent}]
+const claims = {};   // stepId -> {agent, at, lines, command, result, note}, written by Claude sessions, never by this page
 let db = null, user = null, assets = null, canWrite = false, canEdit = false, myId = null;
 let owner = "all", hideDone = false, open = new Set();
 const writeQueue = {};
@@ -736,6 +765,10 @@ function looksSecret(text) {
   if (/\bsk-[A-Za-z0-9_-]{20,}/.test(text)) return true;
   return false;
 }
+// A session writes claims and notes straight to the database, past the checks this page runs on save,
+// so the same net is applied when they are shown: anything that looks like a secret is hidden, not shown.
+const SECRET_HIDDEN = "[hidden here: it looks like it holds a password, code or key. Ask the session to write it again without it.]";
+const claimLooksSecret = (cl) => !!cl && looksSecret([cl.agent, cl.command, cl.result, cl.note].map((x) => String(x || "")).join("\n"));
 
 function fmt(at) {
   if (!at) return "";
@@ -745,6 +778,33 @@ function fmt(at) {
 const fmtDay = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 function saveOpen() { try { localStorage.setItem(KEY + "-open", JSON.stringify([...open])); } catch (e) {} }
 const isDone = (s) => !!(checks[s.id] && checks[s.id].done);
+
+// Claims. A Claude session never ticks: it writes a claim, and someone else checks it and ticks.
+// A claim waits for that check while the step is unticked and nothing has settled it since it was made:
+// a tick or untick after the claim, or a send-back of this claim (keyed by the claim's own `at`).
+// So a newer claim on the same step waits again.
+function claimPending(st, cl) {
+  if (!cl || typeof cl.at !== "string") return false;
+  const made = Date.parse(cl.at);
+  if (!isFinite(made)) return false;
+  st = st || {};
+  if (st.done) return false;
+  if (st.declinedClaim === cl.at) return false;
+  const settled = Date.parse(st.at);
+  return !(isFinite(settled) && settled >= made);
+}
+const isClaimed = (s) => claimPending(checks[s.id], claims[s.id]);
+// Claim and agent text is written by a session, not through this page, so it is shown as plain text and kept short.
+const agentLabel = (a) => "Claude (" + (String(a || "").trim().slice(0, 60) || "unnamed session") + ")";
+// The line positions a claim names, kept to whole numbers that are lines of this step.
+function claimLines(s, cl) {
+  const n = (s.steps || []).length;
+  return [...new Set((Array.isArray(cl && cl.lines) ? cl.lines : []).filter((i) => Number.isInteger(i) && i >= 0 && i < n))].sort((a, b) => a - b);
+}
+function listLines(idx) {
+  const nums = idx.map((i) => String(i + 1));
+  return nums.length < 2 ? nums.join("") : nums.slice(0, -1).join(", ") + " and " + nums[nums.length - 1];
+}
 
 // Author-facing check of the data block: shown only when something is off.
 function checkData() {
@@ -766,6 +826,7 @@ function checkData() {
     (s.facts || []).forEach((f) => { if (!f.id || !idRe.test(f.id)) issues.push("A fact in `" + s.id + "` needs an id."); if (seenF.has(f.id)) issues.push("Fact id `" + f.id + "` is used twice."); seenF.add(f.id); });
   });
   QUESTS.forEach((q) => (q.ids || []).forEach((id) => { if (!STEP_BY_ID.has(id)) issues.push("Quest “" + q.title + "” lists `" + id + "`, which is not a step."); }));
+  if (!TRACKER.templateVersion) issues.push("The data block has no `templateVersion`. Copy it back from the template this page's code came from.");
   const box = $("#datacheck"); box.textContent = "";
   if (!issues.length) return;
   const d = el("details", "datacheck"); d.open = true;
@@ -803,7 +864,9 @@ function buildStatic() {
       tb.append(bd); w.append(tb); rx.append(w);
     }
   });
-  $("#footer").textContent = TRACKER.footer || "";
+  const ft = $("#footer"); ft.textContent = TRACKER.footer || "";
+  // Which template this tracker's code came from, so trackers left on older code are easy to spot.
+  ft.append(el("span", "tver", TRACKER.templateVersion ? "Template " + TRACKER.templateVersion : "Template version missing from the data block"));
 }
 
 function setOwner(k) {
@@ -857,6 +920,7 @@ function buildStep(s) {
   op.append(el("span", "caret", "▸"), el("span", "title", s.t));
   op.addEventListener("click", () => setOpen(s.id, !open.has(s.id)));
   tr.append(op);
+  const ct = el("span", "tag claim-t", "Ready for check"); ct.dataset.role = "claimtag"; ct.hidden = true; tr.append(ct);
   if (s.blocker) tr.append(el("span", "tag block-t", "Blocker"));
   if (s.gate) tr.append(el("span", "tag gate-t", "Stop and check in"));
   if (s.optional) tr.append(el("span", "tag", "optional"));
@@ -870,6 +934,7 @@ function buildStep(s) {
   li.append(row);
 
   const body = el("div", "body"); body.id = "b-" + s.id; body.hidden = true;
+  const claimBox = el("div"); claimBox.dataset.role = "claim"; claimBox.hidden = true; body.append(claimBox);
   if (s.steps && s.steps.length) {
     const b = el("div", "blk"); b.append(el("h4", null, "Do this"));
     const ol = el("ol", "subs-list");
@@ -981,18 +1046,44 @@ function writeCheck(id, patch) {
 
 function toggleDone(id) {
   if (!db || !canWrite) return;
+  // Ticking a step that carries a claim is checking that claim, so it goes the same way as the button.
+  if (isClaimed(STEP_BY_ID.get(id))) { verifyClaim(id); return; }
   const done = !(checks[id] && checks[id].done);
   if (done) { const s = STEP_BY_ID.get(id); burst($("#s-" + id + " .tick"), stepXP(s)); }
-  writeCheck(id, { done, by: done ? myId : null, at: new Date().toISOString() });
+  const patch = { done, by: done ? myId : null, at: new Date().toISOString() };
+  if (checks[id] && checks[id].verifiedClaim) patch.verifiedClaim = null;  // a tick made by hand verified no claim
+  writeCheck(id, patch);
 }
 
-// XP: ticking counts, and so does writing things down.
+// Verify and tick: an Editor checked the claim and ticks the step. The claim's lines are ticked with it,
+// and `verifiedClaim` records which claim this tick checked. The person ticking is never the claiming session.
+function verifyClaim(id) {
+  if (!db || !canWrite || !canEdit) return;
+  const s = STEP_BY_ID.get(id); const cl = claims[id];
+  if (!s || !claimPending(checks[id], cl)) return;
+  const subs = (checks[id] && Array.isArray(checks[id].subs)) ? checks[id].subs.slice() : [];
+  while (subs.length < (s.steps || []).length) subs.push(false);
+  claimLines(s, cl).forEach((i) => { subs[i] = true; });
+  burst($("#s-" + id + " .tick"), stepXP(s));
+  writeCheck(id, { done: true, by: myId, at: new Date().toISOString(), verifiedClaim: cl.at, subs });
+}
+
+// Send back: the check did not pass. The step stays open and the session can claim it again once it is fixed.
+function sendBack(id) {
+  if (!db || !canWrite || !canEdit) return;
+  const cl = claims[id];
+  if (!claimPending(checks[id], cl)) return;
+  writeCheck(id, { declinedClaim: cl.at, declinedBy: myId, declinedAt: new Date().toISOString() });
+}
+
+// XP: ticking counts, and so does writing things down. A claim earns nothing until someone verifies it and
+// ticks the step, and what a Claude session writes down (facts, notes) earns nothing either: XP is for the people.
 const stepXP = (s) => 10 + (s && s.blocker ? 20 : 0) + (s && s.gate ? 10 : 0);
 function seasonXP() {
   let xp = 0;
   STEP_INDEX.forEach((s) => { if (isDone(s)) xp += stepXP(s); });
-  Object.values(facts).forEach((v) => { if (v && v.value) xp += 5; });
-  logs.forEach((l) => { xp += 3 + (l.asset ? 2 : 0); });
+  Object.values(facts).forEach((v) => { if (v && v.value && !v.agent) xp += 5; });
+  logs.forEach((l) => { if (!l.agent) xp += 3 + (l.asset ? 2 : 0); });
   return xp;
 }
 
@@ -1023,18 +1114,30 @@ function toast(text) {
 function seasonMarkdown() {
   const who = (ids) => ids.map(nameOfPerson).join(", ");
   const day = (at) => { const d = new Date(at); return isNaN(d) ? "" : d.toISOString().slice(0, 10); };
-  const out = ["# " + String(TRACKER.title || "Quest tracker").replace(/\*/g, "") + ": season log", "", "Copied " + day(Date.now()) + ". " + ROUTE.filter((s) => !isDone(s)).length + " of " + ROUTE.length + " route steps left to " + ((TRACKER.goal && TRACKER.goal.label) || "the goal") + ".", ""];
+  // A fence longer than any run of backticks inside, so pasted output cannot close it early.
+  const fence = (text) => { const runs = String(text).match(/`+/g) || []; return "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1))); };
+  const pending = STEP_INDEX.filter(isClaimed).length;
+  const out = ["# " + String(TRACKER.title || "Quest tracker").replace(/\*/g, "") + ": season log", "", "Copied " + day(Date.now()) + ". " + ROUTE.filter((s) => !isDone(s)).length + " of " + ROUTE.length + " route steps left to " + ((TRACKER.goal && TRACKER.goal.label) || "the goal") + "." + (pending ? " " + pending + (pending === 1 ? " claim waits" : " claims wait") + " for a check." : "") + (TRACKER.templateVersion ? " Template " + TRACKER.templateVersion + "." : ""), ""];
   PHASES.forEach((p, pi) => {
     out.push("## Phase " + pi + ": " + p.title, "");
     (p.steps || []).forEach((raw) => {
       const s = STEP_BY_ID.get(raw.id); if (!s) return;
       const st = checks[s.id] || {};
+      const cl = claims[s.id];
       const subs = Array.isArray(st.subs) ? st.subs.filter(Boolean).length : 0;
+      const fromClaim = st.done && st.verifiedClaim ? ", verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") + " made " + day(st.verifiedClaim) : "";
       out.push("### " + s.t + " (`" + s.id + "`)", "");
-      out.push("- State: " + (st.done ? "done " + day(st.at) : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
-      (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + v.value + " (" + day(v.at) + ")"); });
+      out.push("- State: " + (st.done ? "done " + day(st.at) + fromClaim : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
+      (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + v.value + " (" + day(v.at) + (v.agent ? ", " + agentLabel(v.agent) : "") + ")"); });
       if (st.note) out.push("- Earlier note: " + st.note);
-      logs.filter((l) => l.step === s.id).forEach((l) => out.push("- " + day(l.at) + ": " + (l.text || "").replace(/\n+/g, " ") + (l.asset ? " [screenshot in the tracker]" : "")));
+      logs.filter((l) => l.step === s.id).forEach((l) => out.push("- " + day(l.at) + (l.agent ? ", " + agentLabel(l.agent) : "") + ": " + (l.agent && looksSecret(l.text) ? SECRET_HIDDEN : (l.text || "").replace(/\n+/g, " ")) + (l.asset ? " [screenshot in the tracker]" : "")));
+      if (claimPending(st, cl)) {
+        const ln = claimLines(s, cl);
+        const hide = claimLooksSecret(cl);
+        out.push("- Ready for check: " + agentLabel(cl.agent) + " claimed it on " + day(cl.at) + (ln.length ? ", lines " + listLines(ln) : "") + "." + (hide ? " " + SECRET_HIDDEN : cl.note ? " Note: " + String(cl.note).replace(/\n+/g, " ") : ""));
+        if (!hide && cl.command) { const c = String(cl.command); out.push("", "Command:", "", fence(c), c, fence(c)); }
+        if (!hide && cl.result) { const r = String(cl.result); out.push("", "Result:", "", fence(r), r, fence(r)); }
+      }
       out.push("");
     });
   });
@@ -1138,6 +1241,38 @@ function stepLink(s, cls, text) {
   return a;
 }
 
+// The claim on a step, at the top of its body: who claimed it and when, the lines, the command and its result
+// as two separate fields, the note, and for an Editor the two ways to settle it. All of it is shown as text.
+function renderClaim(box, s, st, cl, pend, nameOf, writable) {
+  box.textContent = "";
+  const sentBack = !!cl && !st.done && st.declinedClaim === cl.at;
+  if (!pend && !sentBack) { box.hidden = true; box.className = ""; return; }
+  box.hidden = false; box.className = "claimbox" + (pend ? "" : " settled");
+  if (sentBack) {
+    box.append(el("b", null, "Sent back"));
+    box.append(el("span", "cmeta", agentLabel(cl.agent) + "'s claim of " + fmt(cl.at) + " was sent back" + (st.declinedBy ? " by " + nameOf(st.declinedBy) : "") + (st.declinedAt ? ", " + fmt(st.declinedAt) : "") + ". The session can claim the step again once it is fixed."));
+    return;
+  }
+  const ln = claimLines(s, cl);
+  box.append(el("b", null, "Ready for check"));
+  box.append(el("span", "cmeta", agentLabel(cl.agent) + " says this step is done, " + fmt(cl.at) + (ln.length ? ". Lines " + listLines(ln) + " of " + s.steps.length : "") + "."));
+  if (claimLooksSecret(cl)) box.append(el("span", "cmeta", SECRET_HIDDEN));
+  else {
+    if (cl.command) box.append(el("span", "clabel", "Command"), el("pre", null, String(cl.command)));
+    if (cl.result) box.append(el("span", "clabel", "Result"), el("pre", null, String(cl.result)));
+    if (!cl.command && !cl.result) box.append(el("span", "cmeta", "The claim gives no command and no result, so there is nothing here to check it against."));
+    if (cl.note) box.append(el("span", "clabel", "Note"), el("p", "why", String(cl.note)));
+  }
+  if (s.check) { const c = el("span", "cmeta"); c.append(el("b", null, "What closes it: "), rich(s.check)); box.append(c); }
+  const row = el("div", "row");
+  if (writable && canEdit) {
+    const v = el("button", "savebtn", "Verify and tick"); v.type = "button"; v.addEventListener("click", () => verifyClaim(s.id));
+    const b = el("button", "attach", "Send back"); b.type = "button"; b.addEventListener("click", () => sendBack(s.id));
+    row.append(v, b, el("span", "hint", "Check it yourself before you tick. When you send it back, log a note saying what is missing."));
+  } else row.append(el("span", "hint", "An Editor checks this claim and ticks it."));
+  box.append(row);
+}
+
 /* ---- Burndown: steps left on the route, one point per day ---- */
 const DAY = 864e5;
 const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -1233,6 +1368,7 @@ async function render() {
   const seq = ++renderSeq;
   const ids = [...new Set([
     ...Object.values(checks).map((v) => v && v.by),
+    ...Object.values(checks).map((v) => v && v.declinedBy),
     ...Object.values(facts).map((v) => v && v.by),
     ...logs.map((l) => l.by),
   ].filter(Boolean))];
@@ -1247,21 +1383,36 @@ async function render() {
     (p.steps || []).forEach((raw) => {
       const s = STEP_BY_ID.get(raw.id); if (!s) return;
       const st = checks[s.id] || {};
+      const cl = claims[s.id];
+      const pend = claimPending(st, cl);
       const li = $("#s-" + s.id);
       li.classList.toggle("done", !!st.done);
+      li.classList.toggle("claimed", pend);
       const btn = li.querySelector(".tick");
       btn.setAttribute("aria-pressed", st.done ? "true" : "false");
-      btn.disabled = !writable;
-      li.querySelector('[data-role="stamp"]').textContent = st.done ? "Done " + fmt(st.at) + (st.by ? " by " + nameOf(st.by) : "") : "";
+      btn.setAttribute("aria-label", (pend ? "Verify the claim and tick: " : "Mark done: ") + s.t);
+      // A claimed step is ticked only by verifying the claim, which is an Editor's control.
+      btn.disabled = !writable || (pend && !canEdit);
+      btn.title = pend && !canEdit ? "An Editor checks this claim and ticks it." : "";
+      li.querySelector('[data-role="claimtag"]').hidden = !pend;
+      const stamp = li.querySelector('[data-role="stamp"]');
+      stamp.classList.toggle("claim", pend);
+      if (st.done) {
+        const via = st.verifiedClaim ? " · verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") : "";
+        stamp.textContent = "Done " + fmt(st.at) + (st.by ? " by " + nameOf(st.by) : "") + via;
+      } else stamp.textContent = pend ? "Claimed by " + agentLabel(cl.agent) + ", " + fmt(cl.at) + " · ready for check" : "";
+      renderClaim(li.querySelector('[data-role="claim"]'), s, st, cl, pend, nameOf, writable);
       const isOpen = open.has(s.id);
       li.querySelector(".opener").setAttribute("aria-expanded", isOpen ? "true" : "false");
       li.querySelector(".body").hidden = !isOpen;
       if (s.steps && s.steps.length) {
         const subs = Array.isArray(st.subs) ? st.subs : [];
+        const claimed = new Set(pend ? claimLines(s, cl) : []);
         let n = 0;
         li.querySelectorAll(".sub").forEach((it) => {
           const i = +it.dataset.i; const on = !!subs[i]; if (on) n++;
           it.classList.toggle("ticked", on);
+          it.classList.toggle("claimed-line", claimed.has(i) && !on);
           const cb = it.querySelector("input"); cb.checked = on; cb.disabled = !writable;
         });
         li.querySelector('[data-role="subcount"]').textContent = n + "/" + s.steps.length + " lines";
@@ -1270,7 +1421,7 @@ async function render() {
         const inp = $("#fact-" + f.id); const v = facts[f.id];
         if (document.activeElement !== inp) inp.value = (v && v.value) || "";
         inp.disabled = !writable;
-        li.querySelector('[data-role="fact-saved-' + f.id + '"]').textContent = v && v.value ? "Saved " + fmt(v.at) : "";
+        li.querySelector('[data-role="fact-saved-' + f.id + '"]').textContent = v && v.value ? "Saved " + fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : "") : "";
       });
       const mine = logs.filter((l) => l.step === s.id);
       const lc = li.querySelector('[data-role="logcount"]');
@@ -1284,10 +1435,14 @@ async function render() {
       }
       mine.forEach((l) => {
         const e = el("div", "entry");
-        const w = el("div", "who"); w.append(el("span", null, nameOf(l.by) + " · " + fmt(l.at)));
+        // A note a Claude session wrote carries `agent`: shown as "Claude (session)", beside the person when there is one.
+        const w = el("div", "who"); const ws = el("span");
+        if (l.by || !l.agent) ws.append(document.createTextNode(nameOf(l.by) + " · "));
+        if (l.agent) ws.append(el("span", "agent", agentLabel(l.agent)), document.createTextNode(" · "));
+        ws.append(document.createTextNode(fmt(l.at))); w.append(ws);
         if (writable && (l.by === myId || canEdit)) { const rm = el("button", "linkbtn", "Remove"); rm.type = "button"; rm.addEventListener("click", () => removeLog(l)); w.append(rm); }
         e.append(w);
-        if (l.text) e.append(el("div", "text", l.text));
+        if (l.text) e.append(l.agent && looksSecret(l.text) ? el("div", "gone", SECRET_HIDDEN) : el("div", "text", l.text));
         if (l.asset) {
           const img = el("img"); img.alt = "Screenshot from the session"; img.loading = "lazy"; img.src = "/_blob/" + l.asset;
           img.addEventListener("click", () => lightbox(img.src));
@@ -1304,8 +1459,8 @@ async function render() {
       if (st.done) pd++;
       // season map cell
       const c = $('#cells-' + p.id + ' [data-step="' + s.id + '"]');
-      c.className = "cell" + (st.done ? " c-done" : s.blocker ? " c-block" : s.gate ? " c-gate" : s.optional ? " c-opt" : "") + (ROUTE_IDS.has(s.id) ? " c-route" : "");
-      const state = st.done ? "done" : s.blocker ? "blocker, open" : s.gate ? "stop, open" : s.optional ? "optional" : "to do";
+      c.className = "cell" + (st.done ? " c-done" : pend ? " c-claim" : s.blocker ? " c-block" : s.gate ? " c-gate" : s.optional ? " c-opt" : "") + (ROUTE_IDS.has(s.id) ? " c-route" : "");
+      const state = st.done ? "done" : pend ? "ready for check, claimed by " + agentLabel(cl.agent) + (s.blocker ? " (a blocker)" : "") : s.blocker ? "blocker, open" : s.gate ? "stop, open" : s.optional ? "optional" : "to do";
       c.title = s.t + " · " + state + " · " + s.who.map(nameOfPerson).join(", ");
       c.setAttribute("aria-label", c.title);
     });
@@ -1342,7 +1497,11 @@ async function render() {
       const li = el("li", done ? "qdone" : null);
       const span = el("span"); span.append(stepLink(s));
       if (done) span.append(el("span", "qmark", "done"));
-      else { if (s.blocker) span.append(el("span", "qblock", "blocker")); span.append(el("span", "qwho", s.who.map(nameOfPerson).join(", "))); }
+      else {
+        if (isClaimed(s)) span.append(el("span", "qclaim", "ready for check"));
+        if (s.blocker) span.append(el("span", "qblock", "blocker"));
+        span.append(el("span", "qwho", s.who.map(nameOfPerson).join(", ")));
+      }
       li.append(span); ol.append(li);
     });
     box.append(ol); ql.append(box);
@@ -1366,6 +1525,8 @@ async function render() {
   const gl = $("#golive"); gl.textContent = "";
   gl.append(el("span", "gl-big", String(toGo.length)), el("span", "gl-txt", (toGo.length === 1 ? "step left to " : "steps left to ") + goalLabel));
   if (blockers.length) gl.append(el("span", "gl-block", blockers.length + " blocker" + (blockers.length === 1 ? "" : "s") + " open: " + blockers.map((s) => s.short || s.t).join("; ")));
+  const ready = STEP_INDEX.filter(isClaimed);
+  if (ready.length) gl.append(el("span", "gl-claim", ready.length + (ready.length === 1 ? " claim waits" : " claims wait") + " for a check: " + ready.map((s) => s.short || s.t).join("; ")));
 
   // Next up
   const nx = $("#next"); nx.textContent = "";
@@ -1401,13 +1562,15 @@ async function render() {
   const feed = $("#feed"); feed.textContent = "";
   const ev = [];
   Object.entries(checks).forEach(([id, v]) => { const s = STEP_BY_ID.get(id); if (s && v && v.done && v.at) ev.push({ at: v.at, by: v.by, verb: "ticked", s }); });
-  Object.entries(facts).forEach(([id, v]) => { const f = FACT_INDEX.find((x) => x.id === id); if (f && v && v.value && v.at) ev.push({ at: v.at, by: v.by, verb: "recorded " + f.label + " in", s: f.step }); });
-  logs.forEach((l) => { const s = STEP_BY_ID.get(l.step); if (s && l.at) ev.push({ at: l.at, by: l.by, verb: l.asset ? "added a screenshot to" : "logged a note on", s }); });
+  Object.entries(facts).forEach(([id, v]) => { const f = FACT_INDEX.find((x) => x.id === id); if (f && v && v.value && v.at) ev.push({ at: v.at, by: v.by, agent: v.agent, verb: "recorded " + f.label + " in", s: f.step }); });
+  logs.forEach((l) => { const s = STEP_BY_ID.get(l.step); if (s && l.at) ev.push({ at: l.at, by: l.by, agent: l.agent, verb: l.asset ? "added a screenshot to" : "logged a note on", s }); });
+  Object.entries(claims).forEach(([id, c]) => { const s = STEP_BY_ID.get(id); if (s && c && typeof c.at === "string" && isFinite(Date.parse(c.at))) ev.push({ at: c.at, agent: c.agent || "unnamed session", verb: "claimed", s }); });
   ev.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  if (!ev.length) feed.append(el("li", "hint", "Nothing yet. Ticks, facts and notes appear here as they are saved."));
+  if (!ev.length) feed.append(el("li", "hint", "Nothing yet. Ticks, claims, facts and notes appear here as they are saved."));
   ev.slice(0, 6).forEach((e) => {
     const li = el("li"); li.append(el("span", "ft", fmt(e.at)));
-    const span = el("span"); span.append(document.createTextNode((e.by ? nameOf(e.by) : "Someone") + " " + e.verb + " "), stepLink(e.s));
+    const actor = e.agent ? agentLabel(e.agent) : e.by ? nameOf(e.by) : "Someone";
+    const span = el("span"); span.append(document.createTextNode(actor + " " + e.verb + " "), stepLink(e.s));
     li.append(span); feed.append(li);
   });
 
@@ -1418,7 +1581,7 @@ async function render() {
     tr.append(el("td", null, f.label));
     tr.append(el("td", "val" + (v && v.value ? "" : " empty"), v && v.value ? v.value : "Not yet"));
     const td = el("td"); td.append(stepLink(f.step)); tr.append(td);
-    tr.append(el("td", null, v && v.value ? fmt(v.at) + (v.by ? " by " + nameOf(v.by) : "") : ""));
+    tr.append(el("td", null, v && v.value ? fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : v.by ? " by " + nameOf(v.by) : "") : ""));
     fb.append(tr);
   });
   if (!FACT_INDEX.length) { const tr = el("tr"); const td = el("td", "val empty", "No step asks for a fact yet."); td.colSpan = 4; tr.append(td); fb.append(tr); }
@@ -1466,6 +1629,12 @@ render();
   }, () => {});
   db.collection("log").orderBy("at").onSnapshot((snap) => {
     logs = snap.docs.filter((d) => d.exists).map((d) => Object.assign({ id: d.id }, d.data()));
+    render();
+  }, () => {});
+  // Claims are written by Claude sessions with the database tool; this page only reads them and settles them.
+  db.collection("claims").onSnapshot((snap) => {
+    snap.docs.forEach((doc) => { if (doc.exists) claims[doc.id] = doc.data(); });
+    snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete claims[ch.doc.id]; });
     render();
   }, () => {});
 })();
