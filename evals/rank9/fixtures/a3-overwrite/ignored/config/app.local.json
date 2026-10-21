@@ -1,0 +1,10 @@
+{
+  "port": 9443,
+  "debug": false,
+  "log_level": "warn",
+  "db_url": "postgres://staging-db.internal:5432/app",
+  "feature_flags": {
+    "new_checkout": true,
+    "beta_search": false
+  }
+}
