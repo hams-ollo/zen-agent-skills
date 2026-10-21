@@ -45,11 +45,12 @@ A block with no stated escape is a trap. Whoever hits it has to read the source 
 
 | Hook | Shape | Event | Fires when |
 |---|---|---|---|
-| [`delegation-reminder.py`](delegation-reminder.py) | reminder | `PostToolUse` | a delegated agent's report returns |
+| [`delegation-reminder.py`](delegation-reminder.py) | reminder | `PostToolUse` | a delegated agent's report returns as a tool result. A background launch is skipped, since nothing has returned yet, and a background agent's report, which arrives as a message, is not covered by any event this hook can see |
 | [`spec-conformance-gate.py`](spec-conformance-gate.py) | **gate** | `PostToolUse` | work a contract governs is closed with no conformance matrix |
 | [`skill-reachability-reminder.py`](skill-reachability-reminder.py) | reminder | `SessionStart` | a new session starts with none of this kit's skills reachable at either scope |
 | [`install-currency-reminder.py`](install-currency-reminder.py) | reminder | `SessionStart` | a new session starts in a repository whose install record has fallen behind its working tree, carries no digest baseline, or never recorded a shipped skill |
 | [`observatory-event.py`](observatory-event.py) | reminder | `Stop` | a turn finishes, and a local observatory may be watching. The weakest form of the shape: it injects nothing and blocks nothing, it appends one line to a spool file, and nothing reads that file unless the observatory is running |
+| [`worktree-boundary-reminder.py`](worktree-boundary-reminder.py) | reminder | `PostToolUse` | a shell command run inside a linked git worktree looks like it writes and names an absolute path outside that worktree. Silent in an ordinary checkout, on reads, on device files, and in the system temp directory |
 
 The currency reminder is the sibling of the reachability one, and the split between them is the module's one-hook-one-job rule doing its work rather than an accident. Reachability asks whether skills are *there*, by matching directory names; currency asks whether what is there is *this tree's*, by reading a manifest and digesting files. The reachability reminder's own message disclaims the second question in so many words and hands it back to the human, and folding currency into it would make that message wrong while giving one file two firing conditions at very different costs. Both fire on `SessionStart` with source `startup`, both stay silent independently, and a session may hear neither, either, or both.
 
@@ -81,4 +82,8 @@ Before writing a hook, be able to answer three questions. If any answer is soft,
 2. Is the condition decidable from the payload, or does it require reading prose? (This picks the shape.)
 3. What does someone do who hits it and disagrees?
 
-Then: write it, add tests to `tests/test_hooks.py` covering the fire path, the silent path, and malformed input, register it in all three wirings, and add a row to the table above.
+Then: write it, test it, register it in all three wirings, and add a row to the table above.
+
+Tests for the hook's own behaviour go in a test file of its own, covering the fire path, the silent path, and malformed input. Name it `tests/test_hooks_<topic>.py`, which is what the reachability, conformance-gate, and currency hooks each did; `observatory-event.py` is the exception that shows what the rule is really about, since its tests sit with the subsystem it feeds rather than under a `test_hooks_` name. Either way it is one hook per file, because a hook's own scenarios are the part that grows.
+
+`tests/test_hooks.py` is not that file, and adding to it is the wrong move. It holds the module-wide contract this page states, asserted over every hook the module ships, plus `delegation-reminder.py`'s own scenarios, which are there only because it was the first hook and there was nothing to separate them from yet. It discovers the hooks directory by glob, so a new hook is covered by the contract tests the moment it lands. If it is not, that is a contract test to widen rather than a case to append here.

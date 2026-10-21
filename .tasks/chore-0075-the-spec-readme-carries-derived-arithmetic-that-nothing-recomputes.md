@@ -82,7 +82,7 @@ reworded, which is what makes it a checker rather than an edit.
 - **Correcting any drift the check finds on its first run.** `chore-0033` corrected these figures on
   2026-08-28, so a find is either a real one or a false positive and both are worth reporting rather
   than quietly fixing.
-- **`ROADMAP.md`**, which is [`chore-0072`](chore-0072-a-gate-for-the-roadmap-staleness-class-chore-0066-mapped.md).
+- **`ROADMAP.md`**, which is [`chore-0072`](done/chore-0072-a-gate-for-the-roadmap-staleness-class-chore-0066-mapped.md).
   If the two checks merge, that task says so and one of them absorbs the other; do not build half of
   it here.
 - Adding or removing any figure from `docs/spec/README.md`. Whether that document should carry derived

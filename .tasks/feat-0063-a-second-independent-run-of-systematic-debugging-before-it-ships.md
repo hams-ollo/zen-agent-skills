@@ -51,7 +51,7 @@ reporting that the procedure worked is the weakest possible evidence.
   have never been exercised. Say which fired, which did not come up, and which got in the way. A
   correction that never fires on a second run is a correction written for a single incident.
 - **Then the draft decision.** Promote means removing `metadata: status: draft`, choosing the
-  profiles, and giving `docs/CATALOG.md` a row, which is [`chore-0079`](chore-0079-the-catalog-has-no-slot-for-a-skill-that-is-built-but-not-blessed.md)'s
+  profiles, and giving `docs/CATALOG.md` a row, which is [`chore-0079`](done/chore-0079-the-catalog-has-no-slot-for-a-skill-that-is-built-but-not-blessed.md)'s
   question. Keeping it a draft again means naming what the second run showed and filing the next
   task, and at that point the skill's design rather than its wording is the thing to look at.
 

@@ -1,16 +1,12 @@
 ---
 name: new-task
 description: >-
-  Author one or more atomic, agent-ready task files for the .tasks/ work-tracking system, at a
-  gold-standard bar. Turns a rough idea, a bug report, or a ROADMAP.md Feature into task files
-  with honest touched_files, a real parent up-link, resolved depends_on, and a
-  mechanically-verifiable acceptance command, then self-checks them with validate.py. Deliberately
-  elicits and decomposes before writing, because a sharp task is worth 3-10x its authoring time
-  downstream. Assigns collision-safe ids from the existing backlog. Use when the user says "write
-  a task for X", "add this to the backlog", "spec out this bug", "turn this into task files",
-  "break this feature into tasks", or hands over an idea they want made executable. Requires an
-  existing .tasks/ system (run init-worktracking first if absent). Feeds fix-batch: one task file
-  per worktree-isolated agent.
+  Authors atomic, agent-ready task files for a .tasks/ system: honest touched_files, a real parent,
+  resolved depends_on, and a mechanically verifiable acceptance command, self-checked with
+  validate.py and given collision-safe ids. Elicits and decomposes before writing. Use for "write a
+  task for X", "add this to the backlog", "spec out this bug", "turn this into task files", "break
+  this feature into tasks", or an idea to make executable. Needs an existing .tasks/ system (run
+  init-worktracking first). Feeds fix-batch. A change finished in one sitting needs no task file.
 license: MIT
 ---
 
@@ -32,7 +28,7 @@ A good task is self-contained: an agent that reads only `AGENTS.md`, the task fi
 
 ## Why this skill blocks a little
 
-Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experience say the same thing: jumping straight to code on an underspecified task wastes far more time than the few minutes of elicitation. So this skill asks its questions and shows its decomposition before writing files. That friction is the feature. Do not skip it for anything non-trivial.
+Both the `spec`/`brainstorm` patterns in mature agent frameworks and hard experience say the same thing: jumping straight to code on an underspecified task wastes far more time than the few minutes of elicitation. So this skill asks its questions and shows its decomposition before writing files. That friction is the feature. Do not skip it for anything non-trivial. The other side of that line is real too: a change finished in one sitting, with no behaviour anyone has to agree first, is not a task at all. Make it directly and run the acceptance command; a task file earns its place when work spans sittings or goes to another agent.
 
 ## Decomposing an approved spec
 
@@ -64,7 +60,7 @@ obligations, all inside the normal procedure:
 1. Confirm `.tasks/` exists. If not, this repo has no work-tracking system yet: point the user to the `init-worktracking` skill and stop.
 2. **Check whether `ROADMAP.md` exists**, in the same breath and for the same reason. Its absence is the `init-worktracking` **lite** tier, which ships task files deliberately without a roadmap or a changelog, and it changes what `parent` may name (see Step 4). Absence is a valid state here, not a problem to fix: do not offer to create a roadmap.
 3. Read `AGENTS.md`: the section that lists the repo's technical commands (for the acceptance command), the section that states its conventions, and the section that describes the work-altitude model. Read `.tasks/_TEMPLATE.md` for the exact frontmatter shape.
-4. Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`; otherwise scan `.tasks/` and `.tasks/done/` for the highest `NNNN` per `type` and continue from there. Ids are stable and never reused.
+4. Determine the next available id per type. Prefer `.tasks/.scaffold.json` `id_high_water`; otherwise scan `.tasks/` and `.tasks/done/` for the highest `NNNN` per `type` and continue from there. Ids are stable and never reused. What makes that preference safe is that the shipped validator compares the record against the tree and reports every type it has fallen below, so a manifest in a repository whose backlog gate is green is current. Where no such run has happened since the last task landed, scan as well and take whichever is higher: the record is written by hand at closeout, and an author who trusts a stale one is handed an id that is already taken and finds out only from the duplicate-id error, after the file exists and has been cross-referenced.
 5. If the input references a ROADMAP Feature, read that Feature. If it references existing tasks (as dependencies), note their ids and whether they are in `done/`.
 
 ### Step 2: elicit intent (ask before decomposing)
@@ -114,8 +110,8 @@ Follow the repo's own conventions from the conventions section of `AGENTS.md` (d
 
 ### Step 6: self-check and update bookkeeping
 
-1. Run the shipped validator: `python .tasks/validate.py --strict`. Every `touched_files` path already exists by the rule in Step 3, so `--strict` is the mode to check against, and it is the mode a backlog gate in CI runs. Fix anything it flags. Do not hand over a task file that does not pass.
-2. If `.tasks/.scaffold.json` exists, update its `id_high_water` for the types you consumed, so the next author does not collide.
+1. Run the shipped validator: `python .tasks/validate.py --strict`. Every `touched_files` path already exists by the rule in Step 3, so `--strict` is the mode to check against, and it is the mode a backlog gate in CI runs. Fix anything it flags. Do not hand over a task file that does not pass. Expect one finding you have not fixed yet: the ids you just consumed put the tree above the scaffold manifest, and Step 6.2 is what clears it, so do that and run this again.
+2. If `.tasks/.scaffold.json` exists, update its `id_high_water` for the types you consumed, so the next author does not collide. The validator checks this, so skipping it fails the backlog gate now rather than costing the next author a rename later.
 3. If you added a ROADMAP Feature, write that one line now (with user assent).
 
 ### Step 7: report and offer the handoff

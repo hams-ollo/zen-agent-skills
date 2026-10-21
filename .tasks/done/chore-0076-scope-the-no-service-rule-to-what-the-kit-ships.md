@@ -95,7 +95,7 @@ one roadmap paragraph.
   spec's tasks can be written; it builds nothing the spec contracts for.
 - **Any bound.** Item 7(c) stays held and its wording stays as it is, per `feat-0052`.
 - **`.tasks/.scaffold.json`.** Its `id_high_water` is stale and
-  [`chore-0060`](../chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md) owns that.
+  [`chore-0060`](chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md) owns that.
   See Decisions.
 - **Striking any Epic E item.** Whether a Feature is complete is the author's call, as item 2 already
   records for itself.

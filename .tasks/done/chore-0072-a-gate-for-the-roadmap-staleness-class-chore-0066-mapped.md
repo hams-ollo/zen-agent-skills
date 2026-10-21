@@ -2,7 +2,7 @@
 id: chore-0072
 title: The ROADMAP staleness class is now mapped to two mechanical shapes, and building the gate is the part chore-0066 was forbidden to do
 type: chore
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic B: contract-driven delivery (the agent-workflow spine)"
 depends_on: [chore-0066]
@@ -14,8 +14,8 @@ created: 2026-08-27
 
 ## Problem
 
-[`chore-0066`](done/chore-0066-the-roadmap-has-five-verified-staleness-defects-and-no-gate.md)
-corrected nine staleness defects in [`ROADMAP.md`](../ROADMAP.md) and was explicitly forbidden to
+[`chore-0066`](chore-0066-the-roadmap-has-five-verified-staleness-defects-and-no-gate.md)
+corrected nine staleness defects in [`ROADMAP.md`](../../ROADMAP.md) and was explicitly forbidden to
 build a gate for them, because that class is what ROADMAP Epic B item 19 holds and answering it
 inside a correction pass would presuppose the artifact that item declines to presuppose. Its Scope
 said the most valuable thing the work could produce beyond the corrections was a report on what the
@@ -45,7 +45,7 @@ being current.
 
 This is the sixth member of the guard-that-does-not-guard group `chore-0049` names, and the pattern
 behind the group is
-[`chore-0063`](done/chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
+[`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
 
 ## Scope
 
@@ -89,6 +89,47 @@ judge.
 Note that `chore-0049` also declares `scripts/run-checks.py` and `tests/test_run_checks.py`. The two
 cannot share a wave, and whichever lands second inherits the other's gate-count pin in
 `tests/test_run_checks.py`.
+
+## Decisions
+
+- **The `Last updated:` header decision was already made, and this task's framing of it is a
+  premise that turned out false.** The Scope asks for one of check, derive, or delete, "with the
+  rejected two recorded". `chore-0066` deleted it on 2026-08-27 and recorded the rejection of
+  re-dating; `ROADMAP.md` line 3 now carries the removal and its reason. So the live choice was not
+  three-way. What was built instead is a guard that the header stays deleted, since the decision was
+  otherwise durable only as prose. **Rejected: deriving it** (writing today's date into the file on
+  every run), because that rewrites a file this gate only reads, against the detect-and-report rule
+  in the autonomy lens, and it re-arms the same drift the moment a run is skipped. **Rejected:
+  checking it against `git log -1 ROADMAP.md`**, because it fires on every commit that edits the
+  file without also touching the header, which is the noisy-checker failure the Implementation notes
+  name; and because the header would then restate what git already answers.
+- **Rejected alternative: a separate `scripts/check-roadmap.py`, which is this repository's own
+  precedent.** `chore-0049` put the directly analogous gate in `scripts/check-citations.py`, and
+  every other gate here is a script a person can run alone. This one is an in-process callable
+  because the dispatch bounded the change to two files and a third would have been a third file.
+  The cost is real and is written into `Gate`'s docstring: the check cannot be run standalone, and
+  it is the one gate whose crash could take the aggregator down, which `_run_check` handles by
+  catching and reporting `unrunnable`. **If a second in-process gate is ever wanted, extract this
+  one to a script first**; one is a bounded exception, two is a second way of writing gates.
+- **Rejected alternative: the re-runnable-command shape, declined and not built**, which the Scope
+  allows. One instance is not a mechanism; distinguishing a claim about a command's current output
+  from a command quoted as an illustration needs judgment the check has none of; and running shell
+  text lifted out of a document is an action no gate here takes. The report names it among what it
+  did not judge, so the decline is visible on every run rather than only here.
+- **Rejected alternative: matching an open-state phrase and a closed id by proximity rather than by
+  block.** Measured, not argued: over `ROADMAP.md` at `b7cd720^` and at `7a9558f`, the proximity
+  rule found 5 real defects and 1 false positive (the corrected prose that quotes `"Ready to
+  dispatch"` while recording its own fix), and the block rule found 6 and 0. A checker that fires on
+  the sentence describing its own last correction is the one the Implementation notes say gets
+  disabled within a week.
+- **Seam left open deliberately: a block carrying a completion marker is not judged for a hedged
+  phrase, even about a second id.** The vocabulary is two tiers for this reason, and the present-tense
+  tier exists to cover the case that motivated it (`chore-0042` and `chore-0043` reported as
+  outstanding inside a paragraph opening `**Landed 2026-08-18**`). A hedged phrase in the same
+  position would still be missed. Named in the run's own output rather than left to be discovered.
+- **Seam left open deliberately: the restated-contract class is out of reach and stays out.** The
+  Scope forbids building half of it. The run says so in the line `run-checks.py` echoes, so a green
+  gate cannot be read as "`ROADMAP.md` is current".
 
 ## Risks and rollback
 

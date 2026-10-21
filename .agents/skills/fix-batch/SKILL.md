@@ -1,17 +1,13 @@
 ---
 name: fix-batch
 description: >-
-  Delegate a batch of independent, already-scoped task files (bugs, chores, small features) to
-  parallel isolated agents, each sandboxed in its own git worktree, with a mandatory independent
-  verification pass before anything is treated as mergeable. Use this whenever asked to "fix these
-  bugs", "work through the backlog", "spin up agents to fix X, Y, Z", or "parallelize these
-  fixes", especially when there are 2 or more distinct, independently-fixable items and the user
-  wants them actioned rather than just discussed. It is the parallel-execution step of the kit
-  spine: new-task authors the task files, fix-batch dispatches them, verifier-agent proves them,
-  reconcile-worktrees lands them. Do not use it for a single fix (just do it directly) or for
-  changes that are inherently sequential or interdependent (one agent's output feeds the next's
-  input), since worktree
-  isolation assumes the items do not need to see each other's work in progress.
+  Dispatches a batch of independent, already-scoped task files (bugs, chores, small features) to
+  parallel agents, each in its own git worktree, then verifies every result independently before
+  anything is called mergeable. Use when there are two or more independently fixable items to
+  action: "fix these bugs", "work through the backlog", "spin up agents to fix X, Y, Z",
+  "parallelize these fixes". The parallel step of the kit spine (new-task authors, fix-batch
+  dispatches, verifier-agent proves, reconcile-worktrees lands). Not for a single fix, which is done
+  directly, or for items that depend on each other.
 license: MIT
 ---
 
@@ -33,30 +29,7 @@ spawned agent inherits the same rules.
 
 ## Why this exists
 
-A 2026-07-07 session spawned four background agents in isolated worktrees to fix four backlog
-items in the same repo. All four claimed success. Independent verification found:
-
-- One agent, despite being in an isolated worktree, used a shell to reach outside it and
-  overwrite a file in the main checkout with a stale copy, destroying unrelated uncommitted work
-  that had nothing to do with its task. It then tried to fix its own mistake by reconstructing
-  the lost code from memory and test expectations, mostly correct, but it also fabricated one
-  extra, undisclosed test method that had never existed in the repo's history, and its own
-  summary miscounted this fabrication as one of the "original" tests.
-- Two of the four agents had silently incorrect task-file bookkeeping: each moved its task file
-  to a `done/` location but left the status field saying `open` and every checkbox unchecked,
-  despite claiming in their summary that the task was fully closed out.
-- The repo's task-tracking files were untracked by git, so worktree isolation silently split
-  them from the main checkout. Four structurally identical agents, given the same instructions,
-  independently invented three different, mutually incompatible ways of handling this, and none
-  of them flagged the ambiguity before just picking an answer.
-- Separately, and through no fault of any agent, the worktrees exposed a real, pre-existing repo
-  landmine: a binary asset that showed a phantom diff in every worktree due to an unmigrated
-  git-lfs tracking rule. Blindly committing from inside a worktree would have silently corrupted it.
-
-None of this was visible from the agents' own final reports. Every one of them read as a clean
-success. The only reason any of it surfaced was a deliberate, from-scratch verification pass
-against real diffs and real test runs, done after the fact instead of by design. This skill
-exists to make that verification pass the default, not an afterthought.
+A 2026-07-07 batch of four background agents in isolated worktrees all claimed success. Independent verification found that one had used a shell to overwrite a file in the main checkout, destroying unrelated work, then fabricated an undisclosed test while repairing it; two had moved task files to `done/` while leaving their status and checkboxes untouched; and four identical agents had invented three incompatible ways to handle task files git did not carry into their worktrees. None of it was visible in their own reports. This skill makes the verification pass that caught it the default rather than an afterthought. The full record is in [`references/incidents.md`](references/incidents.md).
 
 ## When not to use this
 
@@ -173,20 +146,7 @@ verify its base repairs itself within seconds, and `git worktree list` a moment 
 repaired state rather than the cut. Run it anyway, since it costs one command and catches the slow
 agents, but never conclude from a clean run that the cut was right.
 
-Three occurrences, so this carries its evidence rather than reading as caution:
-
-- **2026-08-05.** A four-agent wave had every worktree cut from `main`, four commits behind
-  `developer`, silently excluding the previous wave's output.
-- **2026-08-18, six agents dispatched from `developer` at `e492b10`.** All six worktrees were at
-  `origin/main`, where not one of the six task files existed. At the wrong base a missing task file
-  reads as a bad dispatch rather than a wrong tree. Four agents diagnosed it themselves, which is
-  item 6's honest-blocker instruction working, but in the wrong place: it charges every agent the
-  same detour and yields N independent recoveries by inconsistent methods.
-- **2026-08-18, a second six-agent wave at `b950c9e`, checked by hand right after dispatch.** The
-  check reported five of six on the dispatch commit. It was wrong. At least three of the six later
-  disclosed in their own blockers that they had been cut at the wrong base and had fast-forwarded,
-  including two the check had called correct. This is the occurrence that makes the check a lower
-  bound.
+This has gone wrong three times on record, the last time with the check above calling two mis-cut worktrees correct; the dates and commits are in [`references/incidents.md`](references/incidents.md).
 
 **Recovery for an agent already running at the wrong base.** Both preconditions are checked before
 the command, because the command is valid only when both hold:
@@ -438,6 +398,14 @@ tool names below are the local implementation.
   `origin/main` while the dispatch branch was `developer`, three times on record, and it gives you
   no place to name a base. If you use it anyway, the post-dispatch check in Step 3 is the only
   signal you get, and it is a lower bound.
+  The cause is now documented: these worktrees branch from the remote default branch unless
+  the `worktree.baseRef` setting is `"head"`, and that setting cannot name a branch or a sha.
+  With it set to `"head"` they start from the session's own `HEAD`, which removes the commonest
+  mis-cut but still pins nothing, so the explicit cut above stays the primary path.
+- **Built-in `/batch`:** Claude Code's `/batch` decomposes an instruction into units itself, runs
+  each in a worktree, and publishes each change. Use it for broad mechanical changes. Use this
+  skill when the items are task files a person already approved and each needs independent
+  verification before anything lands, which `/batch` does not describe.
 - **Dispatch, batch against a *different* repository:** `isolation: "worktree"` worktrees the
   **current** project, so it does nothing useful when the work lives in another repo. It is the same
   explicit-sha command as above with a `-C`

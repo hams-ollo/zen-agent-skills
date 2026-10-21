@@ -34,6 +34,14 @@ re-approval.** It writes down the rule `bug-0044` enforced in the lenses and in
 `TestEmittedRulesModuleResolves` on 2026-08-22 while recording that the contract stated it nowhere;
 `status` is left reading `approved` for the reason the paragraphs above give.
 
+Amended 2026-09-01 (`chore-0087`) to state that a write whose destination resolves outside the
+requested output root is refused rather than performed: scenario S-020, and the `Exit code` row of the
+Proposed Surface, which listed an unrecognized target as the only non-zero exit and had stopped being
+true the day the refusal shipped. **This amendment is pending the author's re-approval.** It writes
+down the containment boundary `bug-0060` gave `_write()` on 2026-08-31, which no scenario required, so
+a later refactor could have removed it with every gate green and this contract's conformance matrix
+still honest; `status` is left reading `approved` for the reason the paragraphs above give.
+
 ## Problem
 
 Claude Code and OpenCode discover skills from a directory, so `install.py` can place a skill's own
@@ -268,6 +276,35 @@ every test still pass, because no test asserts the reason.
 - **Then** it names the unrecognized target and the supported ones, writes no file, and exits
   non-zero.
 
+### Scenario S-020: a destination outside the output root is refused rather than written
+
+- **Given** a skill whose frontmatter `name` makes its adapter's destination resolve outside the
+  requested output root
+- **When** the tool runs against that output root, as a real run or as a preview
+- **Then** no file exists outside the resolved output root, and the run exits non-zero, naming the
+  skill and a destination outside the root that the name would have produced.
+
+  **The obligation is over the destination, not over the one input that reaches it today.** The
+  frontmatter `name` is the value a caller controls that becomes a path component (S-001, S-002, and
+  the emitted per-skill paths), so it is what the Given can be written against. What the Then requires
+  is a property of where a write lands, so a target added later that derives a path from something
+  else is covered without amending this scenario. Written the other way round, as a rule about names,
+  it would pin one guard's input and leave the boundary itself unstated, which is the gap this
+  scenario closes: the behaviour arrived on 2026-08-31 (`bug-0060`) and no scenario required it, so a
+  refactor removing it would have left every gate green.
+
+  **The preview is named in the When deliberately.** A preview writes nothing either way (S-012), so
+  the load-bearing half there is the refusal: a run that reported a destination it would refuse to
+  write, and then exited zero, would satisfy S-012 and mislead every reader of its report. A preview
+  is also the only way this repository's own gates exercise the tool.
+
+  **What this scenario does not state.** That a refused run leaves nothing behind at all. It bounds
+  where a write may land, not whether any write happened, so a run refused partway can leave adapters
+  and shared material inside the output root and still satisfy the Then. Goal 6 asks for more than
+  that. The stronger obligation is owed a scenario of its own rather than folded in here, because a
+  Then no run satisfies could only be recorded not-built, and a scenario nothing enforces is the state
+  this amendment exists to leave rather than to re-enter.
+
 ### Scenario S-015: the plugin target emits an installable plugin tree
 
 - **Given** a kit containing N skills, and the plugin target requested
@@ -313,7 +350,7 @@ every test still pass, because no test asserts the reason.
 | Emitted per skill | `.cursor/rules/<name>.mdc`, `.github/prompts/<name>.prompt.md`, `skills/<name>/SKILL.md` (plugin) |
 | Emitted per plugin run | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, once per run rather than per skill |
 | Emitted shared | Under `.agents/` for the inlining targets and at the plugin root for the plugin target: `<shared>/rules/<file>` (adopted, preserved on a re-run), `<shared>/skills/<name>/<path>` (derived, refreshed on a re-run). Targets sharing a location share one copy |
-| Exit code | non-zero for an unrecognized target, zero otherwise |
+| Exit code | non-zero whenever the run refuses rather than proceeds: an unrecognized target, a skill this tool declines to emit from, a destination that would resolve outside the output root (S-020), or a file it cannot read; zero otherwise. Which refusals are *required* is a scenario's question, not this row's |
 | Output | one line per emitted adapter and per emitted manifest, then a summary of adapter and shared-asset counts, naming the shared locations written, and a manifest count when the plugin target ran |
 
 ## Open Questions

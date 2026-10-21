@@ -78,6 +78,22 @@ DELEGATION_TOOLS = {
 }
 
 
+def _launched_in_background(payload) -> bool:
+    """True when this tool call only launched a background agent, so nothing has returned.
+
+    The 2026-10 kit refresh audit (finding 4.6) watched this hook tell a session "a
+    delegated agent just returned a report" immediately after each of three background
+    launches, and stay silent when the reports arrived, because a background agent's
+    report comes back as a message rather than as a tool result. The false half is
+    decidable from the payload and is fixed here. The missed half is not: no documented
+    event fires in the delegating session when a background report arrives, so a
+    background delegation is outside what this hook can cover, and the verification it
+    asks for has to come from the workflow (`fix-batch` Step 6) instead.
+    """
+    tool_input = payload.get("tool_input")
+    return isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
+
+
 def evaluate(payload):
     """Return the hook's output object for this payload, or None to stay silent."""
     if not isinstance(payload, dict):
@@ -85,6 +101,8 @@ def evaluate(payload):
     if payload.get("hook_event_name") != "PostToolUse":
         return None
     if payload.get("tool_name") not in DELEGATION_TOOLS:
+        return None
+    if _launched_in_background(payload):
         return None
     return {
         "hookSpecificOutput": {

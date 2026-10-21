@@ -53,6 +53,7 @@ Standard library only.
 from __future__ import annotations
 
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -76,12 +77,201 @@ class Gate:
     populated throwaway home behind. Its failure is reported but does not by itself fail
     the gate, because a cleanup that could not run says nothing about the change under
     test.
+
+    `check` is the second gate kind, added by `chore-0072`: an in-process callable
+    returning `(ok, report)` instead of a list of commands. Every other gate here shells
+    out to a script that a person can also run alone, and that remains the right default;
+    this one exists because `chore-0072` owns exactly two files, this one and its test,
+    so a gate with a script of its own would have been a third. The cost is named rather
+    than hidden: an in-process gate cannot be run standalone, and it is the one gate whose
+    crash could take the aggregator down with it, which `run_gate` handles explicitly.
+    A gate carries commands or a check, never both.
     """
 
-    def __init__(self, name, commands, cleanup=None):
+    def __init__(self, name, commands, cleanup=None, check=None):
         self.name = name
         self.commands = commands
         self.cleanup = cleanup
+        self.check = check
+
+
+# The ROADMAP bookkeeping check (chore-0072). Its subject is ROADMAP.md, which AGENTS.md
+# calls authoritative for what happens next and which no gate has ever read.
+ROADMAP = "ROADMAP.md"
+
+TASK_ID = re.compile(r"\b(?:feat|bug|chore|docs|spike)-\d{4}\b")
+
+# A markdown block starts at a list item, a heading, or a table row, and otherwise runs to
+# the next blank line. The unit matters, and it was measured: an earlier draft treated
+# every unindented line as a new block, which split this file's wrapped paragraphs one
+# line each and lost the chore-0042 defect entirely, because the claim and the id it was
+# about sat on different lines.
+BLOCK_START = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)|^#|^\|")
+
+# Two tiers, and the split is the whole false-positive answer. A PRESENT-tense claim that
+# work is outstanding contradicts a closed id on its own, so nothing in the block excuses
+# it. A HEDGED phrase is one this file also uses historically, and its corrected idiom is
+# always "Scoped as [id](...) and **shipped <date>**", so a completion marker anywhere in
+# the same block means the sentence is a record rather than a claim.
+#
+# Measured before being written, over ROADMAP.md at b7cd720^ (the state chore-0066 found)
+# and at 7a9558f (the state it left): 6 findings on the first, 0 on the second. The tense
+# in "are filed rather than fixed" is load-bearing rather than stylistic. chore-0066
+# corrected that exact sentence to "were filed rather than fixed and **both closed
+# 2026-08-19**", so matching the bare phrase would fire on its own fix.
+OPEN_STATE_PRESENT = (
+    "are filed rather than fixed",
+    "is filed rather than fixed",
+    "not yet filed",
+    "is still open",
+    "are still open",
+    "remains open",
+    "remain open",
+)
+OPEN_STATE_HEDGED = (
+    "scoped as",
+    "pending",
+    "ready to dispatch",
+    "in flight",
+    "awaiting",
+)
+
+# A completion word bolded at the head of its span, or sitting beside a date, or a
+# struck-through item. Deliberately not the bare word: this file writes "the shipped task
+# template" and "the shipped validator" as adjectives, and matching those suppressed two
+# real defects when it was tried.
+_COMPLETION_WORD = (r"(?:shipped|landed|closed|merged|superseded|completed|struck"
+                    r"|discharged|corrected)")
+COMPLETION_MARKER = re.compile(
+    r"~~|\*\*\s*(?:and\s+)?" + _COMPLETION_WORD
+    + r"|" + _COMPLETION_WORD + r"\b[^.\n]{0,25}\d{4}-\d{2}-\d{2}", re.IGNORECASE)
+
+# chore-0066 removed the whole-file header on 2026-08-27, after it had read 2026-08-07 for
+# twenty days with nothing checking it. This keeps that decision from being undone by
+# someone who reads its absence as an oversight. The pattern needs the colon and a date on
+# the same line, because the sentence recording the removal names the field in prose and
+# must not match itself.
+STALE_HEADER = re.compile(r"Last updated:.{0,20}?\d{4}-\d{2}-\d{2}")
+
+
+def task_locations(repo_root=None):
+    """Every task id under `.tasks/`, mapped to the directories holding it.
+
+    A set rather than a string, because an id sitting in both directories is a real state
+    this must not silently resolve to one of them.
+    """
+    repo_root = REPO_ROOT if repo_root is None else Path(repo_root)
+    found = {}
+    for directory, where in ((repo_root / ".tasks", "open"),
+                             (repo_root / ".tasks" / "done", "done")):
+        if not directory.is_dir():
+            continue
+        for path in directory.glob("*.md"):
+            match = TASK_ID.match(path.name)
+            if match:
+                found.setdefault(match.group(0), set()).add(where)
+    return found
+
+
+def markdown_blocks(text):
+    """(first line number, block text) for every markdown block in `text`."""
+    blocks = []
+    current = None
+    for number, raw in enumerate(text.splitlines(), 1):
+        if not raw.strip():
+            current = None
+            continue
+        if current is None or BLOCK_START.match(raw):
+            current = [number, [raw]]
+            blocks.append(current)
+        else:
+            current[1].append(raw)
+    return [(number, "\n".join(lines)) for number, lines in blocks]
+
+
+def roadmap_findings(text, locations):
+    """Blocks whose prose claims a closed task id is still outstanding.
+
+    Returns `[(line_number, [phrases], [ids])]`. The comparison runs over the block with
+    its whitespace collapsed, because this file wraps prose at about a hundred columns and
+    every multi-word phrase in the vocabulary straddles a line break somewhere in it.
+    """
+    findings = []
+    for number, block in markdown_blocks(text):
+        flat = " ".join(block.split())
+        lowered = flat.lower()
+        present = [p for p in OPEN_STATE_PRESENT if p in lowered]
+        hedged = [p for p in OPEN_STATE_HEDGED if p in lowered]
+        fired = present + ([] if COMPLETION_MARKER.search(flat) else hedged)
+        if not fired:
+            continue
+        closed = sorted({i for i in TASK_ID.findall(block)
+                         if locations.get(i) == {"done"}})
+        if closed:
+            findings.append((number, fired, closed))
+    return findings
+
+
+def check_roadmap(repo_root=None):
+    """The `roadmap bookkeeping` gate: does ROADMAP.md still agree with .tasks/?
+
+    Returns (ok, report). Two of the three shapes chore-0066 mapped, and a bound naming
+    what is left. The bound is not decoration. This catches the bookkeeping class and
+    cannot catch the defect that mattered most in that pass, Epic E item 2 restating an
+    acceptance bar that docs/spec/cloud-executable.md had already repointed eight days
+    earlier. Catching that means reading the contract the roadmap restates, which is a
+    different capability, so a green run here must not be read as "the roadmap is
+    current".
+
+    The third shape, a quoted shell command written into the file beside its own output,
+    is deliberately not built. One instance is not a mechanism; telling a claim about a
+    command's current output from a command quoted as an illustration needs the judgment
+    this check has none of; and running shell text lifted out of a document is an action
+    no gate here takes.
+    """
+    repo_root = REPO_ROOT if repo_root is None else Path(repo_root)
+    text = (repo_root / ROADMAP).read_text(encoding="utf-8")
+    locations = task_locations(repo_root)
+
+    named = sorted(set(TASK_ID.findall(text)))
+    closed = [i for i in named if locations.get(i) == {"done"}]
+    outstanding = [i for i in named if locations.get(i) == {"open"}]
+    unresolved = [i for i in named if len(locations.get(i, ())) != 1]
+    blocks = markdown_blocks(text)
+    findings = roadmap_findings(text, locations)
+    header = STALE_HEADER.search(text)
+
+    lines = []
+    for number, phrases, ids in findings:
+        lines.append(
+            f"{ROADMAP}:{number}: {', '.join(ids)} "
+            f"{'is' if len(ids) == 1 else 'are'} in .tasks/done/, and this block "
+            f"reads as outstanding: {'; '.join(repr(p) for p in phrases)}")
+    if header:
+        lines.append(
+            f"{ROADMAP}: a `Last updated:` header is back ({header.group(0)!r}). "
+            f"chore-0066 removed it on 2026-08-27 because a date nothing derives is a "
+            f"claim nobody maintains, and `git log -1 ROADMAP.md` answers the same "
+            f"question without being able to drift.")
+    # Reported, never judged. An id naming no task file may be a typo or a file not yet
+    # written, and this check cannot tell which; saying nothing would let the arithmetic
+    # below imply a coverage it does not have.
+    if unresolved:
+        lines.append(f"{ROADMAP}: {len(unresolved)} id(s) named here resolve to no "
+                     f"single task file and were not judged: "
+                     f"{', '.join(unresolved)}")
+
+    lines.append(
+        f"Checked {ROADMAP}: {len(named)} task ids named, {len(closed)} in .tasks/done/, "
+        f"{len(outstanding)} in .tasks/, {len(unresolved)} unresolved; {len(blocks)} "
+        f"blocks read, {len(findings)} carrying an open-state claim over a closed id; "
+        f"1 header rule, {0 if header is None else 1} tripped. Not judged: the "
+        f"restated-contract class (a roadmap claim restating a spec's own bar, which "
+        f"needs reading that contract), quoted commands and their written-down output, "
+        f"and a hedged phrase in a block that also carries a completion marker. "
+        f"2 of the 3 shapes chore-0066 mapped are covered, so a pass here is evidence "
+        f"about bookkeeping and about nothing else.")
+    return not findings and header is None, "\n".join(lines)
 
 
 def gates():
@@ -144,6 +334,13 @@ def gates():
         # measured: seven of 65 pointers in one matrix aimed at something other than what
         # they claimed, from two independent causes in one month.
         Gate("matrix citations", [[PY, "scripts/check-citations.py"]]),
+        # Added by chore-0072, and the first gate here that is a callable rather than a
+        # script. Nothing above reads ROADMAP.md, which AGENTS.md calls authoritative for
+        # what happens next: `backlog` walks the task files, and `doc links` resolves this
+        # file's link paths and stops there. So a sentence saying a task is still to be
+        # done, beside that task's own file sitting in `.tasks/done/`, passed every gate,
+        # which is what chore-0066 measured when it corrected nine of them at once.
+        Gate("roadmap bookkeeping", [], check=check_roadmap),
     ]
 
 
@@ -186,6 +383,24 @@ def _run(command, runner=None):
     return done.returncode == 0, False, output
 
 
+def _run_check(gate):
+    """Run an in-process gate. Same (status, output, cleanup_ok) shape as a command gate.
+
+    The broad `except Exception` is the one place in this file that catches everything,
+    and it is deliberate. Every other gate is a subprocess, so its crash is somebody
+    else's traceback and a non-zero return code; an in-process gate raising would abort
+    the aggregator itself and take the gates after it down with it, which is exactly the
+    fail-fast behaviour this command was written not to have. A crash is reported as
+    `unrunnable` rather than `failed`, for the same reason a missing script is: it means
+    the question was never answered, not that the answer was no.
+    """
+    try:
+        ok, output = gate.check()
+    except Exception as exc:  # deliberately broad; see the docstring
+        return "unrunnable", f"could not run: {type(exc).__name__}: {exc}", True
+    return ("ok" if ok else "failed"), output, True
+
+
 def run_gate(gate, runner=None):
     """Run one gate. Returns (status, output, cleanup_ok).
 
@@ -195,6 +410,8 @@ def run_gate(gate, runner=None):
     passing gate into a failing one. Keeping them separate is what lets the report say
     both things at once.
     """
+    if gate.check is not None:
+        return _run_check(gate)
     collected = []
     status = "ok"
     for command in gate.commands:

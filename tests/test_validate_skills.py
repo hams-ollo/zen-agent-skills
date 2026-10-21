@@ -186,7 +186,9 @@ class TestDescriptionCeiling(unittest.TestCase):
         _write_skill(self.root, "alpha", GOOD_FM.format(name="alpha", desc=exact))
         code, out = _run(self.root)
         self.assertEqual(code, 0)
-        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+        # At the cap, so over the 700-char advisory: a warning, never an error.
+        self.assertIn("Checked 1 skill(s): 0 error(s), 1 warning(s).", out)
+        self.assertIn("over the 700-char advisory", out)
 
     def test_block_scalar_description_is_measured_without_its_indicator(self):
         # Scenario S-018: the measured value excludes the `>-` indicator. Written as a
@@ -197,7 +199,9 @@ class TestDescriptionCeiling(unittest.TestCase):
         _write_skill(self.root, "alpha", frontmatter)
         code, out = _run(self.root)
         self.assertEqual(code, 0, "a block scalar at the limit must not be measured 3 over")
-        self.assertIn("Checked 1 skill(s): 0 error(s), 0 warning(s).", out)
+        # At the cap, so over the 700-char advisory: a warning, never an error.
+        self.assertIn("Checked 1 skill(s): 0 error(s), 1 warning(s).", out)
+        self.assertIn("over the 700-char advisory", out)
 
     def test_block_scalar_indicators_are_stripped_but_plain_scalars_are_not(self):
         # Scenario S-018 at the parser layer, across every indicator form. The negative
@@ -676,6 +680,7 @@ class TestLensComposition(unittest.TestCase):
     """
 
     LENS_OPENING = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "It governs something.\n"
@@ -808,7 +813,10 @@ class TestLensComposition(unittest.TestCase):
         # "lens", which any rules document may use when describing its neighbours. Only
         # the opening is a declaration about *this* file, so a mention further down must
         # not conscript a document into being a lens.
-        deep = self.PLAIN_RULES_DOC + "\n" * 40 + "This file is a **swappable module**.\n"
+        # `paths` frontmatter so the always-loaded budget, a separate rule, stays out of
+        # a test about the declaration window.
+        deep = ("---\npaths:\n  - \"**/rules/README.md\"\n---\n" + self.PLAIN_RULES_DOC
+                + "\n" * 40 + "This file is a **swappable module**.\n")
         self._write_rules("README.md", deep)
         _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC))
         code, out = _run(self.skills)
@@ -821,7 +829,12 @@ class TestLensComposition(unittest.TestCase):
         # bug-0026 asks a drift assertion to be bounded: if a future lens declares itself
         # later than this, the constant is what moves, and this test says so.
         rules_dir = REPO_ROOT / ".agents" / "rules"
-        for path in sorted(rules_dir.glob("*.md")):
+        # The lenses are the files that load on demand; `core.md` is always loaded on
+        # purpose and is deliberately not a lens (2026-10 kit refresh).
+        lenses = [p for p in sorted(rules_dir.glob("*.md"))
+                  if vs.loads_on_demand(p.read_text(encoding="utf-8"))]
+        self.assertTrue(lenses, "no rules file loads on demand, so no lens was checked")
+        for path in lenses:
             lines = path.read_text(encoding="utf-8").splitlines()
             declaring = [i + 1 for i, line in enumerate(lines)
                          if vs.LENS_DECLARATION_RE.search(line)]
@@ -921,11 +934,13 @@ class TestUniversalLensScope(unittest.TestCase):
     """
 
     UNIVERSAL_LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "**Scope: universal.** Every skill in this kit references this module.\n"
     )
     TOPICAL_LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
         "# Zen example lens (edit freely)\n\n"
         "This file is a **swappable module**, the fourth beside the other three.\n\n"
         "It governs something only some skills do.\n"
@@ -1009,6 +1024,179 @@ class TestUniversalLensScope(unittest.TestCase):
         self._skill("alpha", references=False)
         code, out = _run(self.skills)
         self.assertEqual(code, 0, out)
+
+
+class TestDeclaredBodyShape(unittest.TestCase):
+    """chore-0069: a skill that declares itself a lens and is built as a workflow warns.
+
+    The rule is the skill-structure section of `AGENTS.md`: a lens carries `Intent`,
+    `Workflow` and an `Output` heading, because it is composed into another skill rather than
+    run on its own, and giving it a step-by-step procedure invites an agent to run it
+    standalone. Nothing had ever checked it, which is how the one rule governing the internal
+    structure of every deliverable this kit ships reached 2026-08-27 naming three lenses and
+    being right about one.
+
+    **The tautology is the design problem, and the negative cases are what answer it.** A
+    checker that read the intended shape out of the headings would make every skill conform by
+    construction, and a check that cannot fail is unchecked whatever it printed. This one reads
+    a declaration the headings cannot supply, so the pair that carries the weight is
+    `test_a_declared_lens_built_as_a_workflow_warns` beside
+    `test_the_same_body_without_the_declaration_is_not_reported`: byte-identical headings,
+    opposite verdicts, which is only possible if the declaration is what is being read.
+
+    A warning rather than an error, decided after measuring both numbers rather than before:
+    three shipped skills declare themselves lenses and one of the three, `test-quality`,
+    disagrees with the shape. As an error that one skill would fail the tree on landing, and
+    the resolution (reshape the skill, or reword its declaration) is a change to a file this
+    task does not own. `check_status_contradiction` is the prior art for the severity as well
+    as for the shape: a body-content rule reported over parsed text.
+    """
+
+    DECLARATION = "This skill is a lens, not a workflow: it is composed into one.\n\n"
+
+    LENS_HEADINGS = ("## Intent\n\nWhat it decides.\n\n"
+                     "## Workflow\n\nWhat it applies.\n\n"
+                     "## Output format\n\nWhat it returns.\n")
+    WORKFLOW_HEADINGS = ("## When to use\n\nSometimes.\n\n"
+                         "## Procedure\n\n1. Do the first thing.\n\n"
+                         "## Notes\n\nOdds and ends.\n")
+
+    # The stable half of the warning text, so a reworded explanation does not silently stop
+    # these assertions from testing anything.
+    FINDING = "declares itself a lens but is not shaped like one"
+
+    # Real phrasings lifted from shipped bodies. Every one of these names a lens the skill
+    # composes, and none of them classifies the skill as one. A bare-word pattern, which is
+    # what the rules-directory declaration uses, would conscript all four.
+    MENTIONS = {
+        "composes another lens": "It composes the `review-quality` lens the way house-review does.\n\n",
+        "applies a lens": "Apply the `test-quality` lens before returning the draft.\n\n",
+        "runs a lens over its own output": "Run the `spec-quality` lens over your own draft.\n\n",
+        "defines the word": "A lens is a reusable review shot that a workflow composes.\n\n",
+    }
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self._trees = 0
+
+    def _run_body(self, body):
+        """Run main() over a one-skill tree carrying `body`, in a tree of its own."""
+        self._trees += 1
+        root = self.root / f"tree{self._trees}" / "skills"
+        root.mkdir(parents=True)
+        _write_skill(root, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC), body=body)
+        return _run(root)
+
+    def test_a_declared_lens_built_as_a_workflow_warns(self):
+        # The constructed disagreement the whole check exists for: declared one shape, built
+        # as the other. Every heading the lens shape asks for is absent and the workflow's own
+        # heading is present, so the warning names both halves.
+        code, out = self._run_body(self.DECLARATION + self.WORKFLOW_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertIn(self.FINDING, out)
+        for role in ("Intent", "Workflow", "Output"):
+            with self.subTest(role=role):
+                self.assertIn(f"no `{role}` heading", out)
+        self.assertIn("`Procedure` heading", out)
+
+    def test_the_same_body_without_the_declaration_is_not_reported(self):
+        # The other half of the pair, and the answer to the tautology. Identical headings,
+        # declaration removed, nothing reported. If this ever starts warning, the check has
+        # gone back to inferring the shape from the headings and means nothing.
+        code, out = self._run_body(self.WORKFLOW_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_a_declared_lens_carrying_the_lens_shape_is_not_reported(self):
+        code, out = self._run_body(self.DECLARATION + self.LENS_HEADINGS)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_the_output_heading_may_be_spelled_either_way(self):
+        # `spec-conformance` writes `Output` and `spec-plan-readiness` writes `Output format`.
+        # Which of the two an author typed is not a fact about whether the skill can be run
+        # standalone, so a check that split them would report a conforming lens, and a rule
+        # that fires on something nobody intended gets switched off rather than satisfied.
+        for heading in ("## Output\n", "## Output format\n", "## Output shape\n"):
+            with self.subTest(heading=heading.strip()):
+                body = (self.DECLARATION + "## Intent\n\nWhy.\n\n## Workflow\n\nHow.\n\n"
+                        + heading + "\nWhat it returns.\n")
+                code, out = self._run_body(body)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn(self.FINDING, out)
+
+    def test_a_heading_that_merely_starts_with_the_same_letters_does_not_fill_the_role(self):
+        # `Intended readers` is not `Intent`. The role match is the word, or the word followed
+        # by a space, so a prefix collision cannot clear a role the body never carries.
+        body = (self.DECLARATION + "## Intended readers\n\nWho.\n\n"
+                "## Workflow\n\nHow.\n\n## Output\n\nWhat.\n")
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_naming_the_lens_a_skill_composes_is_not_declaring_itself_one(self):
+        for label, mention in self.MENTIONS.items():
+            with self.subTest(phrasing=label):
+                code, out = self._run_body(mention + self.WORKFLOW_HEADINGS)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn(self.FINDING, out, label)
+
+    def test_a_declaration_inside_a_fenced_block_does_not_count(self):
+        # Same rule the reference and scope checks apply: inside a fence the body is showing
+        # what a declaration looks like rather than making one. A skill documenting this
+        # convention must not thereby classify itself.
+        body = ("A lens opts in by writing:\n\n```\n"
+                "This skill is a lens, not a workflow.\n```\n\n" + self.WORKFLOW_HEADINGS)
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(self.FINDING, out)
+
+    def test_a_heading_inside_a_fenced_block_does_not_fill_a_role(self):
+        # The converse, and not hypothetical: `spec-author` prints a whole spec skeleton of
+        # `##` headings inside a fence, and reading those as its own sections would describe
+        # the document it writes rather than the document it is.
+        body = (self.DECLARATION + "It emits a document shaped like this:\n\n```markdown\n"
+                "## Intent\n\n## Workflow\n\n## Output format\n```\n\n" + self.WORKFLOW_HEADINGS)
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn(self.FINDING, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_a_third_level_heading_does_not_fill_a_role(self):
+        # The shape rule is about the sections a body is divided into, not about what sits
+        # inside one, so `### Intent` under some other section does not answer the role.
+        body = (self.DECLARATION + "## Notes\n\n### Intent\n\nnested.\n\n"
+                "## Workflow\n\nHow.\n\n## Output\n\nWhat.\n")
+        code, out = self._run_body(body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("no `Intent` heading", out)
+
+    def test_the_shipped_tree_declares_exactly_these_lenses(self):
+        # Pinned rather than assumed, for the reason the universal-lens set above is pinned:
+        # which skills call themselves lenses is a decision about the kit's taxonomy, and it
+        # should have to be restated in the task that changes it rather than drifting.
+        # `spec-plan-readiness` is deliberately absent: it calls itself a gate, and no other
+        # skill body calls it a lens (measured 2026-08-31, chore-0069).
+        skills = REPO_ROOT / ".agents" / "skills"
+        declaring = sorted(
+            d.name for d in skills.iterdir()
+            if d.is_dir() and vs.declares_lens_shape(
+                (d / "SKILL.md").read_text(encoding="utf-8"))
+        )
+        self.assertEqual(declaring, ["spec-conformance", "spec-quality", "test-quality"],
+                         "the set of self-declared lenses changed; state it in the task "
+                         "that changes it rather than letting the taxonomy drift")
+
+    def test_the_shipped_tree_reports_exactly_the_one_known_disagreement(self):
+        # The number the closeout states, asserted rather than described. One of the three
+        # declared lenses disagrees with the shape, and it stays a warning, so a green
+        # acceptance run is still a green run.
+        code, out = _run(REPO_ROOT / ".agents" / "skills")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count(self.FINDING), 1, out)
+        self.assertIn(f".agents/skills/test-quality/SKILL.md: {self.FINDING}", out)
 
 
 class TestSupportingFileLinkChecks(unittest.TestCase):
@@ -1199,7 +1387,12 @@ class TestSupportingFileLinkChecks(unittest.TestCase):
             for kind, n in vs.check_supporting_files(
                     d, names, d.name, [], skills_dir.parent.resolve()).items():
                 counts[kind] += n
-        self.assertEqual(counts, {"markdown": 1, "template": 8, "other": 5})
+        # 6 since feat-0066 added `sitrep/scripts/sitrep.py`. Markdown 2 since chore-0094
+        # moved `fix-batch`'s incident record into `fix-batch/references/incidents.md`.
+        # feat-0072 added `quest-tracker/references/authoring-guide.md`, read in place and so
+        # link-checked, and two files that are not markdown: the template page
+        # `quest-tracker/templates/quest-tracker.html` and `quest-tracker/scripts/tracker.py`.
+        self.assertEqual(counts, {"markdown": 3, "template": 8, "other": 8})
 
     def test_a_byte_cache_is_not_counted_as_a_supporting_file(self):
         # The count has to be a fact about the kit and not about whether the tests have
@@ -1798,6 +1991,188 @@ class UndecodableSkillFileTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("not valid UTF-8", out)
         self.assertIn("example.md", out)
+
+
+class TestRulesLoadOnDemand(unittest.TestCase):
+    """What the rules module puts in every session before any skill runs (2026-10 refresh).
+
+    Claude Code loads every `.md` under `~/.claude/rules/`, where `install.py` places this
+    module, into every session in every project unless the file carries `paths`
+    frontmatter. The kit refresh audit measured the cost of not knowing that: 488 lines of
+    lens text in every session, most of it citations. A lens must load on demand, and the
+    files that do load always stay inside a line budget.
+    """
+
+    LENS = (
+        "---\npaths:\n  - \"**/rules/example.md\"\n---\n\n"
+        "# Zen example lens (edit freely)\n\n"
+        "This file is a **swappable module**.\n"
+    )
+    BODY = "Follow [`example.md`](../../rules/example.md) when nobody is watching.\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.skills = root / "agents" / "skills"
+        self.rules = root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                     body=self.BODY)
+
+    def test_a_lens_with_paths_frontmatter_passes(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 error(s), 0 warning(s)", out)
+
+    def test_a_lens_without_paths_frontmatter_errors(self):
+        lens = self.LENS.split("---\n\n", 1)[1]
+        (self.rules / "example.md").write_text(lens, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("carries no `paths` frontmatter", out)
+        self.assertIn("example.md", out)
+
+    def test_a_small_always_loaded_file_that_is_not_a_lens_passes(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        (self.rules / "core.md").write_text("# Core rules\n\n- One line per rule.\n",
+                                            encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_always_loaded_files_over_the_budget_error(self):
+        (self.rules / "example.md").write_text(self.LENS, encoding="utf-8")
+        big = "# Core rules\n\n" + "- a rule\n" * vs.ALWAYS_LOADED_MAX_LINES
+        (self.rules / "core.md").write_text(big, encoding="utf-8")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("always-loaded rules files total", out)
+        self.assertIn("core.md", out)
+
+    def test_the_shipped_module_keeps_one_small_always_loaded_file(self):
+        # Against the real tree: the property the audit found broken, pinned in the
+        # direction it broke.
+        rules = REPO_ROOT / ".agents" / "rules"
+        always = sorted(p.name for p in rules.glob("*.md")
+                        if not vs.loads_on_demand(p.read_text(encoding="utf-8")))
+        self.assertEqual(always, ["core.md"])
+        errors = []
+        vs.check_rules_load_on_demand(rules, errors)
+        self.assertEqual(errors, [])
+
+
+class TestEmDashes(unittest.TestCase):
+    """The house-style lens forbids em-dashes, and nothing enforced it over the kit's text.
+
+    Read from the lens, so an adopter whose house style allows them is not overruled.
+    """
+
+    HOUSE_STYLE = ("---\npaths:\n  - \"**/rules/house-style.md\"\n---\n\n"
+                   "# House style lens\n\nThis file is a **swappable module**.\n\n"
+                   "- **No em-dashes.** Use commas.\n")
+    BODY = "Write as [`house-style.md`](../../rules/house-style.md) says.\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.skills = root / "agents" / "skills"
+        self.rules = root / "agents" / "rules"
+        self.rules.mkdir(parents=True)
+
+    def _skill(self, extra):
+        _write_skill(self.skills, "alpha", GOOD_FM.format(name="alpha", desc=LONG_DESC),
+                     body=self.BODY + extra)
+
+    def test_an_em_dash_in_a_skill_body_errors_with_its_line(self):
+        (self.rules / "house-style.md").write_text(self.HOUSE_STYLE, encoding="utf-8")
+        self._skill("A clause \u2014 and another.\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("SKILL.md:6: an em-dash", out)
+
+    def test_an_em_dash_inside_a_fence_is_allowed(self):
+        (self.rules / "house-style.md").write_text(self.HOUSE_STYLE, encoding="utf-8")
+        self._skill("```\nshown \u2014 not written\n```\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_a_house_style_without_the_rule_allows_them(self):
+        allowing = self.HOUSE_STYLE.replace("- **No em-dashes.** Use commas.\n", "")
+        (self.rules / "house-style.md").write_text(allowing, encoding="utf-8")
+        self._skill("A clause \u2014 and another.\n")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 0, out)
+
+    def test_an_em_dash_in_a_rules_file_errors(self):
+        (self.rules / "house-style.md").write_text(
+            self.HOUSE_STYLE + "\nA note \u2014 here.\n", encoding="utf-8")
+        self._skill("")
+        code, out = _run(self.skills)
+        self.assertEqual(code, 1, out)
+        self.assertIn("house-style.md", out)
+        self.assertIn("an em-dash", out)
+
+
+class TestFoldedHyphenBreak(unittest.TestCase):
+    """A `>` description wrapped inside a hyphenated word reads with a space in it.
+
+    The kit refresh's first pass shipped "use doc- author" this way; independent
+    verification with a real YAML parser caught it, and this pins it.
+    """
+
+    def _run_desc(self, block):
+        with tempfile.TemporaryDirectory() as tmp:
+            skills = Path(tmp) / "agents" / "skills"
+            fm = "---\nname: alpha\ndescription: >-\n" + block + "---\n"
+            _write_skill(skills, "alpha", fm)
+            return _run(skills)
+
+    def test_a_line_ending_mid_hyphenated_word_errors(self):
+        code, out = self._run_desc(
+            "  Revises documents in place for any reader. To create a new one use doc-\n"
+            "  author instead, and to find which one is wrong use doc-sync.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ends in a hyphen", out)
+
+    def test_a_hyphenated_word_kept_on_one_line_passes(self):
+        code, out = self._run_desc(
+            "  Revises documents in place for any reader. To create a new one use\n"
+            "  doc-author instead, and to find which one is wrong use doc-sync.\n")
+        self.assertEqual(code, 0, out)
+
+    def test_no_shipped_description_has_one(self):
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        errors = []
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            vs.check_folded_hyphen_break((d / "SKILL.md").read_text(encoding="utf-8"),
+                                         d.name, errors)
+        self.assertEqual(errors, [])
+
+
+class TestDescriptionAdvisory(unittest.TestCase):
+    """A long description is a warning, not an error: the cap is the harness's, this is advice."""
+
+    def test_a_description_over_the_advisory_warns_and_still_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skills = Path(tmp) / "agents" / "skills"
+            desc = "Use this skill when " + "it is needed for a reason, " * 30
+            self.assertGreater(len(desc), vs.DESC_ADVISORY_CHARS)
+            self.assertLessEqual(len(desc), vs.MAX_DESC_CHARS)
+            _write_skill(skills, "alpha", GOOD_FM.format(name="alpha", desc=desc))
+            code, out = _run(skills)
+        self.assertEqual(code, 0, out)
+        self.assertIn("over the 700-char advisory", out)
+
+    def test_every_shipped_description_is_inside_the_advisory(self):
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+        over = []
+        for d in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+            fm, _ = vs.parse_frontmatter((d / "SKILL.md").read_text(encoding="utf-8"))
+            if len(fm.get("description", "")) > vs.DESC_ADVISORY_CHARS:
+                over.append(d.name)
+        self.assertEqual(over, [])
 
 
 if __name__ == "__main__":

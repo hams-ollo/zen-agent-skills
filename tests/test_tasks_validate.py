@@ -16,6 +16,11 @@ template the scaffold ships alongside that validator. It had lost the `external`
 the validator now checks and the `## Decisions` section two shipped skills read it for,
 so an adopter got a rule enforced and never explained.
 
+`bug-0061` adds the dependency graph, back over the pair of validators. Every
+`depends_on` entry was checked on its own and the graph the entries form was checked not
+at all, so two tasks naming each other passed `--strict` at exit 0 while neither could
+ever become dispatchable.
+
 Standard library only, per the conventions section of AGENTS.md.
 
 Scope is still deliberately narrow. `.tasks/validate.py` had no test file before
@@ -26,6 +31,7 @@ import ast
 import contextlib
 import importlib.util
 import io
+import json
 import re
 import subprocess
 import sys
@@ -1063,6 +1069,442 @@ class UndecodableFileTemplateTests(UndecodableFileTests):
     carries its own history in its comments. `chore-0081` was filed asking that the two
     "match", which was a false premise: they were already 119 lines apart by design. What has
     to match is the behaviour, which is what subclassing asserts.
+    """
+
+    module = tvt
+
+
+class ScaffoldManifestTests(TasksRootTestCase):
+    """`chore-0060`: the id high-water mark in the scaffold manifest, read at last.
+
+    `.tasks/.scaffold.json` records the highest id in use per type, and `new-task` tells
+    an author to prefer it over scanning the tree. Nothing read it. A search for
+    `scaffold.json` and `id_high_water` across the skills, the tracker, the tests and
+    the scripts returned six hits and every one was prose in a skill body: no validator,
+    no gate, no test. It had drifted below the backlog while every gate stayed green, so
+    an agent following the instruction as written was handed ids that were already
+    taken, and found out from the duplicate-id error, after the task files existed and
+    had been cross-referenced.
+
+    The population is a manifest that disagrees with the tree it describes. The cases
+    that must stay silent matter as much as the one that must fire: this validator ships
+    into every repository the scaffold touches, and a warning on a clean adopter tree is
+    the outcome this file's own comments say to design against.
+    """
+
+    module = tv
+
+    def _write_task(self, tid):
+        """Write one open task file carrying `tid`, named after it."""
+        ttype = tid.split("-", 1)[0]
+        text = (TASK.format(external="")
+                .replace("id: feat-0099", f"id: {tid}")
+                .replace("type: feat", f"type: {ttype}"))
+        (self.tasks / f"{tid}-test.md").write_text(text, encoding="utf-8")
+
+    def _manifest_path(self):
+        return self.tasks / self.module.SCAFFOLD_MANIFEST
+
+    def _write_manifest(self, raw):
+        """Write the manifest verbatim, so a malformed one is expressible."""
+        self._manifest_path().write_text(raw, encoding="utf-8")
+
+    def _write_high_water(self, **recorded):
+        self._write_manifest(json.dumps({"generator": "init-worktracking",
+                                         "id_high_water": recorded}))
+
+    def _run_lenient(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = self.module.main([])
+        return code, buf.getvalue()
+
+    def test_a_recorded_high_water_below_the_tree_is_reported(self):
+        # The defect itself, and the acceptance criterion. chore-0007 is in the tree and
+        # the manifest says the highest chore is 5, which is exactly the state that
+        # hands the next author an id already taken.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a stale manifest\n{out}")
+        self.assertIn(".scaffold.json", out)
+        self.assertIn("chore-0007", out)
+
+    def test_the_finding_names_both_numbers(self):
+        # The message is the deliverable. "The manifest is stale" sends the reader off
+        # to scan the tree by hand, which is the work the record exists to save.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        _, out = self._run()
+        self.assertIn("is 5", out)
+        self.assertIn("chore-0007", out)
+
+    def test_the_finding_is_a_warning_that_only_strict_promotes(self):
+        # A recorded decision, not an accident of implementation, and the same one the
+        # mislabelled-link check made: a default run in an adopter's tree reports this
+        # without failing, and only --strict, which a backlog gate runs, promotes it.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=5)
+        code, out = self._run_lenient()
+        self.assertEqual(code, 0,
+                         f"a default run must not fail an adopter's tree\n{out}")
+        self.assertIn("WARN", out)
+        self.assertIn(".scaffold.json", out)
+
+    def test_a_manifest_level_with_the_tree_is_silent(self):
+        self._write_task("chore-0007")
+        self._write_high_water(chore=7)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_ahead_of_the_tree_is_silent(self):
+        # Ahead is the normal state, not a finding: an id is consumed when a task is
+        # authored, and a task can be abandoned without its id ever being reused.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=9)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_type_the_tree_has_never_used_is_not_compared(self):
+        # The adopter case the task named outright: a scaffolded tree that has never
+        # filed a bug must not be told its bug high-water is wrong. The seeded manifest
+        # lists all four types with zeros, and three of them match nothing for a long
+        # time.
+        self._write_task("chore-0007")
+        self._write_high_water(bug=0, feat=0, chore=7, epic=0)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_an_absent_manifest_is_not_a_finding(self):
+        # A tracker with no manifest has no second source of truth to be wrong about.
+        self._write_task("chore-0007")
+        self.assertFalse(self._manifest_path().exists())
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_without_the_key_is_not_a_finding(self):
+        self._write_task("chore-0007")
+        self._write_manifest(json.dumps({"generator": "init-worktracking",
+                                         "tier": "lite"}))
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_an_empty_high_water_object_is_not_a_finding(self):
+        self._write_task("chore-0007")
+        self._write_high_water()
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(".scaffold.json", out)
+
+    def test_a_manifest_that_is_not_valid_json_is_reported_rather_than_raising(self):
+        # This check reads a file nothing else here reads, so a corrupt one must not
+        # take the run down. Reporting rather than skipping is the other half: a
+        # manifest that cannot be parsed is a guard that has silently stopped guarding,
+        # which is the failure this check was added to close rather than to join.
+        self._write_task("chore-0007")
+        self._write_manifest("{ not json at all\n")
+        code, out = self._run()          # would raise if the parse were unguarded
+        self.assertEqual(code, 1, out)
+        self.assertIn(".scaffold.json", out)
+        self.assertIn("not valid JSON", out)
+
+    def test_a_manifest_that_is_not_utf8_is_reported_rather_than_raising(self):
+        self._write_task("chore-0007")
+        self._manifest_path().write_bytes(
+            b'{"id_high_water": {"chore": 5}, "note": "\xff\xfe"}')
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("not valid UTF-8", out)
+
+    def test_a_high_water_that_is_not_a_number_is_reported_rather_than_skipped(self):
+        # Same reasoning as the unreadable manifest: a value no comparison can use means
+        # the check quietly does nothing while the record still looks authoritative.
+        self._write_task("chore-0007")
+        self._write_high_water(chore="7")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn(".scaffold.json", out)
+
+    def test_a_boolean_is_not_mistaken_for_a_number(self):
+        # `True == 1` in Python, so a bool passes an isinstance(int) test and would be
+        # compared as the number one, reporting a stale high-water that says nothing
+        # about what is actually wrong with the file.
+        self._write_task("chore-0007")
+        self._write_high_water(chore=True)
+        _, out = self._run()
+        self.assertIn("not a whole number", out)
+
+    def test_a_current_manifest_over_a_real_backlog_is_unaffected(self):
+        # The negative case. A check that reported every manifest it read would satisfy
+        # the assertions above without telling two states apart.
+        self._write_task("chore-0007")
+        self._write_task("bug-0003")
+        self._write_high_water(bug=3, feat=0, chore=7, epic=0)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 error(s), 0 warning(s)", out)
+
+
+class ScaffoldManifestTemplateTests(ScaffoldManifestTests):
+    """The same guard in the copy `init-worktracking` writes into other repositories.
+
+    The manifest is written by that skill, into the tree this template lands in, so the
+    adopter's copy is where a stale high-water actually costs an id. Run as a loaded
+    module rather than compared as text, for the reason the undecodable-file suite gives
+    above: the two files differ by design, and it is the behaviour that has to match.
+    """
+
+    module = tvt
+
+
+class DependencyCycleTests(TasksRootTestCase):
+    """`bug-0061`: a ring of depends_on edges that no dispatch can ever satisfy.
+
+    The validator checked each edge on its own, that it is not the task's own id and that
+    it names a task that exists, and nothing about the graph the edges form. A task naming
+    itself was caught; two tasks naming each other were not, and neither was any longer
+    ring. The lifecycle rule is that a task is dispatchable once every id in its
+    depends_on is in done/, so no member of a ring can ever reach that state, and the gate
+    certified the pair valid at exit 0. The only thing that surfaced it was a person
+    noticing that a batch had nothing ready.
+
+    The cases that must stay silent matter as much as the one that must fire. This
+    validator ships into every repository the scaffold touches, and failing a clean
+    adopter backlog over a diamond, or over a dependency that is already done, is the
+    outcome that gets a check switched off.
+    """
+
+    module = tv
+
+    def _write_task(self, tid, depends_on=(), done=False):
+        """One task file carrying `tid` and the dependencies it names."""
+        ttype = tid.split("-", 1)[0]
+        deps = "".join(f"\n  - {dep}" for dep in depends_on) or " []"
+        text = (TASK.format(external="")
+                .replace("id: feat-0099", f"id: {tid}")
+                .replace("type: feat", f"type: {ttype}")
+                .replace("depends_on: []", f"depends_on:{deps}"))
+        directory = self.tasks
+        if done:
+            text = text.replace("status: open", "status: done")
+            directory = self.tasks / "done"
+            directory.mkdir(exist_ok=True)
+        (directory / f"{tid}-test.md").write_text(text, encoding="utf-8")
+
+    def _write_scalar_task(self, tid, dep):
+        """One task file whose depends_on is a bare scalar rather than a list.
+
+        Legal YAML, and a shape a person writes by hand for a single dependency. It
+        differs from _write_task above in exactly that: the value is not a list.
+        """
+        ttype = tid.split("-", 1)[0]
+        text = (TASK.format(external="")
+                .replace("id: feat-0099", f"id: {tid}")
+                .replace("type: feat", f"type: {ttype}")
+                .replace("depends_on: []", f"depends_on: {dep}"))
+        (self.tasks / f"{tid}-test.md").write_text(text, encoding="utf-8")
+
+    @staticmethod
+    def _cycle_lines(out):
+        """The reported cycle lines, whole, so a change to the message cannot slip by."""
+        return [line for line in out.splitlines() if "depends_on cycle" in line]
+
+    @staticmethod
+    def _unresolved_lines(out):
+        """The reported unresolved-dependency lines, whole.
+
+        Whole rather than counted, because the defect this pins is what the message
+        names: one line per character reads as nine unrelated findings.
+        """
+        return [line for line in out.splitlines() if "depends_on unresolved" in line]
+
+    def test_a_two_node_cycle_is_reported_as_an_error(self):
+        # The defect itself. Two otherwise valid tasks naming each other, which passed
+        # --strict at exit 0 while neither could ever be dispatched.
+        self._write_task("feat-0098", ["feat-0099"])
+        self._write_task("feat-0099", ["feat-0098"])
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a dependency cycle\n{out}")
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0098"],
+            out)
+
+    def test_a_cycle_leaves_the_count_line_accurate(self):
+        # run-checks.py parses this line, so a finding that never reaches the count is a
+        # finding the acceptance command reports as a pass.
+        self._write_task("feat-0098", ["feat-0099"])
+        self._write_task("feat-0099", ["feat-0098"])
+        _, out = self._run()
+        self.assertIn("Checked 2 task files: 1 error(s), 0 warning(s).", out)
+
+    def test_a_three_node_cycle_is_reported_as_an_error(self):
+        # Nothing about the check is special to a pair, and a longer ring is the harder
+        # one for a reader to see by hand.
+        self._write_task("feat-0098", ["feat-0099"])
+        self._write_task("feat-0099", ["feat-0100"])
+        self._write_task("feat-0100", ["feat-0098"])
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a dependency cycle\n{out}")
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0100 -> feat-0098"],
+            out)
+
+    def test_every_ring_is_reported_and_not_only_the_first(self):
+        # Two disjoint rings. Stopping at the first sends the reader back for a second
+        # run to learn about the second, which is the shape of gate that gets ignored.
+        self._write_task("feat-0098", ["feat-0099"])
+        self._write_task("feat-0099", ["feat-0098"])
+        self._write_task("chore-0001", ["chore-0002"])
+        self._write_task("chore-0002", ["chore-0001"])
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/chore-0001-test.md: depends_on cycle: "
+             "chore-0001 -> chore-0002 -> chore-0001",
+             "ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0098"],
+            out)
+
+    def test_the_reported_ring_starts_at_its_lowest_id(self):
+        # Determinism rather than taste. The search reaches this ring through feat-0100,
+        # so an unnormalised report names the same two files in an order that depends on
+        # where the walk happened to enter, and the output stops being diffable.
+        self._write_task("feat-0098", ["feat-0100"])
+        self._write_task("feat-0100", ["feat-0099"])
+        self._write_task("feat-0099", ["feat-0100"])
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0099-test.md: depends_on cycle: "
+             "feat-0099 -> feat-0100 -> feat-0099"],
+            out)
+
+    def test_a_self_dependency_keeps_its_own_message(self):
+        # Deliberately not folded into the cycle report: a one-node ring rendered as a
+        # path is a worse message than the direct one, and the direct one is what a
+        # reader gets first.
+        self._write_task("feat-0098", ["feat-0098"])
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("depends_on lists itself: feat-0098", out)
+        self.assertEqual(self._cycle_lines(out), [], out)
+
+    def test_a_dependency_on_a_completed_task_is_valid(self):
+        # A satisfied dependency, which is the state every closed task leaves behind. The
+        # graph has to carry the ids in done/ or the whole ledger becomes a false
+        # positive.
+        self._write_task("feat-0098", ["feat-0099"])
+        self._write_task("feat-0099", done=True)
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 error(s), 0 warning(s)", out)
+
+    def test_a_ring_with_a_member_in_done_is_reported(self):
+        # The case above pins a dependency *into* done/ as satisfied and silent. This is
+        # the other shape and the opposite answer: a ring one of whose members lives in
+        # done/ is a genuine backlog defect, because the open member waits on an id that
+        # waits on it and can never be dispatched. The behaviour was already correct and
+        # nothing asserted it, so a later change could make a done member terminate the
+        # search and hide exactly the defect the check exists for (`chore-0089`).
+        self._write_task("chore-0001", ["feat-0098"], done=True)
+        self._write_task("feat-0098", ["chore-0001"])
+        code, out = self._run()
+        self.assertEqual(code, 1, f"--strict must fail on a ring through done/\n{out}")
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/done/chore-0001-test.md: depends_on cycle: "
+             "chore-0001 -> feat-0098 -> chore-0001"],
+            out)
+
+    def test_a_scalar_depends_on_is_read_as_one_id_and_not_as_characters(self):
+        # A scalar is legal YAML and the frontmatter parser returns it as a string, so
+        # the loop walked it character by character and reported one unresolved
+        # dependency per letter. Harmless to the graph, since a single character is
+        # never a known id, and unreadable to the person holding the output
+        # (`chore-0089`).
+        self._write_scalar_task("feat-0098", "feat-0099")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._unresolved_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on unresolved: 'feat-0099' "
+             "is not a known task id"],
+            out)
+
+    def test_a_ring_written_with_scalar_depends_on_is_still_reported(self):
+        # The consequence the `chore-0089` task file understated, found by independent
+        # verification and measured on the base commit: a scalar contributed **no edge**
+        # to the graph, so a ring written that way was invisible to the cycle search
+        # entirely. The run still failed, on eighteen single-character "unresolved"
+        # errors and no cycle line at all, which reads as two broken files rather than
+        # as a ring. The task said the scalar shape "cannot manufacture a false cycle",
+        # which is true and is the wrong direction: it suppressed a true one.
+        #
+        # Measured at 648a140 with both tasks written this way: exit 1, 0 cycle lines,
+        # 18 unresolved lines. After the normalisation: exit 1, 1 cycle line, 0
+        # unresolved. This is the single most valuable consequence of that change and
+        # nothing else pins it.
+        self._write_scalar_task("feat-0098", "feat-0099")
+        self._write_scalar_task("feat-0099", "feat-0098")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            self._cycle_lines(out),
+            ["ERROR .tasks/feat-0098-test.md: depends_on cycle: "
+             "feat-0098 -> feat-0099 -> feat-0098"],
+            out)
+        # And the eighteen bogus diagnostics are gone, which is what makes the ring
+        # legible rather than merely detected.
+        self.assertEqual(self._unresolved_lines(out), [], out)
+
+    def test_a_chain_and_a_diamond_are_valid(self):
+        # The false positive worth designing against. Two paths that meet again are not a
+        # ring, and a search that only asks whether a node has been seen before reports
+        # the second path as one.
+        self._write_task("feat-0098", ["feat-0099", "feat-0100"])
+        self._write_task("feat-0099", ["chore-0001"])
+        self._write_task("feat-0100", ["chore-0001"])
+        self._write_task("chore-0001", ["chore-0002"])
+        self._write_task("chore-0002")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("Checked 5 task files: 0 error(s), 0 warning(s).", out)
+
+    def test_a_chain_deeper_than_the_recursion_limit_is_walked(self):
+        # Driven against the helper rather than through a fixture of files, because the
+        # property is about the search and not about the backlog: the recursive form of
+        # this walk dies on a chain longer than the interpreter's own limit, which is a
+        # real failure over a directory of arbitrary size and an uninteresting one.
+        depth = sys.getrecursionlimit() * 2
+        chain = {f"feat-{n:04d}": {f"feat-{n + 1:04d}"} for n in range(depth)}
+        self.assertEqual(self.module.dependency_cycles(chain), [],
+                         "a chain is not a ring, however deep it runs")
+        chain[f"feat-{depth:04d}"] = {"feat-0000"}
+        found = self.module.dependency_cycles(chain)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0][0], "feat-0000")
+        self.assertEqual(len(found[0]), depth + 1)
+
+
+class TemplateDependencyCycleTests(DependencyCycleTests):
+    """The same guard in the copy `init-worktracking` writes into other repositories.
+
+    `bug-0026` is why this subclass exists rather than a sentence claiming both copies
+    were changed: the check that made a shipped feature safe landed in one copy alone and
+    every gate stayed green. Run as a loaded module rather than compared as text, for the
+    reason the suites above give: the two files differ by design, and it is the behaviour
+    that has to match.
     """
 
     module = tvt

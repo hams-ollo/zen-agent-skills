@@ -24,8 +24,10 @@ import io
 import ipaddress
 import json
 import os
+import queue
 import re
 import shutil
+import sqlite3
 import socket
 import subprocess
 import sys
@@ -1465,6 +1467,29 @@ class TestActionBoundary(ServerTestCase):
                       "the outbound link no longer suppresses the referrer, so following it "
                       "hands the loopback URL to its destination")
 
+    def test_a_copy_command_inserts_a_recorded_value_rather_than_interpreting_it(self):
+        """bug-0065: a `copy-command` builds its text from a value the corpus recorded.
+
+        `String.prototype.replace` interprets a dollar-sign escape in its *replacement*
+        argument, so `copy-cwd` fed a working directory containing one back through
+        `GetSubstitution` and copied a path that was not the recorded path. Silently: the
+        button still reports `Copied`.
+
+        **This asserts construction, not behavior, and the difference is the point.** The
+        suite has no JavaScript runtime by design, which `followable_url` gives as the reason
+        the scheme check lives in Python, so nothing here can execute this line and see the
+        wrong string come out. What it can do is pin the form that has no pattern language in
+        it. A reader should trust this exactly that far.
+        """
+        site = self.construction_site()
+
+        self.assertIn('action.template.split("{" + action.field + "}").join(value)', site,
+                      "the token substitution is no longer the literal split and join form")
+        self.assertNotIn("action.template.replace(", site,
+                         "the template is substituted with String.replace again, which "
+                         "interprets a dollar-sign escape in the recorded value instead of "
+                         "inserting it")
+
     def test_s019_a_mutating_method_is_declined_on_every_route_the_handler_defines(self):
         """Derived from the handler rather than restated: every `do_*` it defines is either
         one of the two readers or the refusal. A `do_POST` that did something would be caught
@@ -2054,6 +2079,82 @@ class TestLiveWatcher(ServeTestCase):
         self.assertEqual(watcher.listeners(), 0)
         self.assertFalse(watcher._thread.is_alive(),
                          "the watcher kept polling after the last page closed")
+
+    def test_a_resubscribe_leaves_the_watcher_polling(self):
+        """S-013 across a page reload, which is the sequence that broke it (bug-0064).
+
+        Closing a report and opening another produces unsubscribe then subscribe with
+        nothing in between. The test above is the only other lifecycle case and it joins
+        the thread before asserting, which is exactly the wait that hid this: without the
+        join, `subscribe` observed a thread that was still alive, took its no-restart
+        branch, and left the stop event set, so the surviving thread exited and nothing
+        ever started another. The page kept its live indicator over a report that had
+        stopped following the corpus.
+
+        This one case cannot be driven a tick at a time the way the rest of this class is,
+        because the defect is in the thread lifecycle itself and `poll_once` never touches
+        it. The drain below is what keeps it from being a sleep-and-hope: it waits out the
+        thread the unsubscribe told to stop, so what happens after it is decided by the
+        lifecycle rather than by which of two threads got scheduled first. A slower machine
+        makes the assertion stronger rather than flakier, since the extra time can only
+        take the old thread further past its exit.
+        """
+        self.build_store([self.record("a1", sid="s-live")])
+        watcher = self.watcher(poll_seconds=0.01)
+        watcher.poll_once()                 # baseline synchronously, before any thread
+
+        first = watcher.subscribe()
+        watcher.unsubscribe(first)
+        channel = watcher.subscribe()       # no join: a reload does not wait either
+        try:
+            time.sleep(0.5)                 # drain the thread the unsubscribe stopped
+            self.assertFalse(watcher._stop.is_set(),
+                             "a stop request outlived the unsubscribe that made it, so "
+                             "the surviving thread exits and none replaces it")
+            self.append_record("a2")
+            try:
+                event = channel.get(timeout=2)
+            except queue.Empty:
+                self.fail("a report opened after another closed never saw new work, so "
+                          "the page shows a live indicator over a stalled report")
+            self.assertEqual(event["type"], "change")
+        finally:
+            watcher.unsubscribe(channel)
+
+    def test_a_thread_that_cannot_start_leaves_no_state_behind(self):
+        """The hazard bug-0064's fix introduced, closed in the same change.
+
+        Deciding the restart on `_running` rather than on `Thread.is_alive()` is what fixes
+        the reload, and it means a thread that never starts leaves a flag claiming one is
+        running. Under the old code such a thread reported not alive and the next subscribe
+        retried; under the new one nothing would ever start another. So the failure has to
+        unwind both the flag and the listener it was appended for.
+        """
+        watcher = self.watcher(poll_seconds=0.01)
+        original = threading.Thread.start
+
+        def refuse(self):
+            raise RuntimeError("can't start new thread")
+
+        threading.Thread.start = refuse
+        try:
+            with self.assertRaises(RuntimeError):
+                watcher.subscribe()
+        finally:
+            threading.Thread.start = original
+
+        self.assertEqual(watcher.listeners(), 0,
+                         "a listener stayed behind for a thread that never started")
+        self.assertFalse(watcher._running,
+                         "the running flag outlived the thread that failed to start, so no "
+                         "later subscribe would ever start one")
+
+        channel = watcher.subscribe()
+        try:
+            self.assertTrue(watcher._thread.is_alive(),
+                            "a subscribe after a failed start did not recover")
+        finally:
+            watcher.unsubscribe(channel)
 
     def test_a_fingerprint_is_cheaper_than_an_ingest_and_notices_both_kinds_of_change(self):
         """The probe has to see an append that keeps the size the same and a rewrite that
@@ -3057,6 +3158,85 @@ class TestHealthPageBehaviour(HealthTestCase):
                 self.assertNotIn(forbidden, body,
                                  f"the health renderer builds {forbidden} directly, so it is "
                                  f"outside the enumeration S-019 is proven by")
+
+
+class StoreFailureReachesTheClientTests(ServerTestCase):
+    """bug-0052: a sqlite error inside a route escaped the handler with no response written.
+
+    `_with_store` catches `db.StoreUnusable`, and `sqlite3.OperationalError` is not one: it is
+    a plain `sqlite3.Error`. So an error raised inside `db.connect` passed straight through
+    the `except` on the line below it, `do_GET` returned having written nothing, and the
+    client got a dropped connection rather than a status and a body.
+
+    Two call sites, and only the first has ever been observed. `bug-0051` was how it surfaced:
+    a concurrent ingester made `db.connect` raise `database is locked` and routes stopped
+    answering. `build(conn)` is the same gap unreached, since a query can fail for the same
+    reasons a connect can.
+
+    **Asserted on what the client receives**, never on what the server logged. A handler that
+    writes nothing and a handler that writes a 500 look identical from inside the process.
+    """
+
+    def failing_at(self, where):
+        """Make the store fail at one of the two call sites, and undo it afterwards."""
+        if where == "connect":
+            original = serve.db.connect
+            def boom(path):
+                raise sqlite3.OperationalError("database is locked")
+            serve.db.connect = boom
+            self.addCleanup(setattr, serve.db, "connect", original)
+        else:
+            original = serve.fleet_report
+            def boom(*a, **k):
+                raise sqlite3.OperationalError("no such table: session")
+            serve.fleet_report = boom
+            self.addCleanup(setattr, serve, "fleet_report", original)
+
+    def test_a_sqlite_failure_at_connect_still_answers_the_client(self):
+        self.build_store([self.record("u1")])
+        self.failing_at("connect")
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("error", payload)
+        self.assertIn("database is locked", payload["error"])
+
+    def test_a_sqlite_failure_inside_the_report_still_answers_the_client(self):
+        # The site nobody has seen fail. A query can fail for the same reasons a connect can,
+        # and the `finally` around `build(conn)` closes the connection without answering.
+        self.build_store([self.record("u1")])
+        self.failing_at("build")
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("error", payload)
+        self.assertIn("no such table", payload["error"])
+
+    def test_a_missing_store_still_answers_200_and_says_so(self):
+        # Existing behaviour this must not fold into a generic error: an absent store means
+        # the ingester has not run, which is a different thing from a corpus with nothing in
+        # it, and the page says which.
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 200)
+        self.assertIs(payload["store_present"], False)
+        self.assertIn("ingest.py", payload["message"])
+
+    def test_a_schema_version_failure_keeps_its_readable_message(self):
+        # The other existing behaviour. `StoreUnusable` carries a message telling the reader
+        # to delete the store and re-ingest, and a generic 500 would lose it.
+        self.build_store([self.record("u1")])
+        conn = sqlite3.connect(str(self.store))
+        conn.execute("UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                     (str(serve.db.SCHEMA_VERSION + 5),))
+        conn.commit()
+        conn.close()
+
+        server = self.serve_on_loopback()
+        status, payload = self.fetch_json(server, "/api/fleet")
+        self.assertEqual(status, 500)
+        self.assertIn("re-ingest", payload["error"],
+                      "the readable StoreUnusable message was folded into a generic error")
 
 
 class ContentSecurityPolicyTests(ServerTestCase):

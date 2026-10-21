@@ -22,7 +22,7 @@ Run the shipped checker before dispatching work to agents:
 
     python .tasks/validate.py
 
-It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task, that every relative markdown link resolves from the directory the file is actually in, and (with `--strict`) that every `touched_files` path exists. It exits non-zero on any error, so it drops cleanly into CI or a pre-commit hook.
+It verifies frontmatter schema, id uniqueness, that every `depends_on` resolves to a real task and no ring of them closes back on itself, that every relative markdown link resolves from the directory the file is actually in, and (with `--strict`) that every `touched_files` path exists. It exits non-zero on any error, so it drops cleanly into CI or a pre-commit hook.
 
 ## Lifecycle
 

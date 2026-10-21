@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/rules/review-quality.md"
+---
+
 # Zen review quality lens (edit freely)
 
 This file is a **swappable module**, the house-review counterpart to
@@ -5,7 +10,8 @@ This file is a **swappable module**, the house-review counterpart to
 `house-review` skill applies. It is separated from the skill so an adopter can retune the review bar
 (or replace it with a team's own standard) without touching skill logic. Future quality-focused
 skills (for example `test-author`, `security-audit`) can compose this same lens, or a sibling lens
-next to it.
+next to it. It is topical, so the `paths` frontmatter above keeps Claude Code from loading it into
+every session; the reviewing skills read it when they review.
 
 The pattern follows moonray's composable quality lens (`github.com/moonray/repoprompt-workflows`):
 a lens is a reusable review "shot" a workflow composes, and findings are validated before they are

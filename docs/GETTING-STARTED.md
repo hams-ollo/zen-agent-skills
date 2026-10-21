@@ -307,6 +307,8 @@ Install the skills for your tool, then use one skill when the need appears:
 
 This approach is useful when your existing task or project-management system already works for you.
 
+Even with the full system in place, most changes do not need all of it. The README's [choosing a path](../README.md#choosing-a-path) section says which changes are made directly, which get a task file, and which earn a written specification first.
+
 ## 👥 The collaboration journey
 
 The kit becomes especially useful when more than one person or agent is involved.

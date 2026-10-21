@@ -1,0 +1,1755 @@
+<title>Quest Tracker Template</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Silkscreen:wght@400;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Outfit:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one development season as a quest log. The quest chain and the season-at-a-glance panels sit on top; phases of steps (levels) run below, each opening into its lines, checks, facts and log. Everything is drawn from the TRACKER data block in the script.
+   Three skins share one token set, chosen by data-skin on <html>:
+   zen   = Zen Solutions: near-black ink, cream serif, vermilion, with an 8-bit layer (pixel labels, notched corners, segmented bars)
+   quest = Main Quest Zen: night navy, pixel labels, heavy sans, cyan / amber / violet
+   field = the light work-order sheet (follows the viewer's light or dark setting), for client-facing trackers */
+:root {
+  --xp: #2c5a86;
+  --xp-soft: #dde8f3;
+  --label: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --radius: 10px;
+  --display-stretch: 82%;
+  --h1-weight: 800;
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --sunk: #e4e9ee;
+  --ink: #17212b;
+  --muted: #586675;
+  --line: #d3dae1;
+  --accent: #2c5a86;
+  --accent-soft: #dde8f3;
+  --gate: #a8650f;
+  --gate-soft: #fbefdc;
+  --done: #2a7a4b;
+  --done-soft: #def0e5;
+  --warn: #a33a2a;
+  --warn-soft: #f8e3df;
+  --scrim: rgba(15, 21, 27, 0.82);
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151b; --surface: #172029; --sunk: #121a21; --ink: #e5ebf0; --muted: #94a2af;
+    --line: #2a3643; --accent: #82b2e0; --accent-soft: #1d3247; --gate: #e3a94e; --gate-soft: #2e2416;
+    --done: #62c08b; --done-soft: #17352a; --warn: #f08a78; --warn-soft: #3a1f1a; --scrim: rgba(0, 0, 0, 0.85); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #172029; --sunk: #121a21; --ink: #e5ebf0; --muted: #94a2af;
+  --line: #2a3643; --accent: #82b2e0; --accent-soft: #1d3247; --gate: #e3a94e; --gate-soft: #2e2416;
+  --done: #62c08b; --done-soft: #17352a; --warn: #f08a78; --warn-soft: #3a1f1a; --scrim: rgba(0, 0, 0, 0.85); color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --xp: #82b2e0; --xp-soft: #1d3247; } }
+:root[data-theme="dark"] { --xp: #82b2e0; --xp-soft: #1d3247; }
+/* The two game skins are dark by design, whatever the viewer's light or dark setting */
+html:root[data-skin="zen"] {
+  --bg: #0b0a0c; --surface: #141215; --sunk: #1c181b; --ink: #efe8dc; --muted: #a39a90; --line: #2e272a;
+  --accent: #e8643f; --accent-soft: #301a14; --gate: #d6ab5c; --gate-soft: #2a2215; --done: #8cc29b; --done-soft: #16261c;
+  --warn: #ff6283; --warn-soft: #391722; --xp: #d6ab5c; --xp-soft: #2a2215; --scrim: rgba(6, 5, 6, 0.9);
+  --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif; --body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --label: "Silkscreen", "JetBrains Mono", ui-monospace, monospace; --radius: 2px; --display-stretch: 100%; --h1-weight: 500; color-scheme: dark;
+}
+html:root[data-skin="quest"] {
+  --bg: #070d1c; --surface: #0d1730; --sunk: #0a1328; --ink: #e9effc; --muted: #93a3c6; --line: #1f2e52;
+  --accent: #41d1ee; --accent-soft: #0f2b40; --gate: #f6a928; --gate-soft: #2e2411; --done: #45db8e; --done-soft: #0f2e22;
+  --warn: #ff6a8e; --warn-soft: #3a1526; --xp: #a291ff; --xp-soft: #231d4d; --scrim: rgba(3, 6, 14, 0.9);
+  --display: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif; --body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --label: "Silkscreen", "JetBrains Mono", ui-monospace, monospace; --radius: 8px; --display-stretch: 100%; --h1-weight: 800; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); font-stretch: var(--display-stretch); text-wrap: balance; margin: 0; letter-spacing: -0.005em; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--sunk); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header */
+header.top { padding-block: 28px 14px; display: grid; gap: 12px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(28px, 5vw, 42px); font-weight: var(--h1-weight); }
+h1 em { font-style: italic; color: var(--accent); }
+.lede { max-width: 72ch; color: var(--muted); margin: 0; }
+.doclinks { display: flex; flex-wrap: wrap; gap: 8px; }
+.doclinks a { font-size: 13px; text-decoration: none; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 10px; }
+.doclinks a b { font-weight: 600; color: var(--ink); }
+.status { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); align-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.dot.ok { background: var(--done); } .dot.off { background: var(--warn); }
+
+/* Rules strip */
+.rulestrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-block: 4px 18px; }
+.rulestrip div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 13.5px; min-width: 0; }
+.rulestrip .rt { display: block; font-family: var(--display); font-stretch: var(--display-stretch); font-size: 15px; margin-bottom: 2px; }
+.rulestrip .no { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.rulestrip .no .rt { color: var(--warn); }
+
+.banner { border: 1px solid var(--warn); color: var(--warn); background: var(--surface); border-radius: var(--radius); padding: 8px 12px; font-size: 13.5px; margin-bottom: 12px; }
+.datacheck { border: 1px dashed var(--gate); background: var(--gate-soft); border-radius: var(--radius); padding: 8px 12px; font-size: 13.5px; margin-bottom: 12px; }
+.datacheck summary { cursor: pointer; font-weight: 600; color: var(--gate); }
+.datacheck ul { margin: 6px 0 0; padding-left: 20px; }
+
+/* Quest board */
+.quests { margin-block: 4px 18px; }
+.sec-h { font-size: 22px; font-weight: 750; padding-bottom: 6px; border-bottom: 2px solid var(--ink); }
+.sec-intro { color: var(--muted); margin: 8px 0 4px; max-width: 75ch; font-size: 14px; }
+.questgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; margin-top: 10px; }
+.quest { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; border-top: 4px solid var(--tone, var(--muted)); }
+.quest h3 { font-family: var(--display); font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+.quest .qnote { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.quest ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; counter-reset: q; }
+.quest li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; align-items: baseline; font-size: 14px; counter-increment: q; }
+.quest li::before { content: counter(q) "."; font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+.quest li a { text-decoration: none; color: var(--ink); overflow-wrap: anywhere; }
+.quest li a:hover { color: var(--accent); text-decoration: underline; }
+.quest li.qdone a { color: var(--muted); text-decoration: line-through; }
+.quest .qmark { font-size: 12px; color: var(--done); margin-left: 6px; }
+.quest .qcount { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.quest .qbar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; margin: 2px 0 8px; }
+.quest .qbar > div { height: 100%; background: var(--done); width: 0; transition: width .3s; }
+.qstate { display: inline-block; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; border: 1px solid var(--line); color: var(--muted); }
+.qstate.st-done { color: var(--done); border-color: var(--done); }
+.qstate.st-next { color: var(--accent); border-color: var(--accent); }
+.qstate.st-wait { color: var(--gate); border-color: var(--gate); }
+.quest.is-next { box-shadow: 0 0 0 2px var(--accent); }
+.quest .qblock { font-size: 11px; color: var(--warn); font-weight: 600; margin-left: 6px; white-space: nowrap; }
+.quest .qwho { font-size: 11px; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+.golive { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin: 10px 0 4px; }
+.gl-big { font-family: var(--display); font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.gl-txt { color: var(--muted); font-size: 14px; }
+.gl-block { color: var(--warn); font-weight: 600; font-size: 14px; }
+.route { list-style: none; margin: 10px 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.route li { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.route li + li::before { content: ""; width: 18px; height: 2px; background: var(--line); display: inline-block; }
+.route .node { border: 2px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); white-space: nowrap; }
+.route .node.st-done { border-color: var(--done); color: var(--done); background: var(--done-soft); }
+.route .node.st-next { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.route .node.st-wait { border-color: var(--gate); color: var(--gate); background: var(--gate-soft); }
+
+/* People tones: each person in TRACKER.people picks one */
+.tone-ink { --tone: var(--ink); --tone-bg: var(--sunk); }
+.tone-accent { --tone: var(--accent); --tone-bg: var(--accent-soft); }
+.tone-gate { --tone: var(--gate); --tone-bg: var(--gate-soft); }
+.tone-done { --tone: var(--done); --tone-bg: var(--done-soft); }
+.tone-plain { --tone: var(--muted); --tone-bg: transparent; }
+
+/* Season at a glance */
+.glance { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-block: 4px 18px; }
+@media (max-width: 800px) { .glance { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.panel h2 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.panel .ph { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+.big { font-family: var(--display); font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.big small { font-size: 14px; color: var(--muted); font-weight: 600; }
+.small-note { font-size: 12px; color: var(--muted); margin: 0; }
+
+.map { display: grid; gap: 7px; }
+.maprow { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+@media (max-width: 480px) { .maprow { grid-template-columns: minmax(0, 1fr) auto; } .maprow .cells { grid-column: 1 / -1; grid-row: 2; } }
+.mapname { font-size: 12.5px; color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mapname:hover { color: var(--accent); }
+.mapname span { font-family: var(--mono); color: var(--muted); margin-right: 4px; }
+.cells { display: flex; flex-wrap: wrap; gap: 3px; }
+.cell { width: 16px; height: 16px; border-radius: 4px; background: var(--sunk); border: 1.5px solid var(--line); display: block; }
+.cell:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cell.c-done { background: var(--done); border-color: var(--done); }
+.cell.c-gate { background: repeating-linear-gradient(-45deg, var(--gate-soft) 0 3px, color-mix(in srgb, var(--gate) 45%, transparent) 3px 5px); border-color: var(--gate); }
+.cell.c-block { background: var(--warn-soft); border-color: var(--warn); border-width: 2px; }
+.cell.c-opt { background: transparent; border-style: dashed; }
+.cell.c-route { box-shadow: inset 0 0 0 2px var(--surface), inset 0 0 0 4px var(--accent); }
+.cell.c-done.c-route { box-shadow: none; }
+.mapcount { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend .cell { width: 12px; height: 12px; pointer-events: none; }
+
+.burn { position: relative; min-height: 190px; }
+.burn svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.burn .ax { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.burn .ax-strong { font-family: var(--mono); font-size: 12px; fill: var(--ink); font-weight: 500; }
+.burn .grid { stroke: var(--line); stroke-width: 1; }
+.burn .ideal { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; fill: none; }
+.burn .actual { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linejoin: round; }
+.burn .area { fill: var(--accent); fill-opacity: 0.12; stroke: none; }
+.burn .now { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.burn .end { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.burn .cross { stroke: var(--ink); stroke-width: 1; opacity: .5; }
+.burn .hit { fill: transparent; }
+.burn-tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -110%); font-variant-numeric: tabular-nums; }
+.burnkey { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.burnkey i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent); vertical-align: 3px; margin-right: 6px; }
+.burnkey i.dash { border-top: 1.5px dashed var(--muted); }
+
+.people { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.person { border: 1px solid var(--line); border-left: 4px solid var(--tone); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 5px; min-width: 0; background: var(--surface); }
+.person .pn { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.person .pn b { font-family: var(--display); font-stretch: var(--display-stretch); font-size: 16px; }
+.person .pc { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.person .pbar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.person .pbar > div { height: 100%; background: var(--done); }
+.person .pnext { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.person .pnext a { color: var(--ink); text-decoration: none; }
+.person .pnext a:hover { color: var(--accent); text-decoration: underline; }
+.person .pblock { font-size: 12px; color: var(--warn); font-weight: 600; }
+.person .pshow { justify-self: start; background: none; border: 0; padding: 0; font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+.next, .feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.next li, .feed li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14px; }
+.pid { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.gate-flag { color: var(--gate); font-weight: 600; }
+.feed .ft { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.feed a { color: var(--ink); }
+.subh { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 4px 0 0; }
+
+/* Toolbar */
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.toolbar .sep { flex: 1; }
+.toolbar label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.toolbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+
+/* Phases */
+.phase { margin-block: 0 28px; scroll-margin-top: 64px; }
+.phase-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
+.phase-num { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.phase-head h2 { font-size: 24px; font-weight: 750; }
+.when { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 4px; background: var(--sunk); color: var(--muted); }
+.when.now { background: var(--accent-soft); color: var(--accent); }
+.phase-count { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.phase-intro { color: var(--muted); margin: 8px 0 4px; max-width: 75ch; font-size: 14px; }
+.docs-line { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+.docs-line b { color: var(--ink); font-weight: 600; }
+
+/* Steps */
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { border-bottom: 1px solid var(--line); scroll-margin-top: 64px; }
+.step.gate { background: var(--gate-soft); border-left: 4px solid var(--gate); padding-left: 10px; margin-left: -14px; background-image: repeating-linear-gradient(-45deg, transparent 0 10px, color-mix(in srgb, var(--gate) 7%, transparent) 10px 20px); }
+.step-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 4px 12px; padding: 12px 0; }
+.tick { width: 26px; height: 26px; border-radius: 6px; border: 2px solid var(--muted); background: var(--surface); cursor: pointer; display: grid; place-items: center; padding: 0; margin-top: 1px; }
+.tick svg { width: 16px; height: 16px; opacity: 0; }
+.tick:disabled { cursor: not-allowed; opacity: .55; }
+.step.done > .step-row .tick { background: var(--done); border-color: var(--done); }
+.step.done > .step-row .tick svg { opacity: 1; }
+.step.done .title { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.head-main { min-width: 0; display: grid; gap: 4px; }
+.title-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.opener { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; display: inline-flex; gap: 8px; align-items: baseline; min-width: 0; }
+.opener .caret { font-family: var(--mono); color: var(--muted); font-size: 12px; transition: transform .15s; display: inline-block; }
+.opener[aria-expanded="true"] .caret { transform: rotate(90deg); }
+.title { font-weight: 600; }
+.opener:hover .title { color: var(--accent); }
+.tag { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; border-radius: 4px; padding: 0 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag.gate-t { color: var(--gate); border-color: color-mix(in srgb, var(--gate) 40%, transparent); }
+.tag.subs { font-variant-numeric: tabular-nums; }
+.tag.block-t { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); font-weight: 600; }
+.tag.logs { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.owners { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.owner { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--tone-bg); color: var(--tone); border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent); white-space: nowrap; }
+.owner.tone-plain { border-style: dashed; border-color: var(--line); }
+.why { margin: 0; font-size: 14px; color: var(--muted); max-width: 75ch; }
+.stamp { font-size: 12.5px; color: var(--done); }
+
+.body { display: grid; gap: 14px; padding: 0 0 18px 46px; min-width: 0; }
+@media (max-width: 560px) { .body { padding-left: 0; } .owners { margin-left: 0; width: 100%; } .step.gate { margin-left: -10px; padding-left: 6px; } }
+.blk { display: grid; gap: 6px; min-width: 0; }
+.blk h4 { margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.subs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: sub; }
+.sub { display: grid; grid-template-columns: 22px 26px minmax(0, 1fr); gap: 6px; align-items: start; padding: 5px 6px; border-radius: 6px; counter-increment: sub; }
+.sub:hover { background: var(--sunk); }
+.sub::before { content: counter(sub); grid-column: 2; grid-row: 1; font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 2px; text-align: right; }
+.sub input { grid-column: 1; grid-row: 1; width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--done); cursor: pointer; }
+.sub .txt { grid-column: 3; grid-row: 1; font-size: 14.5px; min-width: 0; overflow-wrap: anywhere; }
+.sub.ticked .txt { color: var(--muted); }
+.ui { font-weight: 600; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 0.93em; white-space: nowrap; }
+.callout { border-radius: var(--radius); padding: 9px 12px; font-size: 14px; }
+.callout.check { background: var(--done-soft); }
+.callout.check b { color: var(--done); }
+.callout.stop { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.callout.stop b { color: var(--warn); }
+.callout.tip { background: var(--accent-soft); }
+.callout.tip b { color: var(--accent); }
+.facts { display: grid; gap: 8px; }
+.fact { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+@media (max-width: 560px) { .fact { grid-template-columns: minmax(0, 1fr); } }
+.fact label { font-size: 13.5px; font-weight: 600; }
+.fact label small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.fact input { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--surface); font-family: var(--mono); font-size: 13px; }
+.fact .saved { font-size: 12px; color: var(--done); white-space: nowrap; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.links a { font-size: 12.5px; text-decoration: none; border: 1px solid var(--line); background: var(--surface); border-radius: 5px; padding: 2px 8px; overflow-wrap: anywhere; }
+.links a::after { content: " \2197"; color: var(--muted); }
+.links a:hover { border-color: var(--accent); }
+.links.ours a { border-style: dashed; }
+.linkrow { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+@media (max-width: 560px) { .linkrow { grid-template-columns: minmax(0, 1fr); } }
+.linkrow span { font-size: 12.5px; color: var(--muted); }
+.meta { font-size: 12.5px; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+/* Session log */
+.log { display: grid; gap: 8px; }
+.entry { background: var(--sunk); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 6px; min-width: 0; }
+.entry .who { font-size: 12px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.entry .text { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.entry img { max-width: min(100%, 420px); border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+.entry .gone { font-size: 12.5px; color: var(--muted); font-style: italic; }
+.entry.summary-note { background: var(--accent-soft); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.composer { display: grid; gap: 6px; }
+.composer textarea { width: 100%; min-width: 0; font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; resize: vertical; min-height: 54px; }
+.composer .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.composer .pending { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.composer .pending img { max-height: 54px; border-radius: 4px; border: 1px solid var(--line); }
+.savebtn { border: 1px solid var(--ink); background: var(--ink); color: var(--bg); border-radius: 6px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+.savebtn:disabled { opacity: .5; cursor: not-allowed; }
+.attach { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+.hint { font-size: 12px; color: var(--muted); }
+.hidden-by-filter { display: none; }
+
+/* Reference */
+.ref { margin-top: 36px; }
+.ref > h2 { font-size: 26px; font-weight: 800; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
+.ref h3 { font-family: var(--display); font-size: 20px; margin-top: 22px; }
+.ref p { max-width: 75ch; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-block: 10px 18px; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; background: var(--sunk); }
+tr:last-child td { border-bottom: 0; }
+td.val { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+td.val.empty { color: var(--muted); font-family: var(--body); font-style: italic; }
+footer { margin-top: 30px; font-size: 12.5px; color: var(--muted); }
+.lightbox { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 24px; z-index: 20; cursor: zoom-out; }
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { .opener .caret, .quest .qbar > div { transition: none; } }
+
+/* XP and rank (shown in the game skins) */
+.xpbox { display: grid; gap: 4px; }
+.xpline { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.xpline .xpn { font-family: var(--label); font-size: 20px; color: var(--xp); font-variant-numeric: tabular-nums; }
+.xpline .rank { font-family: var(--label); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); border: 1px solid var(--xp); background: var(--xp-soft); padding: 1px 8px; border-radius: var(--radius); }
+.xpline .xpnext { font-size: 12px; color: var(--muted); }
+.xpbar { height: 8px; background: var(--sunk); border: 1px solid var(--line); overflow: hidden; }
+.xpbar > div { height: 100%; background: var(--xp); }
+.lv-game, .game-only { display: none; }
+html[data-skin="zen"] .lv-game, html[data-skin="quest"] .lv-game { display: inline; }
+html[data-skin="zen"] .lv-field, html[data-skin="quest"] .lv-field { display: none; }
+html[data-skin="zen"] .game-only, html[data-skin="quest"] .game-only { display: grid; }
+
+/* Tick reward: a pixel burst and a floating +XP (game skins, motion allowed) */
+.burst { position: fixed; width: 0; height: 0; pointer-events: none; z-index: 30; }
+.burst i { position: absolute; width: 5px; height: 5px; background: var(--c, var(--done)); left: -2px; top: -2px; animation: pop .6s steps(6) forwards; }
+.burst b { position: absolute; left: 16px; top: -10px; font-family: var(--label); font-size: 12px; color: var(--xp); white-space: nowrap; animation: rise .9s steps(9) forwards; }
+@keyframes pop { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes rise { to { transform: translateY(-26px); opacity: 0; } }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--surface); color: var(--ink); border: 2px solid var(--xp); padding: 8px 14px; font-family: var(--label); font-size: 13px; letter-spacing: .04em; box-shadow: 4px 4px 0 var(--xp-soft); max-width: calc(100% - 32px); }
+
+/* The 8-bit layer, shared by both game skins */
+html[data-skin="zen"] .eyebrow, html[data-skin="quest"] .eyebrow,
+html[data-skin="zen"] .tag, html[data-skin="quest"] .tag,
+html[data-skin="zen"] .when, html[data-skin="quest"] .when,
+html[data-skin="zen"] .qstate, html[data-skin="quest"] .qstate,
+html[data-skin="zen"] .panel h2, html[data-skin="quest"] .panel h2,
+html[data-skin="zen"] .blk h4, html[data-skin="quest"] .blk h4,
+html[data-skin="zen"] .subh, html[data-skin="quest"] .subh,
+html[data-skin="zen"] th, html[data-skin="quest"] th,
+html[data-skin="zen"] .phase-num, html[data-skin="quest"] .phase-num,
+html[data-skin="zen"] .route .node, html[data-skin="quest"] .route .node { font-family: var(--label); font-weight: 400; }
+html[data-skin="zen"] .phase-num, html[data-skin="quest"] .phase-num { border: 1px solid var(--xp); color: var(--xp); background: var(--xp-soft); padding: 1px 8px; font-size: 12px; letter-spacing: .06em; }
+html[data-skin="zen"] .quest, html[data-skin="quest"] .quest,
+html[data-skin="zen"] .panel, html[data-skin="quest"] .panel,
+html[data-skin="zen"] .rulestrip div, html[data-skin="quest"] .rulestrip div,
+html[data-skin="zen"] .person, html[data-skin="quest"] .person {
+  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px));
+}
+html[data-skin="zen"] .quest.is-next, html[data-skin="quest"] .quest.is-next { box-shadow: inset 0 0 0 2px var(--accent); }
+html[data-skin="zen"] .qbar, html[data-skin="quest"] .qbar,
+html[data-skin="zen"] .pbar, html[data-skin="quest"] .pbar,
+html[data-skin="zen"] .xpbar, html[data-skin="quest"] .xpbar { height: 8px; border-radius: 0; }
+html[data-skin="zen"] .qbar > div, html[data-skin="quest"] .qbar > div,
+html[data-skin="zen"] .pbar > div, html[data-skin="quest"] .pbar > div { background: repeating-linear-gradient(90deg, var(--done) 0 6px, transparent 6px 8px); }
+html[data-skin="zen"] .xpbar > div, html[data-skin="quest"] .xpbar > div { background: repeating-linear-gradient(90deg, var(--xp) 0 6px, transparent 6px 8px); }
+html[data-skin="zen"] .cell, html[data-skin="quest"] .cell { border-radius: 0; }
+html[data-skin="zen"] .tick, html[data-skin="quest"] .tick { border-radius: 0; }
+html[data-skin="zen"] .chip, html[data-skin="zen"] .route .node { border-radius: 2px; }
+html[data-skin="quest"] .chip, html[data-skin="quest"] .route .node { border-radius: 6px; }
+html[data-skin="zen"] .phase-head, html[data-skin="quest"] .phase-head,
+html[data-skin="zen"] .sec-h, html[data-skin="quest"] .sec-h,
+html[data-skin="zen"] .ref > h2, html[data-skin="quest"] .ref > h2 { border-bottom: 2px dashed var(--line); }
+
+/* Zen Solutions: a low vermilion sun behind the header, serif display, // eyebrows */
+html[data-skin="zen"] header.top { position: relative; isolation: isolate; }
+html[data-skin="zen"] header.top::before { content: ""; position: absolute; z-index: -1; right: 0; top: 8px; width: min(340px, 60vw); aspect-ratio: 1; max-width: 100%; border-radius: 50%; background: radial-gradient(circle at 40% 40%, color-mix(in srgb, var(--accent) 26%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 62%, transparent 70%); pointer-events: none; }
+html[data-skin="zen"] .eyebrow::before { content: "// "; color: var(--accent); }
+html[data-skin="zen"] .eyebrow { color: var(--accent); }
+html[data-skin="zen"] .rulestrip .rt { font-size: 19px; font-weight: 600; }
+html[data-skin="zen"] .toolbar .eyebrow { color: var(--muted); }
+html[data-skin="zen"] h1 { font-size: clamp(36px, 7vw, 60px); line-height: 1.02; letter-spacing: -0.01em; }
+html[data-skin="zen"] .sec-h, html[data-skin="zen"] .phase-head h2, html[data-skin="zen"] .ref > h2 { font-weight: 600; font-size: 28px; }
+html[data-skin="zen"] .quest h3, html[data-skin="zen"] .ref h3 { font-weight: 600; font-size: 21px; }
+html[data-skin="zen"] .gl-big, html[data-skin="zen"] .big { font-family: var(--label); font-weight: 400; color: var(--accent); }
+
+/* Main Quest Zen: a faint pixel starfield and a teal glow at the top */
+html[data-skin="quest"] body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1.5px 1.5px at 22px 34px, color-mix(in srgb, var(--accent) 55%, transparent) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 96px 120px, color-mix(in srgb, var(--xp) 50%, transparent) 50%, transparent 52%),
+    radial-gradient(1px 1px at 160px 70px, color-mix(in srgb, var(--ink) 40%, transparent) 50%, transparent 52%),
+    radial-gradient(ellipse 80% 340px at 50% -80px, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+  background-size: 200px 180px, 260px 220px, 180px 160px, 100% 100%;
+  background-repeat: repeat, repeat, repeat, no-repeat;
+}
+html[data-skin="quest"] .eyebrow { color: var(--accent); }
+html[data-skin="quest"] .toolbar { background: color-mix(in srgb, var(--bg) 92%, transparent); }
+html[data-skin="quest"] h1 { letter-spacing: -0.02em; }
+html[data-skin="quest"] .gl-big, html[data-skin="quest"] .big { font-family: var(--label); font-weight: 400; color: var(--accent); }
+html[data-skin="quest"] .tone-ink { --tone: var(--accent); --tone-bg: var(--accent-soft); }
+html[data-skin="quest"] .tone-plain { --tone: var(--xp); --tone-bg: transparent; }
+html[data-skin="zen"] .tone-plain { --tone: var(--muted); }
+
+.skinpick { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.skinpick select { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.copyrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 8px 4px; }
+.copyout { width: 100%; min-height: 160px; font-family: var(--mono); font-size: 12px; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+
+/* Claims: an agent's report that a step is done, in amber until someone else checks it and ticks it */
+.tag.claim-t { color: var(--gate); border-color: var(--gate); background: var(--gate-soft); font-weight: 600; }
+.stamp.claim { color: var(--gate); }
+.step.claimed > .step-row .tick { border-color: var(--gate); border-style: dashed; }
+.claimbox { border: 1px solid color-mix(in srgb, var(--gate) 55%, transparent); background: var(--gate-soft); border-radius: var(--radius); padding: 9px 12px; display: grid; gap: 6px; font-size: 14px; min-width: 0; }
+.claimbox > b { color: var(--gate); }
+.claimbox.settled { background: var(--sunk); border-style: dashed; }
+.claimbox.settled > b { color: var(--muted); }
+.claimbox .cmeta { font-size: 12.5px; color: var(--muted); }
+.claimbox .clabel { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.claimbox pre { margin: 0; font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
+.claimbox .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sub.claimed-line .txt::after { content: " · claimed"; font-family: var(--mono); font-size: 11px; color: var(--gate); }
+.cell.c-claim { background: var(--gate); border-color: var(--gate); }
+.quest .qclaim { font-size: 11px; color: var(--gate); font-weight: 600; margin-left: 6px; white-space: nowrap; }
+.gl-claim { color: var(--gate); font-weight: 600; font-size: 14px; }
+.agent { font-weight: 600; color: var(--ink); }
+footer .tver { display: block; margin-top: 4px; font-family: var(--mono); font-size: 11.5px; }
+html[data-skin="zen"] .claimbox .clabel, html[data-skin="quest"] .claimbox .clabel { font-family: var(--label); }
+
+/* Waiting on you: claims ready for a check and stops the work has reached, at the top of the page */
+.waiting { border: 1px solid color-mix(in srgb, var(--gate) 55%, transparent); background: var(--gate-soft); border-radius: var(--radius); padding: 10px 12px; margin-block: 4px 14px; font-size: 14px; }
+.waiting h2 { margin: 0 0 6px; font-size: 15px; color: var(--gate); }
+.waiting ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.waiting li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; }
+.waiting li > b { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--gate); min-width: 4.5em; }
+.waiting .wwho { color: var(--muted); font-size: 12.5px; }
+html[data-skin="zen"] .waiting li > b, html[data-skin="quest"] .waiting li > b { font-family: var(--label); }
+/* What a tick rests on: a command and its result, a claim without one, or a tick by hand */
+.stamp .ev { margin-left: 8px; font-family: var(--mono); font-size: 11px; border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.stamp .ev-hand, .stamp .ev-claim { color: var(--muted); border-style: dashed; }
+/* Hidden means hidden, whatever display a class sets, so the page does not rely on a host's own reset */
+[hidden] { display: none !important; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede"></p>
+    <div class="doclinks" id="doclinks"></div>
+    <div class="status"><span><span class="dot" id="conn-dot"></span><span id="conn-text">Connecting to saved progress…</span></span><span id="who"></span><span id="status-note"></span></div>
+  </header>
+
+  <section class="waiting" id="waiting" aria-label="Waiting on you" hidden></section>
+  <div class="rulestrip" id="rules" aria-label="Session rules"></div>
+  <div id="datacheck"></div>
+  <div id="banner"></div>
+
+  <section class="quests" aria-labelledby="quests-h">
+    <h2 class="sec-h" id="quests-h">Who does what, in order</h2>
+    <p class="sec-intro" id="quests-intro"></p>
+    <div class="golive" id="golive"></div>
+    <ol class="route" id="route" aria-label="The quests, in order"></ol>
+    <div class="questgrid" id="quest-list"></div>
+  </section>
+
+  <section class="glance" aria-label="Season at a glance">
+    <div class="panel">
+      <div class="ph"><h2>Season map</h2><div class="big" id="overall">0 <small>of 0 steps done</small></div></div>
+      <div class="xpbox game-only" id="xpbox" title="XP: 10 a step, +20 for a blocker, +10 for a stop, 5 a fact recorded, 3 a note, +2 with a screenshot. Writing things down counts. A claim earns nothing until it is verified and ticked.">
+        <div class="xpline"><span class="xpn" id="xp-n">0 XP</span><span class="rank" id="xp-rank">Novice</span><span class="xpnext" id="xp-next"></span></div>
+        <div class="xpbar"><div id="xp-fill" style="width:0"></div></div>
+      </div>
+      <div class="map" id="map"></div>
+      <div class="legend">
+        <span><i class="cell c-done"></i>Done</span>
+        <span><i class="cell c-claim"></i>Ready for check</span>
+        <span><i class="cell"></i>To do</span>
+        <span><i class="cell c-route"></i>On the route</span>
+        <span><i class="cell c-block"></i>Blocker</span>
+        <span><i class="cell c-gate"></i>Stop and check in</span>
+        <span><i class="cell c-opt"></i>Optional</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2 id="burn-h">Steps left</h2><span class="small-note" id="burn-sub"></span></div>
+      <div class="burn" id="burn"></div>
+      <div class="burnkey"><span><i></i>Steps left, by day</span><span id="burn-ideal-key"><i class="dash"></i>Even pace to the target date</span></div>
+      <p class="small-note">Drawn from the time each route step was last ticked. A step unticked and ticked again moves to its newer date.</p>
+    </div>
+    <div class="panel">
+      <h2>People</h2>
+      <div class="people" id="people"></div>
+    </div>
+    <div class="panel">
+      <h2>Next up</h2>
+      <ol class="next" id="next"></ol>
+      <h3 class="subh">Recent activity</h3>
+      <ol class="feed" id="feed"></ol>
+    </div>
+  </section>
+
+  <div class="toolbar" role="toolbar" aria-label="Filters">
+    <span class="eyebrow">Show</span>
+    <span id="chips" style="display:contents"></span>
+    <span class="sep"></span>
+    <label class="skinpick" for="skin-pick">Look <select id="skin-pick"><option value="zen">Zen Solutions</option><option value="quest">Main Quest</option><option value="field">Field sheet</option></select></label>
+    <label for="hide-done"><input type="checkbox" id="hide-done"> Hide done</label>
+    <button class="toolbtn" type="button" id="collapse-all">Close all steps</button>
+  </div>
+
+  <main id="phases"></main>
+
+  <section class="ref" id="ref">
+    <h2>Reference</h2>
+    <h3>Facts recorded so far</h3>
+    <p>Filled in from the steps above as they are done. None of these is secret.</p>
+    <div class="tablewrap"><table><thead><tr><th>Fact</th><th>Value</th><th>Step</th><th>Recorded</th></tr></thead><tbody id="facts-body"></tbody></table></div>
+    <h3>The season log, for the docs</h3>
+    <p>Every step with its ticks, facts and notes, in phase order, as Markdown. Paste it into the project's docs at the end of a session, or hand it to Claude to write up.</p>
+    <div class="copyrow"><button class="savebtn" type="button" id="copy-log">Copy the log as Markdown</button><span class="hint" id="copy-status"></span></div>
+    <div id="copy-fallback"></div>
+    <div id="ref-extra"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+/* =====================================================================
+   DATA BLOCK: the only part to edit for a new project.
+   Everything on the page is drawn from LINK and TRACKER below.
+   Rules (the authoring guide has the long form):
+   - Step ids, fact ids and phase ids never change once anything is ticked.
+   - Never insert, reorder or delete lines inside a step's `steps` list
+     once a line is ticked: line ticks are stored by position. Add new
+     lines at the end; reword a line in place only if it means the same.
+   - Text markup: [[On-screen control]], **bold**, `code`, [link text](https://...).
+   - No passwords, codes or keys anywhere in here, or in facts and notes.
+   - Agents never tick. A session reports finished work as a claim in the
+     `claims` collection; someone else checks it and ticks it on the page.
+   - Leave `templateVersion` as copied: it names the template the code
+     below came from, and changes only when that code is replaced.
+   ===================================================================== */
+
+// Base addresses, so step links stay short. Replace these placeholders with the project's own.
+const LINK = {
+  REPO: "https://example.com/your-project",
+  DOCS: "https://example.com/your-project/docs",
+};
+
+const TRACKER = {
+  templateVersion: "1.2.1",         // the template this page's code came from; shown in the footer so trackers on older code are visible
+  storageKey: "quest-template",          // prefix for this viewer's remembered filters; one per project
+  skin: "zen",                            // default look: "zen" (Zen Solutions), "quest" (Main Quest Zen) or "field" (light work sheet). Each viewer can switch.
+  ranks: ["Novice", "Apprentice", "Journeyman", "Adept", "Expert", "Master", "Grandmaster"],  // one rank per 100 XP
+  eyebrow: "Template · example season · replace the data block to start a project",
+  title: "Quest *tracker*",               // *word* sets one word in the accent italic
+  lede: "The working guide for one season of work. Open a step, follow the lines, tick each one as it is done and checked, write down what you found, and log notes and screenshots as you go. A striped step is a stop: check in before going past it.",
+  started: "2026-10-12",                  // first day of the season (YYYY-MM-DD): where the burndown starts
+  statusNote: "Example data: every phase, step and quest below is a sample showing what the template can hold.",
+  goal: { label: "launch", target: "2026-11-06" },  // "N steps left to <label>"; target date draws the even-pace line (optional)
+  questsIntro: "The road to launch as short runs of work, like a quest chain: finish one, the next unlocks. Each line opens its step below. A red tag marks a blocker.",
+  doclinks: [
+    ["Project", LINK.REPO, "the work itself"],
+    ["Docs", LINK.DOCS, "the project's own docs"],
+  ],
+  rules: [
+    { title: "Never here", warn: true, text: "No password, sign-in code, backup code or key in a note, a fact or a screenshot. Crop screenshots first." },
+    { title: "Tick what is checked", text: "A tick means the work is done **and** its check passed. Not started, half done or hoped-for stays unticked." },
+    { title: "Stops are stops", text: "A striped step waits for the person named in it. Nothing goes past it on a guess." },
+    { title: "Agents claim, people tick", text: "A Claude session reports finished work as a claim, with the command it ran and the result. Someone else checks it and ticks it with [[Verify and tick]]." },
+  ],
+
+  // Who does the work. Keys are used in `who` and in quests. Tone: ink, accent, gate, done or plain.
+  people: {
+    you:     { name: "You",     tone: "ink" },
+    partner: { name: "Partner", tone: "accent" },
+    owner:   { name: "Owner",   tone: "gate" },
+    claude:  { name: "Claude",  tone: "plain" },
+  },
+
+  phases: [
+    { id: "p0", title: "Start a new tracker", when: "Do once", now: true,
+      intro: "These example steps double as the checklist for starting a tracker from this template. In a real project, replace them with the project's own phases.",
+      docs: "The authoring guide",
+      steps: [
+        { id: "p0-copy", t: "Make a copy for the new project", who: ["you", "claude"],
+          why: "Each project gets its own page and its own saved ticks, so one season never overwrites another.",
+          steps: [
+            "Ask Claude: “start a quest tracker for <project>”, with whatever you already know: the goal, the people, the first phases.",
+            "Claude reads the template, writes the new project into the data block, and publishes a new private page with saved progress on (`db`, `user`, `assets`).",
+            "Open the new link and check the header names the new project.",
+          ],
+          check: "The new page says “Live: ticks, facts and notes are shared” and shows no steps done.",
+          ours: [["The project's docs", LINK.DOCS]] },
+        { id: "p0-phases", t: "Write the phases and the steps", who: ["you", "claude"],
+          why: "A step that carries its own context (what, why, what closes it) can be picked up by anyone, on any day, without a call.",
+          steps: [
+            "One phase per stretch of work that ends in something you can check.",
+            "Each step: a short title (`t`), who does it (`who`), why it matters (`why`), the lines to follow (`steps`), and what closes it (`check`).",
+            "Give each step an id that never changes, such as `p1-domain`.",
+          ],
+          tip: "Once a line is ticked, never insert, reorder or delete lines in that step: line ticks are stored by position. Add new lines at the end.",
+          facts: [{ id: "phase_count", label: "Phases written", hint: "how many, and their names", placeholder: "4: setup, accounts, launch, after" }] },
+        { id: "p0-people", t: "Name the people and pick their colors", who: ["you"],
+          steps: ["In `people`, one entry per person: a short key, the name shown, and a tone (`ink`, `accent`, `gate`, `done` or `plain`).", "Use the same keys in each step's `who`."],
+          check: "The filter chips and the People panel show everyone, each in their own color." },
+        { id: "p0-quests", t: "Chain the steps into quests", who: ["you", "claude"],
+          why: "The quest chain is the order of work across phases. It drives the route strip, the steps-left counter, Next up and the burndown.",
+          steps: ["In `quests`, one entry per run of work, in order: a short route label, a title, a note, and the step ids it covers.", "Add `wait` to a quest that sits with someone else, such as “Waiting on the owner”."],
+          check: "The data check under the header shows nothing: every quest id points at a real step." },
+        { id: "p0-share", gate: true, t: "Share with the people who tick", who: ["you"],
+          why: "Ticks, facts, notes and screenshots are shared with everyone who can open the page, so who gets in is a real decision.",
+          steps: ["Share menu: Editor for anyone who ticks and attaches screenshots; Viewer for anyone who only reads.", "Send the link in the project's usual channel."],
+          stop: "anyone asks to paste a password or key into a note. Secrets go straight into the screen that needs them." },
+      ] },
+
+    { id: "p1", title: "Example: accounts and hosting", when: "Example phase",
+      intro: "A sample phase showing blockers, a stop, facts to record and links. Replace it with the project's own work.",
+      steps: [
+        { id: "p1-2fa", blocker: true, short: "Two-step sign-in", t: "Two-step sign-in on the main email account", who: ["partner"],
+          why: "Every other account resets its password through this inbox. Whoever controls it controls everything.",
+          steps: ["Open the account's security page and turn on two-step sign-in with an authenticator app.", "Write the backup codes on paper. Never a photo.", "Check the recovery phone and email belong to the business."],
+          check: "Sign out and back in on a private window: it asks for an app code.",
+          facts: [{ id: "email_2sv", label: "Two-step sign-in", hint: "on or off, and on whose phone", placeholder: "On, app on Partner's phone" }] },
+        { id: "p1-domain", t: "Lock the domain and turn on auto-renew", who: ["partner"],
+          why: "The lock stops anyone with the password moving the domain away.",
+          steps: ["At the registrar: [[Domain List]], [[Manage]], turn on [[Domain Lock]].", "Turn on [[Auto-Renew]]. The card is the owner's call."],
+          check: "The public registry record lists `client transfer prohibited`.",
+          facts: [{ id: "domain_lock", label: "Domain lock", placeholder: "On, 14 Oct" }],
+          docs: [["ICANN lookup", "https://lookup.icann.org/"]] },
+        { id: "p1-backup", t: "Back up the old site, files and database", who: ["you"],
+          why: "The way back if launch goes wrong.",
+          steps: ["Create a backup in the hosting panel.", "Download the files and the database. Keep both offline, never in email or chat."],
+          facts: [{ id: "backup_taken", label: "Backup taken", hint: "date and where it is kept", placeholder: "15 Oct, office laptop and USB" }] },
+        { id: "p1-hosting", gate: true, t: "Decide where the site is hosted", who: ["you", "owner"],
+          why: "Hosting someone else controls can be switched off by them. Settle it before launch, or accept it in writing.",
+          steps: ["Launch where it is now, and sort ownership after.", "Or move to a plan the business owns first."] },
+      ] },
+
+    { id: "p2", title: "Example: launch", when: "Example phase",
+      intro: "A sample launch phase. The owner's written OK is the last gate.",
+      steps: [
+        { id: "p2-approve", gate: true, blocker: true, short: "Owner's written OK", t: "The owner's written “approved”", who: ["owner"],
+          why: "A one-line reply in writing shows the owner saw the new site before customers did.",
+          steps: ["Send the preview link and ask for a one-word reply, “approved”.", "Log the reply here (a screenshot with nothing private in it)."] },
+        { id: "p2-launch", t: "Put the new site live", who: ["you", "claude"],
+          steps: ["Run the release.", "Clear the caches.", "Stop before each line and say it out loud."],
+          check: "The homepage shows the new site on a phone and a computer." },
+        { id: "p2-check", t: "Check the live site from outside", who: ["claude", "you"],
+          steps: ["Old addresses redirect in one hop.", "The contact form delivers one test message marked TEST."],
+          check: "Every old address lands on its new page; the test message arrived." },
+        { id: "p2-google", optional: true, t: "Tell search engines about the new pages", who: ["partner"],
+          steps: ["Submit the sitemap in the search console."] },
+      ] },
+  ],
+
+  // The order of work, as quest runs. Each lists step ids from the phases above.
+  quests: [
+    { tone: "ink", short: "1 Set up", title: "1. Set up the tracker",
+      note: "Once per project. About 30 minutes with Claude.",
+      ids: ["p0-copy", "p0-phases", "p0-people", "p0-quests", "p0-share"] },
+    { tone: "accent", short: "2 Accounts call", title: "2. Accounts call",
+      note: "The partner's logins, with the codes on their phone. Email first.",
+      ids: ["p1-2fa", "p1-domain", "p1-backup"] },
+    { tone: "gate", short: "3 Owner OK", wait: "Waiting on the owner", title: "3. The owner, in writing",
+      note: "A reply by email or message counts.",
+      ids: ["p1-hosting", "p2-approve"] },
+    { tone: "ink", short: "4 Launch", title: "4. Launch call",
+      note: "Stop before each step. Claude checks from outside.",
+      ids: ["p2-launch", "p2-check"] },
+  ],
+
+  // Extra reference sections under the facts table. Text uses the same markup as steps.
+  reference: [
+    { title: "How this page saves things",
+      text: ["Ticks, facts and notes are saved for everyone who can open the page, live. Filters and open steps are remembered only in your own browser."],
+      table: { head: ["Saved as", "One record per", "Holds"], rows: [
+        ["`checks`", "step (by step id)", "done, who, when, the line ticks as a list by position, which claim a tick verified, and what the tick rests on: a command and its result, a claim without one, or a tick by hand"],
+        ["`facts`", "fact (by fact id)", "the value, who, when, and the step it came from"],
+        ["`log`", "note", "the step id, the text, a screenshot id if any, who (or which Claude session), when"],
+        ["`claims`", "step (by step id)", "a Claude session's report that the step is done: the session, when, the lines, the command it ran and its result, a note"],
+      ] } },
+  ],
+
+  footer: "Ticks, facts, notes and screenshots are shared with everyone who can open this page. Never put a password, code or key in any of them.",
+};
+/* ========================= END OF DATA BLOCK ========================= */
+
+
+const PHASES = TRACKER.phases;
+const QUESTS = TRACKER.quests || [];
+const PEOPLE = TRACKER.people || {};
+const KEY = TRACKER.storageKey || "tracker";
+const STEP_INDEX = [];
+PHASES.forEach((p, pi) => (p.steps || []).forEach((s) => STEP_INDEX.push({ ...s, who: s.who || [], phase: p, pi })));
+const STEP_BY_ID = new Map(STEP_INDEX.map((s) => [s.id, s]));
+const FACT_INDEX = [];
+STEP_INDEX.forEach((s) => (s.facts || []).forEach((f) => FACT_INDEX.push({ ...f, step: s })));
+const nameOfPerson = (k) => (PEOPLE[k] && PEOPLE[k].name) || k;
+const toneOf = (k) => "tone-" + ((PEOPLE[k] && PEOPLE[k].tone) || "plain");
+// The route to the goal: quest steps in order, or every non-optional step if there are no quests.
+const ROUTE = QUESTS.length
+  ? [...new Set(QUESTS.flatMap((q) => q.ids))].map((id) => STEP_BY_ID.get(id)).filter(Boolean)
+  : STEP_INDEX.filter((s) => !s.optional);
+const ROUTE_IDS = new Set(ROUTE.map((s) => s.id));
+
+const checks = {};   // stepId -> {done, by, at, note, subs, evidence, verifiedClaim, settledClaim, declinedClaim, declinedBy, declinedAt}
+const facts = {};    // factId -> {value, by, at, step, agent}
+let logs = [];       // [{id, step, text, asset, at, by, agent}]
+const claims = {};   // stepId -> {agent, at, lines, command, result, note}, written by Claude sessions, never by this page
+let db = null, user = null, assets = null, canWrite = false, canEdit = false, myId = null;
+// Whether the saved ticks and claims have arrived from the database, not from a cache: the waiting strip says
+// nothing until both have, because what waits is worked out from them.
+const live = { checks: false, claims: false };
+let owner = "all", hideDone = false, open = new Set();
+const writeQueue = {};
+const pendingImg = {};
+
+try {
+  owner = localStorage.getItem(KEY + "-owner") || "all";
+  if (owner !== "all" && !PEOPLE[owner]) owner = "all";
+  hideDone = localStorage.getItem(KEY + "-hide") === "1";
+  const o = JSON.parse(localStorage.getItem(KEY + "-open") || "null");
+  if (Array.isArray(o)) open = new Set(o);
+} catch (e) {}
+
+// The look: the data block's default, unless this viewer picked another one.
+const SKINS = ["zen", "quest", "field"];
+let skin = SKINS.includes(TRACKER.skin) ? TRACKER.skin : "zen";
+try { const v = localStorage.getItem(KEY + "-skin"); if (SKINS.includes(v)) skin = v; } catch (e) {}
+document.documentElement.dataset.skin = skin;
+const gameSkin = () => skin !== "field";
+const calm = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const CHECK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// [[Control]], **bold**, `code`, [text](https://url), *italic*
+function rich(text) {
+  const frag = document.createDocumentFragment();
+  const re = /\[\[(.+?)\]\]|\*\*(.+?)\*\*|`(.+?)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*([^*\s][^*]*?)\*/g;
+  let last = 0, m;
+  text = String(text || "");
+  while ((m = re.exec(text))) {
+    if (m.index > last) frag.append(document.createTextNode(text.slice(last, m.index)));
+    if (m[1]) frag.append(el("span", "ui", m[1]));
+    else if (m[2]) frag.append(el("b", null, m[2]));
+    else if (m[3]) frag.append(el("code", null, m[3]));
+    else if (m[4]) { const a = el("a", null, m[4]); a.href = m[5]; a.target = "_blank"; a.rel = "noopener"; frag.append(a); }
+    else frag.append(el("em", null, m[6]));
+    last = re.lastIndex;
+  }
+  if (last < text.length) frag.append(document.createTextNode(text.slice(last)));
+  return frag;
+}
+
+function looksSecret(text) {
+  if (!text) return false;
+  if (/pass(word)?\s*[:=]|pwd\s*[:=]|api[_ -]?key\s*[:=]|secret\s*[:=]|token\s*[:=]|recovery code|backup code/i.test(text)) return true;
+  if (/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(text)) return true;
+  if (/\b(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}/.test(text)) return true;
+  if (/\bAIza[0-9A-Za-z_-]{20,}/.test(text)) return true;
+  if (/\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{12,}/.test(text)) return true;
+  if (/\bsk-[A-Za-z0-9_-]{20,}/.test(text)) return true;
+  return false;
+}
+// A session writes claims and notes straight to the database, past the checks this page runs on save,
+// so the same net is applied when they are shown: anything that looks like a secret is hidden, not shown.
+const SECRET_HIDDEN = "[hidden here: it looks like it holds a password, code or key. Ask the session to write it again without it.]";
+// Field by field, as the skill's script checks a claim before it is written: joined, a word at the end of one
+// field and a colon at the start of the next would read as a secret that neither field holds.
+const claimLooksSecret = (cl) => !!cl && [cl.agent, cl.command, cl.result, cl.note].some((x) => looksSecret(String(x || "")));
+// A fact a session wrote went past `saveFact`'s check too, so its value is shown only if it passes the same net.
+const factHidden = (v) => !!(v && v.agent && looksSecret(String(v.value || "")));
+
+function fmt(at) {
+  if (!at) return "";
+  const d = new Date(at); if (isNaN(d)) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ", " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+const fmtDay = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+function saveOpen() { try { localStorage.setItem(KEY + "-open", JSON.stringify([...open])); } catch (e) {} }
+const isDone = (s) => !!(checks[s.id] && checks[s.id].done);
+
+// Claims. A Claude session never ticks: it writes a claim, and someone else checks it and ticks.
+// A claim waits for that check while the step is unticked and nothing has settled this claim: verified
+// (`verifiedClaim`), sent back (`declinedClaim`), or the step ticked or unticked by hand while it was on the
+// step (`settledClaim`). Each names the claim by its own `at`, so a newer claim on the same step waits again.
+// The page never compares the session's clock with the browser's: a claim is settled by which claim it is.
+function claimPending(st, cl) {
+  if (!cl || typeof cl.at !== "string" || !isFinite(Date.parse(cl.at))) return false;
+  st = st || {};
+  if (st.done) return false;
+  return st.verifiedClaim !== cl.at && st.declinedClaim !== cl.at && st.settledClaim !== cl.at;
+}
+const isClaimed = (s) => claimPending(checks[s.id], claims[s.id]);
+// Claim and agent text is written by a session, not through this page, so it is shown as plain text, on one
+// line, kept short, and hidden when it looks like a secret.
+function agentLabel(a) {
+  const name = String(a || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  return "Claude (" + (!name ? "unnamed session" : looksSecret(name) ? "name hidden" : name) + ")";
+}
+// The line positions a claim names, kept to whole numbers that are lines of this step.
+function claimLines(s, cl) {
+  const n = (s.steps || []).length;
+  return [...new Set((Array.isArray(cl && cl.lines) ? cl.lines : []).filter((i) => Number.isInteger(i) && i >= 0 && i < n))].sort((a, b) => a - b);
+}
+function listLines(idx) {
+  const nums = idx.map((i) => String(i + 1));
+  return nums.length < 2 ? nums.join("") : nums.slice(0, -1).join(", ") + " and " + nums[nums.length - 1];
+}
+
+// What a tick rests on, so a reader can tell a checked command from someone's word. Verify and tick saves
+// "command" when the claim it verified carried a command and that command's result, and "claim" when it did not;
+// a tick by hand saves "hand", because nothing on the page records how it was checked. Ticks saved before
+// `evidence` existed (template 1.1.0) are read from `verifiedClaim`, and from the claim while it is still that one.
+const EVIDENCE = { command: "checked by a command", claim: "claimed, no command on record", hand: "ticked by hand, no command on record" };
+function tickEvidence(st, cl) {
+  if (!st || !st.done) return "";
+  if (st.evidence === "command" || st.evidence === "claim" || st.evidence === "hand") return st.evidence;
+  if (!st.verifiedClaim) return "hand";
+  return cl && cl.at === st.verifiedClaim && cl.command && cl.result ? "command" : "claim";
+}
+
+// A stop the work has reached waits on the person named in it. Each run is a list of steps in order, and a stop is
+// reached when it is the first open step of its run: everything before it is ticked. Optional steps are passed over.
+function stopsReached(runs, done) {
+  const out = [];
+  runs.forEach((steps) => {
+    const first = steps.find((s) => !s.optional && !done(s));
+    if (first && first.gate && !out.some((x) => x.id === first.id)) out.push(first);
+  });
+  return out;
+}
+
+// Author-facing check of the data block, as a list of what to fix. The page shows it under its header, and the
+// skill's script runs this same function before a tracker is published, so it reads only the block it is given.
+function dataIssues(T) {
+  const issues = [];
+  const idRe = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  const people = T.people || {};
+  const seen = new Set(), seenF = new Set(), seenP = new Set();
+  if (!Array.isArray(T.phases)) issues.push("The data block has no `phases` list.");
+  const steps = [];
+  (Array.isArray(T.phases) ? T.phases : []).forEach((p) => {
+    if (!p.id || !idRe.test(p.id)) issues.push("Phase “" + p.title + "” needs an id of letters, digits, - or _.");
+    if (seenP.has(p.id)) issues.push("Phase id `" + p.id + "` is used twice."); seenP.add(p.id);
+    if (!(p.steps || []).length) issues.push("Phase `" + p.id + "` has no steps.");
+    (p.steps || []).forEach((s) => steps.push(s));
+  });
+  steps.forEach((s) => {
+    const who = s.who || [];
+    if (!s.id || !idRe.test(s.id)) issues.push("Step “" + s.t + "” needs an id of letters, digits, - or _.");
+    if (seen.has(s.id)) issues.push("Step id `" + s.id + "` is used twice: their ticks would mix."); seen.add(s.id);
+    if (!s.t) issues.push("Step `" + s.id + "` has no title (`t`).");
+    if (!who.length) issues.push("Step `" + s.id + "` names nobody in `who`.");
+    who.forEach((w) => { if (!people[w]) issues.push("Step `" + s.id + "` names `" + w + "`, who is not in `people`."); });
+    if (!s.optional && !s.why && !s.check) issues.push("Step `" + s.id + "` says neither why it matters (`why`) nor what closes it (`check`).");
+    (s.facts || []).forEach((f) => { if (!f.id || !idRe.test(f.id)) issues.push("A fact in `" + s.id + "` needs an id."); if (seenF.has(f.id)) issues.push("Fact id `" + f.id + "` is used twice."); seenF.add(f.id); });
+  });
+  (T.quests || []).forEach((q) => {
+    if (!Array.isArray(q.ids)) { issues.push("Quest “" + q.title + "” has no list of step ids (`ids`)."); return; }
+    q.ids.forEach((id) => { if (!seen.has(id)) issues.push("Quest “" + q.title + "” lists `" + id + "`, which is not a step."); });
+  });
+  if (!T.templateVersion) issues.push("The data block has no `templateVersion`. Copy it back from the template this page's code came from.");
+  return issues;
+}
+
+// Shown only when something is off.
+function checkData() {
+  const issues = dataIssues(TRACKER);
+  const box = $("#datacheck"); box.textContent = "";
+  if (!issues.length) return;
+  const d = el("details", "datacheck"); d.open = true;
+  d.append(el("summary", null, "Data block check: " + issues.length + (issues.length === 1 ? " thing" : " things") + " to fix"));
+  const ul = el("ul"); issues.forEach((t) => { const li = el("li"); li.append(rich(t)); ul.append(li); });
+  d.append(ul); box.append(d);
+}
+
+function buildStatic() {
+  $("#eyebrow").textContent = TRACKER.eyebrow || "";
+  $("#title").append(rich(TRACKER.title || "Quest tracker"));
+  $("#lede").textContent = TRACKER.lede || "";
+  $("#status-note").textContent = TRACKER.statusNote || "";
+  $("#quests-intro").append(rich(TRACKER.questsIntro || ""));
+  const dl = $("#doclinks");
+  (TRACKER.doclinks || []).forEach(([t, href, sub]) => { const a = el("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.append(el("b", null, t)); if (sub) a.append(document.createTextNode(" " + sub)); dl.append(a); });
+  const rs = $("#rules");
+  (TRACKER.rules || []).forEach((r) => { const d = el("div", r.warn ? "no" : null); d.append(el("b", "rt", r.title)); d.append(rich(r.text)); rs.append(d); });
+  if (!QUESTS.length) $(".quests").hidden = true;
+  const chips = $("#chips");
+  [["all", "Everyone"], ...Object.keys(PEOPLE).map((k) => [k, nameOfPerson(k)])].forEach(([k, label]) => {
+    const c = el("button", "chip", label); c.type = "button"; c.dataset.owner = k;
+    c.setAttribute("aria-pressed", k === owner ? "true" : "false");
+    c.addEventListener("click", () => setOwner(k));
+    chips.append(c);
+  });
+  const rx = $("#ref-extra");
+  (TRACKER.reference || []).forEach((r) => {
+    rx.append(el("h3", null, r.title));
+    (r.text || []).forEach((t) => { const p = el("p"); p.append(rich(t)); rx.append(p); });
+    if (r.table) {
+      const w = el("div", "tablewrap"); const tb = el("table"); const th = el("thead"); const hr = el("tr");
+      r.table.head.forEach((h) => hr.append(el("th", null, h))); th.append(hr); tb.append(th);
+      const bd = el("tbody"); r.table.rows.forEach((row) => { const tr = el("tr"); row.forEach((c) => { const td = el("td"); td.append(rich(c)); tr.append(td); }); bd.append(tr); });
+      tb.append(bd); w.append(tb); rx.append(w);
+    }
+  });
+  const ft = $("#footer"); ft.textContent = TRACKER.footer || "";
+  // Which template this tracker's code came from, so trackers left on older code are easy to spot.
+  ft.append(el("span", "tver", TRACKER.templateVersion ? "Template " + TRACKER.templateVersion : "Template version missing from the data block"));
+}
+
+function setOwner(k) {
+  owner = k;
+  document.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x.dataset.owner === k ? "true" : "false"));
+  try { localStorage.setItem(KEY + "-owner", owner); } catch (e) {}
+  render();
+}
+
+function build() {
+  const root = $("#phases");
+  PHASES.forEach((p, pi) => {
+    const sec = el("section", "phase"); sec.id = p.id;
+    const head = el("div", "phase-head");
+    const num = el("span", "phase-num"); num.append(el("span", "lv-field", "Phase " + pi), el("span", "lv-game", "LV " + pi));
+    head.append(num, el("h2", null, p.title));
+    if (p.when) head.append(el("span", "when" + (p.now || p.today ? " now" : ""), p.when));
+    const cnt = el("span", "phase-count"); cnt.id = "count-" + p.id; head.append(cnt);
+    sec.append(head);
+    if (p.intro) { const i = el("p", "phase-intro"); i.append(rich(p.intro)); sec.append(i); }
+    if (p.docs) { const d = el("div", "docs-line"); d.append(el("b", null, "Docs this phase changes: "), rich(p.docs)); sec.append(d); }
+    const ul = el("ul", "steps");
+    (p.steps || []).forEach((s) => ul.append(buildStep(STEP_BY_ID.get(s.id) || { ...s, who: s.who || [] })));
+    sec.append(ul);
+    root.append(sec);
+  });
+  const map = $("#map");
+  PHASES.forEach((p, pi) => {
+    const row = el("div", "maprow");
+    const a = el("a", "mapname"); a.href = "#" + p.id; a.title = p.title; a.append(el("span", null, String(pi)), document.createTextNode(p.title));
+    const cells = el("div", "cells"); cells.id = "cells-" + p.id;
+    (p.steps || []).forEach((s) => {
+      const c = el("a", "cell"); c.href = "#s-" + s.id; c.dataset.step = s.id;
+      c.addEventListener("click", () => setOpen(s.id, true));
+      cells.append(c);
+    });
+    row.append(a, cells, el("span", "mapcount")); row.lastChild.id = "mapcount-" + p.id;
+    map.append(row);
+  });
+}
+
+function buildStep(s) {
+  const li = el("li", "step" + (s.gate ? " gate" : "")); li.id = "s-" + s.id;
+  const row = el("div", "step-row");
+  const btn = el("button", "tick"); btn.type = "button"; btn.innerHTML = CHECK_SVG;
+  btn.setAttribute("aria-label", "Mark done: " + s.t); btn.setAttribute("aria-pressed", "false");
+  btn.addEventListener("click", () => toggleDone(s.id));
+  const hm = el("div", "head-main");
+  const tr = el("div", "title-row");
+  const op = el("button", "opener"); op.type = "button"; op.setAttribute("aria-expanded", "false"); op.setAttribute("aria-controls", "b-" + s.id);
+  op.append(el("span", "caret", "▸"), el("span", "title", s.t));
+  op.addEventListener("click", () => setOpen(s.id, !open.has(s.id)));
+  tr.append(op);
+  const ct = el("span", "tag claim-t", "Ready for check"); ct.dataset.role = "claimtag"; ct.hidden = true; tr.append(ct);
+  if (s.blocker) tr.append(el("span", "tag block-t", "Blocker"));
+  if (s.gate) tr.append(el("span", "tag gate-t", "Stop and check in"));
+  if (s.optional) tr.append(el("span", "tag", "optional"));
+  if (s.steps && s.steps.length) { const t = el("span", "tag subs"); t.dataset.role = "subcount"; tr.append(t); }
+  const lt = el("span", "tag logs"); lt.dataset.role = "logcount"; lt.hidden = true; tr.append(lt);
+  const ow = el("span", "owners"); s.who.forEach((w) => ow.append(el("span", "owner " + toneOf(w), nameOfPerson(w)))); tr.append(ow);
+  hm.append(tr);
+  if (s.why) { const w = el("p", "why"); w.append(rich(s.why)); hm.append(w); }
+  const stamp = el("span", "stamp"); stamp.dataset.role = "stamp"; hm.append(stamp);
+  row.append(btn, hm);
+  li.append(row);
+
+  const body = el("div", "body"); body.id = "b-" + s.id; body.hidden = true;
+  const claimBox = el("div"); claimBox.dataset.role = "claim"; claimBox.hidden = true; body.append(claimBox);
+  if (s.steps && s.steps.length) {
+    const b = el("div", "blk"); b.append(el("h4", null, "Do this"));
+    const ol = el("ol", "subs-list");
+    s.steps.forEach((txt, i) => {
+      const it = el("li", "sub"); it.dataset.i = i;
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "sub-" + s.id + "-" + i;
+      cb.setAttribute("aria-label", "Line " + (i + 1) + " done");
+      cb.addEventListener("change", () => toggleSub(s.id, i, cb.checked));
+      const lab = el("label", "txt"); lab.htmlFor = cb.id; lab.append(rich(txt));
+      it.append(cb, lab); ol.append(it);
+    });
+    b.append(ol); body.append(b);
+  }
+  if (s.check) { const c = el("div", "callout check"); c.append(el("b", null, "Check it worked: "), rich(s.check)); body.append(c); }
+  if (s.stop) { const c = el("div", "callout stop"); c.append(el("b", null, "Stop if: "), rich(s.stop)); body.append(c); }
+  if (s.tip) { const c = el("div", "callout tip"); c.append(el("b", null, "Good to know: "), rich(s.tip)); body.append(c); }
+  if (s.facts && s.facts.length) {
+    const b = el("div", "blk"); b.append(el("h4", null, "Write down (not secret)"));
+    const fx = el("div", "facts");
+    s.facts.forEach((f) => {
+      const r = el("div", "fact");
+      const lab = el("label"); lab.htmlFor = "fact-" + f.id; lab.append(document.createTextNode(f.label));
+      if (f.hint) lab.append(el("small", null, f.hint));
+      const inp = document.createElement("input"); inp.id = "fact-" + f.id; inp.type = "text"; inp.autocomplete = "off"; inp.spellcheck = false;
+      inp.placeholder = f.placeholder || "";
+      inp.addEventListener("change", () => saveFact(f.id, s.id, inp));
+      const sv = el("span", "saved"); sv.dataset.role = "fact-saved-" + f.id;
+      r.append(lab, inp, sv); fx.append(r);
+    });
+    b.append(fx); body.append(b);
+  }
+  if ((s.docs && s.docs.length) || (s.ours && s.ours.length)) {
+    const b = el("div", "blk"); b.append(el("h4", null, "Links"));
+    if (s.docs && s.docs.length) b.append(linkRow("Platform help", s.docs, ""));
+    if (s.ours && s.ours.length) b.append(linkRow("Our docs", s.ours, " ours"));
+    body.append(b);
+  }
+  if (s.doc) { const m = el("div", "meta"); m.append(el("b", null, "Docs to update after: "), rich(s.doc)); body.append(m); }
+
+  const lb = el("div", "blk"); lb.append(el("h4", null, "Session log"));
+  const log = el("div", "log"); log.dataset.role = "log"; lb.append(log);
+  lb.append(buildComposer(s));
+  body.append(lb);
+  li.append(body);
+  return li;
+}
+
+function linkRow(label, list, cls) {
+  const r = el("div", "linkrow"); r.append(el("span", null, label));
+  const lk = el("div", "links" + cls);
+  list.forEach(([t, href]) => { const a = el("a", null, t); a.href = href; a.target = "_blank"; a.rel = "noopener"; lk.append(a); });
+  r.append(lk); return r;
+}
+
+function buildComposer(s) {
+  const c = el("div", "composer"); c.dataset.role = "composer";
+  const ta = document.createElement("textarea"); ta.id = "note-" + s.id; ta.rows = 2;
+  ta.placeholder = "What happened, what was different, what we fixed. Paste a screenshot here (crop out anything secret first).";
+  ta.setAttribute("aria-label", "Session note for " + s.t);
+  ta.addEventListener("paste", (e) => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (const it of items) { if (it.kind === "file" && it.type.startsWith("image/")) { const f = it.getAsFile(); if (f) { e.preventDefault(); setPending(s.id, f); } break; } }
+  });
+  const row = el("div", "row");
+  const save = el("button", "savebtn", "Add to log"); save.type = "button"; save.dataset.role = "save";
+  save.addEventListener("click", () => addLog(s.id));
+  const fileIn = document.createElement("input"); fileIn.type = "file"; fileIn.accept = "image/png,image/jpeg,image/webp,image/gif"; fileIn.hidden = true; fileIn.id = "file-" + s.id;
+  fileIn.addEventListener("change", () => { if (fileIn.files && fileIn.files[0]) setPending(s.id, fileIn.files[0]); fileIn.value = ""; });
+  const att = el("button", "attach", "Attach screenshot"); att.type = "button"; att.dataset.role = "attach";
+  att.addEventListener("click", () => fileIn.click());
+  const pend = el("span", "pending"); pend.dataset.role = "pending";
+  row.append(save, att, fileIn, pend);
+  c.append(ta, row, el("span", "hint", "Screenshots are seen by everyone who can open this page. Never include a password, code, key or backup code."));
+  return c;
+}
+
+function setPending(stepId, blob) {
+  if (blob.size > 20 * 1024 * 1024) { showBanner("That image is over 20 MB. Crop it or save it smaller, then attach it again."); return; }
+  pendingImg[stepId] = blob;
+  const pend = $("#s-" + stepId).querySelector('[data-role="pending"]');
+  pend.textContent = "";
+  const img = el("img"); img.alt = "Screenshot to attach"; img.src = URL.createObjectURL(blob);
+  const rm = el("button", "linkbtn", "Remove"); rm.type = "button";
+  rm.addEventListener("click", () => { delete pendingImg[stepId]; pend.textContent = ""; });
+  pend.append(img, el("span", null, "Ready to attach"), rm);
+}
+
+function setOpen(id, on) {
+  if (on) open.add(id); else open.delete(id);
+  saveOpen();
+  const li = $("#s-" + id); if (!li) return;
+  li.querySelector(".opener").setAttribute("aria-expanded", on ? "true" : "false");
+  li.querySelector(".body").hidden = !on;
+}
+
+function enqueue(path, fn) {
+  const prev = writeQueue[path] || Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  writeQueue[path] = next;
+  return next;
+}
+
+function writeCheck(id, patch) {
+  const cur = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { done: false, by: null, at: null, note: "" };
+  const body = Object.assign(cur, patch);
+  checks[id] = body; render();
+  return enqueue("checks/" + id, () => db.collection("checks").doc(id).set(body)).catch(onWriteError);
+}
+
+function toggleDone(id) {
+  if (!db || !canWrite) return;
+  // Ticking a step that carries a claim is checking that claim, so it goes the same way as the button.
+  if (isClaimed(STEP_BY_ID.get(id))) { verifyClaim(id); return; }
+  const done = !(checks[id] && checks[id].done);
+  if (done) { const s = STEP_BY_ID.get(id); burst($("#s-" + id + " .tick"), stepXP(s)); }
+  const patch = { done, by: done ? myId : null, at: new Date().toISOString(), evidence: done ? "hand" : null };
+  if (checks[id] && checks[id].verifiedClaim) patch.verifiedClaim = null;  // a tick made by hand verified no claim
+  // A claim on the step when it is ticked or unticked by hand is settled by that, so it does not come back.
+  const cl = claims[id];
+  if (cl && typeof cl.at === "string") patch.settledClaim = cl.at;
+  writeCheck(id, patch);
+}
+
+// Verify and tick: an Editor checked the claim and ticks the step. The claim's lines are ticked with it,
+// `verifiedClaim` records which claim this tick checked, and `evidence` what that claim gave to check it against.
+// The person ticking is never the claiming session. A claim the page hides cannot be checked against what it says,
+// so it can only be sent back.
+function verifyClaim(id) {
+  if (!db || !canWrite || !canEdit) return;
+  const s = STEP_BY_ID.get(id); const cl = claims[id];
+  if (!s || !claimPending(checks[id], cl) || claimLooksSecret(cl)) return;
+  const subs = (checks[id] && Array.isArray(checks[id].subs)) ? checks[id].subs.slice() : [];
+  while (subs.length < (s.steps || []).length) subs.push(false);
+  claimLines(s, cl).forEach((i) => { subs[i] = true; });
+  burst($("#s-" + id + " .tick"), stepXP(s));
+  const evidence = cl.command && cl.result ? "command" : "claim";
+  writeCheck(id, { done: true, by: myId, at: new Date().toISOString(), verifiedClaim: cl.at, evidence, subs });
+}
+
+// Send back: the check did not pass. The step stays open and the session can claim it again once it is fixed.
+function sendBack(id) {
+  if (!db || !canWrite || !canEdit) return;
+  const cl = claims[id];
+  if (!claimPending(checks[id], cl)) return;
+  writeCheck(id, { declinedClaim: cl.at, declinedBy: myId, declinedAt: new Date().toISOString() });
+}
+
+// XP: ticking counts, and so does writing things down. A claim earns nothing until someone verifies it and
+// ticks the step, and what a Claude session writes down (facts, notes) earns nothing either: XP is for the people.
+const stepXP = (s) => 10 + (s && s.blocker ? 20 : 0) + (s && s.gate ? 10 : 0);
+function seasonXP() {
+  let xp = 0;
+  STEP_INDEX.forEach((s) => { if (isDone(s)) xp += stepXP(s); });
+  Object.values(facts).forEach((v) => { if (v && v.value && !v.agent) xp += 5; });
+  logs.forEach((l) => { if (!l.agent) xp += 3 + (l.asset ? 2 : 0); });
+  return xp;
+}
+
+function burst(anchor, xp) {
+  if (!gameSkin() || calm() || !anchor) return;
+  const r = anchor.getBoundingClientRect();
+  const b = el("div", "burst"); b.style.left = (r.left + r.width / 2) + "px"; b.style.top = (r.top + r.height / 2) + "px";
+  const colors = ["var(--done)", "var(--xp)", "var(--accent)", "var(--gate)"];
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2; const d = 18 + (i % 3) * 7;
+    const p = el("i"); p.style.setProperty("--dx", Math.round(Math.cos(a) * d) + "px"); p.style.setProperty("--dy", Math.round(Math.sin(a) * d) + "px"); p.style.setProperty("--c", colors[i % 4]);
+    b.append(p);
+  }
+  b.append(el("b", null, "+" + xp + " XP"));
+  document.body.append(b);
+  setTimeout(() => b.remove(), 1000);
+}
+
+let toastTimer = null;
+function toast(text) {
+  if (!gameSkin()) return;
+  let t = $("#toast"); if (!t) { t = el("div", "toast"); t.id = "toast"; t.setAttribute("role", "status"); document.body.append(t); }
+  t.textContent = text; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+// The whole season as Markdown, for the project's docs.
+function seasonMarkdown() {
+  const who = (ids) => ids.map(nameOfPerson).join(", ");
+  const day = (at) => { const d = new Date(at); return isNaN(d) ? "" : d.toISOString().slice(0, 10); };
+  // A fence longer than any run of backticks inside, so pasted output cannot close it early.
+  const fence = (text) => { const runs = String(text).match(/`+/g) || []; return "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1))); };
+  // A claim's command and its result, as two separate fenced blocks.
+  const evidenceOf = (cl) => {
+    if (cl.command) { const c = String(cl.command); out.push("", "Command:", "", fence(c), c, fence(c)); }
+    if (cl.result) { const r = String(cl.result); out.push("", "Result:", "", fence(r), r, fence(r)); }
+  };
+  const pending = STEP_INDEX.filter(isClaimed).length;
+  const out = ["# " + String(TRACKER.title || "Quest tracker").replace(/\*/g, "") + ": season log", "", "Copied " + day(Date.now()) + ". " + ROUTE.filter((s) => !isDone(s)).length + " of " + ROUTE.length + " route steps left to " + ((TRACKER.goal && TRACKER.goal.label) || "the goal") + "." + (pending ? " " + pending + (pending === 1 ? " claim waits" : " claims wait") + " for a check." : "") + (TRACKER.templateVersion ? " Template " + TRACKER.templateVersion + "." : ""), ""];
+  PHASES.forEach((p, pi) => {
+    out.push("## Phase " + pi + ": " + p.title, "");
+    (p.steps || []).forEach((raw) => {
+      const s = STEP_BY_ID.get(raw.id); if (!s) return;
+      const st = checks[s.id] || {};
+      const cl = claims[s.id];
+      const subs = Array.isArray(st.subs) ? st.subs.filter(Boolean).length : 0;
+      const verified = !!(st.done && st.verifiedClaim && cl && cl.at === st.verifiedClaim);
+      const fromClaim = st.done && st.verifiedClaim ? ", verified from a claim by " + (verified ? agentLabel(cl.agent) : "a Claude session") + " made " + day(st.verifiedClaim) : "";
+      out.push("### " + s.t + " (`" + s.id + "`)", "");
+      out.push("- State: " + (st.done ? "done " + day(st.at) + ", " + EVIDENCE[tickEvidence(st, cl)] + fromClaim : "open") + (s.steps && s.steps.length ? ", " + subs + " of " + s.steps.length + " lines ticked" : "") + ". Who: " + who(s.who) + ".");
+      (s.facts || []).forEach((f) => { const v = facts[f.id]; if (v && v.value) out.push("- " + f.label + ": " + (factHidden(v) ? SECRET_HIDDEN : v.value) + " (" + day(v.at) + (v.agent ? ", " + agentLabel(v.agent) : "") + ")"); });
+      if (st.note) out.push("- Earlier note: " + st.note);
+      logs.filter((l) => l.step === s.id).forEach((l) => out.push("- " + day(l.at) + (l.agent ? ", " + agentLabel(l.agent) : "") + ": " + (l.agent && looksSecret(l.text) ? SECRET_HIDDEN : (l.text || "").replace(/\n+/g, " ")) + (l.asset ? " [screenshot in the tracker]" : "")));
+      if (claimPending(st, cl)) {
+        const ln = claimLines(s, cl);
+        const hide = claimLooksSecret(cl);
+        out.push("- Ready for check: " + agentLabel(cl.agent) + " claimed it on " + day(cl.at) + (ln.length ? ", lines " + listLines(ln) : "") + "." + (hide ? " " + SECRET_HIDDEN : cl.note ? " Note: " + String(cl.note).replace(/\n+/g, " ") : ""));
+        if (!hide) evidenceOf(cl);
+      } else if (verified && !claimLooksSecret(cl)) evidenceOf(cl);  // what the tick was checked against, while it is on record
+      out.push("");
+    });
+  });
+  return out.join("\n");
+}
+
+$("#copy-log").addEventListener("click", () => {
+  const md = seasonMarkdown();
+  const status = $("#copy-status"); const fb = $("#copy-fallback"); fb.textContent = "";
+  const fallback = () => {
+    const ta = el("textarea", "copyout"); ta.id = "copy-out"; ta.readOnly = true; ta.value = md; ta.setAttribute("aria-label", "The season log as Markdown");
+    fb.append(ta); ta.focus(); ta.select();
+    status.textContent = "Copying is blocked here: the text is selected below, press Ctrl+C.";
+  };
+  try {
+    navigator.clipboard.writeText(md).then(() => { status.textContent = "Copied " + md.split("\n").length + " lines."; }, fallback);
+  } catch (e) { fallback(); }
+});
+
+const pick = $("#skin-pick"); pick.value = skin;
+pick.addEventListener("change", () => {
+  skin = pick.value; document.documentElement.dataset.skin = skin;
+  try { localStorage.setItem(KEY + "-skin", skin); } catch (e) {}
+  render();
+});
+
+function toggleSub(id, i, on) {
+  if (!db || !canWrite) { render(); return; }
+  const s = STEP_BY_ID.get(id);
+  const cur = (checks[id] && Array.isArray(checks[id].subs)) ? checks[id].subs.slice() : [];
+  while (cur.length < s.steps.length) cur.push(false);
+  cur[i] = on;
+  writeCheck(id, { subs: cur });
+}
+
+function saveFact(fid, stepId, inp) {
+  if (!db || !canWrite) return;
+  const value = inp.value.trim().slice(0, 300);
+  if (looksSecret(value)) { showBanner("That looks like a password, code or key, so it was not saved. Facts here are only things that are safe to share, such as folder names and host names."); inp.value = (facts[fid] && facts[fid].value) || ""; return; }
+  const body = { value, by: myId, at: new Date().toISOString(), step: stepId };
+  facts[fid] = body; render();
+  enqueue("facts/" + fid, () => db.collection("facts").doc(fid).set(body)).catch(onWriteError);
+}
+
+async function addLog(stepId) {
+  if (!db || !canWrite) return;
+  const li = $("#s-" + stepId);
+  const ta = li.querySelector("textarea");
+  const text = ta.value.trim().slice(0, 4000);
+  const blob = pendingImg[stepId];
+  if (!text && !blob) return;
+  if (looksSecret(text)) { showBanner("That note looks like it holds a password, code or key. It was not saved. Keep those in the password manager only."); return; }
+  const save = li.querySelector('[data-role="save"]'); save.disabled = true; save.textContent = blob ? "Uploading…" : "Saving…";
+  let asset = null;
+  try {
+    if (blob) {
+      if (!assets) throw { code: "no_assets" };
+      const r = await assets.upload(blob, blob.type ? undefined : { type: "image/png" });
+      asset = r.id;
+    }
+    await db.collection("log").add({ step: stepId, text, asset, at: new Date().toISOString(), by: myId });
+    ta.value = ""; delete pendingImg[stepId]; li.querySelector('[data-role="pending"]').textContent = "";
+    showBanner("");
+  } catch (e) {
+    const code = e && e.code;
+    if (code === "no_assets" || code === "not_granted" || code === "capability_disabled") showBanner("Screenshots can be added by people who can edit this page. Ask the owner to share it with you as an Editor, or save the note without the picture.");
+    else if (code === "too_large") showBanner("That image is too large. Crop it or save it smaller, then try again.");
+    else if (code === "unsupported_type") showBanner("That file type cannot be attached. Use a PNG or JPEG screenshot.");
+    else if (code === "quota_exceeded" || code === "quota_or_state") showBanner("This page's storage is full. Tell the owner; nothing was saved.");
+    else onWriteError(e);
+  } finally { save.disabled = false; save.textContent = "Add to log"; }
+}
+
+async function removeLog(entry) {
+  if (!db) return;
+  try {
+    await db.collection("log").doc(entry.id).delete();
+    if (entry.asset && assets) { try { await assets.delete(entry.asset); } catch (e) {} }
+  } catch (e) { onWriteError(e); }
+}
+
+function onWriteError(e) {
+  const code = e && e.code;
+  if (code === "invalid_argument" || code === "permission_denied" || code === "not_granted") { canWrite = false; showBanner("Your access to this page is view-only, so ticks, facts and notes are not saved. Ask the owner to share it with you as an Editor."); render(); }
+  else showBanner("A change did not save (" + (code || "error") + "). Try again in a moment.");
+}
+
+function showBanner(msg) { const b = $("#banner"); b.textContent = ""; if (msg) b.append(el("div", "banner", msg)); }
+
+function lightbox(src) {
+  const lb = el("div", "lightbox"); lb.tabIndex = -1; lb.setAttribute("role", "dialog"); lb.setAttribute("aria-label", "Screenshot, full size");
+  const img = el("img"); img.src = src; img.alt = "Screenshot, full size"; lb.append(img);
+  const close = () => lb.remove();
+  lb.addEventListener("click", close); lb.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  document.body.append(lb); lb.focus();
+}
+
+function stepLink(s, cls, text) {
+  const a = el("a", cls || null, text || s.t); a.href = "#s-" + s.id;
+  a.addEventListener("click", () => setOpen(s.id, true));
+  return a;
+}
+
+// The claim on a step, at the top of its body: who claimed it and when, the lines, the command and its result
+// as two separate fields, the note, and for an Editor the two ways to settle it. All of it is shown as text.
+function renderClaim(box, s, st, cl, pend, nameOf, writable) {
+  box.textContent = "";
+  const sentBack = !!cl && !st.done && st.declinedClaim === cl.at;
+  if (!pend && !sentBack) { box.hidden = true; box.className = ""; return; }
+  box.hidden = false; box.className = "claimbox" + (pend ? "" : " settled");
+  if (sentBack) {
+    box.append(el("b", null, "Sent back"));
+    box.append(el("span", "cmeta", agentLabel(cl.agent) + "'s claim of " + fmt(cl.at) + " was sent back" + (st.declinedBy ? " by " + nameOf(st.declinedBy) : "") + (st.declinedAt ? ", " + fmt(st.declinedAt) : "") + ". The session can claim the step again once it is fixed."));
+    return;
+  }
+  const ln = claimLines(s, cl);
+  box.append(el("b", null, "Ready for check"));
+  box.append(el("span", "cmeta", agentLabel(cl.agent) + " says this step is done, " + fmt(cl.at) + (ln.length ? ". Lines " + listLines(ln) + " of " + s.steps.length : "") + "."));
+  if (claimLooksSecret(cl)) box.append(el("span", "cmeta", SECRET_HIDDEN));
+  else {
+    if (cl.command) box.append(el("span", "clabel", "Command"), el("pre", null, String(cl.command)));
+    if (cl.result) box.append(el("span", "clabel", "Result"), el("pre", null, String(cl.result)));
+    if (!cl.command && !cl.result) box.append(el("span", "cmeta", "The claim gives no command and no result, so there is nothing here to check it against."));
+    if (cl.note) box.append(el("span", "clabel", "Note"), el("p", "why", String(cl.note)));
+  }
+  if (s.check) { const c = el("span", "cmeta"); c.append(el("b", null, "What closes it: "), rich(s.check)); box.append(c); }
+  const row = el("div", "row");
+  if (writable && canEdit && claimLooksSecret(cl)) {
+    const b = el("button", "attach", "Send back"); b.type = "button"; b.addEventListener("click", () => sendBack(s.id));
+    row.append(b, el("span", "hint", "This claim is hidden, so there is nothing here to check it against. Send it back and ask the session to claim again without it."));
+  } else if (writable && canEdit) {
+    const v = el("button", "savebtn", "Verify and tick"); v.type = "button"; v.addEventListener("click", () => verifyClaim(s.id));
+    const b = el("button", "attach", "Send back"); b.type = "button"; b.addEventListener("click", () => sendBack(s.id));
+    row.append(v, b, el("span", "hint", "Check it yourself before you tick. When you send it back, log a note saying what is missing."));
+  } else row.append(el("span", "hint", "An Editor checks this claim and ticks it."));
+  box.append(row);
+}
+
+// The quest board's states, in order: a quest with every step ticked is done, one with `wait` waits on someone,
+// the first other quest is up next, and the rest come later.
+function questStates() {
+  let nextFound = false;
+  return QUESTS.map((q) => {
+    const steps = (q.ids || []).map((id) => STEP_BY_ID.get(id)).filter(Boolean);
+    const nDone = steps.filter(isDone).length;
+    let st = "later", label = "Later";
+    if (nDone === steps.length) { st = "done"; label = "Done"; }
+    else if (q.wait) { st = "wait"; label = q.wait; }
+    else if (!nextFound) { st = "next"; label = "Up next"; nextFound = true; }
+    return { q, steps, nDone, st, label };
+  });
+}
+
+// Waiting on you, at the top of the page: claims ready for a person's check, and stops the work has reached.
+// Shown only once the saved ticks and claims have loaded, and only when something waits, so it never lists a
+// settled claim or a stop worked out against ticks it has not seen, and never reads "nothing waits".
+function renderWaiting(ready, stops) {
+  const box = $("#waiting"); box.textContent = "";
+  box.hidden = !live.checks || !live.claims || (!ready.length && !stops.length);
+  if (box.hidden) return;
+  box.append(el("h2", null, "Waiting on you"));
+  const ul = el("ul");
+  ready.forEach((s) => {
+    const cl = claims[s.id]; const li = el("li");
+    li.append(el("b", null, "Check"), stepLink(s), el("span", "wwho", agentLabel(cl.agent) + " claimed it " + fmt(cl.at) + (canEdit ? "" : " · an Editor checks it")));
+    ul.append(li);
+  });
+  stops.forEach((s) => {
+    const li = el("li");
+    li.append(el("b", null, "Stop"), stepLink(s), el("span", "wwho", "waits on " + s.who.map(nameOfPerson).join(", ")));
+    ul.append(li);
+  });
+  box.append(ul);
+}
+
+/* ---- Burndown: steps left on the route, one point per day ---- */
+const DAY = 864e5;
+const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const parseDay = (s) => { if (!s) return null; const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return null; return new Date(+m[1], +m[2] - 1, +m[3]).getTime(); };
+
+function drawBurndown() {
+  const box = $("#burn"); box.textContent = "";
+  const total = ROUTE.length;
+  const goalLabel = (TRACKER.goal && TRACKER.goal.label) || "the goal";
+  $("#burn-h").textContent = "Steps left to " + goalLabel;
+  if (!total) { box.append(el("p", "small-note", "No route yet. Add quests in the data block, or steps that are not optional.")); return; }
+  const doneTimes = ROUTE.filter(isDone).map((s) => Date.parse(checks[s.id].at)).filter((t) => isFinite(t));
+  const today = dayStart(Date.now());
+  let day0 = parseDay(TRACKER.started);
+  if (day0 == null) day0 = doneTimes.length ? dayStart(Math.min(...doneTimes)) : today - 14 * DAY;
+  day0 = Math.min(day0, today);
+  const target = parseDay(TRACKER.goal && TRACKER.goal.target);
+  const lastDay = Math.max(today, target || 0);
+  const nDays = Math.round((lastDay - day0) / DAY) + 1;
+  const series = [];
+  for (let i = 0; i * DAY + day0 <= today; i++) {
+    const end = day0 + (i + 1) * DAY;
+    series.push(total - doneTimes.filter((t) => t < end).length);
+  }
+  const left = series[series.length - 1];
+  $("#burn-sub").textContent = left + " of " + total + " left" + (target ? " · target " + fmtDay(target) : "");
+  $("#burn-ideal-key").hidden = !target;
+
+  const W = Math.max(260, Math.round(box.clientWidth || 460)), H = 200;
+  const m = { l: 30, r: 16, t: 16, b: 28 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const x = (i) => m.l + (nDays > 1 ? (i / (nDays - 1)) * iw : iw / 2);
+  const y = (v) => m.t + (1 - v / total) * ih;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Steps left to " + goalLabel + ": " + left + " of " + total + " on " + fmtDay(today));
+  const add = (tag, attrs, text) => { const n = document.createElementNS(ns, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; svg.append(n); return n; };
+
+  const ticks = [...new Set([0, Math.round(total / 2), total])];
+  ticks.forEach((v) => { add("line", { class: "grid", x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }); add("text", { class: "ax", x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, String(v)); });
+
+  // x labels: start, today, target; drop one that would collide
+  const labels = [{ i: 0, t: day0, a: "start" }];
+  const ti = Math.round((today - day0) / DAY);
+  if (target) labels.push({ i: Math.round((target - day0) / DAY), t: target, a: "target" });
+  if (ti > 0) labels.push({ i: ti, t: today, a: "today" });
+  labels.sort((p, q) => p.i - q.i);
+  let lastX = -1e9;
+  labels.forEach((L, k) => {
+    const px = x(L.i);
+    if (px - lastX < 56 && k > 0) return;
+    const anchor = px < m.l + 20 ? "start" : px > W - m.r - 20 ? "end" : "middle";
+    add("text", { class: L.a === "today" ? "ax-strong" : "ax", x: px, y: H - 8, "text-anchor": anchor }, (L.a === "today" ? "Today " : "") + fmtDay(L.t));
+    lastX = px;
+  });
+
+  if (target && target > day0) add("line", { class: "ideal", x1: x(0), y1: y(total), x2: x(Math.round((target - day0) / DAY)), y2: y(0) });
+  if (ti > 0 && ti < nDays - 1) add("line", { class: "now", x1: x(ti), x2: x(ti), y1: m.t, y2: m.t + ih });
+
+  let d = "M" + x(0) + "," + y(series[0]);
+  for (let i = 1; i < series.length; i++) d += " L" + x(i) + "," + y(series[i - 1]) + " L" + x(i) + "," + y(series[i]);
+  const lastI = series.length - 1;
+  add("path", { class: "area", d: d + " L" + x(lastI) + "," + y(0) + " L" + x(0) + "," + y(0) + " Z" });
+  add("path", { class: "actual", d });
+  add("circle", { class: "end", cx: x(lastI), cy: y(left), r: 5 });
+  const lx = x(lastI), ly = y(left);
+  add("text", { class: "ax-strong", x: lx + (lx > W - 70 ? -9 : 9), y: ly - 8, "text-anchor": lx > W - 70 ? "end" : "start" }, left + " left");
+
+  const cross = add("line", { class: "cross", x1: 0, x2: 0, y1: m.t, y2: m.t + ih, visibility: "hidden" });
+  const hit = add("rect", { class: "hit", x: m.l, y: 0, width: iw, height: H });
+  const tip = el("div", "burn-tip"); tip.hidden = true;
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (W / r.width);
+    let i = nDays > 1 ? Math.round(((px - m.l) / iw) * (nDays - 1)) : 0;
+    i = Math.max(0, Math.min(lastI, i));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    const doneThatDay = i === 0 ? total - series[0] : series[i - 1] - series[i];
+    tip.textContent = fmtDay(day0 + i * DAY) + ": " + series[i] + " left" + (doneThatDay > 0 ? " · " + doneThatDay + " done" : "");
+    tip.style.left = (x(i) * r.width / W) + "px"; tip.style.top = (y(series[i]) * r.height / H) + "px"; tip.hidden = false;
+  };
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  box.append(svg, tip);
+}
+let burnW = 0;
+if (window.ResizeObserver) new ResizeObserver(() => { const w = Math.round($("#burn").clientWidth); if (w && Math.abs(w - burnW) > 4) { burnW = w; drawBurndown(); } }).observe($("#burn"));
+
+let renderSeq = 0, liveSince = 0, questBaseline = null;
+async function render() {
+  const seq = ++renderSeq;
+  const ids = [...new Set([
+    ...Object.values(checks).map((v) => v && v.by),
+    ...Object.values(checks).map((v) => v && v.declinedBy),
+    ...Object.values(facts).map((v) => v && v.by),
+    ...logs.map((l) => l.by),
+  ].filter(Boolean))];
+  let ps = {};
+  if (user && ids.length) { try { ps = await user.profiles(ids); } catch (e) { ps = {}; } }
+  if (seq !== renderSeq) return;
+  const nameOf = (id) => (id && ps[id] && ps[id].name) || "someone";
+  const writable = !!(db && canWrite);
+  let total = 0, doneN = 0;
+  PHASES.forEach((p) => {
+    let pd = 0;
+    (p.steps || []).forEach((raw) => {
+      const s = STEP_BY_ID.get(raw.id); if (!s) return;
+      const st = checks[s.id] || {};
+      const cl = claims[s.id];
+      const pend = claimPending(st, cl);
+      const li = $("#s-" + s.id);
+      li.classList.toggle("done", !!st.done);
+      li.classList.toggle("claimed", pend);
+      const btn = li.querySelector(".tick");
+      btn.setAttribute("aria-pressed", st.done ? "true" : "false");
+      btn.setAttribute("aria-label", (pend ? "Verify the claim and tick: " : "Mark done: ") + s.t);
+      // A claimed step is ticked only by verifying the claim, which is an Editor's control, and a hidden claim not at all.
+      const hiddenClaim = pend && claimLooksSecret(cl);
+      btn.disabled = !writable || (pend && !canEdit) || hiddenClaim;
+      btn.title = hiddenClaim ? "This claim is hidden: send it back from the step." : pend && !canEdit ? "An Editor checks this claim and ticks it." : "";
+      li.querySelector('[data-role="claimtag"]').hidden = !pend;
+      const stamp = li.querySelector('[data-role="stamp"]');
+      stamp.classList.toggle("claim", pend);
+      const ev = tickEvidence(st, cl);
+      if (st.done) {
+        const via = st.verifiedClaim ? " · verified from a claim by " + (cl && cl.at === st.verifiedClaim ? agentLabel(cl.agent) : "a Claude session") : "";
+        stamp.textContent = "Done " + fmt(st.at) + (st.by ? " by " + nameOf(st.by) : "") + via;
+        stamp.append(el("span", "ev ev-" + ev, EVIDENCE[ev]));
+      } else stamp.textContent = pend ? "Claimed by " + agentLabel(cl.agent) + ", " + fmt(cl.at) + " · ready for check" : "";
+      renderClaim(li.querySelector('[data-role="claim"]'), s, st, cl, pend, nameOf, writable);
+      const isOpen = open.has(s.id);
+      li.querySelector(".opener").setAttribute("aria-expanded", isOpen ? "true" : "false");
+      li.querySelector(".body").hidden = !isOpen;
+      if (s.steps && s.steps.length) {
+        const subs = Array.isArray(st.subs) ? st.subs : [];
+        const claimed = new Set(pend ? claimLines(s, cl) : []);
+        let n = 0;
+        li.querySelectorAll(".sub").forEach((it) => {
+          const i = +it.dataset.i; const on = !!subs[i]; if (on) n++;
+          it.classList.toggle("ticked", on);
+          it.classList.toggle("claimed-line", claimed.has(i) && !on);
+          const cb = it.querySelector("input"); cb.checked = on; cb.disabled = !writable;
+        });
+        li.querySelector('[data-role="subcount"]').textContent = n + "/" + s.steps.length + " lines";
+      }
+      (s.facts || []).forEach((f) => {
+        const inp = $("#fact-" + f.id); const v = facts[f.id];
+        if (document.activeElement !== inp) inp.value = factHidden(v) ? "" : (v && v.value) || "";
+        inp.disabled = !writable;
+        li.querySelector('[data-role="fact-saved-' + f.id + '"]').textContent = factHidden(v) ? SECRET_HIDDEN : v && v.value ? "Saved " + fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : "") : "";
+      });
+      const mine = logs.filter((l) => l.step === s.id);
+      const lc = li.querySelector('[data-role="logcount"]');
+      const nNotes = mine.length + (st.note ? 1 : 0);
+      lc.hidden = !nNotes; lc.textContent = nNotes + (nNotes === 1 ? " note" : " notes");
+      const log = li.querySelector('[data-role="log"]'); log.textContent = "";
+      if (st.note) {
+        const e = el("div", "entry summary-note");
+        e.append(el("div", "who", "Earlier note" + (st.noteAt ? " · " + fmt(st.noteAt) : "")), el("div", "text", st.note));
+        log.append(e);
+      }
+      mine.forEach((l) => {
+        const e = el("div", "entry");
+        // A note a Claude session wrote carries `agent`: shown as "Claude (session)", beside the person when there is one.
+        const w = el("div", "who"); const ws = el("span");
+        if (l.by || !l.agent) ws.append(document.createTextNode(nameOf(l.by) + " · "));
+        if (l.agent) ws.append(el("span", "agent", agentLabel(l.agent)), document.createTextNode(" · "));
+        ws.append(document.createTextNode(fmt(l.at))); w.append(ws);
+        if (writable && (l.by === myId || canEdit)) { const rm = el("button", "linkbtn", "Remove"); rm.type = "button"; rm.addEventListener("click", () => removeLog(l)); w.append(rm); }
+        e.append(w);
+        if (l.text) e.append(l.agent && looksSecret(l.text) ? el("div", "gone", SECRET_HIDDEN) : el("div", "text", l.text));
+        if (l.asset) {
+          const img = el("img"); img.alt = "Screenshot from the session"; img.loading = "lazy"; img.src = "/_blob/" + l.asset;
+          img.addEventListener("click", () => lightbox(img.src));
+          img.addEventListener("error", () => { img.replaceWith(el("span", "gone", "Screenshot not available in this view.")); });
+          e.append(img);
+        }
+        log.append(e);
+      });
+      if (!st.note && !mine.length) log.append(el("span", "hint", "Nothing logged yet."));
+      li.querySelector('[data-role="composer"]').hidden = !writable;
+      li.querySelector('[data-role="attach"]').hidden = !assets;
+      const ownerMatch = owner === "all" || s.who.includes(owner);
+      li.classList.toggle("hidden-by-filter", !ownerMatch || (hideDone && !!st.done));
+      if (st.done) pd++;
+      // season map cell
+      const c = $('#cells-' + p.id + ' [data-step="' + s.id + '"]');
+      c.className = "cell" + (st.done ? " c-done" : pend ? " c-claim" : s.blocker ? " c-block" : s.gate ? " c-gate" : s.optional ? " c-opt" : "") + (ROUTE_IDS.has(s.id) ? " c-route" : "");
+      const state = st.done ? "done, " + EVIDENCE[ev] : pend ? "ready for check, claimed by " + agentLabel(cl.agent) + (s.blocker ? " (a blocker)" : "") : s.blocker ? "blocker, open" : s.gate ? "stop, open" : s.optional ? "optional" : "to do";
+      c.title = s.t + " · " + state + " · " + s.who.map(nameOfPerson).join(", ");
+      c.setAttribute("aria-label", c.title);
+    });
+    const n = (p.steps || []).length;
+    total += n; doneN += pd;
+    $("#count-" + p.id).textContent = pd + " / " + n;
+    $("#mapcount-" + p.id).textContent = pd + "/" + n;
+  });
+  const big = $("#overall"); big.textContent = doneN + " "; big.append(el("small", null, "of " + total + " steps done"));
+
+  // Quest board and route strip
+  const ql = $("#quest-list"); ql.textContent = "";
+  const route = $("#route"); route.textContent = "";
+  const states = questStates();
+  states.forEach(({ q, steps, nDone, st, label }) => {
+    const rn = el("li"); rn.append(el("span", "node st-" + st, q.short || q.title)); route.append(rn);
+    // `tone` names a color; `cls`, which older hand-built run sheets use, names a person and borrows their color
+    const qTone = q.tone || (q.cls && PEOPLE[q.cls] && PEOPLE[q.cls].tone) || "plain";
+    const box = el("div", "quest tone-" + qTone + (st === "next" ? " is-next" : ""));
+    const h = el("h3", null, q.title);
+    h.append(el("span", "qstate st-" + st, label), document.createTextNode(" "), el("span", "qcount", nDone + "/" + steps.length));
+    const bar = el("div", "qbar"); const fill = el("div"); fill.style.width = Math.round((nDone / Math.max(1, steps.length)) * 100) + "%"; bar.append(fill);
+    box.append(h, bar);
+    if (q.note) { const nt = el("p", "qnote"); nt.append(rich(q.note)); box.append(nt); }
+    const ol = el("ol");
+    steps.forEach((s) => {
+      const done = isDone(s);
+      const li = el("li", done ? "qdone" : null);
+      const span = el("span"); span.append(stepLink(s));
+      if (done) span.append(el("span", "qmark", "done"));
+      else {
+        if (isClaimed(s)) span.append(el("span", "qclaim", "ready for check"));
+        if (s.blocker) span.append(el("span", "qblock", "blocker"));
+        span.append(el("span", "qwho", s.who.map(nameOfPerson).join(", ")));
+      }
+      li.append(span); ol.append(li);
+    });
+    box.append(ol); ql.append(box);
+  });
+  // Quest complete: announce only changes made after the saved progress has loaded
+  const doneQuests = new Set(states.filter((x) => x.st === "done").map((x) => x.q.title));
+  if (liveSince && Date.now() > liveSince && questBaseline) doneQuests.forEach((t) => { if (!questBaseline.has(t)) toast("Quest complete: " + t); });
+  questBaseline = doneQuests;
+
+  // XP and rank
+  const xp = seasonXP(); const ranks = (TRACKER.ranks && TRACKER.ranks.length) ? TRACKER.ranks : ["Novice"];
+  const ri = Math.min(ranks.length - 1, Math.floor(xp / 100));
+  $("#xp-n").textContent = xp + " XP"; $("#xp-rank").textContent = "Rank " + (ri + 1) + ": " + ranks[ri];
+  const atTop = ri === ranks.length - 1;
+  $("#xp-next").textContent = atTop ? "top rank" : (100 - (xp % 100)) + " XP to " + (ranks[ri + 1] || "the next rank");
+  $("#xp-fill").style.width = (atTop ? 100 : xp % 100) + "%";
+
+  const toGo = ROUTE.filter((s) => !isDone(s));
+  const blockers = STEP_INDEX.filter((s) => s.blocker && !isDone(s));
+  const goalLabel = (TRACKER.goal && TRACKER.goal.label) || "the goal";
+  const gl = $("#golive"); gl.textContent = "";
+  gl.append(el("span", "gl-big", String(toGo.length)), el("span", "gl-txt", (toGo.length === 1 ? "step left to " : "steps left to ") + goalLabel));
+  if (blockers.length) gl.append(el("span", "gl-block", blockers.length + " blocker" + (blockers.length === 1 ? "" : "s") + " open: " + blockers.map((s) => s.short || s.t).join("; ")));
+  const ready = STEP_INDEX.filter(isClaimed);
+  if (ready.length) gl.append(el("span", "gl-claim", ready.length + (ready.length === 1 ? " claim waits" : " claims wait") + " for a check: " + ready.map((s) => s.short || s.t).join("; ")));
+  // The runs under way: the quests up next or waiting on someone, or the whole route when there are no quests.
+  const runs = QUESTS.length ? states.filter((x) => x.st === "next" || x.st === "wait").map((x) => x.steps) : [ROUTE];
+  renderWaiting(ready, stopsReached(runs, isDone).filter((s) => !isClaimed(s)));
+
+  // Next up
+  const nx = $("#next"); nx.textContent = "";
+  const pending = toGo.slice(0, 4);
+  if (!pending.length) nx.append(el("li", null, "Everything on the route is ticked."));
+  pending.forEach((s) => {
+    const li = el("li"); li.append(el("span", "pid", "P" + s.pi));
+    const span = el("span"); span.append(stepLink(s, s.gate ? "gate-flag" : null, (s.gate ? "Stop: " : "") + s.t), document.createTextNode(" · " + s.who.map(nameOfPerson).join(", ")));
+    li.append(span); nx.append(li);
+  });
+
+  // People
+  const pp = $("#people"); pp.textContent = "";
+  Object.keys(PEOPLE).forEach((k) => {
+    const theirs = STEP_INDEX.filter((s) => s.who.includes(k));
+    const d = theirs.filter(isDone).length;
+    const card = el("div", "person " + toneOf(k));
+    const pn = el("div", "pn"); pn.append(el("b", null, nameOfPerson(k)), el("span", "pc", d + "/" + theirs.length + " done")); card.append(pn);
+    const bar = el("div", "pbar"); const f = el("div"); f.style.width = Math.round((d / Math.max(1, theirs.length)) * 100) + "%"; bar.append(f); card.append(bar);
+    const nb = theirs.filter((s) => s.blocker && !isDone(s)).length;
+    if (nb) card.append(el("span", "pblock", nb + " open blocker" + (nb === 1 ? "" : "s")));
+    const nextS = ROUTE.find((s) => s.who.includes(k) && !isDone(s)) || theirs.find((s) => !isDone(s) && !s.optional);
+    const pnx = el("div", "pnext");
+    if (nextS) { pnx.append(document.createTextNode("Next: ")); pnx.append(stepLink(nextS)); } else pnx.textContent = theirs.length ? "All their steps are done." : "No steps yet.";
+    card.append(pnx);
+    const show = el("button", "pshow", owner === k ? "Showing only theirs" : "Show only theirs"); show.type = "button";
+    show.addEventListener("click", () => setOwner(owner === k ? "all" : k));
+    card.append(show);
+    pp.append(card);
+  });
+
+  // Recent activity
+  const feed = $("#feed"); feed.textContent = "";
+  const ev = [];
+  Object.entries(checks).forEach(([id, v]) => { const s = STEP_BY_ID.get(id); if (s && v && v.done && v.at) ev.push({ at: v.at, by: v.by, verb: "ticked", s }); });
+  Object.entries(facts).forEach(([id, v]) => { const f = FACT_INDEX.find((x) => x.id === id); if (f && v && v.value && v.at) ev.push({ at: v.at, by: v.by, agent: v.agent, verb: "recorded " + f.label + " in", s: f.step }); });
+  logs.forEach((l) => { const s = STEP_BY_ID.get(l.step); if (s && l.at) ev.push({ at: l.at, by: l.by, agent: l.agent, verb: l.asset ? "added a screenshot to" : "logged a note on", s }); });
+  Object.entries(claims).forEach(([id, c]) => { const s = STEP_BY_ID.get(id); if (s && c && typeof c.at === "string" && isFinite(Date.parse(c.at))) ev.push({ at: c.at, agent: c.agent || "unnamed session", verb: "claimed", s }); });
+  ev.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  if (!ev.length) feed.append(el("li", "hint", "Nothing yet. Ticks, claims, facts and notes appear here as they are saved."));
+  ev.slice(0, 6).forEach((e) => {
+    const li = el("li"); li.append(el("span", "ft", fmt(e.at)));
+    const actor = e.agent ? agentLabel(e.agent) : e.by ? nameOf(e.by) : "Someone";
+    const span = el("span"); span.append(document.createTextNode(actor + " " + e.verb + " "), stepLink(e.s));
+    li.append(span); feed.append(li);
+  });
+
+  // Facts table
+  const fb = $("#facts-body"); fb.textContent = "";
+  FACT_INDEX.forEach((f) => {
+    const v = facts[f.id]; const tr = el("tr");
+    tr.append(el("td", null, f.label));
+    tr.append(el("td", "val" + (v && v.value && !factHidden(v) ? "" : " empty"), factHidden(v) ? SECRET_HIDDEN : v && v.value ? v.value : "Not yet"));
+    const td = el("td"); td.append(stepLink(f.step)); tr.append(td);
+    tr.append(el("td", null, v && v.value ? fmt(v.at) + (v.agent ? " by " + agentLabel(v.agent) : v.by ? " by " + nameOf(v.by) : "") : ""));
+    fb.append(tr);
+  });
+  if (!FACT_INDEX.length) { const tr = el("tr"); const td = el("td", "val empty", "No step asks for a fact yet."); td.colSpan = 4; tr.append(td); fb.append(tr); }
+
+  drawBurndown();
+}
+
+function setConn(ok, text) { $("#conn-dot").className = "dot " + (ok ? "ok" : "off"); $("#conn-text").textContent = text; }
+
+const hd = $("#hide-done"); hd.checked = hideDone;
+hd.addEventListener("change", () => { hideDone = hd.checked; try { localStorage.setItem(KEY + "-hide", hideDone ? "1" : "0"); } catch (e) {} render(); });
+$("#collapse-all").addEventListener("click", () => { open.clear(); saveOpen(); render(); });
+
+buildStatic();
+checkData();
+build();
+if (!open.size) { const first = ROUTE[0] || STEP_INDEX.find((s) => !s.optional); if (first) open.add(first.id); }
+render();
+
+(async () => {
+  if (!window.claude || !window.claude.use) { setConn(false, "Saved progress is not available in this view"); return; }
+  const [d, u, a] = await Promise.all([window.claude.use("db"), window.claude.use("user"), window.claude.use("assets")]);
+  db = d; user = u; assets = a;
+  if (!db) { setConn(false, "Saved progress is not available in this view (sign in to claude.ai)"); render(); return; }
+  const cw = user ? await user.can("data.write") : null;
+  canWrite = cw !== false;
+  canEdit = user ? !!(await user.canEdit()) : false;
+  myId = user ? await user.id() : null;
+  if (user) { const me = await user.me(); $("#who").textContent = (me && me.name ? "Signed in as " + me.name : "") + (canWrite ? "" : " · view only"); }
+  let first = true;
+  db.collection("checks").onSnapshot((snap) => {
+    snap.docs.forEach((doc) => { if (doc.exists) checks[doc.id] = doc.data(); });
+    snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete checks[ch.doc.id]; });
+    if (!snap.metadata.fromCache) live.checks = true;
+    setConn(true, snap.metadata.fromCache ? "Loading saved progress…" : "Live: ticks, facts and notes are shared");
+    if (first && !snap.metadata.fromCache) {
+      first = false; liveSince = Date.now() + 2000;
+      try { if (!localStorage.getItem(KEY + "-open")) { open.clear(); const nx = ROUTE.find((s) => !isDone(s)) || STEP_INDEX.find((s) => !s.optional && !isDone(s)); if (nx) open.add(nx.id); } } catch (e) {}
+    }
+    render();
+  }, () => setConn(false, "Lost the connection to saved progress. Reload the page."));
+  db.collection("facts").onSnapshot((snap) => {
+    snap.docs.forEach((doc) => { if (doc.exists) facts[doc.id] = doc.data(); });
+    snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete facts[ch.doc.id]; });
+    render();
+  }, () => {});
+  db.collection("log").orderBy("at").onSnapshot((snap) => {
+    logs = snap.docs.filter((d) => d.exists).map((d) => Object.assign({ id: d.id }, d.data()));
+    render();
+  }, () => {});
+  // Claims are written by Claude sessions with the database tool; this page only reads them and settles them.
+  db.collection("claims").onSnapshot((snap) => {
+    snap.docs.forEach((doc) => { if (doc.exists) claims[doc.id] = doc.data(); });
+    snap.docChanges().forEach((ch) => { if (ch.type === "removed") delete claims[ch.doc.id]; });
+    if (!snap.metadata.fromCache) live.claims = true;
+    render();
+  }, () => { live.claims = true; render(); });  // with no claims to read, the strip still shows the stops
+})();
+</script>

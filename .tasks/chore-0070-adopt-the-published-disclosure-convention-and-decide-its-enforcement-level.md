@@ -80,7 +80,7 @@ at all, so the tree passing them today is luck rather than a guarantee.
 **Out of scope:**
 
 - **The body-shape rule and the lens list**, which are
-  [`chore-0069`](chore-0069-the-two-body-shapes-rule-is-wrong-on-its-own-list-and-nothing-checks-it.md).
+  [`chore-0069`](done/chore-0069-the-two-body-shapes-rule-is-wrong-on-its-own-list-and-nothing-checks-it.md).
   **That task touches the same three files as this one, so the two cannot share a wave.**
 - The third-person description rule, which is a published, mechanically-checkable rule that nothing here
   enforces either. It belongs with a description-focused pass rather than a disclosure-focused one.

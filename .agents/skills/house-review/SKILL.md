@@ -1,16 +1,13 @@
 ---
 name: house-review
 description: >-
-  Review a code change against an explicit house rubric and severities, and produce a structured,
-  severity-ranked markdown review, without editing or committing anything. Determines the review
-  range (the current branch against its merge-base with the default branch, with a working-tree
-  fallback), applies the review-quality lens (correctness, security, error handling, tests,
-  readability, performance, API design, docs), resolves every finding's quoted evidence against the
-  real file and drops any finding that does not resolve, and writes findings ordered blocker to nit
-  with file:line, the quote, a stable signature, why it matters, and a concrete fix. Use when the
-  user says "review this", "review my changes", "code review", "review
-  this PR/branch/diff", "what's wrong with this change", or wants a second pair of eyes before
-  merging. Report-only: it never changes code.
+  Reviews a code change against an explicit house rubric and severities and writes a severity-ranked
+  markdown review, without editing or committing anything. Resolves every finding's quoted evidence
+  against the real file and drops any that does not resolve, then reports blocker to nit with
+  file:line, the quote, a stable signature, and a concrete fix. Use for "review this", "review my
+  changes", "code review", "review this PR or branch", "what's wrong with this change", or a second
+  pair of eyes before merging. Report only. Adds a swappable rubric and an evidence gate to what a
+  built-in code review gives.
 license: MIT
 ---
 
@@ -227,6 +224,11 @@ validate-before-reporting rule, the evidence gate, and each finding's evidence a
 identical either way; only the output channel changes. A structured channel with no field for the
 quote or the signature carries them inside the fields it does have rather than dropping them, since
 a finding that loses its evidence on the way out has lost the thing the gate was checking.
+
+Claude Code's built-in `/code-review` also reviews a diff, at an effort level the user picks, and
+is the right tool for a fast bug hunt. This skill is for when the review has to follow a rubric the
+team owns, with every finding's quote resolved against the file and a signature that survives the
+code moving; the two can run on the same change without conflict.
 
 ## Notes
 

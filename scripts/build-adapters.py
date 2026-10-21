@@ -49,6 +49,23 @@ The plugin target is opt-in rather than a default, because a default run writes
 into a project root and a committed .claude-plugin/ there is the hand-maintained
 second copy this generator exists to prevent.
 
+Every write lands inside <out>. A skill's frontmatter `name` becomes a path
+component of the two inlining destinations, so a `..` segment in one would walk
+out of the output root and write wherever it landed (bug-0060). Two things stop
+that: a `name` that is not the source directory's name is refused, which is the
+rule validate-skills.py already states, and `_write` compares the resolved
+destination against the resolved root for every file it places. Either refusal
+fails the whole run with exit 2, in a preview as well as in a real run, rather
+than skipping the skill and emitting the rest.
+
+The name rule runs as a pre-pass over every discovered skill, before the first
+file of the run is written, and it reports every offending skill rather than the
+first one it meets (bug-0062). It used to be applied inside the emit loop, which
+left every skill sorted ahead of the offender on disk, and the shared material
+with them, under an output root that defaults to the working directory. Goal 6
+of the contract is to fail clearly on an unusable invocation rather than write a
+partial result, and only the first half of that was true.
+
 Standard library only. Generated adapters are overwritten each run (they are
 derived artifacts); do not hand-edit them, edit the SKILL.md instead.
 """
@@ -135,6 +152,20 @@ BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\s*")
 # rule next changes.
 BACKTICK_RUN_RE = re.compile(r"`+")
 FENCE_RE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
+
+
+class OutsideOutputRoot(Exception):
+    """A write whose destination resolved outside the run's output root.
+
+    Raised rather than printed at the point of detection, because the two facts a
+    reader needs are known in two different places: `_write` sees the destination and
+    the root, and only the caller knows which skill and which target produced them.
+    """
+
+    def __init__(self, dest: Path, root: Path):
+        self.dest = dest
+        self.root = root
+        super().__init__(f"{dest} is not under {root}")
 
 
 def code_span_ranges(text):
@@ -377,23 +408,37 @@ def discover_skills():
                   if d.is_dir() and (d / "SKILL.md").is_file())
 
 
+# Where each inlining target places a skill, as a function of the frontmatter `name`.
+# One source of truth, because two callers need the same answer: the emitter that writes
+# the file, and `_main`'s name refusal, which names a destination the rejected name would
+# have produced (bug-0060). A refusal that reconstructed the path itself would drift into
+# naming something this tool no longer emits, which is a confident citation pointing at
+# nothing. `plugin` is absent deliberately rather than by oversight: it builds its
+# destination from the source directory, so a `name` is never a path component there and
+# there is no escaping path to show.
+NAME_DESTINATIONS = {
+    "cursor": lambda name, out: out / ".cursor" / "rules" / f"{name}.mdc",
+    "vscode": lambda name, out: out / ".github" / "prompts" / f"{name}.prompt.md",
+}
+
+
 def emit_cursor(src: Path, name, desc, body, out: Path, dry: bool) -> Path:
-    dest = out / ".cursor" / "rules" / f"{name}.mdc"
+    dest = NAME_DESTINATIONS["cursor"](name, out)
     content = (
         f"---\ndescription: {json.dumps(desc)}\nalwaysApply: false\n---\n\n"
         f"{BANNER.format(name=name)}\n\n{rewrite_links(body, name, '.mdc')}\n"
     )
-    _write(dest, content, dry)
+    _write(dest, content, dry, out)
     return dest
 
 
 def emit_vscode(src: Path, name, desc, body, out: Path, dry: bool) -> Path:
-    dest = out / ".github" / "prompts" / f"{name}.prompt.md"
+    dest = NAME_DESTINATIONS["vscode"](name, out)
     content = (
         f"---\nmode: agent\ndescription: {json.dumps(desc)}\n---\n\n"
         f"{BANNER.format(name=name)}\n\n{rewrite_links(body, name, '.prompt.md')}\n"
     )
-    _write(dest, content, dry)
+    _write(dest, content, dry, out)
     return dest
 
 
@@ -436,12 +481,38 @@ def emit_plugin_manifests(out: Path, dry: bool) -> list[Path]:
     written = []
     for fname, obj in (("plugin.json", dict(PLUGIN)), ("marketplace.json", marketplace)):
         dest = out / ".claude-plugin" / fname
-        _write(dest, json.dumps(obj, indent=2) + "\n", dry)
+        _write(dest, json.dumps(obj, indent=2) + "\n", dry, out)
         written.append(dest)
     return written
 
 
-def _write(dest: Path, content: str, dry: bool):
+def _write(dest: Path, content: str, dry: bool, root: Path):
+    """Write `content` to `dest`, which must resolve inside `root`.
+
+    The containment check sits here rather than in each emitter because this is the
+    one place every emitted file passes through, so a target added later inherits it
+    instead of restating it (bug-0060). It is needed because a skill's frontmatter
+    `name` becomes a path component in both inlining emitters, and a `..` segment in
+    one walks straight out of the output root: `_main` refuses such a name before it
+    dispatches an emitter, and this is the boundary that holds whatever gets past
+    that. `emit_plugin_manifests` passes destinations this module builds itself, so
+    the check is silent there by construction.
+
+    Both sides are resolved, because the escape is a `..` segment that exists only
+    before resolution and `is_relative_to` on unresolved paths compares the spelling
+    rather than the location. `root` is resolved again here even though `_main`
+    already resolved it, so the guarantee belongs to this function rather than to its
+    callers remembering.
+
+    The check runs *before* the `dry` early return, deliberately. A preview that
+    reports a destination the real run would refuse is misleading, and the adapters
+    gate in `run-checks.py` is a `--dry-run`, so a check behind that branch would
+    never fire in the one place this repository actually exercises the tool.
+    """
+    resolved = dest.resolve()
+    root = root.resolve()
+    if not resolved.is_relative_to(root):
+        raise OutsideOutputRoot(resolved, root)
     if dry:
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -454,6 +525,64 @@ def _write(dest: Path, content: str, dry: bool):
 
 
 EMITTERS = {"cursor": emit_cursor, "vscode": emit_vscode, "plugin": emit_plugin}
+
+
+def name_refusals(named_skills, targets, out: Path, tag: str = "") -> list[str]:
+    """One refusal message per skill whose frontmatter `name` is not its directory.
+
+    `named_skills` is `(skill_dir, name)` pairs, in discovery order. An empty list
+    means the tree is usable, which is the only thing `_main` proceeds on.
+
+    Two properties, and neither is the rule itself. The rule is validate-skills.py's,
+    borrowed rather than moved (bug-0060), and it is applied here exactly as it was
+    applied per skill before.
+
+    The first is *when*. `_main` calls this over every discovered skill before it
+    writes anything at all, so an unusable tree leaves nothing behind rather than
+    everything sorted ahead of the first offender, plus the shared rules module that
+    is placed before the loop even begins (bug-0062).
+
+    The second is *how much*. Every offender is reported rather than the first, so one
+    run tells an adopter the whole set to fix instead of one name per run. That is why
+    this returns a list and prints nothing: the caller decides how a refusal is shown,
+    and this is the only place that knows how many there are.
+
+    `_write`'s containment check is unaffected and stays where it is. This is a second
+    line of defence in front of that boundary rather than a replacement: it covers the
+    names that become path components, and the boundary covers every destination,
+    including whatever a rule about names does not reach.
+    """
+    # One destination is shown rather than one per requested target, and it is read
+    # from NAME_DESTINATIONS rather than rebuilt here: a refusal that reconstructed the
+    # path would drift into naming something this tool no longer emits, which is a
+    # confident citation pointing at nothing. Computed once, because it depends on the
+    # requested targets and not on the skill.
+    shown = next((t for t in targets if t in NAME_DESTINATIONS), None)
+    messages = []
+    for skill_dir, name in named_skills:
+        if name == skill_dir.name:
+            continue
+        if shown is None:
+            # A plugin-only run. Nothing requested derives a path from `name`, so there
+            # is no destination to show and inventing one would be false.
+            where = ("No requested target derives a destination from it, so nothing "
+                     f"would leave the output root {out}")
+        else:
+            # The message names a destination and not only the root, because the root
+            # alone leaves a reader unable to see that the name escapes at all, which
+            # is the fact that carries the severity. It is one target's destination out
+            # of however many were requested, so it is labelled representative rather
+            # than offered as the only one. No emitter is dispatched to obtain it.
+            would_be = NAME_DESTINATIONS[shown](name, out).resolve()
+            side = "inside" if would_be.is_relative_to(out) else "outside"
+            where = (f"Representative, for target {shown!r}: {would_be}, {side} the "
+                     f"output root {out}")
+        messages.append(
+            f"{tag}Refusing to emit skill {skill_dir.name!r}: frontmatter name "
+            f"{name!r} != directory {skill_dir.name!r}, and that name becomes a path "
+            f"component of every inlining target's destination. {where}. Fix the "
+            f"SKILL.md frontmatter; validate-skills.py states the same rule.")
+    return messages
 
 
 def main(argv=None) -> int:
@@ -470,6 +599,21 @@ def main(argv=None) -> int:
         # tool must read is not readable, which is a different claim from "the change is bad"
         # and is the distinction install.py --check and check-provenance.py already draw.
         print(f"Cannot read a file this run needs: {exc}", file=sys.stderr)
+        return 2
+    except OutsideOutputRoot as exc:
+        # The backstop for any write `_main` does not wrap with the skill it belongs to.
+        # Exit 2 for the same reason as above: nothing was placed, so the report is
+        # incomplete rather than the input bad. A traceback here would name this tool
+        # instead of the path that was refused.
+        #
+        # It is unreachable today, and kept anyway. `emit_plugin_manifests` is the only
+        # `_write` caller outside `_main`'s try, and it builds its destination from `out`
+        # itself, so that call cannot escape and nothing else can raise past `_main`. Do
+        # not write a test for this arm: it would be a test for dead code. It earns its
+        # place when the next `_write` caller lands outside that try, which is exactly
+        # when a traceback would otherwise reach a user.
+        print(f"Refusing to write outside the output root: {exc.dest} is not under "
+              f"{exc.root}.", file=sys.stderr)
         return 2
 
 
@@ -504,6 +648,28 @@ def _main(argv=None) -> int:
             layouts.append(LAYOUTS[t])
 
     tag = "[dry-run] " if args.dry_run else ""
+
+    # Every SKILL.md is read and parsed here, before anything is dispatched or placed,
+    # and the result is carried into the loop below. Two reasons, both bug-0062. The
+    # name rule has to be applied to the whole set before the first write, and the first
+    # write of a run belongs to emit_rules_module() rather than to the loop, so a check
+    # merely hoisted to the top of the loop would still leave the shared module behind.
+    # And reading each file once means an undecodable SKILL.md is reported once, by the
+    # one read, rather than giving two chances to describe the same failure differently.
+    parsed = {d: split_frontmatter(read_text_utf8(d / "SKILL.md")) for d in skills}
+
+    refusals = name_refusals(((d, fm.get("name", d.name)) for d, (fm, _) in parsed.items()),
+                             targets, out, tag)
+    if refusals:
+        for message in refusals:
+            print(message)
+        # The whole set, and the assurance that goes with refusing before writing. An
+        # adopter reading one refused run learns every name to fix and that the tree it
+        # ran against is untouched, which for a default run is the working directory.
+        print(f"{tag}Refusing the whole run: {len(refusals)} of {len(skills)} skill(s) "
+              f"named above. No file was written under {out}.")
+        return 2
+
     n = 0
     # The rules module is one copy shared by every skill, so it is emitted per
     # layout and outside the per-skill loop. Inside it, a preview counted it once
@@ -511,11 +677,19 @@ def _main(argv=None) -> int:
     assets = sum(len(emit_rules_module(out, args.dry_run, layout))
                  for layout in layouts)
     for d in skills:
-        fm, body = split_frontmatter(read_text_utf8(d / "SKILL.md"))
+        fm, body = parsed[d]
         name = fm.get("name", d.name)
         desc = fm.get("description", "")
         for t in targets:
-            dest = EMITTERS[t](d, name, desc, body, out, args.dry_run)
+            try:
+                dest = EMITTERS[t](d, name, desc, body, out, args.dry_run)
+            except OutsideOutputRoot as exc:
+                # The boundary at `_write` fired, so the name check above did not cover
+                # this destination. Reported with the skill and the target, which are
+                # known here and not there.
+                print(f"{tag}Refusing to emit skill {d.name!r} for target {t!r}: "
+                      f"destination {exc.dest} is outside the output root {exc.root}.")
+                return 2
             print(f"{tag}{t:7} {name}  -> {dest.relative_to(out) if dest.is_relative_to(out) else dest}")
             n += 1
         # The emitted bodies point at these; without them the links dangle.

@@ -44,7 +44,7 @@ Citations are now by symbol, section heading, or quoted phrase across all ten ma
 strictly more durable and still unchecked: a symbol gets renamed, a heading gets reworded, a quoted
 phrase gets edited, and the matrix goes on asserting it.
 
-**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0058`](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md), and [`chore-0060`](../chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md). `chore-0058` closed 2026-08-27, and `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
+**This task is one of five in the same class**, grouped 2026-08-22 rather than worked as unrelated errands: a guard that does not guard. The other four are [`chore-0032`](chore-0032-links-guard-fires-per-run-not-per-pattern.md), [`chore-0058`](chore-0058-no-gate-link-checks-the-markdown-under-agents-outside-skills.md), [`chore-0059`](../chore-0059-the-third-and-fourth-copies-of-the-link-helpers-are-unguarded.md), and [`chore-0060`](chore-0060-the-scaffold-manifest-id-high-water-is-stale-and-unguarded.md). `chore-0058` closed 2026-08-27, and `bug-0045` was the sixth and is closed: it found six of seven gates reporting `ok` over a repository containing nothing. **What the grouping asks of whoever works this one**: when you fix it, look for the next member before you finish, because every member of this class so far was found only by looking after the previous one landed. The pattern behind the class is [`chore-0063`](chore-0063-the-repository-has-never-written-down-what-it-keeps-learning.md).
 
 ## Scope
 
@@ -72,7 +72,7 @@ phrase gets edited, and the matrix goes on asserting it.
   [`docs/spec/README.md`](../../docs/spec/README.md), extend that file's existing `cloud-executable`
   re-approval row rather than adding a second, and reconcile the matrix row you touch. Per
   `.agents/rules/house-style.md`, introduce no count of any table's rows.
-  This also governs [`chore-0072`](../chore-0072-a-gate-for-the-roadmap-staleness-class-chore-0066-mapped.md),
+  This also governs [`chore-0072`](chore-0072-a-gate-for-the-roadmap-staleness-class-chore-0066-mapped.md),
   which adds a gate too and inherits the amendment rather than repeating it.
 
 **Out of scope:**

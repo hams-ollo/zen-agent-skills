@@ -1,10 +1,10 @@
 # Skill catalog
 
-Every skill Zen Agent Skills ships, plus what is planned and deliberately not built yet.
+Every skill Zen Agent Skills ships, plus what is drafted, what is planned, and what is deliberately not built yet.
 
 The kit is organized by how broadly a skill is worth sharing. The axis is deliberate: broadly-useful skills go in the public kit; hyper-specific personal skills stay out and serve as portfolio demos instead.
 
-A skill is only listed as **shipped** once it lives under [`.agents/skills/`](../.agents/skills/) and has been used and iterated on for real. Everything else is **planned**, and stays planned until it has earned its place. This is the same "seed by inspection, not speculation" principle the skills themselves follow.
+A skill is listed as **shipped** once it lives under [`.agents/skills/`](../.agents/skills/) and has been used and iterated on for real. A skill that is written and lives there but has not yet earned that is a **draft**, listed under [drafts](#drafts-built-but-not-blessed) rather than in a tier, because no install places it. A skill that is not written at all is **planned**, and stays planned until it has earned its place. This is the same "seed by inspection, not speculation" principle the skills themselves follow.
 
 ## Tier A: broadly shareable (the public kit)
 
@@ -42,6 +42,18 @@ With `verifier-agent` blessed, the core spec-to-reconcile loop is complete: an i
 | `doc-sync` | shipped (Epic B) | Detects documentation drift by checking prose claims against repository facts, classifying every document as current-state (correctable with approval), contract (report-only, human-owned) or ledger (skipped). Dry run is the default and detection never changes a file. Composes `doc-revise` for editing discipline. Authored in-kit against `docs/spec/doc-sync.md`, dogfooded on this repository's own documentation (`feat-0020`), and blessed after its apply path repointed three dangling references (`chore-0006`). |
 | `review-depth` | shipped (Epic B) | Chooses how hard to look before `house-review` looks: quick, standard, or deep, selected from a stated signal table (reviewable changed lines, directory spread, trust-boundary risk flags, blast radius, documentation-only scope) so two runs over the same diff reach the same depth and the reason is inspectable. An explicit user choice always overrides detection. Composes into `house-review` rather than duplicating its rubric, which lives in the `review-quality` lens. Blessed 2026-08-05; using it is what exposed the mode contradiction inside `house-review` that `chore-0024` then fixed. |
 
+## Drafts: built but not blessed
+
+A **draft** is written, lives under [`.agents/skills/`](../.agents/skills/), and is placed by no install profile, not even the one that asks for everything. That is the contribution bar made mechanical: a skill earns its place here only after it has been used and iterated on for real, so a freshly written one is held back until real work has exercised it, and `install.py` names what it withheld on every run rather than dropping it silently (`S-015` of [`docs/spec/install.md`](spec/install.md)).
+
+Drafts are listed rather than omitted because both silent readings are wrong. A skill left out of this catalog reads as absent when it is in fact in the tree; the same skill listed in a tier beside the shipped ones reads as available when nothing will install it. What a draft still owes before it ships is tracked in [`ROADMAP.md`](../ROADMAP.md), which is builder-facing; this section only says that it exists and that you do not have it.
+
+| Skill | Status | What it does |
+|---|---|---|
+| `agent-observatory` | draft | Answers questions that span more than one agent session (what is running, what a wave cost, which skills were used, what failed) by reading the local observatory store rather than one transcript at a time, and acts on a session only where the harness exposes the action. Never starts, resumes, interrupts, or ends one. A draft since 2026-08-29. |
+| `systematic-debugging` | draft | Turns a reported defect into a named cause with the evidence that established it: reproduces the report first, localizes to the boundary where behavior diverges, then tests one hypothesis at a time and returns a deterministic verdict. Diagnoses and never repairs. A draft since 2026-08-29, and deliberately kept one at its first dogfood (`feat-0062`), where an independent check refuted the cause the run had reached. |
+| `quest-tracker` | draft | Runs a season of project work from one shared tracker page: phases of steps that each say what, why, and what closes it, with line ticks, facts, a session log, a quest chain, and a burndown, drawn from one data block and saved in the page's own database. Starts a tracker from its bundled template with a script that fills and checks the data block, works a session against one, and has agent sessions report finished work as claims, with the command and its verbatim result, that a person verifies and ticks. The page lists what waits on a person at the top and marks every tick with what it rests on. Needs a host that publishes a page with a shared database, which today is Claude artifacts. A draft since 2026-10-20 (`feat-0072`): the tracker ran a client launch before it was a skill, and claim-and-verify has not yet run on real work. |
+
 ## Tier B: semi-scalable (great for teams and clients)
 
 | Skill | Status | What it does |
@@ -63,10 +75,11 @@ The [hooks module](../.agents/hooks/README.md) is the answer to the second kind.
 
 | Hook | Shape | Fires when |
 |---|---|---|
-| `delegation-reminder` | reminder | a delegated agent reports back, to note that its summary is a claim and not evidence |
+| `delegation-reminder` | reminder | a delegated agent reports back in the foreground, to note that its summary is a claim and not evidence. A background launch is skipped, because nothing has come back yet |
 | `spec-conformance-gate` | gate | work a contract governs is closed with no audit of whether the implementation matches it |
 | `skill-reachability-reminder` | reminder | a session starts with none of this kit's skills reachable at either scope, so work that assumes one would proceed without it and nothing else would say so. A library of somebody else's skills does not count, which is what `bug-0021` fixed after a cloud container's own 24 skills silenced it |
 | `install-currency-reminder` | reminder | a session starts in the kit's own repository and its install record no longer agrees with the working tree, so the copies you are working with are stale, have no digest baseline to be checked against, or were never installed. `install.py --check` has always been able to answer this; nothing ever asked it, and eighteen stale skills went unreported for ten days as a result |
+| `worktree-boundary-reminder` | reminder | a shell command run inside a linked git worktree looks like it writes and names a path outside that worktree. Claude Code refuses an edit tool aimed at the main checkout but does not track where a `cp`, a `mv`, or a redirect writes, and its sandbox does not run on native Windows |
 
 These are the only things the kit ships that run inside your session, so they are opt-in (`install.py --with-hooks`) and you activate them yourself.
 

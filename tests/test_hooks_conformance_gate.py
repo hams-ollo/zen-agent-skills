@@ -206,6 +206,81 @@ class TaskCloseTests(GateTestCase):
                                extra="conformance: recorded in the PR body\n")
         self.assertIsNone(run(edit(task, cwd=self.root))[1])
 
+class SpecReferenceStaysInsideTheRepositoryTests(GateTestCase):
+    """chore-0038: a `spec:` value is ordinary frontmatter and must not escape the root.
+
+    `_evaluate_task_close` resolves the reference with `os.path.join(root, spec_ref)`, and
+    `os.path.join` is not a containment operator: an absolute second argument discards the
+    root outright, and a `../` chain walks out of it. The gate then opened and read the head
+    of whatever it landed on.
+
+    The impact today is nil, which is why this is upkeep rather than a security fix: the
+    hook never emits what it read, so nothing leaves the machine and the only observable
+    difference is whether it blocks. The reason to bound it anyway is that the "nil" rests
+    on a property nothing asserts: the block message quotes the reference the task author
+    wrote and never anything read out of the file it landed on. That is a fine thing to be
+    true and a poor thing to depend on, inside the one component here whose job is to open
+    paths other people wrote.
+
+    Each escaping reference is paired with a control on the same fixture, because silence is
+    also what a hook that failed to load would produce. The control blocks, so the silence
+    beside it is a decision rather than an absence.
+    """
+
+    def outside(self, name="secret"):
+        """A spec with no matrix beside it, in a directory the repository does not contain.
+
+        No matrix, so an unfixed gate that reaches this file has every reason to block, and
+        a silent result therefore means it never reached the file rather than that it looked
+        and forgave it.
+        """
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        spec = Path(other.name) / (name + ".md")
+        spec.write_text("---\ntitle: secret\nstatus: approved\n---\n\n# secret\n",
+                        encoding="utf-8")
+        return spec
+
+    def test_the_control_blocks_so_the_silences_below_mean_something(self):
+        self.write_spec("widget", "approved")
+        task = self.write_task("feat-0001", "done", "docs/spec/widget.md")
+        self.assertIsNotNone(run(edit(task, cwd=self.root))[1],
+                             "the fixture does not block at all, so nothing in this group "
+                             "proves the reference was bounded")
+
+    def test_an_absolute_reference_does_not_reach_outside_the_root(self):
+        spec = self.outside()
+        task = self.write_task("feat-0001", "done", str(spec))
+        self.assertIsNone(
+            run(edit(task, cwd=self.root))[1],
+            "the gate resolved an absolute spec: value to " + str(spec)
+            + ", which is outside the repository root it was handed")
+
+    def test_a_parent_traversal_reference_does_not_reach_outside_the_root(self):
+        spec = self.outside("escaped")
+        # Spelled relative to the root rather than absolute, so this exercises the other
+        # half of the same defect: `join` accepts the walk-up quietly, and normalising the
+        # result is what catches it.
+        ref = os.path.relpath(str(spec), str(self.root)).replace(os.sep, "/")
+        self.assertTrue(ref.startswith(".."), "fixture is not a traversal: " + ref)
+        task = self.write_task("feat-0002", "done", ref)
+        self.assertIsNone(
+            run(edit(task, cwd=self.root))[1],
+            "the gate resolved " + repr(ref) + " out of the repository root it was handed")
+
+    def test_a_reference_nested_deep_inside_the_root_still_resolves(self):
+        # The bound must not be so tight that a legitimate nested reference stops resolving.
+        # That failure is invisible from the outside: the gate would simply never fire again,
+        # which reads exactly like a repository with nothing to report.
+        nested = self.specs / "sub" / "deep"
+        nested.mkdir(parents=True)
+        (nested / "widget.md").write_text(
+            "---\ntitle: widget\nstatus: approved\n---\n\n# widget\n", encoding="utf-8")
+        task = self.write_task("feat-0003", "done", "docs/spec/sub/deep/widget.md")
+        out = run(edit(task, cwd=self.root))[1]
+        self.assertIsNotNone(out, "a legitimate nested spec reference stopped resolving")
+        self.assertEqual(out["decision"], "block")
+
 
 class EscapeAndMessageTests(GateTestCase):
     """A block must name the way out, or whoever hits it uninstalls the hook."""

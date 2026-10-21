@@ -100,6 +100,40 @@ filter in the adapter builder would trade one invisible behaviour for another.
 `metadata:\n  status: draft` is read: a bare top-level `status:` key is rejected by the skill
 schema's allow-list, and the flow form trips `validate-skills.py`'s plain-scalar check.
 
+## Decisions
+
+- **A premise that turned out false: the divergence is wider than filed, and the baseline moved.**
+  This task calls `agent-observatory` "the kit's first draft skill" and quotes
+  `42 adapter file(s) for 21 skill(s)` beside an install gate reading `20 of 21`. At this base the kit
+  holds 22 skills and two frontmatter drafts, `agent-observatory` and `systematic-debugging`, and
+  `build-adapters.py --dry-run` reports `44 adapter file(s) for 22 skill(s)`. All three targets emit
+  both drafts, the plugin tree included.
+
+- **A premise that turned out false: the second of the three recorded reasons no longer covers every
+  target.** [`install.md`](../docs/spec/install.md)'s Non-Goals passage weighs adapter generation as
+  writing "into one named project at the request of whoever runs it", decided 2026-08-05 by
+  `feat-0036`. `feat-0034` added the `plugin` target the following day, 2026-08-06, and a plugin tree
+  carries a `.claude-plugin/marketplace.json` naming a published plugin with a homepage and a version.
+  A draft emitted there reaches everyone who installs the plugin, which is the unbounded exposure that
+  reason was drawn to exclude. The reason was sound when written; one of the three targets it now has
+  to cover did not exist yet.
+
+- **A rejected alternative: implementing either branch.** No author decision is recorded, here or
+  anywhere in the repository, and this task's own Risks section says a run that comes back with the
+  code changed and no recorded decision should be rejected whatever the tests say. Both branches amend
+  an approved contract, so neither is the conservative one to take by default.
+
+- **A rejected alternative: a characterization test pinning today's behaviour.** It changes nothing
+  and would satisfy the letter of the third acceptance criterion, but a test asserting that a draft
+  *is* emitted writes the unchosen branch into the suite, which is the "deciding it without the
+  author" the Scope rules out.
+
+- **A seam left open deliberately: there is no adapter-side analogue of `draft_conflicts()`.**
+  `install.py` refuses the whole run when a placed skill references a draft sibling, because both
+  silent resolutions are defects. Neither draft here is reachable that way today: nothing links either
+  as `../<name>/SKILL.md`, and neither links a sibling. So the amend branch needs no conflict
+  machinery now, and the first draft that is linked reopens the question.
+
 ## Risks and rollback
 
 The task touches more than one module, so the deterministic rule fires on the first condition: an

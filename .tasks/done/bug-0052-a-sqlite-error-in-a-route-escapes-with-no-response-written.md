@@ -2,7 +2,7 @@
 id: bug-0052
 title: A sqlite error inside a route escapes the handler with no response written, so the client hangs
 type: bug
-status: open
+status: done
 priority: P2
 parent: "ROADMAP Epic E #7b: reporting"
 depends_on: []
@@ -14,7 +14,7 @@ created: 2026-08-29
 
 ## Problem
 
-`_with_store` in [`serve.py`](../scripts/observatory/serve.py) line 2157 converts exactly one
+`_with_store` in [`serve.py`](../../scripts/observatory/serve.py) line 2157 converts exactly one
 database failure into a response and lets every other one escape:
 
     try:
@@ -37,7 +37,7 @@ timeout rather than receiving an error.
 [`bug-0051`](bug-0051-every-observatory-reader-takes-a-write-lock-on-connect.md), the exception was
 raised inside `db.connect` and escaped at line 2171. Clients disconnected at 5.5 seconds; in one
 harness two of them hung for 45 seconds. Full record in the `## Dogfood record` section of
-[`feat-0062`](done/feat-0062-dogfood-systematic-debugging-then-promote-it.md).
+[`feat-0062`](feat-0062-dogfood-systematic-debugging-then-promote-it.md).
 
 **This is a separate defect from `bug-0051` and it outlives it.** `bug-0051` removes the contention
 that makes `database is locked` likely. It does not make a sqlite failure impossible: a store on a
@@ -87,19 +87,19 @@ per call site, since the response is the same in both cases and two branches dri
 
     python scripts/run-checks.py
 
-- [ ] With the store made to fail, a store-reading route returns an HTTP response with a status and a
+- [x] With the store made to fail, a store-reading route returns an HTTP response with a status and a
       JSON body. **Asserted on what the client receives**, not on what the server logged.
-- [ ] The failure is injected at both call sites, `db.connect` and `build(conn)`, since only the
+- [x] The failure is injected at both call sites, `db.connect` and `build(conn)`, since only the
       first has ever been observed and the second is the same gap unreached.
-- [ ] The regression test fails against the current code. Confirm it before the fix.
-- [ ] A **missing** store still answers 200 with `store_present: false`, and a schema-version failure
+- [x] The regression test fails against the current code. Confirm it before the fix.
+- [x] A **missing** store still answers 200 with `store_present: false`, and a schema-version failure
       still answers with its readable `StoreUnusable` message. Both are existing behavior this must
       not fold into a generic error.
-- [ ] Existing tests still pass, unchanged in intent.
+- [x] Existing tests still pass, unchanged in intent.
 
 ## Definition of done
 
-- [ ] Acceptance command(s) pass locally.
-- [ ] Conventions in AGENTS.md's conventions section followed.
-- [ ] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
-- [ ] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.
+- [x] Acceptance command(s) pass locally.
+- [x] Conventions in AGENTS.md's conventions section followed.
+- [x] `doc-sync` run over the reader-facing documents and its findings applied or dismissed with a reason. Updating `CHANGELOG.md` and the task file is not documenting the change: a feature only a maintainer can find out about has not shipped for anyone else.
+- [x] File moved to `.tasks/done/`, `status: done`; one dated line added to `CHANGELOG.md` referencing this task id.

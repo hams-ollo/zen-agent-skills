@@ -31,9 +31,14 @@ jobs:
         python: ["3.11", "3.14"]
 
     steps:
-      - uses: actions/checkout@v4
+      # Floating major tags, not pinned SHAs: pinning by commit is a different hardening
+      # posture with its own maintenance cost, and adopting it is a decision rather than
+      # upkeep (chore-0038). The majors were checked against the actions' own latest
+      # releases on 2026-08-31 rather than assumed; both were then at v7. Re-check when
+      # bumping, since a major here also moves the runner's Node version underneath.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
 

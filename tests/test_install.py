@@ -1525,12 +1525,14 @@ class RegistrationCarriesTheEventTests(unittest.TestCase):
 
     def test_the_existing_post_tool_use_hooks_are_unchanged(self):
         # The widening must not disturb what already worked. Both hooks stay under
-        # PostToolUse, in order.
+        # PostToolUse, in order, ahead of the worktree-boundary reminder the 2026-10 kit
+        # refresh added after them.
         parsed = json.loads(inst.claude_registration(Path("/tmp/home")))
         commands = [e["hooks"][0]["command"] for e in parsed["hooks"]["PostToolUse"]]
-        self.assertEqual(2, len(commands))
+        self.assertEqual(3, len(commands))
         self.assertIn("delegation-reminder.py", commands[0])
         self.assertIn("spec-conformance-gate.py", commands[1])
+        self.assertIn("worktree-boundary-reminder.py", commands[2])
 
     def test_every_registered_script_exists_in_the_module(self):
         # A registration naming a script that is not there produces an entry that can
