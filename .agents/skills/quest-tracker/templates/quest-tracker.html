@@ -559,14 +559,14 @@ html[data-skin="zen"] .waiting li > b, html[data-skin="quest"] .waiting li > b {
      below came from, and changes only when that code is replaced.
    ===================================================================== */
 
-// Base addresses, so step links stay short. Add your own.
+// Base addresses, so step links stay short. Replace these placeholders with the project's own.
 const LINK = {
-  TEMPLATE: "https://claude.ai/artifact/2CXWWBAuu9RfieCVn156LA",
-  EXAMPLE: "https://claude.ai/artifact/7feLZSDFECEty9PSDNHfbh",
+  REPO: "https://example.com/your-project",
+  DOCS: "https://example.com/your-project/docs",
 };
 
 const TRACKER = {
-  templateVersion: "1.2.0",            // the template this page's code came from; shown in the footer so trackers on older code are visible
+  templateVersion: "1.2.1",         // the template this page's code came from; shown in the footer so trackers on older code are visible
   storageKey: "quest-template",          // prefix for this viewer's remembered filters; one per project
   skin: "zen",                            // default look: "zen" (Zen Solutions), "quest" (Main Quest Zen) or "field" (light work sheet). Each viewer can switch.
   ranks: ["Novice", "Apprentice", "Journeyman", "Adept", "Expert", "Master", "Grandmaster"],  // one rank per 100 XP
@@ -578,8 +578,8 @@ const TRACKER = {
   goal: { label: "launch", target: "2026-11-06" },  // "N steps left to <label>"; target date draws the even-pace line (optional)
   questsIntro: "The road to launch as short runs of work, like a quest chain: finish one, the next unlocks. Each line opens its step below. A red tag marks a blocker.",
   doclinks: [
-    ["Template", LINK.TEMPLATE, "this page's source"],
-    ["A full season", LINK.EXAMPLE, "the NYFG run sheet"],
+    ["Project", LINK.REPO, "the work itself"],
+    ["Docs", LINK.DOCS, "the project's own docs"],
   ],
   rules: [
     { title: "Never here", warn: true, text: "No password, sign-in code, backup code or key in a note, a fact or a screenshot. Crop screenshots first." },
@@ -604,12 +604,12 @@ const TRACKER = {
         { id: "p0-copy", t: "Make a copy for the new project", who: ["you", "claude"],
           why: "Each project gets its own page and its own saved ticks, so one season never overwrites another.",
           steps: [
-            "Ask Claude: “start a quest tracker for <project> from the template”, with the template link.",
+            "Ask Claude: “start a quest tracker for <project>”, with whatever you already know: the goal, the people, the first phases.",
             "Claude reads the template, writes the new project into the data block, and publishes a new private page with saved progress on (`db`, `user`, `assets`).",
             "Open the new link and check the header names the new project.",
           ],
           check: "The new page says “Live: ticks, facts and notes are shared” and shows no steps done.",
-          ours: [["The template", LINK.TEMPLATE]] },
+          ours: [["The project's docs", LINK.DOCS]] },
         { id: "p0-phases", t: "Write the phases and the steps", who: ["you", "claude"],
           why: "A step that carries its own context (what, why, what closes it) can be picked up by anyone, on any day, without a call.",
           steps: [
@@ -1592,7 +1592,7 @@ async function render() {
   const states = questStates();
   states.forEach(({ q, steps, nDone, st, label }) => {
     const rn = el("li"); rn.append(el("span", "node st-" + st, q.short || q.title)); route.append(rn);
-    // `tone` names a color; `cls` (as in the NYFG run sheet) names a person and borrows their color
+    // `tone` names a color; `cls`, which older hand-built run sheets use, names a person and borrows their color
     const qTone = q.tone || (q.cls && PEOPLE[q.cls] && PEOPLE[q.cls].tone) || "plain";
     const box = el("div", "quest tone-" + qTone + (st === "next" ? " is-next" : ""));
     const h = el("h3", null, q.title);

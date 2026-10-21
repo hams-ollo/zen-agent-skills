@@ -157,6 +157,13 @@ the diff from #90 reads on its own.
   getter or a proxy. Also from it: half an emoji in a step title crashed `check` with exit 1 when
   the issue echoing it was printed, and Node failing to start was reported as a missing permission
   model.
+- **Removed on the author's instruction, 2026-10-21:** the client's name and the links to two
+  private published pages (the author's own copy of the template, and the client's run sheet).
+  The kit is public; the template stays fully usable, with placeholder addresses in its sample
+  data block, and a test fails if a private page link comes back. The code comment that named the
+  client sat below the end marker, so the template is now 1.2.1 and `check` still tells a 1.2.0
+  page's code from it. Git history before this change still holds both; rewriting it is the
+  author's call, not this task's.
 - **A seam left open deliberately:** nothing on the host stops a session writing `checks`, because
   the database tool writes as the person, so that rule is held by the skill rather than the page.
 
