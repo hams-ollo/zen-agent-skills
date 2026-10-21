@@ -256,7 +256,8 @@ class TestTheSkillBody(unittest.TestCase):
         holds = section(self.body, "## What this skill holds")
         self.assertIn("[`scripts/tracker.py`](scripts/tracker.py)", holds)
         procedure = flat(section(self.body, "## Procedure"))
-        self.assertIn("a 2 is reported to the person, never treated as a pass", procedure)
+        self.assertIn("A 2 is reported to the person, never treated as a pass", procedure)
+        self.assertIn("The block is JavaScript and `check` runs it, in an empty sandbox", procedure)
 
     def test_an_agent_writes_claims_with_exactly_the_contracted_fields_and_never_writes_checks(self):
         report = section(self.body, "### 3. Report into a tracker from an agent or a child session")
@@ -377,8 +378,29 @@ class TestTheTemplate(unittest.TestCase):
         self.assertIn("renderWaiting(ready, stopsReached(runs, isDone).filter((s) => !isClaimed(s)));", render)
         self.assertIn('states.filter((x) => x.st === "next" || x.st === "wait")', render)
         waiting = function_source(self.code, "renderWaiting")
-        self.assertIn("box.hidden = !ready.length && !stops.length;", waiting)
+        self.assertIn("(!ready.length && !stops.length);", waiting)
         self.assertIn('<section class="waiting" id="waiting" aria-label="Waiting on you" hidden>', read(TEMPLATE))
+
+    def test_the_waiting_strip_says_nothing_until_the_saved_ticks_and_claims_arrive(self):
+        """Found by independent verification: drawn before the ticks loaded, the strip listed a claim
+        already verified, and with no database it showed a stop worked out against no ticks at all."""
+        self.assertIn("box.hidden = !live.checks || !live.claims ||", function_source(self.code, "renderWaiting"))
+        self.assertIn("const live = { checks: false, claims: false };", self.code)
+        self.assertIn("if (!snap.metadata.fromCache) live.checks = true;", self.code)
+        self.assertIn("if (!snap.metadata.fromCache) live.claims = true;", self.code)
+
+    def test_a_hidden_claim_can_only_be_sent_back(self):
+        """Found by independent verification: a claim whose command and result the page hid could be
+        verified, and the tick then read "checked by a command" over a command nobody was shown."""
+        self.assertIn("if (!s || !claimPending(checks[id], cl) || claimLooksSecret(cl)) return;",
+                      function_source(self.code, "verifyClaim"))
+        claim_box = function_source(self.code, "renderClaim")
+        hidden = claim_box[claim_box.index("if (writable && canEdit && claimLooksSecret(cl)) {"):
+                           claim_box.index("} else if (writable && canEdit) {")]
+        self.assertIn('"Send back"', hidden)
+        self.assertNotIn("Verify and tick", hidden)
+        self.assertIn("btn.disabled = !writable || (pend && !canEdit) || hiddenClaim;",
+                      function_source(self.code, "render"))
 
     def test_hidden_hides_whatever_display_a_class_sets(self):
         """The page must not lean on the host's own reset: `.body` sets `display: grid`."""
@@ -472,6 +494,29 @@ class TestThePagesRules(unittest.TestCase):
         self.assertIs(self.pending(declined, self.CLAIM), False)
         newer = dict(self.CLAIM, at="2026-10-20T15:00:00.000Z")
         self.assertIs(self.pending(declined, newer), True)
+
+    def test_the_page_and_the_script_judge_a_claim_field_by_field(self):
+        """Found by independent verification: the page joined the fields, so `token` ending one
+        field and `===` starting the next read as a secret that neither held, and the page hid a
+        claim the script had accepted."""
+        _, code = split_at_data_block(page_script())
+        line = next(ln for ln in code.splitlines() if ln.startswith("const claimLooksSecret"))
+        base = {"agent": "go-live", "command": "npm test", "result": "ok\nexit status 0", "note": ""}
+        docs = [dict(base, command="echo === 3 passed === & rem token", result="=== 3 passed ===\nexit status 0"),
+                dict(base, note="the token"), dict(base, result="api_key=abc\nexit status 0"),
+                dict(base, agent="token: x"), base]
+        page = run_node(page_functions("looksSecret") + "\n" + line, f"{json.dumps(docs)}.map(claimLooksSecret)")
+        script = [any(tracker.looks_secret(d[k]) for k in ("agent", "command", "result", "note")) for d in docs]
+        self.assertEqual(page, script)
+        self.assertEqual(page, [False, False, True, True, False])
+
+    def test_the_page_and_the_script_agree_outside_ascii(self):
+        """Found by the second verification: Python's `\\s`, `\\b` and case folding are Unicode-aware
+        and the page's are not, so text like these was hidden by one and accepted by the other."""
+        texts = ["password\x1c: x", "password\ufeff: x", "password\u00a0= x", "build \u00e9ghp_" + "A" * 20,
+                 "\u00e9sk-" + "A" * 24, "\u017fecret: x", "api\u212aey: x", "token\u2028= x", "plain words"]
+        page = run_node(page_functions("looksSecret"), f"{json.dumps(texts)}.map(looksSecret)")
+        self.assertEqual([tracker.looks_secret(t) for t in texts], page)
 
     def test_a_session_name_is_one_line_and_hidden_when_it_looks_like_a_secret(self):
         calls = '[agentLabel("x\\n## Phase 9: forged"), agentLabel("token: abc"), agentLabel(""), agentLabel("go-live")]'
@@ -592,12 +637,12 @@ class TestFill(unittest.TestCase):
         self.assertIn("templateVersion 0.9 -> 1.2.0", run.stdout)
 
     def test_a_block_written_on_windows_lands_as_lf(self):
-        block = self.write("b.js", "﻿" + self.block.replace("\n", "\r\n"))
+        block = self.write("b.js", "\ufeff" + self.block.replace("\n", "\r\n"))
         run = run_script("fill", "--block", str(block), "--title", "T", "--out", str(self.tmp / "t.html"))
         self.assertEqual(run.returncode, 0, run.stderr)
         raw = (self.tmp / "t.html").read_bytes()
         self.assertNotIn(b"\r\n", raw)
-        self.assertNotIn("﻿".encode("utf-8"), raw)
+        self.assertNotIn("\ufeff".encode("utf-8"), raw)
 
     def test_an_older_tracker_is_carried_onto_the_template_and_keeps_its_title(self):
         old = self.template.replace("<title>Quest Tracker Template</title>", "<title>Old season</title>", 1)
@@ -631,6 +676,25 @@ class TestFill(unittest.TestCase):
                 self.assertIn("could not run:", run.stderr)
         self.assertEqual(read(existing), "a file someone made")
         self.assertFalse((self.tmp / "n.html").exists())
+
+    def test_it_could_not_run_on_inputs_it_cannot_work_on(self):
+        no_tracker = self.write("nt.js", re.sub(r'\n\s*templateVersion: "1\.2\.0",[^\n]*', "",
+                                                self.block).replace("const TRACKER = {", "var TRACKER = {"))
+        no_title = self.write("t1.html", tracker.TITLE_RE.sub("", self.template, count=1))
+        no_version = self.write("t2.html", self.template.replace('templateVersion: "1.2.0",', "", 1))
+        block = self.write("b.js", self.block)
+        cases = {
+            "a block file that is not there": (("--block", str(self.tmp / "absent.js"), "--title", "T"), "cannot read"),
+            "a block with no TRACKER line to add templateVersion to": (("--block", str(no_tracker), "--title", "T"), "const TRACKER"),
+            "a template with no title": (("--block", str(block), "--title", "T", "--template", str(no_title)), "no <title>"),
+            "a template with no templateVersion": (("--block", str(block), "--title", "T", "--template", str(no_version)), "no templateVersion"),
+        }
+        for name, (args, said) in cases.items():
+            with self.subTest(name):
+                run = run_script("fill", *args, "--out", str(self.tmp / "n.html"))
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn(said, run.stderr)
+                self.assertFalse((self.tmp / "n.html").exists())
 
 
 @unittest.skipUnless(NODE, "no node binary on PATH, so `tracker.py check` cannot run here")
@@ -685,7 +749,202 @@ class TestCheck(unittest.TestCase):
     def test_a_block_that_does_not_run_could_not_be_checked(self):
         run = self.check(self.good.replace("const TRACKER = {", "const TRACKER = {{", 1))
         self.assertEqual(run.returncode, 2)
-        self.assertIn("does not run as JavaScript", run.stderr)
+        self.assertIn("checking the data block failed: SyntaxError", run.stderr)
+
+    def test_a_season_too_long_for_a_command_line_is_checked(self):
+        """Found by independent verification: the block went to Node on the command line, which
+        Windows caps at 32,767 characters, so a real season crashed with exit 1."""
+        long = self.good.replace('lede: "', 'lede: "' + "x" * 40000, 1)
+        run = self.check(long)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_the_block_runs_with_no_way_to_files_or_processes(self):
+        """Found by independent verification: a block saved from someone else's page ran with all of
+        Node.js, wrote a file, and was then reported ready to publish."""
+        marker = self.tmp / "written.txt"
+        attempts = {
+            "require": f'require("fs").writeFileSync({json.dumps(str(marker))}, "x");',
+            "process": f'process.mainModule.require("fs").writeFileSync({json.dumps(str(marker))}, "x");',
+            "the constructor escape": 'this.constructor.constructor("return process")();',
+            "eval": 'eval("1");',
+        }
+        for name, line in attempts.items():
+            with self.subTest(name):
+                run = self.check(self.good.replace(tracker.END_LINE, line + "\n" + tracker.END_LINE, 1))
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn("could not run:", run.stderr)
+                self.assertFalse(marker.exists(), "the block wrote a file during check")
+        # The source line Node echoes above the error also says "Error" here, so only a picker that
+        # wants the error line itself names the right one.
+        named = self.check(self.good.replace(tracker.END_LINE, "const e = new Error(missingName);\n" + tracker.END_LINE, 1))
+        self.assertEqual(named.returncode, 2, named.stdout + named.stderr)
+        self.assertIn("checking the data block failed: ReferenceError: missingName is not defined", named.stderr,
+                      "the message named something other than the error")
+
+    def test_a_block_that_never_settles_is_stopped_by_the_sandboxs_time_limit(self):
+        """Found by the second verification: a microtask loop ran past the vm's limit to the
+        subprocess's, a minute later."""
+        started = datetime.now()
+        run = self.check(self.good.replace(tracker.END_LINE, "Promise.resolve().then(() => { while (true) {} });\n"
+                                           + tracker.END_LINE, 1))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertLess((datetime.now() - started).total_seconds(), 30)
+
+    def with_line(self, line: str) -> str:
+        return self.good.replace(tracker.END_LINE, line + "\n" + tracker.END_LINE, 1)
+
+    def test_nothing_the_block_makes_runs_outside_the_sandbox(self):
+        """Found by the third verification: the answer was turned into text outside the context, so
+        a `toJSON` hook ran on the outer call stack and could read the outer program's own function,
+        one step from its `Function` constructor; and the time limit did not cover it."""
+        probe = ("Object.prototype.toJSON = function toJSON() { if (Array.isArray(this)) return [...this];"
+                 " let c = null; try { c = toJSON.caller; } catch (e) { c = 'threw'; }"
+                 " return {issues: [String(c)], storageKey: null}; };")
+        run = self.check(self.with_line(probe))
+        self.assertNotIn("process.stdin", run.stdout + run.stderr, "a hook reached the outer program")
+        self.assertNotIn("require(", run.stdout + run.stderr, "a hook reached the outer program")
+        started = datetime.now()
+        looped = self.check(self.with_line("Object.prototype.toJSON = function () { for (;;) {} };"))
+        self.assertEqual(looped.returncode, 2, looped.stdout + looped.stderr)
+        self.assertIn("timed out", looped.stderr)
+        self.assertLess((datetime.now() - started).total_seconds(), 30)
+
+    def test_what_the_block_throws_or_returns_is_never_read_by_its_own_code(self):
+        cases = {
+            "a replaced JSON.stringify": ("JSON.stringify = () => ({});", "gave back no text"),
+            "an error whose message is a getter": (
+                "const e = new Error('x'); Object.defineProperty(e, 'message', {get() { return 'getter ran'; }}); throw e;",
+                "Error: the data block threw"),
+            "a thrown proxy": ("throw new Proxy({}, {get() { return 'trap ran'; }, getOwnPropertyDescriptor() {"
+                               " return {value: 'trap ran', writable: true, enumerable: true, configurable: true}; }});",
+                               "Error: the data block threw"),
+            "a rejected promise": ("Promise.reject(new Error('later'));", "left a promise rejected"),
+            "a thrown string": ("throw 'boom';", "threw boom"),
+        }
+        for name, (line, said) in cases.items():
+            with self.subTest(name):
+                run = self.check(self.with_line(line))
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn(said, run.stderr)
+                self.assertNotIn("getter ran", run.stderr)
+                self.assertNotIn("trap ran", run.stderr)
+
+    def test_a_crash_of_the_checking_program_itself_names_its_error(self):
+        """Node echoes the failing source line above an uncaught error, and here that line says
+        "Error" too, so only a picker that wants the error line itself names the right one."""
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        err = io.StringIO()
+        with mock.patch.object(tracker, "SANDBOX", 'throw new TypeError("the checker broke");'), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = tracker.main(["check", str(path)])
+        self.assertEqual(code, 2)
+        self.assertIn("checking the data block failed: TypeError: the checker broke", err.getvalue())
+
+    def test_half_an_emoji_in_a_title_is_reported_not_crashed_on(self):
+        """Found by the third verification: the check echoes titles, and printing a lone surrogate
+        raised, so a typo in a title crashed `check` with exit 1 and a traceback."""
+        page = self.good.replace('t: "Make a copy for the new project"', 't: "Pack the ' + chr(92) + 'ud83d", oops: 1', 1)
+        page = page.replace('{ id: "p0-copy", t: "Pack', '{ t: "Pack', 1)
+        run = self.check(page)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("needs an id", run.stdout)
+        self.assertNotIn("Traceback", run.stderr)
+
+    def test_a_result_missing_its_storage_key_could_not_check(self):
+        """Found by the second verification: a block can reshape what the check returns, which
+        crashed it with a KeyError, exit 1."""
+        run = self.check(self.good.replace(tracker.END_LINE, "Object.prototype.toJSON = function () { return Array.isArray(this) ? [...this] : {issues: []}; };\n"
+                                           + tracker.END_LINE, 1))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("gave no list of issues back", run.stderr)
+
+    def test_node_failing_to_start_or_finish_could_not_check(self):
+        """Found by the second verification: these two branches were added untested."""
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+
+        def probe_ok_then(failure):
+            def run(args, **kwargs):
+                if args[-1] == "0":
+                    return subprocess.CompletedProcess(args, 0, b"", b"")
+                raise failure
+            return run
+
+        cases = {
+            "the check runs past its time": (probe_ok_then(subprocess.TimeoutExpired("node", 60)), "did not finish"),
+            "node cannot be started for the check": (probe_ok_then(OSError("cannot start")), "did not finish"),
+            "node cannot be started at all": (OSError("cannot start"), "Node.js could not be started"),
+        }
+        for name, (effect, said) in cases.items():
+            with self.subTest(name):
+                err = io.StringIO()
+                with mock.patch.object(tracker.subprocess, "run", side_effect=effect), \
+                        contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                    code = tracker.main(["check", str(path)])
+                self.assertEqual(code, 2)
+                self.assertIn(said, err.getvalue())
+
+    def test_the_permission_model_refuses_a_write_even_outside_the_sandbox(self):
+        """The second wall: a program that is not in the `vm` context at all still cannot write."""
+        marker = self.tmp / "escaped.txt"
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        escaped = f'require("fs").writeFileSync({json.dumps(str(marker))}, "x"); process.stdout.write("[]");'
+        with mock.patch.object(tracker, "SANDBOX", escaped), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = tracker.main(["check", str(path)])
+        self.assertEqual(code, 2)
+        self.assertFalse(marker.exists(), "Node.js ran the check without its permission model")
+
+    def test_a_node_without_a_permission_model_could_not_check(self):
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        err = io.StringIO()
+        refuse = subprocess.CompletedProcess([], 9, b"", b"bad option")
+        with mock.patch.object(tracker.subprocess, "run", return_value=refuse) as runs, \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = tracker.main(["check", str(path)])
+        self.assertEqual(code, 2)
+        self.assertIn("no permission model", err.getvalue())
+        self.assertTrue(all("-e" in c.args[0] and c.args[0][-1] == "0" for c in runs.call_args_list),
+                        "the data block was run while looking for a permission model")
+
+    def test_a_checker_that_gives_back_no_list_could_not_check(self):
+        broken = self.tmp / "template.html"
+        broken.write_text(self.template.replace("function dataIssues(T) {", "function dataIssues(T) { return \"fine\";", 1),
+                          encoding="utf-8", newline="")
+        path = self.tmp / "t.html"
+        path.write_text(self.good, encoding="utf-8", newline="")
+        run = run_script("check", str(path), "--template", str(broken))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("gave no list of issues back", run.stderr)
+
+    def test_a_page_with_no_template_version_is_told_so_once(self):
+        run = self.check(self.good.replace('templateVersion: "1.2.0",', "", 1))
+        self.assertEqual(run.returncode, 1)
+        self.assertEqual(run.stdout.count("templateVersion"), 1, run.stdout)
+        self.assertNotIn("None", run.stdout)
+
+    def test_malformed_pages_and_templates_could_not_be_checked(self):
+        no_checker = self.tmp / "nc.html"
+        no_checker.write_text(self.template.replace("function dataIssues(", "function dataProblems(", 1),
+                              encoding="utf-8", newline="")
+        cases = {
+            "no end line": (self.good.replace(tracker.END_LINE, "", 1), (), "end line"),
+            "the opening comment never closed": (self.good.replace("===== */\n\n// Base addresses", "=====\n\n// Base addresses", 1), (), "not closed"),
+            "a template with no dataIssues": (self.good, ("--template", str(no_checker)), "no function dataIssues"),
+            "a page that is not there": (None, (), "cannot read"),
+        }
+        for name, (page, extra, said) in cases.items():
+            with self.subTest(name):
+                path = self.tmp / "t.html"
+                path.unlink(missing_ok=True)
+                if page is not None:
+                    path.write_text(page, encoding="utf-8", newline="")
+                run = run_script("check", str(path), *extra)
+                self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                self.assertIn(said, run.stderr)
 
     def test_no_node_is_reported_as_could_not_check(self):
         path = self.tmp / "t.html"
@@ -749,6 +1008,33 @@ class TestClaim(unittest.TestCase):
                 run = self.claim("print('ok')", "--lines", lines)
                 self.assertEqual(run.returncode, 2)
                 self.assertIn("--lines", run.stderr)
+
+    def test_a_check_that_runs_too_long_is_not_a_claim(self):
+        run = self.claim("import time; time.sleep(4)", "--timeout", "1")
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("ran past 1 seconds", run.stdout)
+        self.assertNotIn('"document"', run.stdout)
+
+    def test_every_argument_is_checked_before_the_command_runs(self):
+        """Found by independent verification: an empty `--agent` was noticed only after the command
+        had run, so its side effects happened with no claim to show for them."""
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "ran.txt"
+            command = shell_command(sys.executable, "-c", f"open({str(marker)!r}, 'w').write('x')")
+            cases = {
+                "an empty agent": ("--step", "p2-check", "--agent", "  ", "--command", command),
+                "a step that is not an id": ("--step", "not an id", "--agent", "a", "--command", command),
+                "an empty step": ("--step", "", "--agent", "a", "--command", command),
+                "a step id with a trailing newline": ("--step", "p2-check\n", "--agent", "a", "--command", command),
+                "no output kept": ("--step", "p2-check", "--agent", "a", "--command", command, "--tail", "0"),
+                "an empty command": ("--step", "p2-check", "--agent", "a", "--command", "  "),
+            }
+            for name, args in cases.items():
+                with self.subTest(name):
+                    run = run_script("claim", *args)
+                    self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+                    self.assertIn("could not run:", run.stderr)
+                    self.assertFalse(marker.exists(), "the command ran before its arguments were checked")
 
 
 class TestHouseStyle(unittest.TestCase):

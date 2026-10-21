@@ -166,7 +166,7 @@ A claim is one document in the `claims` collection, named by the step's id:
   at: "2026-10-20T11:45:00Z",                // when it was claimed, ISO 8601 in UTC, from a real clock; also the claim's identity
   lines: [0, 1],                             // the lines it says are done, counted from 0 like the line ticks
   command: "python scripts/check_redirects.py --site https://example.com",   // exactly as typed
-  result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit 0",  // the verbatim tail of what it printed
+  result: "checked 42 old addresses\n42 redirect in one hop (301)\nexit status 0",  // the verbatim tail of what it printed
   note: "The test message is in the shared inbox, marked TEST." }
 ```
 
@@ -183,7 +183,7 @@ A claim also stops waiting when someone ticks or unticks the step by hand while 
 
 Claims earn no XP until they are verified and ticked, and what a session writes down (facts, notes) earns none at all.
 
-A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. What a session writes never passes through the page's own save checks, because it goes straight into the database, so the page applies the same secret net when it shows it: a claim, note or fact value that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it, and so is a session name that looks like one.
+A session writes claims, notes and facts with an `agent` field carrying its name, and never writes `checks`. What a session writes never passes through the page's own save checks, because it goes straight into the database, so the page applies the same secret net when it shows it: a claim, note or fact value that looks like it holds a password, code or key is hidden, with a line asking the session to write it again without it, and so is a session name that looks like one. A hidden claim offers only **Send back**: with its command and result hidden there is nothing to check it against, so it cannot be ticked.
 
 ## What a tick rests on
 
@@ -199,7 +199,7 @@ A tick by hand may rest on a person's own look at the screen, or on someone's wo
 
 ## What waits on you
 
-The strip at the top of the page lists what needs a person, and is hidden when nothing does:
+The strip at the top of the page lists what needs a person. It appears once the saved ticks and claims have loaded, because what waits is worked out from them, and is hidden when nothing waits:
 
 - **Check:** every claim still waiting, with the session that made it. Anyone can see it; an Editor settles it.
 - **Stop:** every stop the work has reached, with who it waits on. A stop is reached when it is the first open step of a quest under way (the one up next, or one marked `wait`), or of the route when there are no quests. Optional steps are passed over. A stop that carries a waiting claim is listed under Check instead.

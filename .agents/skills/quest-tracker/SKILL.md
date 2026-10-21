@@ -98,8 +98,9 @@ Stated once here; every step below applies them.
 ## Procedure
 
 Run the script from this skill's directory as `python scripts/tracker.py <command>`; `--help` on
-each command lists its options. It exits 0 when done or clean, 1 when it refused or found issues, and
-2 when it could not run, and a 2 is reported to the person, never treated as a pass.
+each command lists its options. It exits 0 when done or clean, 1 when it found issues or refused a
+claim, and 2 when it could not run, which includes an input it will not work on (an `--out` that
+already exists, a missing title). A 2 is reported to the person, never treated as a pass.
 
 ### 0. Establish the host can do this, before anything else
 
@@ -133,8 +134,10 @@ nothing, which is worse than no tracker.
 4. **Check it**: `check <tracker.html>`. It lists any id that is malformed or used twice, any quest
    naming a step that does not exist, any `who` naming someone not in `people`, any step that says
    neither why nor what closes it, and a `storageKey` or title still the template's. Fix and re-run
-   until it exits 0. Where it exits 2 because there is no Node.js, say so, and read the page's own
-   "Data block check" box under its header once it is published.
+   until it exits 0. The block is JavaScript and `check` runs it, in an empty sandbox under Node.js's
+   permission model, so a block written by someone else can neither read nor write files. Where it
+   exits 2 because there is no Node.js, or none with a permission model, say so, and read the page's
+   own "Data block check" box under its header once it is published.
 5. **Publish it as a new, private page**, with the `db`, `user` (profile scope), and `assets`
    capabilities. **Never publish over the template**, and never reuse another tracker's page: each
    project gets its own page and its own database.
@@ -207,7 +210,8 @@ shows it as "Claude (name)".
   change as a note rather than overwriting it.
 - **Never write `checks`**, and never write `done`, `evidence`, `verifiedClaim`, `settledClaim`, or a
   send-back field. The page's "Verify and tick" control is what records that a person checked a
-  claim, and what the tick rests on.
+  claim, and what the tick rests on. A claim with any field that looks like a secret is hidden on
+  the page and can only be sent back, which is why the script refuses to build one.
 - **Claims earn no XP**, and neither does what an agent writes down. XP comes from the tick.
 
 A session dispatching child sessions to work tracker steps gives each one the tracker's link, the
