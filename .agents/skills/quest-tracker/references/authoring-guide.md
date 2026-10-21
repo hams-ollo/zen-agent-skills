@@ -1,6 +1,6 @@
 # Quest tracker: authoring guide
 
-How to start and run a development season from the quest tracker template. The canonical copy of the template is [`quest-tracker.html`](../templates/quest-tracker.html), beside this guide in the `quest-tracker` skill; the author also keeps it published as a private Claude artifact, [Quest tracker template](https://claude.ai/artifact/2CXWWBAuu9RfieCVn156LA), which may lag the canonical copy. The first full season run on this pattern is the [NYFG launch run sheet](https://claude.ai/artifact/7feLZSDFECEty9PSDNHfbh) (October 2026).
+How to start and run a development season from the quest tracker template. The canonical copy of the template is [`quest-tracker.html`](../templates/quest-tracker.html), beside this guide in the `quest-tracker` skill; a copy published from it earlier may lag it. The pattern ran a client's whole launch season in October 2026 before it became this template.
 
 ## What the template is
 
@@ -55,7 +55,7 @@ One token set, three skins, picked by `skin` in the data block and switchable pe
 |---|---|---|
 | `zen` | Zen Solutions work and professional projects (the default) | The Zen Solutions site palette: near-black, cream serif headings, vermilion accent, `//` eyebrows, a low red sun behind the header. With an 8-bit layer: pixel labels, notched corners, segmented progress bars, `LV` badges, square map cells. |
 | `quest` | Main Quest Zen and anything playful | Main Quest Zen's look: night navy with a faint pixel starfield, heavy sans headings, pixel labels, cyan, amber and violet. |
-| `field` | Client-facing trackers (NYFG style) | The light work-order sheet, which follows the viewer's light or dark setting and drops the game layer. |
+| `field` | Client-facing trackers | The light work-order sheet, which follows the viewer's light or dark setting and drops the game layer. |
 
 Both game skins are dark by design. The game layer adds a pixel burst and "+XP" when a step is ticked, and a "Quest complete" notice when the last step of a quest is ticked; both are skipped for anyone who has reduced motion switched on.
 
@@ -88,7 +88,7 @@ The Reference section has a **Copy the log as Markdown** button: every phase and
   steps: [ ... ] }
 ```
 
-`now: true` highlights the phase's `when` tag as the current one (`today: true` from the NYFG sheet works too). A phase ends in something you can check.
+`now: true` highlights the phase's `when` tag as the current one (`today: true`, from older hand-built run sheets, works too). A phase ends in something you can check.
 
 ## How to write a step
 
@@ -135,7 +135,7 @@ A step with neither `why` nor `check` is flagged by the data check: if you canno
 - Phase ids `p0`, `p1`, ... and step ids `<phase>-<word>`, such as `p3-ftp`. Letters, digits, `-` and `_` only.
 - Fact ids are short snake_case names for the value, such as `ftp_cert_host`.
 - **An id never changes once anything is ticked, logged or recorded against it.** The saved ticks, notes and facts are keyed by id: rename the id and they stay behind under the old one, invisible.
-- An id need not match the phase it sits in. Moving a step to another phase is safe if the id stays (NYFG's `p2-org` lives in phase 1). Never reuse an old id for a different step.
+- An id need not match the phase it sits in. Moving a step to another phase is safe if the id stays (a step with the id `p2-org` can live in phase 1). Never reuse an old id for a different step.
 - The data check flags duplicate step, fact and phase ids.
 
 ## Never move a step's lines
@@ -253,7 +253,7 @@ A quest is one run of work, in order, usually one call or one person's sitting. 
 - The first quest not done and not waiting is marked "Up next". A quest with `wait` shows that label instead and is skipped for "Up next".
 - The route is every step listed in any quest, in quest order. It drives "N steps left", Next up, the burndown, and the ringed cells on the season map. With no quests, the route is every step that is not optional.
 - A step can sit in one quest only; listing it twice counts it once.
-- `tone` picks the quest's color. The NYFG sheet's `cls: "<person key>"` also works and borrows that person's color.
+- `tone` picks the quest's color. `cls: "<person key>"`, from older hand-built run sheets, also works and borrows that person's color.
 
 ## The views
 
@@ -277,11 +277,11 @@ Each of these reads only what the page already stores.
 
 ## Porting an existing sheet
 
-The NYFG run sheet's `PHASES`, `QUESTS` and `OWNERS` move across almost unchanged: put `PHASES` into `phases`, `QUESTS` into `quests` (its `cls` still works), and turn `OWNERS` into `people` with a tone for each. Keep every id exactly as it was; the saved ticks stay in the old artifact's database, so a port is a fresh start unless Claude copies the documents across with ArtifactData.
+A hand-built run sheet's `PHASES`, `QUESTS` and `OWNERS` move across almost unchanged: put `PHASES` into `phases`, `QUESTS` into `quests` (its `cls` still works), and turn `OWNERS` into `people` with a tone for each. Keep every id exactly as it was; the saved ticks stay in the old artifact's database, so a port is a fresh start unless Claude copies the documents across with ArtifactData.
 
 ## Bringing a tracker onto a newer template
 
-A tracker keeps the code it was published with. To give it a newer template's code, Claude saves the tracker's page and runs `tracker.py fill --from` on it: the data block comes across unchanged except for `templateVersion`, which takes the newer template's value, and the page keeps its title. Then `tracker.py check`, a look at what the newer template changed in its sample `rules` and `reference` entries, and a republish to the tracker's **existing** artifact, so its database and every tick in it are kept. Template 1.1.0 added claims; 1.2.0 added the "Waiting on you" strip and the evidence marks, and needs nothing new in the data block.
+A tracker keeps the code it was published with. To give it a newer template's code, Claude saves the tracker's page and runs `tracker.py fill --from` on it: the data block comes across unchanged except for `templateVersion`, which takes the newer template's value, and the page keeps its title. Then `tracker.py check`, a look at what the newer template changed in its sample `rules` and `reference` entries, and a republish to the tracker's **existing** artifact, so its database and every tick in it are kept. Template 1.1.0 added claims; 1.2.0 added the "Waiting on you" strip and the evidence marks, and needs nothing new in the data block; 1.2.1 changed only the sample data and one code comment.
 
 ## House rules
 

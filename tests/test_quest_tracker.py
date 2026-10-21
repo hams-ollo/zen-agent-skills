@@ -66,6 +66,8 @@ _tr_spec.loader.exec_module(tracker)
 CLAIM_FIELDS = frozenset({"agent", "at", "lines", "command", "result", "note"})
 # What a tick can rest on, saved as `evidence` on the step's `checks` document.
 EVIDENCE_VALUES = frozenset({"command", "claim", "hand"})
+# The template release under test: bumped whenever the code below the data block changes.
+VERSION = "1.2.1"
 
 # The capabilities a tracker is published with, exactly as the skill must state them.
 CAPABILITIES = '{db: {}, user: {scopes: ["profile"]}, assets: {}}'
@@ -331,7 +333,7 @@ class TestTheTemplate(unittest.TestCase):
         cls.block, cls.code = split_at_data_block(page_script())
 
     def test_the_data_block_carries_a_template_version_and_the_footer_shows_it(self):
-        self.assertRegex(self.block, r'(?m)^\s*templateVersion: "1\.2\.0",')
+        self.assertRegex(self.block, r'(?m)^\s*templateVersion: "1\.2\.1",')
         build = function_source(self.code, "buildStatic")
         self.assertIn("TRACKER.templateVersion", build)
         self.assertIn('$("#footer")', build)
@@ -625,16 +627,16 @@ class TestFill(unittest.TestCase):
         self.assertEqual((self.tmp / "t.html").read_bytes(), TEMPLATE.read_bytes())
 
     def test_a_block_and_a_title_change_only_the_block_and_the_title(self):
-        block = self.write("b.js", self.block.replace('templateVersion: "1.2.0"', 'templateVersion: "0.9"'))
+        block = self.write("b.js", self.block.replace(f'templateVersion: "{VERSION}"', 'templateVersion: "0.9"'))
         run = run_script("fill", "--block", str(block), "--title", "Sourdough season", "--out", str(self.tmp / "t.html"))
         self.assertEqual(run.returncode, 0, run.stderr)
         page = read(self.tmp / "t.html")
         self.assertTrue(page.startswith("<title>Sourdough season</title>\n"))
         self.assertEqual(tracker.outside_block(page), tracker.outside_block(self.template))
         self.assertIn('storageKey: "qt-test"', tracker.data_block(page))
-        self.assertEqual(tracker.template_version(tracker.data_block(page)), "1.2.0",
+        self.assertEqual(tracker.template_version(tracker.data_block(page)), VERSION,
                          "the block's own templateVersion survived: it names the code, not the project")
-        self.assertIn("templateVersion 0.9 -> 1.2.0", run.stdout)
+        self.assertIn(f"templateVersion 0.9 -> {VERSION}", run.stdout)
 
     def test_a_block_written_on_windows_lands_as_lf(self):
         block = self.write("b.js", "\ufeff" + self.block.replace("\n", "\r\n"))
@@ -646,8 +648,8 @@ class TestFill(unittest.TestCase):
 
     def test_an_older_tracker_is_carried_onto_the_template_and_keeps_its_title(self):
         old = self.template.replace("<title>Quest Tracker Template</title>", "<title>Old season</title>", 1)
-        old = old.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1)
-        older = re.sub(r'\n\s*templateVersion: "1\.2\.0",[^\n]*', "", self.template, count=1)
+        old = old.replace(f'templateVersion: "{VERSION}",', 'templateVersion: "1.1.0",', 1)
+        older = re.sub(r'\n\s*templateVersion: "' + re.escape(VERSION) + r'",[^\n]*', "", self.template, count=1)
         for name, page, was in (("old.html", old, "1.1.0"), ("older.html", older, None)):
             with self.subTest(was=was):
                 src = self.write(name, page)
@@ -655,7 +657,7 @@ class TestFill(unittest.TestCase):
                 run = run_script("fill", "--from", str(src), "--out", str(out))
                 self.assertEqual(run.returncode, 0, run.stderr)
                 up = read(out)
-                self.assertEqual(tracker.template_version(tracker.data_block(up)), "1.2.0")
+                self.assertEqual(tracker.template_version(tracker.data_block(up)), VERSION)
                 self.assertEqual(tracker.outside_block(up), tracker.outside_block(self.template))
         self.assertTrue(read(self.tmp / "up-old.html").startswith("<title>Old season</title>"))
 
@@ -678,10 +680,10 @@ class TestFill(unittest.TestCase):
         self.assertFalse((self.tmp / "n.html").exists())
 
     def test_it_could_not_run_on_inputs_it_cannot_work_on(self):
-        no_tracker = self.write("nt.js", re.sub(r'\n\s*templateVersion: "1\.2\.0",[^\n]*', "",
+        no_tracker = self.write("nt.js", re.sub(r'\n\s*templateVersion: "' + re.escape(VERSION) + r'",[^\n]*', "",
                                                 self.block).replace("const TRACKER = {", "var TRACKER = {"))
         no_title = self.write("t1.html", tracker.TITLE_RE.sub("", self.template, count=1))
-        no_version = self.write("t2.html", self.template.replace('templateVersion: "1.2.0",', "", 1))
+        no_version = self.write("t2.html", self.template.replace(f'templateVersion: "{VERSION}",', "", 1))
         block = self.write("b.js", self.block)
         cases = {
             "a block file that is not there": (("--block", str(self.tmp / "absent.js"), "--title", "T"), "cannot read"),
@@ -735,12 +737,12 @@ class TestCheck(unittest.TestCase):
         self.assertIn("something below the end marker was edited", run.stdout)
 
     def test_a_version_that_does_not_name_the_code_is_an_issue(self):
-        run = self.check(self.good.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1))
+        run = self.check(self.good.replace(f'templateVersion: "{VERSION}",', 'templateVersion: "1.1.0",', 1))
         self.assertEqual(run.returncode, 1)
-        self.assertIn("`templateVersion` says 1.1.0 but the code is template 1.2.0's", run.stdout)
+        self.assertIn(f"`templateVersion` says 1.1.0 but the code is template {VERSION}'s", run.stdout)
 
     def test_an_older_tracker_on_older_code_gets_a_notice_not_an_issue(self):
-        old = self.good.replace('templateVersion: "1.2.0",', 'templateVersion: "1.1.0",', 1).replace(
+        old = self.good.replace(f'templateVersion: "{VERSION}",', 'templateVersion: "1.1.0",', 1).replace(
             "const stepXP = (s) => 10 +", "const stepXP = (s) =>  10 +", 1)
         run = self.check(old)
         self.assertEqual(run.returncode, 0, run.stdout)
@@ -921,7 +923,7 @@ class TestCheck(unittest.TestCase):
         self.assertIn("gave no list of issues back", run.stderr)
 
     def test_a_page_with_no_template_version_is_told_so_once(self):
-        run = self.check(self.good.replace('templateVersion: "1.2.0",', "", 1))
+        run = self.check(self.good.replace(f'templateVersion: "{VERSION}",', "", 1))
         self.assertEqual(run.returncode, 1)
         self.assertEqual(run.stdout.count("templateVersion"), 1, run.stdout)
         self.assertNotIn("None", run.stdout)
@@ -1038,6 +1040,14 @@ class TestClaim(unittest.TestCase):
 
 
 class TestHouseStyle(unittest.TestCase):
+
+    def test_no_file_of_the_skill_links_a_private_page(self):
+        """The kit is public and a published tracker is private to whoever it was shared with, so a
+        link to one is dead for every adopter and names a page that is not theirs (removed on the
+        author's instruction, 2026-10-21)."""
+        for path in sorted(p for p in SKILL_DIR.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
+            with self.subTest(path=path.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn("claude.ai/artifact/", read(path))
 
     def test_no_em_dash_in_any_file_of_the_skill(self):
         for path in sorted(p for p in SKILL_DIR.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
