@@ -48,7 +48,7 @@ Prior art: Andrej Karpathy's LLM wiki pattern keeps an `index.md` catalogue and 
   line.
 - **A read-only lint over a notes folder named explicitly on the command line.** It reports:
   - notes with no closing line;
-  - notes older than a threshold (see the open question);
+  - notes older than seven days by default (see the decision below);
   - for each, its last-modified date.
 
   The deterministic part is a stdlib `tracker.py` subcommand (for example `notes-lint <folder>`),
@@ -75,8 +75,8 @@ Prior art: Andrej Karpathy's LLM wiki pattern keeps an `index.md` catalogue and 
 - **Harness-bound, and declared as such**, the way `quest-tracker` already declares its dependence
   on a page host. A host without a shared notes folder skips the lint, and the close-out rule
   still applies to whatever hand-over the session wrote.
-- **No unexplained threshold** in `tracker.py`: the age limit is an argument with a stated default
-  once the open question is answered.
+- **No unexplained threshold** in `tracker.py`: the age limit is an argument, defaulting to seven
+  days, with the reason stated beside it.
 - **Shares touched files with `feat-0074`.** Do not dispatch both in one `fix-batch` wave.
 
 ## Open question
@@ -86,6 +86,15 @@ Prior art: Andrej Karpathy's LLM wiki pattern keeps an `index.md` catalogue and 
    `agent-handoff`, which writes briefs but does not close sessions, or a small skill of its own.
 2. **What age makes an unclosed note worth reporting?** A week is a starting suggestion, not a
    measured value, so the value needs Hamsa's answer rather than a guess.
+
+## Decision
+
+Answered by Hamsa on 2026-10-22:
+
+1. **`quest-tracker` owns the close-out rule and the lint.** `agent-handoff` gets the one-line
+   pointer already in scope.
+2. **An unclosed note is reported once it is older than seven days.** It is a default, overridable
+   per run.
 
 ## Risks and rollback
 

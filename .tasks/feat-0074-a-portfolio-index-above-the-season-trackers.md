@@ -82,6 +82,15 @@ which project needs me this week, and for what.
 2. **Is the index its own page, or a section added to every tracker?** The recommendation is its
    own page. A section on each tracker would repeat every other project's state on every page.
 
+## Decision
+
+Answered by Hamsa on 2026-10-22:
+
+1. **Yes: the index belongs in `quest-tracker`, separate from Epic E #7d's planned cross-repository
+   view in `agent-observatory`.** Each row links to the repository's board where one exists. ROADMAP
+   Epic C #6 now carries a sentence saying so.
+2. **The index is its own page,** not a section on each tracker.
+
 ## Acceptance criteria (mechanically verifiable)
 
     python -m unittest discover -s tests -p "test_quest_tracker.py" -v

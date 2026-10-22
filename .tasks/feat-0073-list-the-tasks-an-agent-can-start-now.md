@@ -58,7 +58,7 @@ Prior art, read 2026-10-20:
 - **Documentation** of the listing in both `.tasks/README.md` copies.
 
 **Out of scope:**
-- A new frontmatter field for who took a task (see the open question).
+- A new frontmatter field for who took a task (ruled out in the decision below).
 - Any locking or database.
 - Changing sitrep's board output.
 - The cross-repository view, which ROADMAP Epic E #7d places in `agent-observatory`'s scope
@@ -75,8 +75,7 @@ Prior art, read 2026-10-20:
 - A take that is only committed in a worktree is invisible to the main checkout until it lands.
   That is why the dispatcher, the one process that sees the whole batch, sets `in_progress` before
   dispatch, rather than each agent setting it on itself.
-- The open question below makes this task show as waiting on the person in sitrep. That is
-  intended.
+- The questions below are answered, so sitrep no longer lists this task as waiting on the person.
 
 ## Decisions
 
@@ -98,6 +97,15 @@ Prior art, read 2026-10-20:
    the `quest-tracker` skill a claim already means an agent's report of finished work awaiting a
    person's check.
 
+## Decision
+
+Answered by Hamsa on 2026-10-22:
+
+1. **The listing lives in `validate.py`, as a `--ready` flag, in both copies.** `fix-batch` calls it
+   when choosing a batch.
+2. **`status: in_progress`, set by the dispatcher, is the only mark.** No field naming who took a
+   task is added.
+
 ## Risks and rollback
 
 This task touches more than one module (both `validate.py` copies, `fix-batch`, and sitrep's
@@ -105,8 +113,7 @@ tests), so the rule fires.
 - **What could go wrong:** the two copies drift, or `fix-batch` marks a task `in_progress` and then
   fails before dispatch, leaving it hidden from the ready listing.
 - **The mitigation:** dispatch must reset the status when it aborts, and that reset is tested.
-- **Rollback:** revert the commit. No persisted format changes if open question 2 is answered as
-  recommended.
+- **Rollback:** revert the commit. No persisted format changes, since no new field is added.
 
 ## Acceptance criteria (mechanically verifiable)
 
